@@ -1,0 +1,62 @@
+# SLI recording rules (C1 §OUTPUT.2). AIO writes, CDO reviews + merges into Prometheus.
+#
+# Metric names verified against the real system (OTel spanmetrics connector):
+#   traces_span_metrics_calls_total{service_name, span_name, status_code}
+#   traces_span_metrics_duration_milliseconds_bucket{service_name, span_name, le}
+# status_code="STATUS_CODE_ERROR" marks failed spans.
+#
+# NOTE (feeds an ADR + a C1 change request): the real scrape_interval is 60s, not the 30s
+# C1 assumes. A 5m short window therefore holds only ~5 samples, at the edge of the "≥10
+# points" guidance. Recommend CDO drop scrape to 30s for checkout, OR we widen the short
+# window to 10m. Tracked in telemetry-dependencies.md.
+
+groups:
+  - name: techx_sli
+    interval: 30s
+    rules:
+      # ── checkout success ratio (revenue-critical, SLO ≥ 99%) ──
+      # Entry span of the checkout service; total vs error over 5m/30m/1h/6h windows.
+      - record: sli:checkout_error:ratio_rate5m
+        expr: |
+          sum(rate(traces_span_metrics_calls_total{service_name="checkout",status_code="STATUS_CODE_ERROR"}[5m]))
+          /
+          clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="checkout"}[5m])), 1e-9)
+      - record: sli:checkout_error:ratio_rate30m
+        expr: |
+          sum(rate(traces_span_metrics_calls_total{service_name="checkout",status_code="STATUS_CODE_ERROR"}[30m]))
+          / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="checkout"}[30m])), 1e-9)
+      - record: sli:checkout_error:ratio_rate1h
+        expr: |
+          sum(rate(traces_span_metrics_calls_total{service_name="checkout",status_code="STATUS_CODE_ERROR"}[1h]))
+          / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="checkout"}[1h])), 1e-9)
+      - record: sli:checkout_error:ratio_rate6h
+        expr: |
+          sum(rate(traces_span_metrics_calls_total{service_name="checkout",status_code="STATUS_CODE_ERROR"}[6h]))
+          / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="checkout"}[6h])), 1e-9)
+
+      # ── frontend/browse success ratio (SLO ≥ 99.5%) ──
+      - record: sli:frontend_error:ratio_rate5m
+        expr: |
+          sum(rate(traces_span_metrics_calls_total{service_name="frontend",status_code="STATUS_CODE_ERROR"}[5m]))
+          / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="frontend"}[5m])), 1e-9)
+      - record: sli:frontend_error:ratio_rate1h
+        expr: |
+          sum(rate(traces_span_metrics_calls_total{service_name="frontend",status_code="STATUS_CODE_ERROR"}[1h]))
+          / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="frontend"}[1h])), 1e-9)
+
+      # ── cart success ratio (SLO ≥ 99.5%) ──
+      - record: sli:cart_error:ratio_rate5m
+        expr: |
+          sum(rate(traces_span_metrics_calls_total{service_name="cart",status_code="STATUS_CODE_ERROR"}[5m]))
+          / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="cart"}[5m])), 1e-9)
+      - record: sli:cart_error:ratio_rate1h
+        expr: |
+          sum(rate(traces_span_metrics_calls_total{service_name="cart",status_code="STATUS_CODE_ERROR"}[1h]))
+          / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="cart"}[1h])), 1e-9)
+
+      # ── storefront p95 latency in seconds (SLO < 1s) ──
+      - record: sli:frontend_latency:p95_5m
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(traces_span_metrics_duration_milliseconds_bucket{service_name="frontend"}[5m]))
+          ) / 1000

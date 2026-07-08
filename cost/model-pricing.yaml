@@ -1,0 +1,17 @@
+# Model pricing for AI cost showback (C5). USD per 1K tokens.
+# Mock llm = $0 (no entry). Update + ADR when switching to a real model.
+# Numbers below are placeholders for a small OpenAI-compatible model — replace with the
+# real provider's published rates and reconcile against the weekly bill (<=5% error, C5).
+
+techx-llm: {}   # mock — free
+
+# Real model (AI-8..12): gpt-4o-mini chosen for cost — ~$0.21 / 1k requests at the observed
+# ~800 in / ~150 out token profile, ~26x cheaper than gpt-4o. Reconcile vs the real bill weekly
+# (<=5% error, C5). Update + ADR if the model changes.
+gpt-4o-mini:
+  input_per_1k: 0.00015    # $0.150 / 1M input tokens
+  output_per_1k: 0.00060   # $0.600 / 1M output tokens
+
+gpt-4o:
+  input_per_1k: 0.0025
+  output_per_1k: 0.010

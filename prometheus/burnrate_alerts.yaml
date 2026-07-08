@@ -1,0 +1,78 @@
+# Multiwindow multi-burn-rate alerts (C2 §Failure-modes: the Alertmanager fallback layer).
+#
+# Google SRE Workbook thresholds for a 99% SLO (error budget = 1%):
+#   critical: burn 14.4x on 1h  AND 5m   (page now)
+#   warning : burn 6x   on 6h   AND 30m  (handle in shift)
+# An alert fires ONLY when BOTH long and short windows breach — kills 5-minute spikes.
+#
+# WHY this file exists even though the engine also detects: if the AI engine dies, these
+# rules keep paging straight from Prometheus/Alertmanager (C2 failure mode). AIO authors
+# them; CDO hosts them. The engine adds correlation/enrichment on top, not the page itself.
+#
+# error_budget = 1 - SLO. threshold(long,short) = burn_rate * error_budget.
+#   checkout: 14.4 * 0.01 = 0.144 ; 6 * 0.01 = 0.06
+
+groups:
+  - name: techx_checkout_burnrate
+    rules:
+      - alert: CheckoutBurnRateCritical
+        expr: |
+          sli:checkout_error:ratio_rate1h > 0.144
+          and
+          sli:checkout_error:ratio_rate5m > 0.144
+        for: 2m
+        labels:
+          severity: critical
+          service: checkout
+          sli: checkout_success_ratio
+          source_layer: slo-burnrate
+        annotations:
+          summary: "Checkout burning error budget 14.4x (1h+5m)"
+          description: "checkout error ratio {{ $value | humanizePercentage }} — revenue flow degraded."
+          runbook: "TF3/ai-engine/runbooks/RB-PAY-01.md"
+
+      - alert: CheckoutBurnRateWarning
+        expr: |
+          sli:checkout_error:ratio_rate6h > 0.06
+          and
+          sli:checkout_error:ratio_rate30m > 0.06
+        for: 5m
+        labels:
+          severity: warning
+          service: checkout
+          sli: checkout_success_ratio
+          source_layer: slo-burnrate
+        annotations:
+          summary: "Checkout burning error budget 6x (6h+30m)"
+
+  - name: techx_browse_cart_burnrate
+    rules:
+      # browse/cart SLO 99.5% -> error budget 0.5%; critical 14.4*0.005 = 0.072
+      - alert: BrowseBurnRateCritical
+        expr: |
+          sli:frontend_error:ratio_rate1h > 0.072
+          and
+          sli:frontend_error:ratio_rate5m > 0.072
+        for: 2m
+        labels: { severity: critical, service: frontend, sli: browse_success_ratio, source_layer: slo-burnrate }
+        annotations:
+          summary: "Browse burning error budget 14.4x (1h+5m)"
+
+      - alert: CartBurnRateCritical
+        expr: |
+          sli:cart_error:ratio_rate1h > 0.072
+          and
+          sli:cart_error:ratio_rate5m > 0.072
+        for: 2m
+        labels: { severity: critical, service: cart, sli: cart_success_ratio, source_layer: slo-burnrate }
+        annotations:
+          summary: "Cart burning error budget 14.4x (1h+5m)"
+
+  - name: techx_latency
+    rules:
+      - alert: StorefrontLatencyP95High
+        expr: sli:frontend_latency:p95_5m > 1
+        for: 5m
+        labels: { severity: warning, service: frontend, sli: browse_latency_p95, source_layer: slo-burnrate }
+        annotations:
+          summary: "Storefront p95 latency > 1s (SLO breach)"
