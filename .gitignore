@@ -15,3 +15,22 @@ env/
 # OS
 .DS_Store
 Thumbs.db
+
+# --- Cấu hình lọc thư mục cho Capstone Phase 3 ---
+# Chỉ lưu các tệp và thư mục trong mô hình khuyến nghị lên Git remote
+
+# Bỏ qua các tệp/thư mục gốc không cần thiết
+/GETTING_STARTED.md
+/RULES.md
+/JIRA_TODO_WEEK1.md
+/contracts/
+/mandates/
+/onboarding/
+/techx-corp-chart/
+
+# Bỏ qua toàn bộ nội dung trong techx-corp-platform ngoại trừ src/llm và src/product-reviews
+/techx-corp-platform/*
+!/techx-corp-platform/src/
+/techx-corp-platform/src/*
+!/techx-corp-platform/src/llm/
+!/techx-corp-platform/src/product-reviews/
