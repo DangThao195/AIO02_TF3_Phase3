@@ -27,16 +27,17 @@ _Dành cho TICKET 1 (Khoa) - Ghi nhận thời gian phản hồi thực tế và
 Dựa trên thống kê token đo đạc thực tế từ cuộc gọi RAG:
 
 * **Số token trung bình / request**:
-  * Input tokens (Prompt): `~795` tokens (đối với Groq) và `~1378` tokens (đối với Bedrock Nova qua LiteLLM)
-  * Output tokens (Completion): `~76` tokens (đối với Groq) và `~108` tokens (đối với Bedrock Nova)
+  * Input tokens (Prompt): `~795` tokens (đối với Groq), `~1357` tokens (Nova Lite qua LiteLLM), và `~1378` tokens (Nova Micro qua LiteLLM)
+  * Output tokens (Completion): `~76` tokens (đối với Groq), `~62` tokens (Nova Lite), và `~108` tokens (Nova Micro)
 
 * **Bảng so sánh chi phí (trên 10,000 requests)**:
 
 | Nhà cung cấp | Model | Đơn giá Input (/1M tokens) | Đơn giá Output (/1M tokens) | Chi phí ước tính (10k requests) | Ghi chú |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Groq** | `llama-3.3-70b-versatile` | `$0.590` | `$0.790` | **`~$5.29 USD`** | Trễ trung bình ~825 ms, chất lượng rất cao |
-| **AWS Bedrock** | `amazon.nova-lite-v1:0` | `$0.060` | `$0.240` | **`~$0.66 USD`** | Tiết kiệm **87.5% chi phí** so với Llama 3.3 70B |
+| **AWS Bedrock** | `amazon.nova-lite-v1:0` | `$0.060` | `$0.240` | **`~$0.96 USD`** | Tiết kiệm **81.8% chi phí** so với Llama 3.3 70B |
 | **AWS Bedrock** | `amazon.nova-micro-v1:0` | `$0.035` | `$0.140` | **`~$0.63 USD`** | Siêu tiết kiệm, giá tốt nhất trong các model |
+
 
 
 
