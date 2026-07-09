@@ -10,3 +10,7 @@ venv/
 *.egg
 .env
 .env.local
+
+# nội bộ — không đưa CDO/repo
+prometheus/CDO-HANDOFF-RECORDING-RULES.md
+prometheus/PROMPT-WRITE-RECORDING-RULES.md

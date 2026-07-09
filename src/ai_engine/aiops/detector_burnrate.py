@@ -19,6 +19,7 @@ from ..common.telemetry import PrometheusClient, TelemetryError
 _TIERS = [
     (14.4, "1h", "5m", Severity.CRITICAL),
     (6.0, "6h", "30m", Severity.WARNING),
+    (3.0, "1d", "2h", Severity.WARNING),
     (1.0, "3d", "6h", Severity.INFO),
 ]
 

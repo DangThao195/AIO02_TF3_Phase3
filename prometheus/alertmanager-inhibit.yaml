@@ -1,0 +1,41 @@
+# Alertmanager inhibit rules — chống double-page trong multiwindow multi-burn-rate.
+#
+# VẤN ĐỀ: 4 cặp burn-rate cho cùng 1 service. Khi sự cố nặng + kéo dài, nhiều cặp cùng fire
+# (vd CriticalFast + CriticalSlow + WarningMedium). On-call nhận nhiều alert cho MỘT sự cố.
+#
+# GIẢI PHÁP (chuẩn sloth/pyrra): cặp burn cao "che" (inhibit) cặp thấp hơn của cùng service+sli.
+# Chỉ giữ alert nghiêm trọng nhất → 1 page/sự cố.
+#
+# CDO: ghép mục `inhibit_rules` này vào Alertmanager config (alertmanager.yaml / CR
+# `AlertmanagerConfig`). Đây là file của CDO (Alertmanager), AIO chỉ đề xuất nội dung.
+# Điều kiện match dựa trên label `pair` (1-page-fast > 2-page-slow > 3-ticket-medium > 4-ticket-slow)
+# mà alert rules đã gắn sẵn (burnrate_alerts.yaml).
+
+inhibit_rules:
+  # 1-page-fast che tất cả cặp yếu hơn của cùng service + sli
+  - source_matchers:
+      - pair = "1-page-fast"
+    target_matchers:
+      - pair =~ "2-page-slow|3-ticket-medium|4-ticket-slow"
+    equal: [service, sli]
+
+  # 2-page-slow che 3 và 4
+  - source_matchers:
+      - pair = "2-page-slow"
+    target_matchers:
+      - pair =~ "3-ticket-medium|4-ticket-slow"
+    equal: [service, sli]
+
+  # 3-ticket-medium che 4
+  - source_matchers:
+      - pair = "3-ticket-medium"
+    target_matchers:
+      - pair = "4-ticket-slow"
+    equal: [service, sli]
+
+  # (chung) critical che warning của cùng service — an toàn kép nếu label pair thiếu
+  - source_matchers:
+      - severity = "critical"
+    target_matchers:
+      - severity = "warning"
+    equal: [service, sli]

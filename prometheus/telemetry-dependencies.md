@@ -10,7 +10,8 @@
 | Source | Metric / rule | Required labels | Used by |
 |---|---|---|---|
 | Prometheus | `traces_span_metrics_calls_total` | `service_name`, `status_code` | Burn-rate SLI (C2 layer 1) — recording_rules.yaml |
-| Prometheus | `traces_span_metrics_duration_milliseconds_bucket` | `service_name`, `le` | p95 latency SLI (SLO < 1s) |
+| Prometheus | `traces_span_metrics_duration_milliseconds_bucket` | `service_name`, `le` (**cần có `le="1000"`**) | p95 latency (dashboard) + latency-ratio SLI (% <1s) |
+| Prometheus | `traces_span_metrics_duration_milliseconds_count` | `service_name` | mẫu số cho latency-ratio SLI |
 | Prometheus | recording rules `sli:*_error:ratio_rate{5m,30m,1h,6h}` | — | burnrate_alerts.yaml + detector_burnrate.py |
 | Prometheus | `ai_gateway_*`, `ai_cost_*`, `ai_guardrail_*`, `ai_breaker_state` (AIO emits) | `outcome`,`model`,`feature`,`reason` | C4/C5 dashboards |
 | Prometheus | kafka consumer lag, `*_memory_*`, container CPU (Phase 3 anomaly) | `service_name`/`pod` | ML anomaly (C2 layer 2) |
