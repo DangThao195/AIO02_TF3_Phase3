@@ -27,8 +27,13 @@ _Dành cho TICKET 1 (Khoa) - Ghi nhận thời gian phản hồi thực tế và
 Dựa trên thống kê token đo đạc thực tế từ cuộc gọi RAG:
 
 * **Số token trung bình / request**:
-  * Input tokens (Prompt): `~795` tokens (đối với Groq), `~1357` tokens (Nova Lite qua LiteLLM), và `~1378` tokens (Nova Micro qua LiteLLM)
-  * Output tokens (Completion): `~76` tokens (đối với Groq), `~62` tokens (Nova Lite), và `~108` tokens (Nova Micro)
+
+| Nhà cung cấp | Model | Input Tokens (Prompt) | Output Tokens (Completion) | Tổng số Tokens | Ghi chú |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Groq** | `llama-3.3-70b-versatile` | `~795` | `~76` | `~871` | Định dạng RAG thô |
+| **AWS Bedrock** | `amazon.nova-lite-v1:0` | `~1357` | `~62` | `~1419` | Định dạng qua LiteLLM |
+| **AWS Bedrock** | `amazon.nova-micro-v1:0` | `~1378` | `~108` | `~1486` | Định dạng qua LiteLLM |
+
 
 * **Bảng so sánh chi phí (trên 10,000 requests)**:
 
