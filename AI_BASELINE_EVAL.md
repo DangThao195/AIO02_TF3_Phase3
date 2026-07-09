@@ -20,6 +20,7 @@ _Dành cho TICKET 1 (Khoa) - Ghi nhận thời gian phản hồi thực tế và
 | **Real LLM** (Groq 70B) | `llama-3.3-70b-versatile`             | 824.67               | 968.81           | 978.91           | 10.00         |
 | **Real LLM** (Bedrock)  | `amazon.nova-lite-v1:0` (via LiteLLM) | 1668.41              | 2281.35          | 2298.11          | 0.00          |
 | **Real LLM** (Bedrock)  | `amazon.nova-micro-v1:0` (via LiteLLM) | 2073.34              | 2959.01          | 5997.22          | 0.00          |
+| **Real LLM** (Bedrock)  | `meta.llama3-3-70b-instruct-v1:0` (via LiteLLM) | 7650.01              | 10017.15         | 10017.72         | 65.00         |
 
 
 ### 2. Ước tính Chi Phí (Cost Estimation)
@@ -42,6 +43,7 @@ Dựa trên thống kê token đo đạc thực tế từ cuộc gọi RAG:
 | **Groq** | `llama-3.3-70b-versatile` | `$0.590` | `$0.790` | **`~$5.29 USD`** | Trễ trung bình ~825 ms, chất lượng rất cao |
 | **AWS Bedrock** | `amazon.nova-lite-v1:0` | `$0.060` | `$0.240` | **`~$0.96 USD`** | Tiết kiệm **81.8% chi phí** so với Llama 3.3 70B |
 | **AWS Bedrock** | `amazon.nova-micro-v1:0` | `$0.035` | `$0.140` | **`~$0.63 USD`** | Siêu tiết kiệm, giá tốt nhất trong các model |
+| **AWS Bedrock** | `meta.llama3-3-70b-instruct-v1:0` | `$0.720` | `$0.720` | **`~$6.27 USD`** | Rất đắt, dễ bị timeout (65% lỗi) |
 
 
 
@@ -52,11 +54,13 @@ Dựa trên thống kê token đo đạc thực tế từ cuộc gọi RAG:
   * **Gemini 2.5 Flash**: Tỷ lệ lỗi cực cao (**60.00%**) chủ yếu do cạn kiệt tài nguyên (Quota Limitations - 20 requests/ngày ở tài khoản miễn phí). Không đủ điều kiện chạy sản xuất.
   * **Llama 3.1 8B (Groq)**: Tỷ lệ lỗi **30.00%** do lỗi cú pháp gọi tool (Tool-calling syntax hallucination). Mô hình này thường tự biên dịch sai tên hàm (ví dụ: gọi nhầm thành `fetech_product_reviews`) hoặc truyền sai cấu trúc JSON.
   * **Llama 3.3 70B (Groq)**: Độ chính xác cải thiện rõ rệt (chỉ **10.00%** lỗi), nhờ kích thước tham số lớn hơn giúp tuân thủ chỉ dẫn (System Prompt) tốt hơn.
-  * **Amazon Nova Lite (Bedrock)**: Đạt độ ổn định tuyệt đối (**0.00%** lỗi). Mô hình bám sát cấu trúc Tool Calling rất tốt và tương thích cao khi được lọc/chuẩn hóa tham số qua LiteLLM.
+  * **Amazon Nova (Lite/Micro - Bedrock)**: Đạt độ ổn định tuyệt đối (**0.00%** lỗi). Cả hai mô hình bám sát cấu trúc Tool Calling rất tốt và tương thích cao khi được lọc/chuẩn hóa tham số qua LiteLLM.
+  * **Llama 3.3 70B (Bedrock)**: Gặp tỷ lệ lỗi vô cùng nghiêm trọng (**65.00%** lỗi) dưới dạng lỗi **`DeadlineExceeded`** (Vượt quá gRPC timeout 10.0s). Do mô hình lớn cộng với việc bị giới hạn/hạn chế lưu lượng (throttling) trên môi trường on-demand của Bedrock khiến thời gian phản hồi tăng vọt (p95 đạt `10017 ms`).
 
 * **Phân tích đánh đổi giữa Độ trễ và Chi phí (Latency vs. Cost Trade-offs)**:
-  * **Groq Llama 3.3 70B** là mô hình có tốc độ nhanh nhất (**~825 ms**) nhưng chi phí cao hơn (**$5.29 / 10k requests**).
-  * **AWS Bedrock Nova Lite** có độ trễ lớn hơn một chút (**~1668 ms**) nhưng chi phí rẻ một cách vượt trội (**$0.66 / 10k requests** - rẻ hơn gấp 8 lần).
+  * **Groq Llama 3.3 70B** là mô hình nhanh nhất (**~825 ms**) với mức chi phí trung bình (**$5.29 / 10k requests**).
+  * **AWS Bedrock Nova Lite/Micro** là sự kết hợp tối ưu nhất về giá (**$0.63 - $0.96 / 10k requests**) và độ ổn định (0% lỗi), mặc dù độ trễ lớn hơn một chút (~1600ms - ~2000ms).
+  * **AWS Bedrock Llama 3.3 70B** không phù hợp cho môi trường thực tế (production) nếu không mua Provisioned Throughput hoặc tăng timeout, do vừa đắt vừa chậm khi chạy dạng on-demand.
 
 ---
 
