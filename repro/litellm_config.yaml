@@ -1,7 +1,17 @@
 model_list:
   - model_name: amazon.nova-lite-v1:0
     litellm_params:
-      model: bedrock/amazon.nova-lite-v1:0
+      model: bedrock/us.amazon.nova-lite-v1:0
+      region_name: us-east-1
+
+  - model_name: amazon.nova-micro-v1:0
+    litellm_params:
+      model: bedrock/us.amazon.nova-micro-v1:0
+      region_name: us-east-1
+
+  - model_name: meta.llama3-3-70b-instruct-v1:0
+    litellm_params:
+      model: bedrock/us.meta.llama3-3-70b-instruct-v1:0
       region_name: us-east-1
 
 litellm_settings:
