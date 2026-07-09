@@ -10,13 +10,13 @@ import sys
 import os
 import grpc
 
-# Import gRPC generated code từ thư mục repro
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# Thêm đường dẫn tới thư mục chứa demo_pb2 và demo_pb2_grpc
+sys.path.append(os.path.join(os.path.dirname(__file__), "../techx-corp-platform/src/product-reviews"))
 try:
     import demo_pb2
     import demo_pb2_grpc
 except ImportError:
-    print("[!] Không thể import code gRPC generated. Hãy chắc chắn bạn đang chạy từ thư mục repro.")
+    print("[!] Không thể import code gRPC generated. Hãy kiểm tra thư mục product-reviews.")
     sys.exit(1)
 
 PRODUCT_REVIEWS_ADDR = "localhost:3551"
