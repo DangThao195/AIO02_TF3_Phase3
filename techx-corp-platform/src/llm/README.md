@@ -34,24 +34,65 @@ most 3rd party LLMs would be treated.
 
 ---
 
-## Sơ đồ luồng hoạt động (Rút gọn)
+## Sơ đồ luồng hoạt động chi tiết (Detailed Code Flowchart)
+
+Dưới đây là sơ đồ chi tiết biểu diễn luồng hoạt động của dịch vụ LLM (`app.py`), bao gồm quá trình khởi tạo và xử lý các endpoint:
 
 ```mermaid
 flowchart TD
-    POST([POST /v1/chat/completions]) --> Msg{Kiểm tra last_message}
-    
-    Msg -->|Câu hỏi cố định| Fix[Trả lời cứng có sẵn]
-    Msg -->|Yêu cầu tóm tắt / tool| Extract[Bóc product_id bằng Regex]
-    
-    Extract --> Tool{Có tham số 'tools'?}
-    
-    Tool -->|Có| Limit{Model rate-limit?}
-    Limit -->|Có| Err[Lỗi 429 - Rate limit]
-    Limit -->|Không| CallTool[Trả về yêu cầu gọi Tool]
-    
-    Tool -->|Không| Flag{Flag inaccurate & ID 'L9ECAV7KIM'?}
-    Flag -->|Đúng| Wrong[Trả tóm tắt sai lệch]
-    Flag -->|Sai| OK[Trả tóm tắt chính xác]
+    %% Subgraph 1: Initialization
+    subgraph Initialization ["1. Khởi tạo Dịch vụ (Main)"]
+        Start([Chạy app.py]) --> SetProvider[Cài đặt OpenFeature Provider với Flagd]
+        SetProvider --> LoadAccurate[Đọc 'product-review-summaries.json' bằng load_product_review_summaries]
+        LoadAccurate --> LoadInaccurate[Đọc 'inaccurate-product-review-summaries.json']
+        LoadInaccurate --> FlaskRun[Khởi chạy Flask Server trên Port 8000]
+    end
+
+    %% Subgraph 2: GET /v1/models
+    subgraph GET_Models ["2. GET /v1/models"]
+        ReqModels([Nhận request /v1/models]) --> RetModels[Trả về JSON danh sách model: techx-llm]
+    end
+
+    %% Subgraph 3: POST /v1/chat/completions
+    subgraph POST_Chat ["3. POST /v1/chat/completions"]
+        ReqChat([Nhận request POST]) --> ParsePayload[Lấy json body: messages, stream, model, tools]
+        ParsePayload --> GetLastMsg[Lấy last_message = messages[-1]['content']]
+        GetLastMsg --> MatchAge{last_message chứa 'What age(s) is this recommended for?'}
+        
+        MatchAge -->|Đúng| RetAge[Trả về: This product is recommended for ages 7 and above.]
+        MatchAge -->|Sai| MatchNegative{last_message chứa 'Were there any negative reviews?'}
+        
+        MatchNegative -->|Đúng| RetNegative[Trả về: No, there were no reviews less than three stars...]
+        MatchNegative -->|Sai| CheckAllowed{last_message chứa 'Can you summarize...' hoặc 'Based on the tool results...'}
+        
+        CheckAllowed -->|Sai| RetSorry[Trả về: Sorry, I'm not able to answer that question.]
+        CheckAllowed -->|Đúng| ParsePID[Gọi parse_product_id: quét Regex tìm product_id]
+        
+        ParsePID --> MatchPID{Trùng Regex: 'product ID:...' hoặc 'inaccurate:...'}
+        MatchPID -->|Không trùng| RaiseErr[Ném lỗi ValueError]
+        MatchPID -->|Trùng| CheckTools{Tham số tools != None?}
+        
+        CheckTools -->|Đúng| CheckRateLimit{model kết thúc bằng 'rate-limit'?}
+        CheckRateLimit -->|Đúng| Ret429[Trả về HTTP 429 - Rate limit reached]
+        CheckRateLimit -->|Sai| RetToolCall[Trả về yêu cầu Client gọi Tool: fetch_product_reviews]
+        
+        CheckTools -->|Sai| GenResp[Gọi generate_response]
+        GenResp --> CheckFlag{Flag llmInaccurateResponse bật AND product_id == 'L9ECAV7KIM'?}
+        CheckFlag -->|Đúng| GetInaccurate[Lấy summary từ file inaccurate]
+        CheckFlag -->|Sai| GetAccurate[Lấy summary từ file accurate]
+        
+        GetInaccurate --> BuildResp[Đóng gói phản hồi bằng build_response]
+        GetAccurate --> BuildResp
+        BuildResp --> RetFinal[Trả về JSON Chat Completion với finish_reason: stop]
+    end
+
+    %% Styles
+    classDef init fill:#f9f,stroke:#333,stroke-width:2px;
+    classDef get fill:#bbf,stroke:#333,stroke-width:2px;
+    classDef post fill:#bfb,stroke:#333,stroke-width:2px;
+    class FlaskRun init;
+    class RetModels get;
+    class RetFinal post;
 ```
 
 ---
