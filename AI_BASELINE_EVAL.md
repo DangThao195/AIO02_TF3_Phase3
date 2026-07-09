@@ -1,4 +1,4 @@
-# Báo Cáo Đánh Giá AI Baseline & Kịch Bản Thử Nghiệm (Tuần 1)
+﻿# Báo Cáo Đánh Giá AI Baseline & Kịch Bản Thử Nghiệm (Tuần 1)
 
 Báo cáo này lưu trữ các chỉ số đo lường hiệu năng, chi phí, độ chính xác (Fidelity), và các lỗ hổng bảo mật được phát hiện trên hệ thống AI của Nhóm AIE1 (Task Force 1).
 
@@ -35,29 +35,119 @@ Dựa trên thống kê token từ OpenAI API:
 
 ## MỤC 2: Bộ Đánh Giá Độ Trung Thực (Fidelity Evaluation)
 
-_Dành cho TICKET 2 (Thịnh) - Đánh giá xem tóm tắt có trung thực với review gốc hay không._
+*Dành cho TICKET 2 (Thịnh) - Đánh giá xem tóm tắt do AI sinh ra có trung thực với review thật trong database hay không.*
 
-### 1. Định nghĩa Thang Đo Fidelity (1 - 5)
+### 1. Phương pháp đánh giá đang dùng trong `repro/eval_fidelity.py`
+Bộ evaluator mới không còn chấm kiểu so khớp chuỗi đơn giản hoặc fallback heuristic khi judge lỗi. Thay vào đó, pipeline đánh giá được chuẩn hóa như sau:
 
-- **5 - Hoàn hảo**: Tóm tắt chính xác, đầy đủ ý chính từ các reviews, không bịa đặt.
-- **4 - Tốt**: Tóm tắt đúng nhưng thiếu một vài ý phụ không quan trọng.
-- **3 - Trung bình**: Tóm tắt có phần mơ hồ hoặc bỏ sót ý chính.
-- **2 - Kém**: Có dấu hiệu bịa đặt thông tin nhẹ (Hallucination) hoặc suy diễn sai lệch.
-- **1 - Sai lệch hoàn toàn**: Tóm tắt trái ngược với nội dung review gốc hoặc bịa đặt thông tin nghiêm trọng.
+1. Lấy **review thật** từ PostgreSQL theo `product_id`.
+2. Gọi gRPC `AskProductAIAssistant` để lấy **candidate summary** do hệ thống AI hiện tại sinh ra.
+3. Tạo **fact sheet** từ review thật, gồm:
+   - `review_count`
+   - `average_score`
+   - `top_positive_reviews`
+   - `top_negative_reviews`
+   - `has_explicit_age_signal`
+4. Chạy **rule checks** trước khi tốn token judge, gồm:
+   - `empty_summary`
+   - `summary_exceeds_prompt_length`
+   - `unsupported_age_claim`
+   - `negative_trend_claim_conflicts_with_reviews`
+5. Gọi **LLM-as-a-judge** qua API key với prompt JSON rubric chặt, trong đó judge phải:
+   - trích các claim chính từ summary
+   - gắn nhãn từng claim là `supported`, `unsupported`, hoặc `contradicted`
+   - trả thêm các metric định lượng để phục vụ aggregate
+6. Lưu toàn bộ kết quả vào artifact JSON trong `repro/artifacts/` để audit và so sánh lại nhiều lần chạy.
 
-### 2. Kịch bản mô phỏng lỗi (Test Case L9ECAV7KIM)
+Lưu ý quan trọng: artifact hiện tại mới chứng minh **pipeline chạy end-to-end đúng kỹ thuật** trên một case mẫu. Nó chưa đủ để kết luận evaluator đã ổn định ở mức baseline chính thức.
 
-Khi kích hoạt Feature Flag `llmInaccurateResponse` cho sản phẩm `L9ECAV7KIM`:
+### 2. Metric, gate hiện tại và các giới hạn cần ghi rõ
+Evaluator hiện tại sinh ra các trường quan trọng sau:
 
-- **Nội dung reviews gốc trong DB**:
-  _[Điền nội dung reviews thực tế từ DB]_
-- **Tóm tắt giả lập từ file inaccurate**:
-  _[Nội dung tóm tắt sai lệch]_
-- **Kết quả chấm điểm từ Script Eval (`repro/eval_fidelity.py`)**:
-  - Điểm Fidelity: `1 / 5`
-  - Trạng thái: **Phát hiện sai lệch thành công (FAIL)**.
+- `overall_score` (thang 1-5)
+- `supported_claims`
+- `unsupported_claims`
+- `contradicted_claims`
+- `claim_precision`
+- `aspect_coverage`
+- `sentiment_alignment`
+- `conciseness_pass`
+- `status` (`ok`, `rule_failed`, `invalid_run`)
+- `passed` (kết luận cuối cùng của case)
 
----
+Gate `passed` hiện tại đang dùng trong code là:
+
+1. `status = ok`
+2. `contradicted_claims = 0`
+3. `unsupported_claims = 0`
+4. `overall_score >= 4`
+5. `conciseness_pass = 1`
+
+Ba metric `claim_precision`, `aspect_coverage`, và `sentiment_alignment` hiện **chưa tham gia trực tiếp vào gate pass/fail**. Ở thời điểm này, chúng được dùng cho mục đích:
+
+- audit vì sao một summary được judge đánh giá cao hoặc thấp
+- phát hiện summary quá nghèo nội dung dù không hallucinate
+- làm dữ liệu để hiệu chỉnh threshold ở Tuần 2
+
+Lý do chưa đưa ba metric này vào gate ngay là cỡ mẫu hiện tại còn quá nhỏ để chọn threshold đáng tin cậy. Ví dụ: nếu áp `aspect_coverage >= 0.6` hoặc `claim_precision >= 0.8` quá sớm khi mới có một artifact mẫu, báo cáo sẽ tạo cảm giác chính xác giả.
+
+Một giới hạn khác của evaluator hiện tại là **summary có quá ít claim** vẫn có thể tạo ra `unsupported_claims = 0` một cách tầm thường. Vì vậy, trước khi dùng làm baseline chính thức, cần bổ sung thêm ít nhất một trong hai cơ chế sau:
+
+- ngưỡng `minimum_claim_count`
+- hoặc đưa `claim_precision` và `aspect_coverage` vào gate sau khi đã hiệu chỉnh trên tập mẫu lớn hơn
+
+### 3. Kết quả mẫu hiện có và cách đọc đúng
+Artifact mẫu đã chạy thành công:
+- `repro/artifacts/fidelity_eval_OLJCESPC7Z.json`
+
+Kết quả chính của case `OLJCESPC7Z`:
+
+- `status`: `ok`
+- `overall_score`: `4 / 5`
+- `unsupported_claim_rate`: `0.0`
+- `contradiction_rate`: `0.0`
+- `aspect_coverage`: `0.8`
+- `conciseness_pass`: `0`
+- `passed`: `false`
+
+Diễn giải đúng cho case này là:
+- Judge xác nhận summary **bám dữ liệu thật**, không có claim bịa hoặc mâu thuẫn.
+- Summary vẫn **trượt gate conciseness** vì dài hơn mức mong muốn.
+- Vì vậy đây là case **fidelity tốt nhưng format chưa đạt**.
+
+Quan trọng hơn, cỡ mẫu hiện tại mới là **n = 1**. Artifact này chỉ đủ để chứng minh evaluator hoạt động end-to-end, chưa đủ để kết luận rằng phân bố `invalid_run`, `rule_failed`, hay `ok nhưng failed` đã phản ánh ổn định chất lượng toàn hệ thống.
+
+### 4. Ranh giới kết quả Tuần 1
+Trong phạm vi Tuần 1, MỤC 2 chỉ chứng minh được ba điểm sau:
+
+- evaluator mới đã được thiết kế và viết thành code trong `repro/eval_fidelity.py`
+- pipeline đã chạy end-to-end thành công trên case mẫu `OLJCESPC7Z`
+- artifact JSON đã lưu được các trường cần thiết để audit một case cụ thể
+
+MỤC 2 **chưa** chứng minh các kết luận ở mức baseline chính thức trên toàn tập product. Cụ thể, báo cáo Tuần 1 **chưa** có bằng chứng rằng evaluator đã được chạy trên vài chục `product_id` hay đã ổn định về mặt thống kê.
+
+Ngoài ra, tài liệu cần ghi rõ một rủi ro phương pháp luận: nếu **judge model** dùng cùng backend hoặc cùng họ model với **candidate summary path** đang được chấm, kết quả có thể bị lệch do **self-evaluation bias**. Vì vậy mỗi artifact phải lưu rõ:
+
+- `candidate_source`
+- `judge_base_url`
+- `judge_model`
+
+Cuối cùng, boolean `passed` hiện tại đang **gộp chung fidelity và format**. Đây là cách triển khai hiện có trong code, nhưng khi đọc báo cáo cần tách bằng diễn giải:
+
+- `fidelity_passed`: nội dung có grounded, không unsupported, không contradicted
+- `format_passed`: output có đạt ràng buộc độ dài / hình thức hay không
+- `passed = fidelity_passed AND format_passed`
+
+### 5. Kế hoạch Tuần 2
+Các đầu việc dưới đây là **kế hoạch tiếp theo**, không phải kết quả đã hoàn thành trong Tuần 1:
+
+1. Chạy evaluator trên tối thiểu vài chục `product_id` để đo:
+   - `invalid_run_rate`
+   - `rule_failed_rate`
+   - tỷ lệ `ok nhưng failed`
+   - phân bố `aspect_coverage`, `claim_precision`, `sentiment_alignment`
+2. Bổ sung hai cờ tường minh `fidelity_passed` và `format_passed` vào artifact JSON.
+3. Cân nhắc đưa `minimum_claim_count`, `claim_precision`, hoặc `aspect_coverage` vào gate sau khi có đủ cỡ mẫu để hiệu chỉnh threshold.
 
 ## MỤC 3: Đánh Giá Lỗ Hổng Bảo Mật AI (AI Guardrails & PII)
 
