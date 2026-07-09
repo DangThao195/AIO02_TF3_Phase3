@@ -1,42 +1,98 @@
-# Backlog AIOps — TF3 / AIO02
+# AIOps Engine — Priority Backlog (TF3 / AIO02)
 
-> Backlog trụ AI (luồng AIOps), xếp theo **Ưu tiên = Rủi ro (khả năng × nghiêm trọng) ×
-> Tác động business**. Neo vào SLO / BUDGET / INCIDENT_HISTORY, không neo vào "có phải
-> feature không". Dùng cho pitch + Ops Review. Backlog AIE ở [AI_BASELINE_EVAL.md §5].
+> **Nguồn sự thật duy nhất** cho backlog AIOps. Merge từ bản của nhóm + đối chiếu với **code
+> thật đã build và test** (cột Trạng thái). Dùng cho pitch + Ops Review.
 >
-> Rủi ro & Business: thang 1-5. P0 = làm trước, P3 = hoãn có chủ đích.
+> Priority Score = Risk (Probability × Severity) × Business Impact, mỗi tiêu chí thang 1-5.
+> Score 1-125: **75-125 Tối ưu tiên · 40-74 Cao · 20-39 Trung bình · 1-19 Thấp**.
+>
+> **Bối cảnh thật (đã sửa 3 điểm sai):** hệ thống TechX Corp có **~18 microservice** (không phải
+> 200+), `llm` hiện là **mock** OpenAI-compatible (chưa cắm model thật/Bedrock). SLO: checkout
+> ≥99%, browse ≥99.5%, cart ≥99.5%, p95<1s.
 
-## Đã xong (Tuần 1-2) — giữ để chứng minh ở Ops Review
+---
 
-| Mã | Việc | Rủi ro | Business | Ưu tiên | Trạng thái |
-|---|---|---|---|---|---|
-| AIOPS-001 | Burn-rate detector đa cửa sổ (page tin được) | 5 | Bảo vệ checkout revenue | P0 | ✅ done, test |
-| AIOPS-002 | Anomaly detector focus theo INC-history | 4 | Bắt lỗi bơm trước khi system chết | P0 | ✅ done, test |
-| AIOPS-003 | Correlation graph + storm dedup | 4 | On-call đỡ storm khi mentor bơm | P0 | ✅ done, test |
-| AIOPS-004 | C2 alert schema + Alertmanager fallback | 4 | Engine chết vẫn page được | P0 | ✅ done, test |
-| AIOPS-005 | RCA Evidence Pack (C3) ≤30m | 3 | Giảm MTTR, postmortem từ data | P1 | ✅ done, test |
+## 📋 Danh sách Backlog Ưu Tiên
 
-## Cần làm (Tuần 3 + treo)
+| Mã | Hạng mục | Prob | Sev | Business | Score | Ưu tiên | Tuần | **Trạng thái code** |
+|---|---|:---:|:---:|:---:|:---:|---|---|---|
+| **AIOps-01** | Anomaly + Burn-rate SLO (Alertmanager fallback) | 4 | 5 | 5 | **100** | Tối ưu tiên | T1 | ✅ **DONE** (test) |
+| **AIOps-06** | Approval Gate (Slack/webhook) — Human-in-loop (C6) | 4 | 4 | 5 | **80** | Tối ưu tiên | T1-T2 | 🟡 **đang làm** (bước này) |
+| **AIOps-04** | Safety Gate + Dry-run (whitelist, chặn INC-2) | 3 | 5 | 5 | **75** | Tối ưu tiên | T1-T3 | 🟡 **đang làm** (bước này) |
+| **AIOps-02** | RCA định vị nguyên nhân (topology) | 4 | 4 | 4 | **64** | Cao | T1 | ✅ **DONE** (topology tĩnh)¹ |
+| **AIOps-03** | Đóng gói bằng chứng + phân cụm log | 5 | 3 | 4 | **60** | Cao | T1-T2 | 🟡 **một phần**² |
+| **AIOps-05** | Container hóa + deploy EKS | 3 | 4 | 4 | **48** | Cao | T2-T3 | ⏳ chờ C1 CDO |
+| **AIOps-07** | Chống báo động giả (multiwindow) | 5 | 3 | 3 | **45** | Cao | T1 | ✅ **DONE** (multiwindow)³ |
+| **AIOps-08** | Blast Radius (dependency graph) | 2 | 4 | 4 | **32** | Trung bình | T2 | ✅ **DONE** |
+| **AIOps-09** | Chaos/flagd fire-drill (đo detection latency) | 4 | 4 | 4 | **64** | Cao | T3 | ⏳ chờ cluster |
+| **AIOps-10** | ADR mọi lỗi Tuần 2 (ký tên) | 3 | 3 | 3 | **27** | Trung bình | T3 | ⏳ |
 
-| Mã | Việc | Mô tả | Rủi ro | Business | Ưu tiên | Trạng thái |
-|---|---|---|---|---|---|---|
-| AIOPS-006 | **Remediation + audit trail (C6)** | Whitelist action (scale/restart/cache-flush) + approval người thật + rollback + audit append-only. Hard-block flagd trong code. | 5 | Rút ngắn MTTR có kiểm soát; truy-về-người (bắt buộc RULES §7) | **P0** | ⏳ Tuần 3 |
-| AIOPS-007 | **Chaos/flagd fire-drill** | Bật từng flag (payment/kafka/cart/email/llm) trên docker-compose local → đo detection latency ≤3m + precision. | 4 | Chứng minh engine bắt được lỗi thật, số cho Ops Review | **P0** | ⏳ Tuần 3 |
-| AIOPS-008 | Defense-in-depth remediation (Kyverno) | Cap value-level (replica ≤N, mem ≤X) ở admission webhook + idempotency lock. Học từ repo tham khảo. | 3 | An toàn auto-action, mạnh cho audit | P1 | ⏳ |
-| AIOPS-009 | ADR mọi lỗi Tuần 2 | Lỗi gì + solution + why, ký tên. | 2 | Deliverable bắt buộc, bảo vệ ở hội đồng | P1 | ⏳ Tuần 3 |
-| AIOPS-010 | IsolationForest anomaly (multivariate) | Bật lớp ML thứ 2 cho anomaly joint (latency+lag+mem cùng lệch). | 2 | Bắt anomaly tinh vi hơn z-score đơn biến | P2 | ⚙️ ready, chưa bật |
-| AIOPS-011 | LLM-augment RCA | Dùng LLM phrase/merge hypothesis đọc mượt. Có eval + cost cap. | 2 | Evidence dễ đọc hơn — trade-off cost/hallucination | P2 | ⚙️ optional, OFF |
-| AIOPS-012 | Fix metric name sau deploy | Xác nhận tên thật kafka lag/email memory + latency histogram trên Prometheus live; điền telemetry-dependencies. | 3 | Detector không gãy im lặng | P1 | ⏳ chờ C1 CDO |
-| AIOPS-013 | Tinh chỉnh ngưỡng theo false-positive | Dùng nhãn false-positive từ CDO on-call để chỉnh z-threshold + burn-rate. | 2 | Giảm alert fatigue, tăng precision | P2 | ⏳ liên tục |
+**Ghi chú sửa 3 điểm sai (đối chiếu code thật):**
+- ¹ **AIOps-02 RCA:** code dùng **topology tĩnh** (DEPENDENCY_MAP từ ARCHITECTURE.md) + correlated
+  signals, KHÔNG duyệt Jaeger DAG đệ quy. Với ~18 service, static map đủ + giải thích được +
+  không phụ thuộc Jaeger sống. Jaeger DAG đệ quy là **over-engineering** — đưa vào "nice-to-have".
+- ² **AIOps-03:** hiện dùng OpenSearch terms-aggregation (top-5 error signature). **Drain3** (gom
+  log template) là nâng cấp khi bật LLM-augment RCA — chưa làm, không hứa ở pitch.
+- ³ **AIOps-07:** cơ chế thật là **multiwindow multi-burn-rate** (long+short cùng cháy mới page,
+  Google SRE) — đạt đúng mục tiêu "bỏ transient spike <5m" nhưng KHÁC cơ chế "5 chu kỳ quét".
+  Kể một cách thống nhất: "chống báo giả bằng multiwindow", không nói "5 cycle".
 
-## Phụ thuộc cần chốt với CDO (block P0)
+---
 
-- **C1 observability lên** (Prometheus/OpenSearch/Jaeger) — không có = AIOPS-007/012 đứng.
-- **Change log #tf3-changes** — nuôi RCA (AIOPS-005).
-- **Fire-drill window** — cần cluster thật cho AIOPS-007.
+## 🛠️ Chi tiết hạng mục (đồng bộ mô tả với code)
 
-## 3 câu quyết định (chốt để mở khoá backlog)
+### AIOps-01 · Anomaly + Burn-rate SLO ✅ DONE
+- **Đã build:** [detector_burnrate.py] (multiwindow 14.4×/6×/1×) + [detector_anomaly.py]
+  (robust z-score median+MAD, focus checkout/payment/cart/kafka/email theo INC-history) +
+  [burnrate_alerts.yaml] (lớp dự phòng chạy thẳng Alertmanager khi engine chết).
+- **DoD đạt:** burn-rate là nguồn page duy nhất; anomaly ≤warning; test spike→fire, normal→silent.
+- **Metric:** SLO violation detection; anomaly confidence<0.7 bị lọc.
 
-1. Anomaly nghiêm trọng (kafka lag/OOM) nâng critical có điều kiện? → ảnh hưởng AIOPS-002 threshold.
-2. LLM-augment RCA bật hay OFF? → AIOPS-011.
-3. Storm threshold 20→10 alert/h? → AIOPS-003.
+### AIOps-06 · Approval Gate — Human-in-loop (C6) 🟡 đang làm
+- **Mục tiêu:** card duyệt/từ chối (Slack Block Kit hoặc webhook generic) → callback → thực thi.
+  `approval.by` phải là người thật (C6 invariant).
+- **Thực dụng:** làm **framework-agnostic** — core approval logic không cứng phụ thuộc Slack/ALB;
+  Slack chỉ là 1 adapter. Chạy + test không cần hạ tầng AWS.
+- **DoD:** click Approve → thực thi action; Reject → ghi record `rejected`, không thực thi.
+
+### AIOps-04 · Safety Gate + Dry-run 🟡 đang làm
+- **Mục tiêu:** whitelist action (scale/restart/cache-flush/breaker-force/toggle-tf-flag),
+  dry-run trước khi thực thi, **hard-block flagd/flag BTC** + chặn action phá hủy single-replica
+  (bài học INC-2). Rate-limit 3 action/incident/h.
+- **DoD:** chặn 100% action ngoài whitelist; chặn action đụng flagd; mọi record có rollback_plan.
+
+### AIOps-02 · RCA topology ✅ DONE (tĩnh)
+- **Đã build:** [rca_assistant.py] — topology walk trên DEPENDENCY_MAP + causal-by-time,
+  ≥2 hypothesis (anti-anchor), fail-graceful. Evidence Pack markdown ≤30m.
+- **Không làm:** Jaeger DAG đệ quy (over-engineering ở 18 service).
+
+### AIOps-03 · Bằng chứng + phân cụm log 🟡 một phần
+- **Đã có:** OpenSearch terms-agg top-5 error signature trong Evidence Pack.
+- **Chưa:** Drain3 template mining (đưa vào khi bật LLM-augment RCA).
+
+### AIOps-05 · Deploy EKS ⏳ chờ C1
+- Dockerfile + K8s manifest + ServiceAccount/IRSA read-only. Chờ observability CDO lên.
+
+### AIOps-07 · Chống báo giả ✅ DONE (multiwindow)
+- Multiwindow: chỉ page khi long+short cùng cháy → transient spike <5m tự loại. Dedup fingerprint 15m.
+
+### AIOps-08 · Blast Radius ✅ DONE
+- [correlator.py] `_blast_radius`: service + upstream phụ thuộc, từ dependency graph.
+
+### AIOps-09 · Chaos/flagd fire-drill ⏳ T3
+- Bật từng flag trên docker-compose local → đo detection latency ≤3m + precision. Số cho Ops Review.
+
+### AIOps-10 · ADR ⏳ T3
+- Mọi lỗi Tuần 2: lỗi gì + solution + why, ký tên.
+
+---
+
+## Phụ thuộc block (cần CDO)
+- **C1 observability** (Prometheus/OpenSearch/Jaeger) → block AIOps-05/09.
+- **Change log #tf3-changes** → nuôi RCA (AIOps-02/03).
+- **Cluster + fire-drill window** → AIOps-09.
+
+## 3 quyết định cần chốt
+1. Anomaly nghiêm trọng (kafka lag/OOM) nâng critical có điều kiện? → AIOps-01 threshold.
+2. Slack thật hay webhook generic cho approval? → AIOps-06 adapter.
+3. Bật Drain3 + LLM-augment RCA (cost/hallucination) hay giữ deterministic? → AIOps-03.
