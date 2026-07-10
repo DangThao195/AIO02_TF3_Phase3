@@ -13,23 +13,28 @@
 # Cửa sổ dài (1d,3d) chỉ có data sau khi Prometheus chạy đủ thời gian đó (cần retention ≥ 3 ngày).
 
 groups:
-  # ══════════════════════ TẦNG 1: SLI (error ratio theo cửa sổ) ══════════════════════
   - name: techx_sli
     interval: 30s
     rules:
-      # ── checkout error ratio (revenue-critical, SLO ≥ 99%) — đủ 7 cửa sổ cho 4 cặp ──
+      # ── checkout success ratio (revenue-critical, SLO ≥ 99%) ──
+      # Entry span of the checkout service; total vs error over 5m/30m/1h/6h/3d windows.
       - record: sli:checkout_error:ratio_rate5m
-        expr: sum(rate(traces_span_metrics_calls_total{service_name="checkout",status_code="STATUS_CODE_ERROR"}[5m])) / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="checkout"}[5m])), 1e-9)
+        expr: |
+          sum(rate(traces_span_metrics_calls_total{service_name="checkout",status_code="STATUS_CODE_ERROR"}[5m]))
+          /
+          clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="checkout"}[5m])), 1e-9)
       - record: sli:checkout_error:ratio_rate30m
-        expr: sum(rate(traces_span_metrics_calls_total{service_name="checkout",status_code="STATUS_CODE_ERROR"}[30m])) / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="checkout"}[30m])), 1e-9)
+        expr: |
+          sum(rate(traces_span_metrics_calls_total{service_name="checkout",status_code="STATUS_CODE_ERROR"}[30m]))
+          / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="checkout"}[30m])), 1e-9)
       - record: sli:checkout_error:ratio_rate1h
-        expr: sum(rate(traces_span_metrics_calls_total{service_name="checkout",status_code="STATUS_CODE_ERROR"}[1h])) / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="checkout"}[1h])), 1e-9)
-      - record: sli:checkout_error:ratio_rate2h
-        expr: sum(rate(traces_span_metrics_calls_total{service_name="checkout",status_code="STATUS_CODE_ERROR"}[2h])) / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="checkout"}[2h])), 1e-9)
+        expr: |
+          sum(rate(traces_span_metrics_calls_total{service_name="checkout",status_code="STATUS_CODE_ERROR"}[1h]))
+          / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="checkout"}[1h])), 1e-9)
       - record: sli:checkout_error:ratio_rate6h
-        expr: sum(rate(traces_span_metrics_calls_total{service_name="checkout",status_code="STATUS_CODE_ERROR"}[6h])) / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="checkout"}[6h])), 1e-9)
-      - record: sli:checkout_error:ratio_rate1d
-        expr: sum(rate(traces_span_metrics_calls_total{service_name="checkout",status_code="STATUS_CODE_ERROR"}[1d])) / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="checkout"}[1d])), 1e-9)
+        expr: |
+          sum(rate(traces_span_metrics_calls_total{service_name="checkout",status_code="STATUS_CODE_ERROR"}[6h]))
+          / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="checkout"}[6h])), 1e-9)
       - record: sli:checkout_error:ratio_rate3d
         expr: sum(rate(traces_span_metrics_calls_total{service_name="checkout",status_code="STATUS_CODE_ERROR"}[3d])) / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="checkout"}[3d])), 1e-9)
 

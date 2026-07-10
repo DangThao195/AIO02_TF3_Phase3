@@ -1,9 +1,12 @@
 """C6 remediation + approval tests (AIOps-04/06). The safety envelope, not K8s itself."""
 from __future__ import annotations
 
+import tempfile
+
 import pytest
 
 from ai_engine.aiops.approval import Decision, parse_callback, render_slack_blockkit
+from ai_engine.aiops.audit_log import AuditLog
 from ai_engine.aiops.remediation import (
     RemediationEngine,
     RemediationRefused,
@@ -17,7 +20,11 @@ def _engine(calls=None, single_replica=None):
     def executor(record, dry_run):
         calls.append((record.action_id, dry_run))
         return "p99 back to baseline" if not dry_run else "dry-run ok"
-    return RemediationEngine(executor=executor, single_replica_services=single_replica or set()), calls
+    # Isolate the audit sink to a temp dir so tests never write to the real TF3/incidents/.
+    audit = AuditLog(tempfile.mkdtemp(prefix="tf3-audit-test-"))
+    return RemediationEngine(
+        executor=executor, single_replica_services=single_replica or set(), audit=audit
+    ), calls
 
 
 def _propose(eng, action=ActionType.SCALE, target="deployment/payment", rollback="scale to 2"):

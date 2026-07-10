@@ -1,75 +1,135 @@
-# Multiwindow multi-burn-rate ALERTS (C2 §Failure-modes: Alertmanager failsafe layer).
+# Multiwindow multi-burn-rate alerts (C2 §Failure-modes: the Alertmanager fallback layer).
 #
-# Chuẩn Google SRE Workbook ch.5 (mô hình sloth/pyrra). 4 CẶP cho checkout — mỗi cặp fire khi
-# CẢ cửa sổ dài VÀ ngắn cùng vượt ngưỡng (kills spike). Ngưỡng = burn_rate × error_budget.
+# Google SRE Workbook thresholds for a 99% SLO (error budget = 1%):
+#   critical: burn 14.4x on 1h  AND 5m   (page now)
+#   warning : burn 6x   on 6h   AND 30m  (handle in shift)
+#   info    : burn 1x   on 3d   AND 6h   (ticket / email)
+# An alert fires ONLY when BOTH long and short windows breach — kills 5-minute spikes.
 #
-#   checkout SLO 99% (budget 0.01):
-#     Cặp 1 PAGE nhanh : 14.4× → 0.144, cửa sổ 1h + 5m   (~2% budget/1h)
-#     Cặp 2 PAGE vừa   :  6.0× → 0.060, cửa sổ 6h + 30m  (~5% budget/6h)
-#     Cặp 3 TICKET vừa :  3.0× → 0.030, cửa sổ 1d + 2h   (~10% budget/1d)
-#     Cặp 4 TICKET chậm:  1.0× → 0.010, cửa sổ 3d + 6h   (budget cạn dần)
-#   browse/cart SLO 99.5% (budget 0.005): page nhanh 14.4× → 0.072.
+# WHY this file exists even though the engine also detects: if the AI engine dies, these
+# rules keep paging straight from Prometheus/Alertmanager (C2 failure mode). AIO authors
+# them; CDO hosts them. The engine adds correlation/enrichment on top, not the page itself.
 #
-# WHY: nếu AI engine chết, các rule này vẫn page thẳng từ Prometheus/Alertmanager. AIO viết,
-# CDO host. Engine (detector_burnrate.py) thêm correlation/enrichment lên trên, không thay thế.
+# error_budget = 1 - SLO. threshold(long,short) = burn_rate * error_budget.
+#   checkout (SLO 99%): 14.4 * 0.01 = 0.144 ; 6 * 0.01 = 0.06 ; 1 * 0.01 = 0.01
+#   browse/cart (SLO 99.5%): 14.4 * 0.005 = 0.072 ; 6 * 0.005 = 0.03 ; 1 * 0.005 = 0.005
 
 groups:
   - name: techx_checkout_burnrate
     rules:
-      # ── Cặp 1: PAGE nhanh (14.4×, 1h+5m) ──
-      - alert: CheckoutBurnRateCriticalFast
-        expr: sli:checkout_error:ratio_rate1h > 0.144 and sli:checkout_error:ratio_rate5m > 0.144
+      - alert: CheckoutBurnRateCritical
+        expr: |
+          sli:checkout_error:ratio_rate1h > 0.144
+          and
+          sli:checkout_error:ratio_rate5m > 0.144
         for: 2m
-        labels: { severity: critical, service: checkout, sli: checkout_success_ratio, source_layer: slo-burnrate, pair: "1-page-fast" }
+        labels:
+          severity: critical
+          service: checkout
+          sli: checkout_success_ratio
+          source_layer: slo-burnrate
         annotations:
-          summary: "Checkout burn 14.4x (1h+5m) — page NOW"
+          summary: "Checkout burning error budget 14.4x (1h+5m)"
           description: "checkout error ratio {{ $value | humanizePercentage }} — revenue flow degraded."
           runbook: "TF3/ai-engine/runbooks/RB-PAY-01.md"
-      # ── Cặp 2: PAGE vừa (6×, 6h+30m) ──
-      - alert: CheckoutBurnRateCriticalSlow
-        expr: sli:checkout_error:ratio_rate6h > 0.06 and sli:checkout_error:ratio_rate30m > 0.06
+
+      - alert: CheckoutBurnRateWarning
+        expr: |
+          sli:checkout_error:ratio_rate6h > 0.06
+          and
+          sli:checkout_error:ratio_rate30m > 0.06
         for: 5m
-        labels: { severity: critical, service: checkout, sli: checkout_success_ratio, source_layer: slo-burnrate, pair: "2-page-slow" }
+        labels:
+          severity: warning
+          service: checkout
+          sli: checkout_success_ratio
+          source_layer: slo-burnrate
         annotations:
-          summary: "Checkout burn 6x (6h+30m) — page"
-          runbook: "TF3/ai-engine/runbooks/RB-PAY-01.md"
-      # ── Cặp 3: TICKET vừa (3×, 1d+2h) ──
-      - alert: CheckoutBurnRateWarningMedium
-        expr: sli:checkout_error:ratio_rate1d > 0.03 and sli:checkout_error:ratio_rate2h > 0.03
-        for: 15m
-        labels: { severity: warning, service: checkout, sli: checkout_success_ratio, source_layer: slo-burnrate, pair: "3-ticket-medium" }
+          summary: "Checkout burning error budget 6x (6h+30m)"
+
+      - alert: CheckoutBurnRateInfo
+        expr: |
+          sli:checkout_error:ratio_rate3d > 0.01
+          and
+          sli:checkout_error:ratio_rate6h > 0.01
+        for: 30m
+        labels:
+          severity: info
+          service: checkout
+          sli: checkout_success_ratio
+          source_layer: slo-burnrate
         annotations:
-          summary: "Checkout burn 3x (1d+2h) — ticket, xử trong ngày"
-      # ── Cặp 4: TICKET chậm (1×, 3d+6h) ──
-      - alert: CheckoutBurnRateWarningSlow
-        expr: sli:checkout_error:ratio_rate3d > 0.01 and sli:checkout_error:ratio_rate6h > 0.01
-        for: 1h
-        labels: { severity: warning, service: checkout, sli: checkout_success_ratio, source_layer: slo-burnrate, pair: "4-ticket-slow" }
-        annotations:
-          summary: "Checkout burn 1x (3d+6h) — ticket, đưa Ops Review"
+          summary: "Checkout burning error budget 1x (3d+6h)"
 
   - name: techx_browse_cart_burnrate
     rules:
-      # browse/cart SLO 99.5% -> page nhanh 14.4× × 0.005 = 0.072
+      # ── browse/frontend alerts ──
       - alert: BrowseBurnRateCritical
-        expr: sli:frontend_error:ratio_rate1h > 0.072 and sli:frontend_error:ratio_rate5m > 0.072
+        expr: |
+          sli:frontend_error:ratio_rate1h > 0.072
+          and
+          sli:frontend_error:ratio_rate5m > 0.072
         for: 2m
-        labels: { severity: critical, service: frontend, sli: browse_success_ratio, source_layer: slo-burnrate, pair: "1-page-fast" }
+        labels: { severity: critical, service: frontend, sli: browse_success_ratio, source_layer: slo-burnrate }
         annotations:
-          summary: "Browse burn 14.4x (1h+5m)"
+          summary: "Browse burning error budget 14.4x (1h+5m)"
+
+      - alert: BrowseBurnRateWarning
+        expr: |
+          sli:frontend_error:ratio_rate6h > 0.03
+          and
+          sli:frontend_error:ratio_rate30m > 0.03
+        for: 5m
+        labels: { severity: warning, service: frontend, sli: browse_success_ratio, source_layer: slo-burnrate }
+        annotations:
+          summary: "Browse burning error budget 6x (6h+30m)"
+
+      - alert: BrowseBurnRateInfo
+        expr: |
+          sli:frontend_error:ratio_rate3d > 0.005
+          and
+          sli:frontend_error:ratio_rate6h > 0.005
+        for: 30m
+        labels: { severity: info, service: frontend, sli: browse_success_ratio, source_layer: slo-burnrate }
+        annotations:
+          summary: "Browse burning error budget 1x (3d+6h)"
+
+      # ── cart alerts ──
       - alert: CartBurnRateCritical
-        expr: sli:cart_error:ratio_rate1h > 0.072 and sli:cart_error:ratio_rate5m > 0.072
+        expr: |
+          sli:cart_error:ratio_rate1h > 0.072
+          and
+          sli:cart_error:ratio_rate5m > 0.072
         for: 2m
-        labels: { severity: critical, service: cart, sli: cart_success_ratio, source_layer: slo-burnrate, pair: "1-page-fast" }
+        labels: { severity: critical, service: cart, sli: cart_success_ratio, source_layer: slo-burnrate }
         annotations:
-          summary: "Cart burn 14.4x (1h+5m)"
+          summary: "Cart burning error budget 14.4x (1h+5m)"
+
+      - alert: CartBurnRateWarning
+        expr: |
+          sli:cart_error:ratio_rate6h > 0.03
+          and
+          sli:cart_error:ratio_rate30m > 0.03
+        for: 5m
+        labels: { severity: warning, service: cart, sli: cart_success_ratio, source_layer: slo-burnrate }
+        annotations:
+          summary: "Cart burning error budget 6x (6h+30m)"
+
+      - alert: CartBurnRateInfo
+        expr: |
+          sli:cart_error:ratio_rate3d > 0.005
+          and
+          sli:cart_error:ratio_rate6h > 0.005
+        for: 30m
+        labels: { severity: info, service: cart, sli: cart_success_ratio, source_layer: slo-burnrate }
+        annotations:
+          summary: "Cart burning error budget 1x (3d+6h)"
 
   - name: techx_latency
     rules:
-      # latency SLI ratio: <95% request dưới 1s trong 1h → cảnh báo (SLO p95<1s)
-      - alert: StorefrontLatencySLOBreach
-        expr: sli:frontend_latency:ratio_under1s_1h < 0.95
-        for: 10m
-        labels: { severity: warning, service: frontend, sli: browse_latency, source_layer: slo-burnrate }
+      - alert: StorefrontLatencyP95High
+        expr: sli:frontend_latency:p95_5m > 1
+        for: 5m
+        labels: { severity: warning, service: frontend, sli: browse_latency_p95, source_layer: slo-burnrate }
         annotations:
-          summary: "Storefront: <95% request dưới 1s trong 1h (SLO p95<1s breach)"
+          summary: "Storefront p95 latency > 1s (SLO breach)"

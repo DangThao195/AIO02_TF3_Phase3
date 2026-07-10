@@ -44,6 +44,23 @@ class GatewayConfig:
 
 
 @dataclass(frozen=True)
+class CostConfig:
+    """C5 — AI cost showback + budget guardrail.
+
+    `weekly_budget_usd` is the ONE number CDO Cost pillar must supply (via env, backed by an
+    ADR). Until they do, this default is AIO's proposal; alerts fire at 80% (warning) and
+    100% (critical) of it.
+    """
+
+    weekly_budget_usd: float = float(os.environ.get("AI_BUDGET_WEEKLY_USD", "50"))
+    warn_ratio: float = float(os.environ.get("AI_BUDGET_WARN_RATIO", "0.80"))
+    pricing_path: str = os.environ.get(
+        "AI_PRICING_PATH",
+        str(__import__("pathlib").Path(__file__).resolve().parents[3] / "cost" / "model-pricing.yaml"),
+    )
+
+
+@dataclass(frozen=True)
 class SLOConfig:
     """SLO targets from onboarding/SLO.md — drive burn-rate thresholds (C2)."""
 
@@ -61,12 +78,39 @@ class AlertConfig:
 
 
 @dataclass(frozen=True)
+class SlackConfig:
+    """Slack App configuration (C6 Approval Gate / AIOps-06)."""
+
+    app_id: str | None = os.environ.get("SLACK_APP_ID")
+    client_id: str | None = os.environ.get("SLACK_CLIENT_ID")
+    client_secret: str | None = os.environ.get("SLACK_CLIENT_SECRET")
+    signing_secret: str | None = os.environ.get("SLACK_SIGNING_SECRET")
+    verification_token: str | None = os.environ.get("SLACK_VERIFICATION_TOKEN")
+    bot_token: str | None = os.environ.get("SLACK_BOT_TOKEN")
+    channel_id: str | None = os.environ.get("SLACK_CHANNEL_ID")
+
+
+@dataclass(frozen=True)
 class Config:
     telemetry: TelemetryConfig = TelemetryConfig()
     gateway: GatewayConfig = GatewayConfig()
     slo: SLOConfig = SLOConfig()
     alert: AlertConfig = AlertConfig()
+    slack: SlackConfig = SlackConfig()
+    cost: CostConfig = CostConfig()
 
 
 def load_config() -> Config:
+    # Optional: Load from local .env file if present
+    try:
+        from pathlib import Path
+        env_path = Path(__file__).parents[3] / ".env"
+        if env_path.exists():
+            with open(env_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.strip() and not line.startswith("#") and "=" in line:
+                        k, v = line.strip().split("=", 1)
+                        os.environ.setdefault(k, v)
+    except Exception:
+        pass
     return Config()

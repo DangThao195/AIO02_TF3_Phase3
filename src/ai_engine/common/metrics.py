@@ -33,6 +33,10 @@ COST_TOKENS = Counter(
 )
 COST_USD = Counter("ai_cost_usd_total", "Cumulative AI cost in USD", ["model", "feature"])
 COST_PER_REQUEST = Gauge("ai_cost_per_request_usd", "Rolling 1h avg cost per summary")
+COST_BUDGET_WEEKLY = Gauge("ai_cost_budget_weekly_usd", "Weekly AI budget ceiling from CDO (C5)")
+COST_BUDGET_USED_RATIO = Gauge(
+    "ai_cost_budget_used_ratio", "This week's AI spend / weekly budget (0..1+, C5)"
+)
 
 
 ALERTS_EMITTED = Counter("ai_engine_alerts_total", "Alerts emitted", ["severity", "source_layer"])

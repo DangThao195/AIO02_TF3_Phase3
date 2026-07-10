@@ -39,6 +39,13 @@ def test_classify_warning_tier():
     assert result[0] is Severity.WARNING
 
 
+def test_classify_info_tier():
+    # Above 1x (0.01) but below 6x (0.06) on both windows -> info.
+    result = classify(error_ratio_long=0.02, error_ratio_short=0.02, budget=0.01)
+    assert result is not None
+    assert result[0] is Severity.INFO
+
+
 # ─────────────────────────── detector with fake Prometheus ───────────────────────────
 class FakeProm:
     def __init__(self, values: dict[str, float]):
@@ -59,6 +66,20 @@ async def test_detector_fires_checkout_critical():
     signals = await det.evaluate()
     assert len(signals) == 1
     assert signals[0].severity is Severity.CRITICAL
+    assert signals[0].service == "checkout"
+
+
+@pytest.mark.asyncio
+async def test_detector_fires_checkout_info():
+    prom = FakeProm({
+        "sli:checkout_error:ratio_rate3d": 0.02,
+        "sli:checkout_error:ratio_rate6h": 0.02,
+    })
+    det = BurnRateDetector(prom, [SLODef("checkout", "checkout_success_ratio", 0.99,
+                                          "sli:checkout_error:ratio_rate")])
+    signals = await det.evaluate()
+    assert len(signals) == 1
+    assert signals[0].severity is Severity.INFO
     assert signals[0].service == "checkout"
 
 

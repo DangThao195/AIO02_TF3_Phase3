@@ -18,12 +18,20 @@ Fail-graceful (C3): if a telemetry source is slow/blind, the missing section is 
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Callable
 
 from ..common.telemetry import JaegerClient, OpenSearchClient, PrometheusClient, TelemetryError
 from .correlator import DEPENDENCY_MAP, Incident
+from .local_matcher import match_incident_locally
+
+log = logging.getLogger("ai_engine.rca_assistant")
+
+# Repo-relative: .../aiops/rca_assistant.py -> parents[4] == TF3/
+_INCIDENTS_ROOT = Path(__file__).resolve().parents[4] / "incidents"
 
 
 @dataclass
@@ -46,6 +54,9 @@ class EvidencePack:
     logs_note: str = ""
     hypotheses: list[Hypothesis] = field(default_factory=list)
     incomplete: list[str] = field(default_factory=list)
+    # C4.6 — deterministic offline diagnosis (matched incident + safe suggested action),
+    # always populated so a pack is actionable even when the LLM diagnostician is down.
+    local_diagnosis: dict = field(default_factory=dict)
 
     def to_markdown(self) -> str:
         lines = [
@@ -73,10 +84,34 @@ class EvidencePack:
               for i, h in enumerate(self.hypotheses)],
             "",
         ]
+        if self.local_diagnosis:
+            ld = self.local_diagnosis
+            lines += [
+                "## 5. Chẩn đoán offline (fallback khi LLM chết — C4.6)",
+                f"- Khớp sự cố: **{ld.get('matched_incident', 'None')}** "
+                f"(nguồn: {ld.get('source', 'local-fallback')})",
+                f"- Hành động đề xuất (an toàn, vẫn cần approve C6): **{ld.get('proposed_action', 'none')}**"
+                + (f" — `{ld['action_command']}`" if ld.get('action_command') else ""),
+                f"- Phân tích: {ld.get('analysis', '')}",
+                *([f"- Dẫn chứng: {'; '.join(ld['citations'])}"] if ld.get("citations") else []),
+                "",
+            ]
         if self.incomplete:
             lines += ["> ⚠ Evidence incomplete: " + ", ".join(self.incomplete), ""]
         lines += ["## 7. Người xác nhận root cause: ________ (ký tên — bắt buộc trước khi đóng)"]
         return "\n".join(lines)
+
+    def write(self, root: str | Path | None = None) -> Path:
+        """C3 — persist the DRAFT pack to incidents/<id>/evidence-pack.md so it survives the
+        engine dying (the file, not the process, is the deliverable) and goes to git next to
+        that incident's actions.jsonl. Returns the path written."""
+        base = Path(root) if root else _INCIDENTS_ROOT
+        safe = "".join(c for c in self.incident_id if c.isalnum() or c in "-_")
+        path = base / safe / "evidence-pack.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(self.to_markdown(), encoding="utf-8")
+        log.info("evidence pack written: %s", path)
+        return path
 
 
 class RCAAssistant:
@@ -112,11 +147,21 @@ class RCAAssistant:
         await self._gather_logs(incident.blast_radius, pack)
 
         pack.hypotheses = self._rank_hypotheses(incident)
+
+        # C4.6 — deterministic offline diagnosis. Uses the culprit (deepest anomalous
+        # downstream, else primary) + any gathered log signatures. Always safe (INC-2→none).
+        culprit = (incident.blast_radius[-1] if incident.blast_radius else primary.service)
+        log_templates = [{"message": line.lstrip("- ")} for line in pack.logs_note.splitlines()
+                         if line.strip() and not line.startswith("no ")]
+        pack.local_diagnosis = match_incident_locally(
+            culprit_service=culprit, log_templates=log_templates,
+        ).to_dict()
+
         if self._llm_phraser is not None:
             try:
                 pack.hypotheses = self._llm_phraser(pack.hypotheses)
             except Exception:
-                pack.incomplete.append("llm phrasing skipped (error)")
+                pack.incomplete.append("llm phrasing skipped (error) — dùng local_diagnosis")
         return pack
 
     async def _gather_traces(self, service: str, pack: EvidencePack) -> None:

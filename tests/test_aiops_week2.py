@@ -30,12 +30,17 @@ def test_robust_zscore_ignores_normal_variation():
 
 
 class FakeProm:
-    def __init__(self, current, baseline):
+    def __init__(self, current, baseline, use_values_list=False):
         self._current = current
         self._baseline = baseline
+        self._use_values_list = use_values_list
     async def scalar(self, q, default=None):
         return self._current
     async def instant(self, q):
+        if self._use_values_list:
+            # Range vector response style containing a 'values' list of points
+            return [{"values": [[0, str(v)] for v in self._baseline]}]
+        # Instant vector style containing a 'value' point per series
         return [{"value": [0, str(v)]} for v in self._baseline]
 
 
@@ -56,6 +61,17 @@ async def test_anomaly_detector_silent_when_normal():
                       current_query="q", baseline_query="b")
     det = AnomalyDetector(FakeProm(current=101.0, baseline=[100.0] * 20), [m])
     assert await det.evaluate() == []
+
+
+@pytest.mark.asyncio
+async def test_anomaly_detector_handles_values_list():
+    # Verify that the detector correctly parses a 'values' list returned by range subqueries.
+    m = AnomalyMetric(name="checkout_latency_p95", service="checkout",
+                      current_query="q", baseline_query="b", unit="ms")
+    det = AnomalyDetector(FakeProm(current=800.0, baseline=[100.0] * 20, use_values_list=True), [m])
+    signals = await det.evaluate()
+    assert len(signals) == 1
+    assert signals[0].severity in (Severity.WARNING, Severity.INFO)
 
 
 # ─────────────────────────── correlator: graph merge ───────────────────────────

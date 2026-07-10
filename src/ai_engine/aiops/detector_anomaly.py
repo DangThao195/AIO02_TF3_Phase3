@@ -143,11 +143,20 @@ class AnomalyDetector:
         results = await self._prom.instant(query)
         values: list[float] = []
         for r in results:
-            v = r.get("value") or (r.get("values") or [[None, None]])[-1]
-            try:
-                values.append(float(v[1]))
-            except (TypeError, ValueError, IndexError):
-                continue
+            points = r.get("values")
+            if points:
+                for p in points:
+                    try:
+                        values.append(float(p[1]))
+                    except (TypeError, ValueError, IndexError):
+                        continue
+            else:
+                v = r.get("value")
+                if v:
+                    try:
+                        values.append(float(v[1]))
+                    except (TypeError, ValueError, IndexError):
+                        pass
         return values
 
 
@@ -170,19 +179,19 @@ def default_anomaly_metrics() -> list[AnomalyMetric]:
         metrics.append(AnomalyMetric(
             name=f"{svc}_latency_p95", service=svc,
             current_query=dur_p95(svc),
-            baseline_query=f'quantile_over_time(0.5, ({dur_p95(svc)})[1w:5m])',
+            baseline_query=f'({dur_p95(svc)})[1w:5m]',
             unit="ms",
         ))
 
     metrics.append(AnomalyMetric(
         name="kafka_consumer_lag", service="kafka",
         current_query='sum(kafka_consumergroup_lag)',
-        baseline_query='quantile_over_time(0.5, (sum(kafka_consumergroup_lag))[1w:5m])',
+        baseline_query='(sum(kafka_consumergroup_lag))[1w:5m]',
     ))
 
     metrics.append(AnomalyMetric(
         name="email_memory_bytes", service="email",
         current_query='sum(container_memory_working_set_bytes{pod=~"email.*"})',
-        baseline_query='quantile_over_time(0.5, (sum(container_memory_working_set_bytes{pod=~"email.*"}))[1w:5m])',
+        baseline_query='(sum(container_memory_working_set_bytes{pod=~"email.*"}))[1w:5m]',
     ))
     return metrics

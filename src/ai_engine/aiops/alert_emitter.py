@@ -82,25 +82,70 @@ def _suggest(service: str, blast: list[str]) -> str:
 
 class AlertEmitter:
     def __init__(self, cfg: AlertConfig, client: httpx.AsyncClient | None = None,
-                 storm_threshold: int = 20, clock=time.time):
+                 storm_threshold: int = 20, clock=time.time, slack_cfg=None):
         self._cfg = cfg
         self._client = client or httpx.AsyncClient(timeout=5)
         self._storm_threshold = storm_threshold
         self._clock = clock
+        self._slack_cfg = slack_cfg
         self._emit_times: list[float] = []
         self._digest: list[AlertEvent] = []
+        # C2.9: fingerprint -> the last firing AlertEvent, so we can send a matching resolved
+        # notice when it stops firing. Keyed by fingerprint (service|sli|layer), not alert_id.
+        self._active: dict[str, AlertEvent] = {}
 
     async def emit(self, incident: Incident) -> AlertEvent:
         alert = build_alert(incident)
         ALERTS_EMITTED.labels(severity=alert.severity.value, source_layer=alert.source_layer.value).inc()
-
 
         if alert.severity is Severity.CRITICAL or not self._in_storm():
             await self._deliver(alert)
         else:
             self._digest.append(alert)
         self._emit_times.append(self._clock())
+        self._active[alert.fingerprint] = alert
         return alert
+
+    async def reconcile(self, incidents) -> list[AlertEvent]:
+        """C2.9 — after a tick, any previously-firing fingerprint NOT in this tick's incidents
+        has recovered: emit a `status:"resolved"` notice so on-call gets closure, not silence.
+        Returns the resolved events emitted."""
+        still_firing = {build_alert(inc).fingerprint for inc in incidents}
+        resolved: list[AlertEvent] = []
+        for fp in list(self._active):
+            if fp in still_firing:
+                continue
+            prev = self._active.pop(fp)
+            notice = prev.model_copy(update={
+                "status": "resolved",
+                "ends_at": datetime.now(timezone.utc),
+                "severity": prev.severity,
+                "suggested_action": "Đã phục hồi — SLI về dưới ngưỡng. Đóng incident nếu không còn tín hiệu.",
+            })
+            await self._deliver_resolved(notice)
+            resolved.append(notice)
+        return resolved
+
+    async def _deliver_resolved(self, alert: AlertEvent) -> None:
+        # A resolved notice is low-noise: plain text so it never re-triggers the incident card.
+        if self._slack_cfg and self._slack_cfg.bot_token and self._slack_cfg.channel_id:
+            text = f"✅ *ĐÃ PHỤC HỒI* — `{alert.service}` / `{alert.sli_impacted}` về ngưỡng (alert {alert.alert_id})."
+            try:
+                headers = {"Authorization": f"Bearer {self._slack_cfg.bot_token}",
+                           "Content-Type": "application/json; charset=utf-8"}
+                await self._client.post("https://slack.com/api/chat.postMessage",
+                                        json={"channel": self._slack_cfg.channel_id, "text": text},
+                                        headers=headers)
+                return
+            except Exception as exc:
+                log.warning("resolved-notice slack delivery failed: %s", exc)
+        if self._cfg.webhook_url:
+            try:
+                await self._client.post(self._cfg.webhook_url, json=alert.model_dump(mode="json"))
+            except httpx.HTTPError as exc:
+                log.warning("resolved-notice webhook failed: %s", exc)
+        else:
+            log.info("resolved (no webhook): %s", alert.model_dump_json())
 
     def _in_storm(self) -> bool:
         cutoff = self._clock() - 3600
@@ -108,14 +153,118 @@ class AlertEmitter:
         return len(self._emit_times) >= self._storm_threshold
 
     async def _deliver(self, alert: AlertEvent) -> None:
+        # Deliver via Slack Bot Token if configured
+        if self._slack_cfg and self._slack_cfg.bot_token and self._slack_cfg.channel_id:
+            try:
+                payload = self._format_slack_message(alert)
+                payload["channel"] = self._slack_cfg.channel_id
+                headers = {
+                    "Authorization": f"Bearer {self._slack_cfg.bot_token}",
+                    "Content-Type": "application/json; charset=utf-8"
+                }
+                res = await self._client.post("https://slack.com/api/chat.postMessage", json=payload, headers=headers)
+                log.info("Alert delivered via Slack Bot: %s", res.text)
+                return
+            except Exception as exc:
+                log.warning("Slack Bot alert delivery failed: %s", exc)
+
+        # Deliver via Incoming Webhook (Slack compatible format if URL matches)
         if not self._cfg.webhook_url:
             log.info("alert (no webhook configured): %s", alert.model_dump_json())
             return
-        try:
-            await self._client.post(self._cfg.webhook_url, json=alert.model_dump(mode="json"))
-        except httpx.HTTPError as exc:
 
+        try:
+            if "hooks.slack.com" in self._cfg.webhook_url:
+                payload = self._format_slack_message(alert)
+                await self._client.post(self._cfg.webhook_url, json=payload)
+            else:
+                await self._client.post(self._cfg.webhook_url, json=alert.model_dump(mode="json"))
+        except httpx.HTTPError as exc:
             log.warning("alert webhook delivery failed (dashboard fallback still shows it): %s", exc)
+
+    def _format_slack_message(self, alert: AlertEvent) -> dict:
+        blocks = [
+            {
+                "type": "header",
+                "text": {
+                    "type": "plain_text",
+                    "text": f"🚨 Báo động hệ thống: {alert.service.upper()} ({alert.severity.value.upper()})"
+                }
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*Dịch vụ:* `{alert.service}`\n*Chỉ số vỡ:* `{alert.sli_impacted}`\n*Mức độ:* `{alert.severity.value}`"
+                }
+            }
+        ]
+
+        fields = []
+        if alert.burn_rate:
+            fields.append(f"*Burn Rate:* `{alert.burn_rate}x`")
+        if alert.windows:
+            fields.append(f"*Cửa sổ:* `{alert.windows.long}/{alert.windows.short}`")
+        if alert.slo_target:
+            fields.append(f"*Mục tiêu SLO:* `{alert.slo_target * 100}%`")
+
+        if fields:
+            blocks.append({
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": " | ".join(fields)
+                }
+            })
+
+        blocks.append({"type": "divider"})
+
+        evidence_fields = []
+        if alert.evidence.promql:
+            evidence_fields.append(f"*PromQL:* \n`{alert.evidence.promql}`")
+        if alert.evidence.log_query:
+            evidence_fields.append(f"*Log Query:* \n`{alert.evidence.log_query}`")
+
+        if evidence_fields:
+            blocks.append({
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "\n".join(evidence_fields)
+                }
+            })
+
+        actions = []
+        if alert.evidence.grafana_panel:
+            actions.append({
+                "type": "button",
+                "text": {"type": "plain_text", "text": "📊 Xem Grafana"},
+                "url": alert.evidence.grafana_panel,
+                "action_id": "view_grafana"
+            })
+        if alert.runbook_link:
+            actions.append({
+                "type": "button",
+                "text": {"type": "plain_text", "text": "📖 Xem Runbook"},
+                "url": "https://github.com/kietoichoiDXD/AIOPS-w1/blob/main/" + alert.runbook_link,
+                "action_id": "view_runbook"
+            })
+
+        if actions:
+            blocks.append({
+                "type": "actions",
+                "elements": actions
+            })
+
+        if alert.suggested_action:
+            blocks.append({
+                "type": "context",
+                "elements": [
+                    {"type": "mrkdwn", "text": f"*Gợi ý xử lý:* {alert.suggested_action}"}
+                ]
+            })
+
+        return {"blocks": blocks}
 
     async def flush_digest(self) -> list[AlertEvent]:
         """Called every 10 min by the loop: deliver the folded warning/info bulletin."""
