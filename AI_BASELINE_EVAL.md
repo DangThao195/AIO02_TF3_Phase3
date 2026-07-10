@@ -74,128 +74,488 @@ _Dành cho TICKET 2 (Thịnh) - Đánh giá xem tóm tắt do AI sinh ra có tru
 
 ### 1. Phương pháp đánh giá đang dùng trong `repro/eval_fidelity.py`
 
-Bộ evaluator hiện tại đã được chuyển sang **hybrid evaluation**: kết hợp `rule-based` và `LLM-as-a-judge` thay vì chỉ chấm bằng string match hoặc chỉ nhìn một điểm tổng.
+Bộ evaluator hiện tại đã được chuyển sang **hybrid evaluation**: kết hợp `rule-based` và `LLM-as-a-judge`, thay vì chỉ so khớp chuỗi hoặc chỉ nhìn một điểm tổng.
+
+### 1. Phương pháp đánh giá đang dùng trong `repro/eval_fidelity.py`
 
 Pipeline đánh giá hiện tại:
 
 1. Lấy **review thật** từ PostgreSQL theo `product_id`.
 2. Gọi gRPC `AskProductAIAssistant` để lấy **candidate summary** do hệ thống AI hiện tại sinh ra.
-3. Tạo **fact sheet** từ review thật, gồm:
-   - `review_count`
-   - `average_score`
-   - `rating_distribution`
-   - `top_positive_reviews`
-   - `top_negative_reviews`
-   - `has_explicit_age_signal`
-4. Chạy **rule-based checks** để bắt các lỗi chắc chắn, gồm:
-   - `empty_summary`
-   - số câu / số từ vượt ngưỡng
-   - `unsupported_age_claim`
-   - `average_rating_mismatch`
-   - xung đột sentiment rõ ràng với review thật
-5. Gọi **LLM-as-a-judge** qua API key để chấm các chiều khó hơn, gồm:
-   - `supported / unsupported / contradicted`
-   - `claim_count`
-   - `claim_precision`
-   - `aspect_coverage`
-   - `sentiment_alignment`
-   - `overall_score`
-6. Lưu toàn bộ kết quả vào artifact JSON trong `repro/artifacts/` để audit và so sánh lại nhiều lần chạy.
+3. Tạo **fact sheet** từ review thật.
+4. Chạy **rule-based checks** để bắt lỗi chắc chắn trước khi chấm bằng judge.
+5. Gọi **LLM-as-a-judge** để chấm các chiều khó hơn như factuality, coverage và sentiment.
+6. Gộp kết quả từng case và kết quả toàn bộ run vào một artifact JSON.
+
+Các trường chính được sinh ra trong pipeline:
+
+**Input / Selection**
+
+- `product_ids`: Danh sách product ID được chọn để chạy bộ evaluator lần này.
+- `all_products`: Cờ cho biết đang quét toàn bộ sản phẩm có review.
+- `product_count`: Tổng số sản phẩm thực tế được đưa vào lần chạy này.
+- `candidate_source`: Nguồn sinh summary ứng viên, thường là endpoint gRPC `product-reviews`.
+- `judge_base_url`: Endpoint của model judge dùng để chấm fidelity cho summary.
+- `judge_model`: Tên model judge được dùng trong lần chạy evaluator này.
+
+**Review gốc và fact sheet**
+
+- `raw_reviews`: Danh sách review gốc lấy trực tiếp từ PostgreSQL theo `product_id`.
+- `raw_reviews_count`: Số lượng review gốc tìm thấy cho sản phẩm đang đánh giá.
+- `fact_sheet.product_id`: Product ID tương ứng với cụm review được dùng làm ground truth.
+- `fact_sheet.review_count`: Số review gốc được dùng để tạo fact sheet rút gọn.
+- `fact_sheet.average_score`: Điểm trung bình tính từ các review gốc của sản phẩm.
+- `fact_sheet.rating_distribution`: Phân bố số review theo bucket điểm nguyên trong dữ liệu thật.
+- `fact_sheet.top_positive_reviews`: Ba review điểm cao nhất, đại diện cho tín hiệu tích cực.
+- `fact_sheet.top_negative_reviews`: Ba review điểm thấp nhất, đại diện cho tín hiệu tiêu cực.
+- `fact_sheet.constraints.has_explicit_age_signal`: Có hay không tín hiệu tuổi rõ ràng xuất hiện trong review.
+
+**Rule-based checks**
+
+- `rule_checks.summary_length_chars`: Tổng số ký tự của candidate summary sau khi chuẩn hóa khoảng trắng.
+- `rule_checks.sentence_count`: Số câu trong summary, dùng để kiểm soát độ dài đầu ra.
+- `rule_checks.word_count`: Số từ trong summary, dùng để kiểm soát word budget.
+- `rule_checks.warnings`: Danh sách cảnh báo mềm, không luôn làm case fail ngay.
+- `rule_checks.hard_fail_reasons`: Lý do hard fail trước khi bước judge được thực hiện.
+- `rule_checks.hard_fail`: Cờ đánh dấu case phải dừng sớm vì lỗi cứng.
+- `rule_checks.format_passed`: Cờ pass/fail riêng cho yêu cầu hình thức của summary.
+- `rule_checks.format_findings`: Danh sách lỗi format như quá nhiều câu hoặc quá nhiều từ.
+- `rule_checks.fidelity_findings`: Danh sách lỗi factual chắc chắn phát hiện được bằng rule-based.
+- `rule_checks.unsupported_age_claim`: Có claim về độ tuổi dù review thật không hề nói.
+- `rule_checks.average_rating_mentions`: Các giá trị điểm số mà summary đã nhắc tới.
+- `rule_checks.average_rating_mismatch`: Summary có nêu điểm trung bình lệch so với ground truth.
+- `rule_checks.negative_sentiment_conflict`: Summary quá tiêu cực dù review thật nhìn chung tích cực.
+- `rule_checks.positive_sentiment_conflict`: Summary quá tích cực dù review thật nhìn chung tiêu cực.
+- `rule_checks.product_id_echo`: Summary có lộ lại product ID nội bộ trong câu trả lời.
+
+**Judge result**
+
+- `judge_result.overall_score`: Điểm tổng `1-5` do judge chấm cho độ trung thực summary.
+- `judge_result.claims`: Danh sách claim judge trích ra và gắn nhãn từng claim.
+- `judge_result.supported_claims`: Số claim có bằng chứng hỗ trợ trực tiếp từ review thật.
+- `judge_result.unsupported_claims`: Số claim không tìm thấy bằng chứng trong review gốc.
+- `judge_result.contradicted_claims`: Số claim bị review thật hoặc fact sheet phản bác ngược lại.
+- `judge_result.claim_count`: Tổng số claim có ý nghĩa được judge tách ra.
+- `judge_result.claim_precision`: Tỷ lệ claim đúng trên tổng số claim của summary.
+- `judge_result.aspect_coverage`: Mức độ summary cover được các ý chính trong review thật.
+- `judge_result.sentiment_alignment`: Summary có cùng tông cảm xúc với tập review hay không.
+- `judge_result.reason`: Giải thích ngắn gọn của judge cho điểm và nhãn đã gán.
+
+**Case outcome**
+
+- `status`: Trạng thái kỹ thuật cuối cùng của case sau toàn bộ pipeline.
+- `error`: Nội dung lỗi kỹ thuật nếu case rơi vào `invalid_run`.
+- `ai_summary`: Summary ứng viên được sinh ra bởi hệ thống AI đang được test.
+- `fidelity_passed`: Kết quả pass/fail của phần chất lượng nội dung factual.
+- `format_passed`: Kết quả pass/fail của phần format và độ dài đầu ra.
+- `passed`: Kết quả cuối cùng, chỉ pass khi cả fidelity và format đều pass.
+- `failure_reasons`: Danh sách lý do cụ thể khiến case bị fail.
+
+**Aggregate**
+
+- `total_cases`: Tổng số case đã được đưa vào run hiện tại.
+- `ok_cases`: Số case chạy hết pipeline và có judge result hợp lệ.
+- `passed_cases`: Số case pass toàn bộ theo cờ `passed`.
+- `fidelity_passed_cases`: Số case pass riêng phần chất lượng nội dung.
+- `format_passed_cases`: Số case pass riêng phần format đầu ra.
+- `rule_failed_cases`: Số case dừng sớm do hard fail rule-based.
+- `invalid_run_cases`: Số case lỗi hạ tầng, DB, gRPC hoặc judge API.
+- `overall_pass_rate`: Tỷ lệ pass toàn bộ trên toàn bộ số case đã chạy.
+- `fidelity_pass_rate`: Tỷ lệ pass phần fidelity trên toàn bộ số case đã chạy.
+- `format_pass_rate`: Tỷ lệ pass phần format trên toàn bộ số case đã chạy.
+- `invalid_run_rate`: Tỷ lệ case không chấm được do lỗi hạ tầng hoặc judge.
+- `rule_failed_rate`: Tỷ lệ case fail sớm trước khi đến bước judge.
+- `avg_fidelity_score`: Điểm fidelity trung bình của các case có judge result.
+- `avg_claim_precision`: Độ chính xác claim trung bình trên các case được judge.
+- `avg_claim_count`: Số claim trung bình mà judge trích ra từ mỗi summary.
+- `unsupported_claim_rate`: Tỷ lệ claim unsupported trên tổng số claim toàn bộ run.
+- `contradiction_rate`: Tỷ lệ claim contradicted trên tổng số claim toàn bộ run.
+- `aspect_coverage_avg`: Mức coverage trung bình của tất cả case được judge.
+- `sentiment_alignment_rate`: Tỷ lệ case có sentiment khớp với review thật.
 
 ### 2. Metric, threshold và cơ chế pass/fail hiện tại
 
-Evaluator hybrid hiện tại sinh ra nhiều trường khác nhau để không chỉ trả lời câu hỏi "summary này pass hay fail", mà còn chỉ ra **nó sai ở đâu**.
+Evaluator hybrid hiện tại sinh ra nhiều trường để không chỉ trả lời câu hỏi "summary này pass hay fail", mà còn chỉ ra **summary sai ở đâu, sai mức nào và sai theo loại nào**.
 
-Các trường quan trọng và ý nghĩa của chúng:
+#### 2.1. Nhóm metric nội dung do judge trả về
 
-- `overall_score`:
-  - là điểm tổng do LLM judge chấm theo thang `1-5`
-  - `5` nghĩa là summary rất tốt, đúng và đủ
-  - `4` nghĩa là tốt, nhìn chung bám dữ liệu thật
-  - `1-3` nghĩa là còn thiếu, sai hoặc yếu về mặt factual
+**`overall_score`**
 
-- `supported_claims`:
-  - số ý trong summary có thể tìm thấy bằng chứng hỗ trợ trong review thật
-  - hiểu đơn giản là "model nói ra bao nhiêu ý đúng có chứng cứ"
+- Kiểu dữ liệu: `integer`
+- Thang đo: `1-5`
+- Ý nghĩa: điểm tổng hợp do LLM judge chấm cho độ trung thực của summary
 
-- `unsupported_claims`:
-  - số ý trong summary không tìm thấy bằng chứng trong review thật
-  - đây là dấu hiệu mô hình bịa thêm hoặc suy diễn quá mức
+Giải thích từng mức:
 
-- `contradicted_claims`:
-  - số ý trong summary bị review thật hoặc fact sheet phản bác ngược lại
-  - mức độ nghiêm trọng cao hơn `unsupported_claims`, vì đây là sai fact rõ ràng
+- `5`: Summary rất tốt, grounded mạnh, đúng fact và cover được hầu hết ý chính.
+- `4`: Summary nhìn chung đúng, có thể thiếu nhẹ nhưng chưa sai factual đáng kể.
+- `3`: Summary trung bình, thiếu ý chính hoặc factual support còn yếu.
+- `2`: Summary yếu, có nhiều điểm không chắc chắn hoặc coverage quá thấp.
+- `1`: Summary rất kém, sai lệch nặng hoặc mâu thuẫn rõ với review thật.
 
-- `claim_count`:
-  - tổng số claim chính mà judge trích ra từ summary
-  - metric này giúp phát hiện kiểu summary quá chung chung, nói quá ít ý nên tưởng là “an toàn” nhưng thực ra không đủ thông tin
+Vai trò trong gate:
 
-- `claim_precision`:
-  - tỷ lệ claim đúng trên tổng số claim
-  - gần đúng bằng `supported_claims / claim_count`
-  - nếu metric này thấp, nghĩa là model nói nhiều ý nhưng độ chính xác không cao
+- Điều kiện hiện tại là `overall_score >= 4`.
 
-- `aspect_coverage`:
-  - mức độ summary đã cover được bao nhiêu ý chính trong review thật
-  - thang `0-1`
-  - metric này khác với `claim_precision`: một summary có thể không bịa, nhưng vẫn bị coverage thấp nếu bỏ sót nhiều ý quan trọng
+Tradeoff chọn ngưỡng `4`:
 
-- `sentiment_alignment`:
-  - summary có phản ánh đúng tông cảm xúc chung của review hay không
-  - `1` là đúng, `0` là sai
+- Nếu dùng `>= 5`: quá chặt, đẩy nhiều summary đúng nhưng chưa hoàn hảo thành fail.
+- Nếu dùng `>= 3`: quá lỏng, chấp nhận summary thiếu ý hoặc factual support yếu.
+- Chọn `4` để giữ cân bằng giữa tính thực dụng và độ tin cậy factual.
 
-- `status`:
-  - trạng thái kỹ thuật của case
-  - `ok`: chạy bình thường và có kết quả để chấm
-  - `rule_failed`: fail ngay ở rule cứng trước khi đến judge
-  - `invalid_run`: fail do hạ tầng, DB, gRPC hoặc judge API
+**`supported_claims`**
 
-- `fidelity_passed`:
-  - cờ cho biết **nội dung** có đạt yêu cầu hay không
-  - đây là pass/fail của tầng factual quality
+- Kiểu dữ liệu: `integer >= 0`
+- Ý nghĩa: số claim trong summary có bằng chứng hỗ trợ trực tiếp từ review thật
 
-- `format_passed`:
-  - cờ cho biết **hình thức đầu ra** có đạt yêu cầu hay không
-  - ví dụ: có quá dài không, có vượt số câu tối đa không
+**`unsupported_claims`**
 
-- `passed`:
-  - là kết quả cuối cùng
-  - được tính bằng:
+- Kiểu dữ liệu: `integer >= 0`
+- Ý nghĩa: số claim không tìm thấy evidence trong review thật
+
+Vai trò trong gate:
+
+- Điều kiện hiện tại là `unsupported_claims == 0`.
+
+Tradeoff chọn ngưỡng `0`:
+
+- Đây là metric chống hallucination trực tiếp.
+- Nếu cho phép `1` claim unsupported, evaluator sẽ dễ bỏ lọt các claim bịa nhỏ.
+- Chọn `0` để ưu tiên an toàn factual hơn độ "dễ pass".
+
+**`contradicted_claims`**
+
+- Kiểu dữ liệu: `integer >= 0`
+- Ý nghĩa: số claim bị review thật hoặc fact sheet phản bác rõ ràng
+
+Vai trò trong gate:
+
+- Điều kiện hiện tại là `contradicted_claims == 0`.
+
+Tradeoff chọn ngưỡng `0`:
+
+- Contradiction nặng hơn unsupported vì đây là sai fact rõ ràng.
+- Cho phép bất kỳ contradiction nào sẽ làm giảm mạnh giá trị của evaluator.
+- Vì vậy ngưỡng `0` là hợp lý và nên giữ rất chặt.
+
+**`claim_count`**
+
+- Kiểu dữ liệu: `integer >= 0`
+- Ý nghĩa: tổng số claim có ý nghĩa mà judge tách ra từ summary
+
+Vai trò trong gate:
+
+- Điều kiện hiện tại là `claim_count >= 2`.
+
+Tradeoff chọn ngưỡng `2`:
+
+- Nếu ngưỡng là `1`, model có thể trả lời rất chung chung để "an toàn".
+- Nếu ngưỡng là `3` hoặc cao hơn, các summary ngắn 1-2 câu dễ bị fail oan.
+- Chọn `2` để buộc summary phải có ít nhất hai ý có nội dung.
+
+**`claim_precision`**
+
+- Kiểu dữ liệu: `float` trong khoảng `0-1`
+- Ý nghĩa: tỷ lệ claim đúng trên tổng số claim
+
+Cách tính trong code:
+
+- Ưu tiên dùng giá trị judge trả về trong `summary_metrics.claim_precision`
+- Nếu judge trả `0.0` nhưng `supported_claims > 0`, script fallback về:
+  - `claim_precision = supported_claims / claim_count`
+
+Diễn giải:
+
+- `1.0`: mọi claim đều được support
+- `0.8`: khoảng 80% claim có support
+- `0.5`: một nửa claim đúng, một nửa còn lại yếu hoặc sai
+- `0.0`: không có claim nào được support
+
+Vai trò trong gate:
+
+- Điều kiện hiện tại là `claim_precision >= 0.8`.
+
+Tradeoff chọn ngưỡng `0.8`:
+
+- Nếu dùng `1.0`, chỉ cần một claim nhỏ chưa chắc chắn cũng fail toàn bộ.
+- Nếu dùng `0.6`, summary có thể sai khá nhiều nhưng vẫn pass.
+- Chọn `0.8` để giữ chất lượng cao mà vẫn chấp nhận sai lệch rất nhỏ.
+
+**`aspect_coverage`**
+
+- Kiểu dữ liệu: `float` trong khoảng `0-1`
+- Ý nghĩa: summary cover được bao nhiêu ý chính của review thật
+
+Diễn giải:
+
+- `1.0`: gần như cover trọn các ý tích cực và tiêu cực chính
+- `0.8`: cover tốt, chỉ bỏ sót ít ý phụ
+- `0.6`: cover vừa đủ cho baseline
+- `< 0.6`: bỏ sót quá nhiều ý quan trọng
+
+Vai trò trong gate:
+
+- Điều kiện hiện tại là `aspect_coverage >= 0.6`.
+
+Tradeoff chọn ngưỡng `0.6`:
+
+- Nếu dùng `0.8`, nhiều summary ngắn gọn 1-2 câu sẽ fail oan vì thiếu chỗ.
+- Nếu dùng `0.4`, summary quá sơ sài vẫn có thể pass.
+- Chọn `0.6` như một mức "đủ dùng" cho summary ngắn.
+
+**`sentiment_alignment`**
+
+- Kiểu dữ liệu: `0` hoặc `1`
+- Ý nghĩa: summary có cùng tông cảm xúc tổng thể với tập review hay không
+
+Diễn giải:
+
+- `1`: tone của summary phù hợp với tone chung của review thật
+- `0`: tone bị lệch rõ, ví dụ review tích cực mà summary quá tiêu cực
+
+Vai trò trong gate:
+
+- Điều kiện hiện tại là `sentiment_alignment == 1`.
+
+Tradeoff chọn ngưỡng `1`:
+
+- Đây là cờ nhị phân, không có mức trung gian trong code hiện tại.
+- Tone lệch thường dẫn tới hiểu sai sản phẩm, nên không nên cho pass.
+
+#### 2.2. Nhóm metric format và rule-based checks
+
+**`summary_length_chars`**
+
+- Kiểu dữ liệu: `integer >= 0`
+- Ý nghĩa: số ký tự sau khi summary đã được chuẩn hóa khoảng trắng
+
+**`sentence_count`**
+
+- Kiểu dữ liệu: `integer >= 0`
+- Cách tính: tách câu bằng regex `(?<=[.!?])\\s+`
+- Vai trò trong gate format: phải `<= 2`
+
+Tradeoff chọn ngưỡng `2`:
+
+- Prompt runtime hiện yêu cầu câu trả lời ngắn `1-2 sentences`.
+- Nếu cho `3-4` câu, output dễ dài dòng và tăng latency/tokens.
+- Nếu ép `1` câu, nhiều summary tốt sẽ thiếu ý cần thiết.
+
+**`word_count`**
+
+- Kiểu dữ liệu: `integer >= 0`
+- Cách tính: đếm bằng regex `\\b\\w+\\b`
+- Vai trò trong gate format: phải `<= 80`
+
+Tradeoff chọn ngưỡng `80`:
+
+- Đủ chỗ cho `1-2` câu có nội dung, vẫn kiểm soát verbosity.
+- Ngưỡng `40-50` dễ làm fail oan các summary đủ ý.
+- Ngưỡng `100+` lại làm giảm tác dụng kiểm soát độ ngắn gọn.
+
+**`warnings`**
+
+- Kiểu dữ liệu: `list[string]`
+- Ý nghĩa: cảnh báo mềm, ví dụ `summary_exceeds_prompt_length`, `product_id_echoed_in_summary`
+- Không phải warning nào cũng làm case fail ngay.
+
+**`hard_fail_reasons`**
+
+- Kiểu dữ liệu: `list[string]`
+- Ý nghĩa: các lỗi cứng khiến case dừng trước bước judge
+- Trong code hiện tại, hard fail rõ nhất là `empty_summary`
+
+**`hard_fail`**
+
+- Kiểu dữ liệu: `true/false`
+- Cách tính: `bool(hard_fail_reasons)`
+- Nếu `true`, case chuyển sang `status = rule_failed`
+
+**`format_passed`**
+
+- Kiểu dữ liệu: `true/false`
+- Cách tính trong code:
+  - khởi tạo `True`
+  - chuyển thành `False` nếu `sentence_count > 2`
+  - chuyển thành `False` nếu `word_count > 80`
+  - trong `rule_failed`, giá trị này vẫn được giữ lại để biết summary fail format hay không
+
+**`format_findings`**
+
+- Kiểu dữ liệu: `list[string]`
+- Ý nghĩa: danh sách lỗi format cụ thể, ví dụ:
+  - `too_many_sentences`
+  - `too_many_words`
+
+**`fidelity_findings`**
+
+- Kiểu dữ liệu: `list[string]`
+- Ý nghĩa: các lỗi factual chắc chắn do rule-based phát hiện trước khi xem judge
+
+**`unsupported_age_claim`**
+
+- Kiểu dữ liệu: `true/false`
+- Cách tính:
+  - nếu `has_explicit_age_signal == False`
+  - và summary match các regex tuổi như `ages 7`, `7+ years`, `recommended for ages`
+  - thì flag này bằng `True`
+
+Tradeoff:
+
+- Rule này chặt vì claim tuổi là kiểu rất dễ bịa và ít khi nên suy diễn.
+- Nếu bỏ rule này, judge có thể bỏ lọt các claim tuổi có vẻ "hợp lý".
+
+**`average_rating_mentions`**
+
+- Kiểu dữ liệu: `list[float]`
+- Ý nghĩa: các con số điểm rating mà summary có nhắc tới
+
+**`average_rating_mismatch`**
+
+- Kiểu dữ liệu: `true/false`
+- Cách tính:
+  - extract tất cả rating mention từ summary
+  - so với `fact_sheet.average_score`
+  - nếu `abs(value - average_score) > 0.05` thì mismatch
+
+Tradeoff chọn tolerance `0.05`:
+
+- `0.05` đủ chặt để bắt lỗi làm tròn sai đáng kể như `4.3` thay vì `4.4`.
+- Nếu dùng `0.1`, nhiều lệch nhỏ sẽ bị bỏ qua.
+- Nếu dùng `0.0`, chỉ cần khác cách làm tròn rất nhỏ cũng fail quá gắt.
+
+**`negative_sentiment_conflict`**
+
+- Kiểu dữ liệu: `true/false`
+- Cách tính:
+  - nếu `average_score >= 4.0`
+  - và summary chứa pattern tiêu cực mạnh như `mostly negative`, `poor value`, `not recommended`
+  - thì flag này bằng `True`
+
+**`positive_sentiment_conflict`**
+
+- Kiểu dữ liệu: `true/false`
+- Cách tính:
+  - nếu `average_score <= 2.5`
+  - và summary chứa pattern tích cực mạnh như `highly recommended`, `excellent value`
+  - thì flag này bằng `True`
+
+Tradeoff của hai sentiment conflict rules:
+
+- Đây là heuristic, không phải suy luận đầy đủ.
+- Ưu điểm là bắt rất nhanh các summary lệch tone rõ ràng.
+- Nhược điểm là không thay thế hoàn toàn được judge ở các case mixed sentiment tinh vi.
+
+**`product_id_echo`**
+
+- Kiểu dữ liệu: `true/false`
+- Cách tính: kiểm tra `fact_sheet.product_id.lower()` có xuất hiện trong summary hay không
+- Vai trò hiện tại: warning để phát hiện rò rỉ identifier nội bộ
+
+#### 2.3. Trạng thái case và cơ chế pass/fail
+
+**`status`**
+
+- Kiểu dữ liệu: `string`
+- Giá trị có thể có:
+  - `ok`: case chạy xong đầy đủ và có judge result
+  - `rule_failed`: fail sớm do hard fail rule-based
+  - `invalid_run`: fail do lỗi DB, gRPC, judge API hoặc runtime khác
+
+**`error`**
+
+- Kiểu dữ liệu: `string`
+- Ý nghĩa: nội dung lỗi thật nếu `status = invalid_run`
+
+**`fidelity_passed`**
+
+- Kiểu dữ liệu: `true/false`
+- Cách tính trong `compute_fidelity_pass(...)`:
+  - `overall_score >= 4`
+  - `unsupported_claims == 0`
+  - `contradicted_claims == 0`
+  - `claim_count >= 2`
+  - `claim_precision >= 0.8`
+  - `aspect_coverage >= 0.6`
+  - `sentiment_alignment == 1`
+  - `unsupported_age_claim == False`
+  - `average_rating_mismatch == False`
+  - `negative_sentiment_conflict == False`
+  - `positive_sentiment_conflict == False`
+
+Nếu bất kỳ điều kiện nào fail:
+
+- `fidelity_passed = false`
+- đồng thời ghi lý do vào `failure_reasons`
+
+**`passed`**
+
+- Kiểu dữ liệu: `true/false`
+- Công thức:
   - `passed = fidelity_passed AND format_passed`
 
-Các threshold đang dùng trong artifact hiện tại:
+Ý nghĩa:
 
-- `min_claim_count = 2`
-- `min_claim_precision = 0.8`
-- `min_aspect_coverage = 0.6`
-- `min_overall_score = 4`
-- `max_summary_sentences = 2`
-- `max_summary_words = 80`
+- `fidelity_passed = true`, `format_passed = false`: nội dung đúng nhưng trình bày chưa đạt.
+- `fidelity_passed = false`, `format_passed = true`: summary gọn nhưng factual chưa đạt.
+- `passed = true`: chỉ khi cả nội dung lẫn hình thức đều đạt.
 
-Cơ chế pass/fail hiện tại đã được tách rõ:
+**`failure_reasons`**
 
-1. **`format_passed`** được quyết định bằng rule-based checks:
-   - số câu không vượt `2`
-   - số từ không vượt `80`
-   - không vi phạm hard fail như `empty_summary`
+- Kiểu dữ liệu: `list[string]`
+- Nguồn sinh:
+  - lấy từ `compute_fidelity_pass(...)`
+  - cộng thêm `format_findings` nếu fail format
+  - hoặc `hard_fail_reasons` nếu `status = rule_failed`
+  - hoặc `["invalid_run"]` nếu `status = invalid_run`
 
-2. **`fidelity_passed`** được quyết định bằng hybrid gate:
-   - `overall_score >= 4`
-   - `unsupported_claims = 0`
-   - `contradicted_claims = 0`
-   - `claim_count >= 2`
-   - `claim_precision >= 0.8`
-   - `aspect_coverage >= 0.6`
-   - `sentiment_alignment = 1`
-   - không dính các rule chắc chắn như `unsupported_age_claim` hoặc `average_rating_mismatch`
+#### 2.4. Aggregate metrics cho toàn bộ run
 
-3. **`passed = fidelity_passed AND format_passed`**
+Các trường trong `aggregate` được tính như sau:
 
-Điểm quan trọng nhất của cách tách này là: nó giúp đọc kết quả đúng bản chất lỗi.
+- `total_cases = len(cases)`
+- `ok_cases = count(status == "ok")`
+- `passed_cases = count(status == "ok" and passed == true)`
+- `fidelity_passed_cases = count(status == "ok" and fidelity_passed == true)`
+- `format_passed_cases = count(status == "ok" and format_passed == true)`
+- `rule_failed_cases = count(status == "rule_failed")`
+- `invalid_run_cases = count(status == "invalid_run")`
 
-- Nếu case fail ở `fidelity_passed`, nghĩa là **nội dung summary có vấn đề**.
-- Nếu case fail ở `format_passed`, nghĩa là **cách trình bày output có vấn đề**.
-- Nếu cả hai đều pass, lúc đó mới coi là summary đạt chuẩn toàn diện.
+Các tỷ lệ:
+
+- `overall_pass_rate = passed_cases / total_cases`
+- `fidelity_pass_rate = fidelity_passed_cases / total_cases`
+- `format_pass_rate = format_passed_cases / total_cases`
+- `invalid_run_rate = invalid_run_cases / total_cases`
+- `rule_failed_rate = rule_failed_cases / total_cases`
+
+Các giá trị trung bình trên `ok_cases`:
+
+- `avg_fidelity_score = average(judge_result.overall_score)`
+- `avg_claim_precision = average(judge_result.claim_precision)`
+- `avg_claim_count = average(judge_result.claim_count)`
+- `aspect_coverage_avg = average(judge_result.aspect_coverage)`
+- `sentiment_alignment_rate = average(judge_result.sentiment_alignment)`
+
+Các tỷ lệ claim toàn cục:
+
+- `total_supported = sum(supported_claims)`
+- `total_unsupported = sum(unsupported_claims)`
+- `total_contradicted = sum(contradicted_claims)`
+- `total_claims = total_supported + total_unsupported + total_contradicted`
+- `unsupported_claim_rate = total_unsupported / total_claims`
+- `contradiction_rate = total_contradicted / total_claims`
+
+Tradeoff của aggregate hiện tại:
+
+- Ưu điểm:
+  - nhìn được chất lượng tổng thể của cả hệ thống AI summary
+  - tách riêng reliability (`invalid_run_rate`) và fidelity (`fidelity_pass_rate`)
+  - phát hiện được drift factual qua `unsupported_claim_rate`, `contradiction_rate`
+- Nhược điểm:
+  - sample hiện tại còn nhỏ nên threshold chưa phải production-grade
+  - `overall_score` vẫn là signal do LLM judge sinh ra, chưa phải human label tuyệt đối
+  - các tỷ lệ claim toàn cục có thể bị méo nếu một số summary có quá ít claim
 
 ### 3. Kết quả run hiện tại trên toàn bộ sản phẩm có review
 
