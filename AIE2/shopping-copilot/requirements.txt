@@ -1,0 +1,61 @@
+# Shopping Copilot — Python dependencies
+# TF3 AIOps | Phase 3
+# Cách cài: pip install -r requirements.txt
+
+# ══════════════════════════════════════
+# LLM / Agent Framework
+# ══════════════════════════════════════
+
+# LangChain core (tool decorator, message types, runnable)
+langchain-core>=0.3.0
+
+# Groq provider — LLM inference nhanh, dùng trong Agent
+langchain-groq>=0.1.0
+
+# Groq API client
+groq>=0.9.0
+
+# ══════════════════════════════════════
+# Search & Matching
+# ══════════════════════════════════════
+
+# Fuzzy string matching (query autocorrect, typo tolerance)
+rapidfuzz>=3.0.0
+
+# ══════════════════════════════════════
+# gRPC — Kết nối microservices TechX Corp (ProductCatalog, Cart)
+# ══════════════════════════════════════
+
+grpcio>=1.62.0
+grpcio-tools>=1.62.0   # Chỉ cần khi compile proto (python -m grpc_tools.protoc ...)
+
+# ══════════════════════════════════════
+# API Server (FastAPI + Uvicorn)
+# ══════════════════════════════════════
+
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0   # [standard] = bao gồm watchfiles, websockets
+pydantic>=2.0.0
+
+# ══════════════════════════════════════
+# Environment & Config
+# ══════════════════════════════════════
+
+python-dotenv>=1.0.0   # Load .env file cho GROQ_API_KEY, COPILOT_CONFIRMATION_SECRET
+
+# ══════════════════════════════════════
+# Testing
+# ══════════════════════════════════════
+
+pytest>=8.0.0
+httpx>=0.28.0          # HTTP client cho FastAPI TestClient
+
+# ══════════════════════════════════════
+# Observability (uncomment khi deploy lên EKS)
+# ══════════════════════════════════════
+
+# Bật khi deploy Tuần 2 — cần tích hợp với otel-collector-agent trên cluster
+# opentelemetry-api>=1.20.0
+# opentelemetry-sdk>=1.20.0
+# opentelemetry-instrumentation-fastapi>=0.41b0
+# opentelemetry-exporter-otlp-proto-grpc>=1.20.0

@@ -1,0 +1,53 @@
+# --- Secrets / credentials: never commit real values ---
+# Fill tokens/keys via --set on the helm command line or a local untracked
+# file instead of editing the tracked template in place.
+*.local.yaml
+*.secret.yaml
+values-flagd-sync.local.yaml
+kubeconfig*
+*.kubeconfig
+.aws/
+.env.local
+.env.*.local
+*.pem
+*.key
+*id_rsa*
+*.pfx
+*.p12
+llm-api-key*
+
+# --- Terraform: state and local overrides never get committed ---
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+crash.log
+crash.*.log
+infra/backend.hcl
+infra/terraform.tfvars
+!infra/terraform.tfvars.example
+
+# --- Helm dependency artifacts: regenerate via `helm dependency build` ---
+**/charts/*.tgz
+**/Chart.lock
+
+# --- OS / editor noise ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+.venv/
+venv/
+env/
+.env
+*.egg-info/
+dist/
+build/
