@@ -143,6 +143,31 @@ def chatbot():
     return HTMLResponse(content="<h1>chatbot.html not found</h1>", status_code=404)
 
 
+@app.get("/api/cart")
+def api_get_cart(user_id: str):
+    """Lấy danh sách sản phẩm trong giỏ hàng giả lập (dùng cho test UI)."""
+    try:
+        from tests.test_interactive import MOCK_CART, MOCK_PRODUCTS
+        items = MOCK_CART.get(user_id, [])
+        prod_map = {p["id"]: p for p in MOCK_PRODUCTS}
+        detailed_items = []
+        for item in items:
+            p_id = item["product_id"]
+            p_info = prod_map.get(p_id, {"name": p_id, "price": p_info.get("price", "0.00") if isinstance(p_info, dict) else "0.00"})
+            # Make sure we safely get fields
+            p_name = p_info.get("name", p_id) if isinstance(p_info, dict) else p_id
+            p_price = p_info.get("price", "0.00") if isinstance(p_info, dict) else "0.00"
+            detailed_items.append({
+                "product_id": p_id,
+                "name": p_name,
+                "price": p_price,
+                "quantity": item["quantity"]
+            })
+        return {"user_id": user_id, "items": detailed_items}
+    except Exception as e:
+        return {"user_id": user_id, "items": [], "error": str(e)}
+
+
 @app.post("/api/chat", response_model=ChatResponse)
 async def api_chat(req: ChatRequest):
     """

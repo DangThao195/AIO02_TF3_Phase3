@@ -203,6 +203,254 @@
     .session-id { display: none; }
   }
 
+  /* ── App Container & Sidebar Layout ── */
+  .app-container {
+    display: flex;
+    max-width: 1200px;
+    height: 100vh;
+    margin: 0 auto;
+    background: var(--surface);
+    overflow: hidden;
+  }
+
+  .app {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    border-right: 1px solid var(--border);
+    min-width: 0;
+  }
+
+  .sidebar {
+    width: 380px;
+    background: var(--surface-alt);
+    display: flex;
+    flex-direction: column;
+    padding: 24px;
+    gap: 20px;
+    overflow-y: auto;
+    border-left: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  @media (max-width: 900px) {
+    .app-container { flex-direction: column; }
+    .sidebar { width: 100%; height: auto; border-left: none; border-top: 1px solid var(--border); }
+  }
+
+  .sidebar-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .sidebar-card h3 {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+    margin-bottom: 2px;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .form-group label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+  }
+
+  .form-input-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  .form-input {
+    flex: 1;
+    padding: 8px 12px;
+    font-size: 13px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    outline: none;
+    font-family: var(--font);
+    background: var(--surface-alt);
+    transition: all 0.15s;
+    font-weight: 500;
+  }
+
+  .form-input:focus {
+    border-color: var(--primary);
+    background: var(--surface);
+    box-shadow: 0 0 0 3px rgba(37,99,235,.1);
+  }
+
+  .btn-action {
+    padding: 8px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .btn-action:hover {
+    background: var(--primary-hover);
+  }
+
+  .sidebar-info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+  }
+
+  .sidebar-info-label {
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+
+  .sidebar-info-value {
+    font-family: monospace;
+    background: var(--surface-alt);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    font-size: 12px;
+  }
+
+  /* Cart List Styles */
+  .cart-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .cart-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--surface-alt);
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    border: 1px solid var(--border);
+  }
+
+  .cart-item-details {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .cart-item-name {
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+  }
+
+  .cart-item-price {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .cart-item-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .cart-item-qty {
+    font-size: 11px;
+    background: var(--primary-light);
+    color: var(--primary);
+    padding: 2px 8px;
+    border-radius: 99px;
+    font-weight: 700;
+  }
+
+  .cart-item-total {
+    font-weight: 700;
+    color: var(--success);
+  }
+
+  .cart-empty {
+    font-size: 13px;
+    color: var(--text-muted);
+    text-align: center;
+    padding: 16px 0;
+    font-style: italic;
+  }
+
+  .cart-total-summary {
+    border-top: 2px dashed var(--border);
+    padding-top: 10px;
+    margin-top: 4px;
+    display: flex;
+    justify-content: space-between;
+    font-weight: 700;
+    font-size: 14px;
+  }
+
+  /* Services list */
+  .services-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .service-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    padding: 4px 0;
+  }
+
+  .service-name {
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  .service-status {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 99px;
+    text-transform: uppercase;
+  }
+
+  .service-status.mock {
+    background: var(--warn-bg);
+    color: var(--warn);
+    border: 1px solid var(--warn);
+  }
+
+  .service-status.active {
+    background: var(--success-bg);
+    color: var(--success);
+    border: 1px solid var(--success);
+  }
+
   /* ── Scrollbar ── */
   .chat::-webkit-scrollbar { width: 6px; }
   .chat::-webkit-scrollbar-track { background: transparent; }
@@ -221,49 +469,181 @@
 </head>
 <body>
 
-<div class="app">
-  <!-- Header -->
-  <header class="header">
-    <h1>Shopping <span>Copilot</span></h1>
-    <div class="header-actions">
-      <span class="session-id" id="sessionDisplay" title="Session ID">—</span>
-      <button class="btn-new" onclick="newChat()">+ New Chat</button>
-    </div>
-  </header>
+<div class="app-container">
+  <div class="app">
+    <!-- Header -->
+    <header class="header">
+      <h1>Shopping <span>Copilot</span></h1>
+      <div class="header-actions">
+        <span class="session-id" id="sessionDisplay" title="Session ID">—</span>
+        <button class="btn-new" onclick="newChat()">+ New Chat</button>
+      </div>
+    </header>
 
-  <!-- Chat area -->
-  <div class="chat" id="chat" role="log" aria-live="polite"></div>
+    <!-- Chat area -->
+    <div class="chat" id="chat" role="log" aria-live="polite"></div>
 
-  <!-- Footer / Input -->
-  <footer class="footer">
-    <div class="input-row">
-      <textarea id="input" rows="1" placeholder="Nhập câu hỏi để test..." onkeydown="onKeyDown(event)"></textarea>
-      <button class="btn-send" id="sendBtn" onclick="send()">Gửi</button>
+    <!-- Footer / Input -->
+    <footer class="footer">
+      <div class="input-row">
+        <textarea id="input" rows="1" placeholder="Nhập câu hỏi để test..." onkeydown="onKeyDown(event)"></textarea>
+        <button class="btn-send" id="sendBtn" onclick="send()">Gửi</button>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <!-- Config Card -->
+    <div class="sidebar-card">
+      <h3>Cấu hình phiên Test</h3>
+      
+      <div class="form-group">
+        <label for="userIdInput">User ID (Giỏ hàng)</label>
+        <div class="form-input-row">
+          <input type="text" id="userIdInput" class="form-input" value="test_user_001" />
+          <button class="btn-action" onclick="updateUserId()">Lưu</button>
+        </div>
+      </div>
+
+      <div class="sidebar-info-row">
+        <span class="sidebar-info-label">Session ID:</span>
+        <span class="sidebar-info-value" id="sidebarSessionId">—</span>
+      </div>
     </div>
-  </footer>
+
+    <!-- Cart Card -->
+    <div class="sidebar-card">
+      <h3>Giỏ hàng giả lập (Real-time)</h3>
+      <div class="cart-list" id="cartList">
+        <div class="cart-empty">Không có sản phẩm nào</div>
+      </div>
+    </div>
+
+    <!-- Microservices Card -->
+    <div class="sidebar-card">
+      <h3>Microservices (EKS Mocks)</h3>
+      <div class="services-list">
+        <div class="service-row">
+          <span class="service-name">Product Catalog Service</span>
+          <span class="service-status mock">MOCKING</span>
+        </div>
+        <div class="service-row">
+          <span class="service-name">Cart Service</span>
+          <span class="service-status mock">MOCKING</span>
+        </div>
+        <div class="service-row">
+          <span class="service-name">Currency Service</span>
+          <span class="service-status mock">MOCKING</span>
+        </div>
+        <div class="service-row">
+          <span class="service-name">Recommendation Service</span>
+          <span class="service-status mock">MOCKING</span>
+        </div>
+        <div class="service-row">
+          <span class="service-name">Shipping Service</span>
+          <span class="service-status mock">MOCKING</span>
+        </div>
+        <div class="service-row">
+          <span class="service-name">AWS Bedrock Converse API</span>
+          <span class="service-status active">ACTIVE</span>
+        </div>
+      </div>
+    </div>
+  </aside>
 </div>
 
 <script>
 // ── State ──
 const STATE = {
   sessionId: crypto.randomUUID(),
+  userId: 'test_user_001',
   busy: false,
   pendingToken: null,
 };
 
 const API = '/api/chat';
 const API_CONFIRM = '/api/confirm';
+const API_CART = '/api/cart';
 
 // ── DOM refs ──
 const chat = document.getElementById('chat');
 const input = document.getElementById('input');
 const sendBtn = document.getElementById('sendBtn');
 const sessionDisplay = document.getElementById('sessionDisplay');
+const sidebarSessionId = document.getElementById('sidebarSessionId');
+const userIdInput = document.getElementById('userIdInput');
+const cartList = document.getElementById('cartList');
 
 function updateSessionDisplay() {
   sessionDisplay.textContent = STATE.sessionId.slice(0, 8) + '…';
   sessionDisplay.title = STATE.sessionId;
+  if (sidebarSessionId) {
+    sidebarSessionId.textContent = STATE.sessionId.slice(0, 8) + '…';
+    sidebarSessionId.title = STATE.sessionId;
+  }
 }
+
+// ── Cart Sync ──
+async function loadCart() {
+  try {
+    const res = await fetch(`${API_CART}?user_id=${encodeURIComponent(STATE.userId)}`);
+    if (!res.ok) throw new Error('Cannot load cart');
+    const data = await res.json();
+    renderCart(data.items || []);
+  } catch (err) {
+    console.error('Lỗi khi tải giỏ hàng:', err);
+  }
+}
+
+function renderCart(items) {
+  if (!cartList) return;
+  if (items.length === 0) {
+    cartList.innerHTML = '<div class="cart-empty">Giỏ hàng đang trống</div>';
+    return;
+  }
+
+  let html = '';
+  let total = 0;
+  for (const item of items) {
+    const itemTotal = parseFloat(item.price) * item.quantity;
+    total += itemTotal;
+    html += `
+      <div class="cart-item">
+        <div class="cart-item-details">
+          <div class="cart-item-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</div>
+          <div class="cart-item-price">$${parseFloat(item.price).toFixed(2)}</div>
+        </div>
+        <div class="cart-item-meta">
+          <span class="cart-item-qty">x${item.quantity}</span>
+          <span class="cart-item-total">$${itemTotal.toFixed(2)}</span>
+        </div>
+      </div>
+    `;
+  }
+  
+  html += `
+    <div class="cart-total-summary">
+      <span>Tổng cộng:</span>
+      <span style="color:var(--success)">$${total.toFixed(2)}</span>
+    </div>
+  `;
+  cartList.innerHTML = html;
+}
+
+function updateUserId() {
+  const val = userIdInput.value.trim();
+  if (!val) {
+    showToast('User ID không được để trống.');
+    return;
+  }
+  STATE.userId = val;
+  showToast(`Đã đổi sang User ID: ${val}`);
+  loadCart();
+}
+
+// Gọi load cart lần đầu
+setTimeout(loadCart, 500);
 
 updateSessionDisplay();
 
@@ -290,7 +670,7 @@ async function send() {
       body: JSON.stringify({
         message: text,
         session_id: STATE.sessionId,
-        user_id: 'test-' + crypto.randomUUID().slice(0, 8),
+        user_id: STATE.userId,
       }),
     });
 
@@ -304,6 +684,7 @@ async function send() {
     // Remove loading, append bot response with animated steps
     loadingEl.remove();
     appendBotResponse(data);
+    loadCart();
   } catch (err) {
     loadingEl.remove();
     showToast('Lỗi: ' + err.message);
@@ -329,6 +710,7 @@ async function confirmAction(token) {
     const data = await res.json();
     // Show confirm result as a bot message
     appendBotMsg(data.reply || 'Đã xác nhận.');
+    loadCart();
   } catch (err) {
     showToast('Lỗi xác nhận: ' + err.message);
   } finally {
