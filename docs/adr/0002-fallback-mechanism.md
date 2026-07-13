@@ -1,29 +1,43 @@
-# ADR 0002: Thiết kế cơ chế Fallback xử lý sự cố kết nối LLM
+# ADR 0002: Thiết kế cơ chế Fallback Graceful Degradation nhiều tầng cho kết nối LLM
 
-* **Trạng thái:** Đề xuất (Draft)
+* **Trạng thái:** Đã phê duyệt (Accepted)
 * **Tác giả:** Kiên (AIE1) & Khoa (Leader AIE1)
-* **Ngày tạo:** 2026-07-08
+* **Ngày tạo:** 2026-07-13
 
 ---
 
 ## 1. Bối cảnh (Context)
-Khi tích hợp LLM thật (OpenAI/Bedrock) vào dịch vụ `product-reviews`, toàn bộ hệ thống storefront sẽ phụ thuộc vào tính sẵn sàng của API ngoài này. Tuy nhiên, các API này có nguy cơ gặp sự cố bất cứ lúc nào (lỗi kết nối mạng, vượt quá giới hạn cuộc gọi - Rate Limit 429, hoặc API sập 500/503). 
+Khi đưa LLM thật (AWS Bedrock) vào vận hành, dịch vụ `product-reviews` phải đối mặt với các nguy cơ gián đoạn từ API bên thứ ba (lỗi kết nối, lỗi quá hạn mức rate limit 429, hoặc API downtime 5xx). 
 
-Nếu không có cơ chế dự phòng (Fallback), bất kỳ lỗi nào từ LLM cũng sẽ khiến cuộc gọi gRPC `AskProductAIAssistant` bị lỗi, dẫn đến việc giao diện web của storefront bị đơ hoặc báo lỗi hệ thống với người dùng, trực tiếp làm hỏng trải nghiệm khách hàng (UX) và vi phạm SLO.
+Hệ thống cũ không bắt ngoại lệ (naked exception) tại hàm `get_ai_assistant_response()`. Điều này khiến gRPC handler bị crash khi LLM gặp sự cố, trả về HTTP 500 cho storefront và làm đơ giao diện người dùng. Để bảo đảm cam kết SLO và tăng tính chịu lỗi của hệ thống, chúng tôi cần thiết kế một cơ chế dự phòng hoạt động ổn định dưới mọi tình huống.
 
 ---
 
 ## 2. Giải pháp Đề xuất (Proposed Solution)
-Chúng tôi triển khai cơ chế **Fallback & Chống chịu lỗi (Fault Tolerance)** ngay trong dịch vụ `product-reviews` tại hàm `get_ai_assistant_response`:
 
-1. **Thiết lập Timeout nghiêm ngặt**: Cấu hình thời gian chờ tối đa khi gọi OpenAI API là **8 giây** (bảo vệ SLA tổng thể của storefront).
-2. **Khối bắt lỗi ngoại lệ (Try-Except Block)**: Bọc toàn bộ các bước gọi API của OpenAI để bắt tất cả các lỗi kết nối, quá thời gian chờ, lỗi xác thực hoặc lỗi Rate Limit.
-3. **Cơ chế Phản hồi Dự phòng (Fallback response)**:
-   * Nếu cuộc gọi LLM thất bại ở bất kỳ bước nào, hệ thống sẽ tự động chuyển sang trả về một câu thông báo thân thiện được định nghĩa trước: *"Hệ thống trợ lý AI đang bận xử lý thông tin. Quý khách vui lòng thử lại sau ít phút."* hoặc lấy nội dung tóm tắt tĩnh đã được cache trước trong database.
+Chúng tôi quyết định áp dụng mô hình kiến trúc ** Graceful Degradation 3 tầng ** bọc quanh cuộc gọi LLM:
+
+```
+Tầng 1 (Primary)    → Bedrock Nova Lite via LiteLLM (Real-time LLM Response)
+        ↓ Lỗi / Timeout / Quá tải 429
+Tầng 2 (Fallback 1) → Static Summary từ PostgreSQL (Pre-computed / Cache-on-success)
+        ↓ Không tìm thấy dữ liệu trong DB
+Tầng 3 (Fallback 2) → Generic Message thân thiện (Last Resort)
+```
+
+### Chi tiết vận hành từng tầng:
+
+1. **Tầng 1 — Bedrock Nova Lite (Primary):** Gọi trực tiếp mô hình qua LiteLLM proxy. Nếu cuộc gọi thành công, dữ liệu được trả về gRPC đồng thời lưu đè vào DB làm cache (Cache-on-success). Nếu xảy ra bất kỳ lỗi mạng hoặc timeout nào, hệ thống bắt ngoại lệ và hạ cấp xuống Tầng 2.
+2. **Tầng 2 — Static Summary từ PostgreSQL:** Hệ thống thực hiện truy vấn bảng `product_summaries` trong PostgreSQL theo `product_id`. Nếu tồn tại bản tóm tắt tĩnh (được tạo trước bởi batch job định kỳ hoặc lưu từ lần chạy thành công trước), hệ thống trả về tóm tắt này. Người dùng vẫn nhận được thông tin sản phẩm thực tế dù không phải thời gian thực.
+3. **Tầng 3 — Generic Message (Last Resort):** Nếu không tìm thấy dòng dữ liệu nào trong DB (sản phẩm mới chưa có cache/batch), hệ thống trả về một thông điệp thân thiện cố định: *"Product review summary is temporarily unavailable. Please try again in a few moments."* Tầng này đảm bảo cuộc gọi luôn thành công (HTTP 200) thay vì crash lỗi trắng trang.
 
 ---
 
-## 3. Lợi ích & Đánh giá (Benefits & Evaluation)
-* **Độ tin cậy (Reliability)**: Giữ cho storefront luôn hoạt động bình thường kể cả khi LLM bên thứ ba bị sập hoàn toàn.
-* **Thời gian phản hồi (Latency)**: Khống chế thời gian chờ tối đa nhờ cài đặt timeout, không để request bị treo vô hạn.
-* **Hệ quả**: Khách hàng sẽ nhận được thông báo lỗi thân thiện thay vì thấy một trang web bị đơ hay lỗi server trắng xóa.
+## 3. Đo lường & Giám sát (Observability)
+
+Để phân biệt các phản hồi thực tế và phản hồi fallback trên hệ thống giám sát (Jaeger/Prometheus), chúng tôi bổ sung:
+* **Span Attributes**:
+  * `app.fallback.triggered` (boolean): Đánh dấu có kích hoạt fallback hay không.
+  * `app.fallback.source` (string): Ghi nhận nguồn fallback (`database` | `generic_message` | `none`).
+* **Logs**: Ghi log mức độ `WARNING` kèm mã lỗi gốc của Bedrock để phục vụ mục đích kiểm toán (audit trail).
+* **Metrics**: Đẩy metric counter `app.ai.fallback.total` phân loại theo nhãn `source` để giám sát sức khỏe API LLM.
