@@ -37,8 +37,9 @@ from metrics import (
     init_metrics
 )
 
-# OpenAI
+# OpenAI & AWS SDK
 from openai import OpenAI
+import boto3
 
 from google.protobuf.json_format import MessageToJson, MessageToDict
 
@@ -48,6 +49,24 @@ llm_mock_url = None
 llm_base_url = None
 llm_api_key = None
 llm_model = None
+llm_provider = None
+bedrock_client = None
+
+def convert_openai_tools_to_bedrock(openai_tools):
+    bedrock_tools = []
+    for tool in openai_tools:
+        if tool.get("type") == "function":
+            func = tool["function"]
+            bedrock_tools.append({
+                "toolSpec": {
+                    "name": func["name"],
+                    "description": func["description"],
+                    "inputSchema": {
+                        "json": func["parameters"]
+                    }
+                }
+            })
+    return bedrock_tools
 
 # --- Define the tool for the OpenAI API ---
 tools = [
@@ -201,108 +220,211 @@ def get_ai_assistant_response(request_product_id, question):
                     return ai_assistant_response
 
         # otherwise, continue processing the request as normal
-        client = OpenAI(
-            base_url=f"{llm_base_url}",
-            # The OpenAI API requires an api_key to be present, but
-            # our LLM doesn't use it
-            api_key=f"{llm_api_key}"
-        )
-
-        user_prompt = f"Answer the following question about product ID:{request_product_id}: {question}"
-        messages = [
-           {"role": "system", "content": "You are a helpful assistant that answers related to a specific product. Use tools as needed to fetch the product reviews and product information. Keep the response brief with no more than 1-2 sentences. If you don't know the answer, just say you don't know."},
-           {"role": "user", "content": user_prompt}
-        ]
-
-        # use the LLM to summarize the product reviews
-        initial_response = client.chat.completions.create(
-            model=llm_model,
-            messages=messages,
-            tools=tools,
-            tool_choice="auto"
-        )
-
-        response_message = initial_response.choices[0].message
-        tool_calls = response_message.tool_calls
-
-        logger.info(f"Response message: {response_message}")
-
-        # Check if the model wants to call a tool
-        if tool_calls:
-            logger.info(f"Model wants to call {len(tool_calls)} tool(s)")
-
-            # Append the assistant's message with tool calls
-            messages.append(response_message)
-
-            # Process all tool calls
-            for tool_call in tool_calls:
-                function_name = tool_call.function.name
-                function_args = json.loads(tool_call.function.arguments)
-
-                logger.info(f"Processing tool call: '{function_name}' with arguments: {function_args}")
-
-                if function_name == "fetch_product_reviews":
-                    function_response = fetch_product_reviews(
-                        product_id=function_args.get("product_id")
-                    )
-                    logger.info(f"Function response for fetch_product_reviews: '{function_response}'")
-
-                elif function_name == "fetch_product_info":
-                    function_response = fetch_product_info(
-                        product_id=function_args.get("product_id")
-                    )
-                    logger.info(f"Function response for fetch_product_info: '{function_response}'")
-
+        if llm_provider == 'bedrock':
+            # ==========================================
+            # LUỒNG 1: GỌI TRỰC TIẾP AWS BEDROCK (boto3)
+            # ==========================================
+            bedrock_tools = convert_openai_tools_to_bedrock(tools)
+            
+            system_prompt = "You are a helpful assistant that answers related to a specific product. Use tools as needed to fetch the product reviews and product information. Keep the response brief with no more than 1-2 sentences. If you don't know the answer, just say you don't know."
+            user_prompt = f"Answer the following question about product ID:{request_product_id}: {question}"
+            
+            messages = [
+                {"role": "user", "content": [{"text": user_prompt}]}
+            ]
+            
+            # Turn 1: Gọi Bedrock Converse
+            response = bedrock_client.converse(
+                modelId=llm_model,
+                messages=messages,
+                system=[{"text": system_prompt}],
+                inferenceConfig={"temperature": 0.0, "maxTokens": 500},
+                toolConfig={"tools": bedrock_tools}
+            )
+            
+            output_message = response["output"]["message"]
+            messages.append(output_message)
+            
+            # Kiểm tra xem Bedrock có yêu cầu gọi Tool không
+            content_list = output_message.get("content", [])
+            tool_requests = [c["toolUse"] for c in content_list if "toolUse" in c]
+            
+            if tool_requests:
+                logger.info(f"Bedrock wants to call {len(tool_requests)} tool(s)")
+                tool_results = []
+                
+                for tool_req in tool_requests:
+                    func_name = tool_req["name"]
+                    func_args = tool_req["input"]
+                    tool_use_id = tool_req["toolUseId"]
+                    
+                    logger.info(f"Processing tool call: '{func_name}' with arguments: {func_args}")
+                    
+                    if func_name == "fetch_product_reviews":
+                        function_response = fetch_product_reviews(
+                            product_id=func_args.get("product_id")
+                        )
+                        logger.info(f"Function response for fetch_product_reviews: '{function_response}'")
+                    elif func_name == "fetch_product_info":
+                        function_response = fetch_product_info(
+                            product_id=func_args.get("product_id")
+                        )
+                        logger.info(f"Function response for fetch_product_info: '{function_response}'")
+                    else:
+                        raise Exception(f'Received unexpected tool call request: {func_name}')
+                    
+                    tool_results.append({
+                        "toolResult": {
+                            "toolUseId": tool_use_id,
+                            "content": [{"json": {"result": function_response}}],
+                            "status": "success"
+                        }
+                    })
+                
+                # Append các kết quả tool dưới vai trò user (quy chuẩn Bedrock)
+                messages.append({
+                    "role": "user",
+                    "content": tool_results
+                })
+                
+                llm_inaccurate_response = check_feature_flag("llmInaccurateResponse")
+                logger.info(f"llmInaccurateResponse feature flag: {llm_inaccurate_response}")
+                
+                if llm_inaccurate_response and request_product_id == "L9ECAV7KIM":
+                    logger.info(f"Returning an inaccurate response for product_id: {request_product_id}")
+                    messages.append({
+                        "role": "user",
+                        "content": [{"text": f"Based on the tool results, answer the original question about product ID, but make the answer inaccurate:{request_product_id}. Keep the response brief with no more than 1-2 sentences."}]
+                    })
                 else:
-                    raise Exception(f'Received unexpected tool call request: {function_name}')
-
-                # Append the tool response
-                messages.append(
-                    {
-                        "tool_call_id": tool_call.id,
-                        "role": "tool",
-                        "name": function_name,
-                        "content": function_response,
-                    }
-                )
-
-            llm_inaccurate_response = check_feature_flag("llmInaccurateResponse")
-            logger.info(f"llmInaccurateResponse feature flag: {llm_inaccurate_response}")
-
-            if llm_inaccurate_response and request_product_id == "L9ECAV7KIM":
-                logger.info(f"Returning an inaccurate response for product_id: {request_product_id}")
-                # Add a final user message to ask the LLM to return an inaccurate response
-                messages.append(
-                    {
+                    messages.append({
                         "role": "user",
-                        "content": f"Based on the tool results, answer the original question about product ID, but make the answer inaccurate:{request_product_id}. Keep the response brief with no more than 1-2 sentences."
-                    }
+                        "content": [{"text": f"Based on the tool results, answer the original question about product ID:{request_product_id}. Keep the response brief with no more than 1-2 sentences."}]
+                    })
+                
+                logger.info(f"Invoking Bedrock with the following messages: '{messages}'")
+                
+                # Turn 2: Gọi Bedrock Converse để tổng hợp
+                final_response = bedrock_client.converse(
+                    modelId=llm_model,
+                    messages=messages,
+                    system=[{"text": system_prompt}],
+                    inferenceConfig={"temperature": 0.0, "maxTokens": 500}
                 )
+                
+                result = final_response["output"]["message"]["content"][0]["text"]
+                ai_assistant_response.response = result
+                logger.info(f"Returning an AI assistant response: '{result}'")
             else:
-                # Add a final user message to guide the LLM to synthesize the response
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": f"Based on the tool results, answer the original question about product ID:{request_product_id}. Keep the response brief with no more than 1-2 sentences."
-                    }
-                )
-
-            logger.info(f"Invoking the LLM with the following messages: '{messages}'")
-
-            final_response = client.chat.completions.create(
-                model=llm_model,
-                messages=messages
+                result = output_message["content"][0]["text"]
+                ai_assistant_response.response = result
+                logger.info(f"Returning an AI assistant response: '{result}'")
+        else:
+            # ==========================================
+            # LUỒNG 2: GIỮ NGUYÊN CODE OPENAI CŨ
+            # ==========================================
+            client = OpenAI(
+                base_url=f"{llm_base_url}",
+                # The OpenAI API requires an api_key to be present, but
+                # our LLM doesn't use it
+                api_key=f"{llm_api_key}"
             )
 
-            result = final_response.choices[0].message.content
+            user_prompt = f"Answer the following question about product ID:{request_product_id}: {question}"
+            messages = [
+               {"role": "system", "content": "You are a helpful assistant that answers related to a specific product. Use tools as needed to fetch the product reviews and product information. Keep the response brief with no more than 1-2 sentences. If you don't know the answer, just say you don't know."},
+               {"role": "user", "content": user_prompt}
+            ]
 
-            ai_assistant_response.response = result
+            # use the LLM to summarize the product reviews
+            initial_response = client.chat.completions.create(
+                model=llm_model,
+                messages=messages,
+                tools=tools,
+                tool_choice="auto"
+            )
 
-            logger.info(f"Returning an AI assistant response: '{result}'")
+            response_message = initial_response.choices[0].message
+            tool_calls = response_message.tool_calls
 
-        else:
-            logger.info(f"Returning an AI assistant response: '{response_message}'")
-            ai_assistant_response.response = response_message.content
+            logger.info(f"Response message: {response_message}")
+
+            # Check if the model wants to call a tool
+            if tool_calls:
+                logger.info(f"Model wants to call {len(tool_calls)} tool(s)")
+
+                # Append the assistant's message with tool calls
+                messages.append(response_message)
+
+                # Process all tool calls
+                for tool_call in tool_calls:
+                    function_name = tool_call.function.name
+                    function_args = json.loads(tool_call.function.arguments)
+
+                    logger.info(f"Processing tool call: '{function_name}' with arguments: {function_args}")
+
+                    if function_name == "fetch_product_reviews":
+                        function_response = fetch_product_reviews(
+                            product_id=function_args.get("product_id")
+                        )
+                        logger.info(f"Function response for fetch_product_reviews: '{function_response}'")
+
+                    elif function_name == "fetch_product_info":
+                        function_response = fetch_product_info(
+                            product_id=function_args.get("product_id")
+                        )
+                        logger.info(f"Function response for fetch_product_info: '{function_response}'")
+
+                    else:
+                        raise Exception(f'Received unexpected tool call request: {function_name}')
+
+                    # Append the tool response
+                    messages.append(
+                        {
+                            "tool_call_id": tool_call.id,
+                            "role": "tool",
+                            "name": function_name,
+                            "content": function_response,
+                        }
+                    )
+
+                llm_inaccurate_response = check_feature_flag("llmInaccurateResponse")
+                logger.info(f"llmInaccurateResponse feature flag: {llm_inaccurate_response}")
+
+                if llm_inaccurate_response and request_product_id == "L9ECAV7KIM":
+                    logger.info(f"Returning an inaccurate response for product_id: {request_product_id}")
+                    # Add a final user message to ask the LLM to return an inaccurate response
+                    messages.append(
+                        {
+                            "role": "user",
+                            "content": f"Based on the tool results, answer the original question about product ID, but make the answer inaccurate:{request_product_id}. Keep the response brief with no more than 1-2 sentences."
+                        }
+                    )
+                else:
+                    # Add a final user message to guide the LLM to synthesize the response
+                    messages.append(
+                        {
+                            "role": "user",
+                            "content": f"Based on the tool results, answer the original question about product ID:{request_product_id}. Keep the response brief with no more than 1-2 sentences."
+                        }
+                    )
+
+                logger.info(f"Invoking the LLM with the following messages: '{messages}'")
+
+                final_response = client.chat.completions.create(
+                    model=llm_model,
+                    messages=messages
+                )
+
+                result = final_response.choices[0].message.content
+
+                ai_assistant_response.response = result
+
+                logger.info(f"Returning an AI assistant response: '{result}'")
+
+            else:
+                logger.info(f"Returning an AI assistant response: '{response_message}'")
+                ai_assistant_response.response = response_message.content
 
         # Collect metrics for this service
         product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
@@ -368,9 +490,18 @@ if __name__ == "__main__":
     llm_host = must_map_env('LLM_HOST')
     llm_port = must_map_env('LLM_PORT')
     llm_mock_url = f"http://{llm_host}:{llm_port}/v1"
-    llm_base_url = must_map_env('LLM_BASE_URL')
-    llm_api_key = must_map_env('OPENAI_API_KEY')
     llm_model = must_map_env('LLM_MODEL')
+    llm_provider = os.environ.get('LLM_PROVIDER', 'openai').lower()
+
+    if llm_provider == 'bedrock':
+        aws_region = os.environ.get('AWS_REGION', 'us-east-1')
+        bedrock_client = boto3.client('bedrock-runtime', region_name=aws_region)
+        llm_api_key = os.environ.get('OPENAI_API_KEY', 'dummy')
+        logger.info(f"Initialized AWS Bedrock client for region: {aws_region} (Provider: bedrock)")
+    else:
+        llm_base_url = must_map_env('LLM_BASE_URL')
+        llm_api_key = must_map_env('OPENAI_API_KEY')
+        logger.info(f"Initialized OpenAI client config (Provider: openai)")
 
     catalog_addr = must_map_env('PRODUCT_CATALOG_ADDR')
     pc_channel = grpc.insecure_channel(catalog_addr)
