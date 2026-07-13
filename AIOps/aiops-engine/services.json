@@ -1,0 +1,10 @@
+{
+  "frontend": ["checkout", "product-catalog", "cart", "recommendation"],
+  "checkout": ["payment", "shipping", "currency"],
+  "payment": ["payments-db"],
+  "product-catalog": ["postgresql"],
+  "cart": ["valkey-cart"],
+  "product-reviews": ["llm"],
+  "accounting": ["kafka"],
+  "fraud-detection": ["flagd"]
+}

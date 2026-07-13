@@ -1,0 +1,402 @@
+[
+  {
+    "body": "INFO: [RequestID: req-374316] HTTP GET /products/details success. Processed in 8ms.",
+    "timestamp": 1783656829506
+  },
+  {
+    "body": "INFO: [RequestID: req-210107] HTTP GET /products/details success. Processed in 44ms.",
+    "timestamp": 1783656910506
+  },
+  {
+    "body": "INFO: [RequestID: req-834159] HTTP GET /products/details success. Processed in 34ms.",
+    "timestamp": 1783656970506
+  },
+  {
+    "body": "INFO: [RequestID: req-618777] HTTP GET /products/details success. Processed in 8ms.",
+    "timestamp": 1783656958506
+  },
+  {
+    "body": "INFO: [RequestID: req-545362] HTTP GET /products/details success. Processed in 32ms.",
+    "timestamp": 1783656994506
+  },
+  {
+    "body": "INFO: [RequestID: req-116747] HTTP GET /products/details success. Processed in 35ms.",
+    "timestamp": 1783656844506
+  },
+  {
+    "body": "INFO: [RequestID: req-914381] HTTP GET /products/details success. Processed in 43ms.",
+    "timestamp": 1783657024506
+  },
+  {
+    "body": "INFO: [RequestID: req-911968] HTTP GET /products/details success. Processed in 8ms.",
+    "timestamp": 1783656928506
+  },
+  {
+    "body": "INFO: [RequestID: req-841237] HTTP GET /products/details success. Processed in 13ms.",
+    "timestamp": 1783657012506
+  },
+  {
+    "body": "INFO: [RequestID: req-807527] HTTP GET /products/details success. Processed in 45ms.",
+    "timestamp": 1783656949506
+  },
+  {
+    "body": "INFO: [RequestID: req-406231] HTTP GET /products/details success. Processed in 39ms.",
+    "timestamp": 1783656805506
+  },
+  {
+    "body": "INFO: [RequestID: req-306121] HTTP GET /products/details success. Processed in 27ms.",
+    "timestamp": 1783656862506
+  },
+  {
+    "body": "INFO: [RequestID: req-632827] HTTP GET /products/details success. Processed in 23ms.",
+    "timestamp": 1783657000506
+  },
+  {
+    "body": "INFO: [RequestID: req-702868] HTTP GET /products/details success. Processed in 13ms.",
+    "timestamp": 1783656991506
+  },
+  {
+    "body": "INFO: [RequestID: req-120845] HTTP GET /products/details success. Processed in 36ms.",
+    "timestamp": 1783656961506
+  },
+  {
+    "body": "INFO: [RequestID: req-652730] HTTP GET /products/details success. Processed in 15ms.",
+    "timestamp": 1783656820506
+  },
+  {
+    "body": "INFO: [RequestID: req-568990] HTTP GET /products/details success. Processed in 27ms.",
+    "timestamp": 1783656937506
+  },
+  {
+    "body": "CRITICAL: [Kafka_Lag_ID: err-620316] Consumer lag spike. Topic orders is 9300 messages behind.",
+    "timestamp": 1783657060506
+  },
+  {
+    "body": "CRITICAL: [Kafka_Lag_ID: err-602359] Consumer lag spike. Topic orders is 9200 messages behind.",
+    "timestamp": 1783657042506
+  },
+  {
+    "body": "INFO: [RequestID: req-275950] HTTP GET /products/details success. Processed in 44ms.",
+    "timestamp": 1783656913506
+  },
+  {
+    "body": "INFO: [RequestID: req-785523] HTTP GET /products/details success. Processed in 33ms.",
+    "timestamp": 1783656946506
+  },
+  {
+    "body": "INFO: [RequestID: req-593515] HTTP GET /products/details success. Processed in 22ms.",
+    "timestamp": 1783656823506
+  },
+  {
+    "body": "INFO: [RequestID: req-425092] HTTP GET /products/details success. Processed in 17ms.",
+    "timestamp": 1783656826506
+  },
+  {
+    "body": "CRITICAL: [Kafka_Lag_ID: err-632188] Consumer lag spike. Topic orders is 10300 messages behind.",
+    "timestamp": 1783657093506
+  },
+  {
+    "body": "INFO: [RequestID: req-219447] HTTP GET /products/details success. Processed in 35ms.",
+    "timestamp": 1783656988506
+  },
+  {
+    "body": "CRITICAL: [Kafka_Lag_ID: err-313543] Consumer lag spike. Topic orders is 9800 messages behind.",
+    "timestamp": 1783657099506
+  },
+  {
+    "body": "INFO: [RequestID: req-526673] HTTP GET /products/details success. Processed in 28ms.",
+    "timestamp": 1783656919506
+  },
+  {
+    "body": "INFO: [RequestID: req-115056] HTTP GET /products/details success. Processed in 30ms.",
+    "timestamp": 1783656847506
+  },
+  {
+    "body": "INFO: [RequestID: req-903209] HTTP GET /products/details success. Processed in 24ms.",
+    "timestamp": 1783656925506
+  },
+  {
+    "body": "INFO: [RequestID: req-544208] HTTP GET /products/details success. Processed in 34ms.",
+    "timestamp": 1783657030506
+  },
+  {
+    "body": "INFO: [RequestID: req-663647] HTTP GET /products/details success. Processed in 7ms.",
+    "timestamp": 1783656901506
+  },
+  {
+    "body": "CRITICAL: [Kafka_Lag_ID: err-373653] Consumer lag spike. Topic orders is 9700 messages behind.",
+    "timestamp": 1783657069506
+  },
+  {
+    "body": "INFO: [RequestID: req-265874] HTTP GET /products/details success. Processed in 29ms.",
+    "timestamp": 1783656955506
+  },
+  {
+    "body": "CRITICAL: [Kafka_Lag_ID: err-449552] Consumer lag spike. Topic orders is 10300 messages behind.",
+    "timestamp": 1783657045506
+  },
+  {
+    "body": "INFO: [RequestID: req-509407] HTTP GET /products/details success. Processed in 21ms.",
+    "timestamp": 1783656898506
+  },
+  {
+    "body": "INFO: [RequestID: req-195933] HTTP GET /products/details success. Processed in 28ms.",
+    "timestamp": 1783656808506
+  },
+  {
+    "body": "INFO: [RequestID: req-386940] HTTP GET /products/details success. Processed in 13ms.",
+    "timestamp": 1783656832506
+  },
+  {
+    "body": "INFO: [RequestID: req-477620] HTTP GET /products/details success. Processed in 17ms.",
+    "timestamp": 1783656811506
+  },
+  {
+    "body": "INFO: [RequestID: req-886287] HTTP GET /products/details success. Processed in 30ms.",
+    "timestamp": 1783657006506
+  },
+  {
+    "body": "INFO: [RequestID: req-342497] HTTP GET /products/details success. Processed in 22ms.",
+    "timestamp": 1783656877506
+  },
+  {
+    "body": "CRITICAL: [Kafka_Lag_ID: err-671802] Consumer lag spike. Topic orders is 9400 messages behind.",
+    "timestamp": 1783657084506
+  },
+  {
+    "body": "INFO: [RequestID: req-814301] HTTP GET /products/details success. Processed in 34ms.",
+    "timestamp": 1783656964506
+  },
+  {
+    "body": "INFO: [RequestID: req-977373] HTTP GET /products/details success. Processed in 36ms.",
+    "timestamp": 1783656952506
+  },
+  {
+    "body": "INFO: [RequestID: req-878466] HTTP GET /products/details success. Processed in 28ms.",
+    "timestamp": 1783657027506
+  },
+  {
+    "body": "INFO: [RequestID: req-533293] HTTP GET /products/details success. Processed in 10ms.",
+    "timestamp": 1783657021506
+  },
+  {
+    "body": "INFO: [RequestID: req-488227] HTTP GET /products/details success. Processed in 39ms.",
+    "timestamp": 1783656943506
+  },
+  {
+    "body": "CRITICAL: [Kafka_Lag_ID: err-804798] Consumer lag spike. Topic orders is 10200 messages behind.",
+    "timestamp": 1783657057506
+  },
+  {
+    "body": "INFO: [RequestID: req-860335] HTTP GET /products/details success. Processed in 31ms.",
+    "timestamp": 1783656802506
+  },
+  {
+    "body": "INFO: [RequestID: req-613227] HTTP GET /products/details success. Processed in 12ms.",
+    "timestamp": 1783657003506
+  },
+  {
+    "body": "CRITICAL: [Kafka_Lag_ID: err-488032] Consumer lag spike. Topic orders is 9000 messages behind.",
+    "timestamp": 1783657051506
+  },
+  {
+    "body": "INFO: [RequestID: req-117235] HTTP GET /products/details success. Processed in 28ms.",
+    "timestamp": 1783657039506
+  },
+  {
+    "body": "INFO: [RequestID: req-159659] HTTP GET /products/details success. Processed in 41ms.",
+    "timestamp": 1783656931506
+  },
+  {
+    "body": "INFO: [RequestID: req-282331] HTTP GET /products/details success. Processed in 9ms.",
+    "timestamp": 1783656817506
+  },
+  {
+    "body": "INFO: [RequestID: req-846347] HTTP GET /products/details success. Processed in 34ms.",
+    "timestamp": 1783656997506
+  },
+  {
+    "body": "INFO: [RequestID: req-928514] HTTP GET /products/details success. Processed in 40ms.",
+    "timestamp": 1783656904506
+  },
+  {
+    "body": "INFO: [RequestID: req-400725] HTTP GET /products/details success. Processed in 25ms.",
+    "timestamp": 1783657009506
+  },
+  {
+    "body": "INFO: [RequestID: req-890426] HTTP GET /products/details success. Processed in 30ms.",
+    "timestamp": 1783656982506
+  },
+  {
+    "body": "INFO: [RequestID: req-437425] HTTP GET /products/details success. Processed in 5ms.",
+    "timestamp": 1783656874506
+  },
+  {
+    "body": "INFO: [RequestID: req-243137] HTTP GET /products/details success. Processed in 36ms.",
+    "timestamp": 1783656934506
+  },
+  {
+    "body": "CRITICAL: [Kafka_Lag_ID: err-648186] Consumer lag spike. Topic orders is 9300 messages behind.",
+    "timestamp": 1783657078506
+  },
+  {
+    "body": "INFO: [RequestID: req-960873] HTTP GET /products/details success. Processed in 20ms.",
+    "timestamp": 1783656895506
+  },
+  {
+    "body": "INFO: [RequestID: req-303252] HTTP GET /products/details success. Processed in 22ms.",
+    "timestamp": 1783657018506
+  },
+  {
+    "body": "INFO: [RequestID: req-934555] HTTP GET /products/details success. Processed in 21ms.",
+    "timestamp": 1783656967506
+  },
+  {
+    "body": "INFO: [RequestID: req-775917] HTTP GET /products/details success. Processed in 33ms.",
+    "timestamp": 1783656835506
+  },
+  {
+    "body": "INFO: [RequestID: req-510523] HTTP GET /products/details success. Processed in 30ms.",
+    "timestamp": 1783656976506
+  },
+  {
+    "body": "CRITICAL: [Kafka_Lag_ID: err-886869] Consumer lag spike. Topic orders is 9300 messages behind.",
+    "timestamp": 1783657096506
+  },
+  {
+    "body": "INFO: [RequestID: req-652880] HTTP GET /products/details success. Processed in 18ms.",
+    "timestamp": 1783656922506
+  },
+  {
+    "body": "INFO: [RequestID: req-355009] HTTP GET /products/details success. Processed in 21ms.",
+    "timestamp": 1783656886506
+  },
+  {
+    "body": "INFO: [RequestID: req-143699] HTTP GET /products/details success. Processed in 22ms.",
+    "timestamp": 1783656865506
+  },
+  {
+    "body": "CRITICAL: [Kafka_Lag_ID: err-321491] Consumer lag spike. Topic orders is 9600 messages behind.",
+    "timestamp": 1783657066506
+  },
+  {
+    "body": "CRITICAL: [Kafka_Lag_ID: err-742283] Consumer lag spike. Topic orders is 10400 messages behind.",
+    "timestamp": 1783657087506
+  },
+  {
+    "body": "INFO: [RequestID: req-972646] HTTP GET /products/details success. Processed in 43ms.",
+    "timestamp": 1783657015506
+  },
+  {
+    "body": "INFO: [RequestID: req-709110] HTTP GET /products/details success. Processed in 6ms.",
+    "timestamp": 1783656973506
+  },
+  {
+    "body": "INFO: [RequestID: req-778849] HTTP GET /products/details success. Processed in 9ms.",
+    "timestamp": 1783656871506
+  },
+  {
+    "body": "INFO: [RequestID: req-793631] HTTP GET /products/details success. Processed in 44ms.",
+    "timestamp": 1783656880506
+  },
+  {
+    "body": "INFO: [RequestID: req-692718] HTTP GET /products/details success. Processed in 23ms.",
+    "timestamp": 1783657036506
+  },
+  {
+    "body": "INFO: [RequestID: req-331752] HTTP GET /products/details success. Processed in 10ms.",
+    "timestamp": 1783657033506
+  },
+  {
+    "body": "INFO: [RequestID: req-953448] HTTP GET /products/details success. Processed in 44ms.",
+    "timestamp": 1783656889506
+  },
+  {
+    "body": "CRITICAL: [Kafka_Lag_ID: err-323012] Consumer lag spike. Topic orders is 10000 messages behind.",
+    "timestamp": 1783657075506
+  },
+  {
+    "body": "INFO: [RequestID: req-765003] HTTP GET /products/details success. Processed in 42ms.",
+    "timestamp": 1783656916506
+  },
+  {
+    "body": "INFO: [RequestID: req-580776] HTTP GET /products/details success. Processed in 23ms.",
+    "timestamp": 1783656907506
+  },
+  {
+    "body": "INFO: [RequestID: req-464652] HTTP GET /products/details success. Processed in 24ms.",
+    "timestamp": 1783656985506
+  },
+  {
+    "body": "CRITICAL: [Kafka_Lag_ID: err-882145] Consumer lag spike. Topic orders is 9900 messages behind.",
+    "timestamp": 1783657054506
+  },
+  {
+    "body": "CRITICAL: [Kafka_Lag_ID: err-833685] Consumer lag spike. Topic orders is 9200 messages behind.",
+    "timestamp": 1783657090506
+  },
+  {
+    "body": "INFO: [RequestID: req-825846] HTTP GET /products/details success. Processed in 5ms.",
+    "timestamp": 1783656838506
+  },
+  {
+    "body": "INFO: [RequestID: req-601936] HTTP GET /products/details success. Processed in 23ms.",
+    "timestamp": 1783656940506
+  },
+  {
+    "body": "INFO: [RequestID: req-593628] HTTP GET /products/details success. Processed in 7ms.",
+    "timestamp": 1783656853506
+  },
+  {
+    "body": "INFO: [RequestID: req-754544] HTTP GET /products/details success. Processed in 18ms.",
+    "timestamp": 1783656979506
+  },
+  {
+    "body": "INFO: [RequestID: req-881760] HTTP GET /products/details success. Processed in 41ms.",
+    "timestamp": 1783656883506
+  },
+  {
+    "body": "INFO: [RequestID: req-287441] HTTP GET /products/details success. Processed in 35ms.",
+    "timestamp": 1783656841506
+  },
+  {
+    "body": "INFO: [RequestID: req-926244] HTTP GET /products/details success. Processed in 28ms.",
+    "timestamp": 1783656859506
+  },
+  {
+    "body": "INFO: [RequestID: req-256890] HTTP GET /products/details success. Processed in 12ms.",
+    "timestamp": 1783656856506
+  },
+  {
+    "body": "INFO: [RequestID: req-256083] HTTP GET /products/details success. Processed in 20ms.",
+    "timestamp": 1783656868506
+  },
+  {
+    "body": "CRITICAL: [Kafka_Lag_ID: err-595837] Consumer lag spike. Topic orders is 10300 messages behind.",
+    "timestamp": 1783657063506
+  },
+  {
+    "body": "INFO: [RequestID: req-299996] HTTP GET /products/details success. Processed in 42ms.",
+    "timestamp": 1783656892506
+  },
+  {
+    "body": "INFO: [RequestID: req-566221] HTTP GET /products/details success. Processed in 15ms.",
+    "timestamp": 1783656814506
+  },
+  {
+    "body": "INFO: [RequestID: req-879020] HTTP GET /products/details success. Processed in 37ms.",
+    "timestamp": 1783656850506
+  },
+  {
+    "body": "CRITICAL: [Kafka_Lag_ID: err-405897] Consumer lag spike. Topic orders is 10100 messages behind.",
+    "timestamp": 1783657072506
+  },
+  {
+    "body": "CRITICAL: [Kafka_Lag_ID: err-245991] Consumer lag spike. Topic orders is 9300 messages behind.",
+    "timestamp": 1783657081506
+  },
+  {
+    "body": "CRITICAL: [Kafka_Lag_ID: err-475490] Consumer lag spike. Topic orders is 9300 messages behind.",
+    "timestamp": 1783657048506
+  }
+]
