@@ -310,7 +310,8 @@ def get_ai_assistant_response(request_product_id, question):
                     modelId=llm_model,
                     messages=messages,
                     system=[{"text": system_prompt}],
-                    inferenceConfig={"temperature": 0.0, "maxTokens": 500}
+                    inferenceConfig={"temperature": 0.0, "maxTokens": 500},
+                    toolConfig={"tools": bedrock_tools}
                 )
                 
                 result = final_response["output"]["message"]["content"][0]["text"]
