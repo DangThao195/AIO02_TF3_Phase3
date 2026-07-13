@@ -1,45 +1,36 @@
 """
-LLM Client Module - Groq-based LLM integration for shopping copilot
-Uses groq Python client library for cost-efficient LLM calls
+LLM Client Module - AWS Bedrock-based LLM integration for shopping copilot
+Migrated from Groq to Bedrock (Amazon Nova) to use TechX Corp infra.
 """
 
 import os
-from typing import Optional
-from dotenv import load_dotenv
+import boto3
 import json
-
-load_dotenv()
-
-try:
-    from groq import Groq
-    HAS_GROQ = True
-except ImportError:
-    HAS_GROQ = False
-
+from typing import Optional
 
 class LLMClient:
-    """LLM client wrapper using Groq API (cost-efficient 8b-instant model)."""
+    """LLM client wrapper using AWS Bedrock (Amazon Nova model)."""
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self):
         """
-        Initialize LLM client.
-        
-        Args:
-            api_key: Groq API key. If None, reads from GROQ_API_KEY env var.
+        Initialize AWS Bedrock client.
+        Reads credentials via AWS profile or environment variables.
         """
-        if not HAS_GROQ:
-            raise ImportError("groq package not installed. Install with: pip install groq")
-        
-        self.api_key = api_key or os.getenv("GROQ_API_KEY")
-        if not self.api_key:
-            raise ValueError("GROQ_API_KEY not found in environment variables")
-        
-        self.client = Groq(api_key=self.api_key)
-        self.model = "mixtral-8b-32768"  # Free tier model (equivalent to 8b-instant)
+        self.model = os.getenv("BEDROCK_MODEL_ID", "apac.amazon.nova-lite-v1:0")
+        self.region = os.getenv("BEDROCK_REGION", "ap-southeast-1")
+        self.profile = os.getenv("AWS_PROFILE")
+
+        # Initialize boto3 session
+        if self.profile:
+            session = boto3.Session(profile_name=self.profile)
+        else:
+            session = boto3.Session()
+            
+        self.client = session.client("bedrock-runtime", region_name=self.region)
 
     def invoke(self, prompt: str, temperature: float = 0.3, max_tokens: int = 500) -> "LLMResponse":
         """
-        Call LLM with given prompt.
+        Call Bedrock Converse API with given prompt.
         
         Args:
             prompt: Input prompt
@@ -50,22 +41,28 @@ class LLMClient:
             LLMResponse object with .content attribute
         """
         try:
-            message = self.client.chat.completions.create(
+            response = self.client.converse(
+                modelId=self.model,
                 messages=[
                     {
                         "role": "user",
-                        "content": prompt,
+                        "content": [{"text": prompt}]
                     }
                 ],
-                model=self.model,
-                temperature=temperature,
-                max_tokens=max_tokens,
+                inferenceConfig={
+                    "temperature": temperature,
+                    "maxTokens": max_tokens
+                }
             )
             
-            response_text = message.choices[0].message.content
-            return LLMResponse(content=response_text, raw=message)
+            content_blocks = response["output"]["message"]["content"]
+            response_text = ""
+            for block in content_blocks:
+                if "text" in block:
+                    response_text += block["text"]
+                    
+            return LLMResponse(content=response_text, raw=response)
         except Exception as e:
-            # Return error response that can be handled gracefully
             return LLMResponse(content="", error=str(e))
 
     def extract_json(self, response: "LLMResponse") -> dict:
@@ -73,7 +70,13 @@ class LLMClient:
         if response.error:
             return {}
         try:
-            return json.loads(response.content)
+            # Clean possible markdown wrap (```json ... ```)
+            text = response.content.strip()
+            if text.startswith("```json"):
+                text = text[7:]
+            if text.endswith("```"):
+                text = text[:-3]
+            return json.loads(text.strip())
         except json.JSONDecodeError:
             return {}
 
@@ -104,18 +107,18 @@ def get_llm_client() -> LLMClient:
     if _llm_instance is None:
         try:
             _llm_instance = LLMClient()
-        except (ImportError, ValueError) as e:
-            # For testing without Groq: return mock client
-            print(f"Warning: Could not initialize Groq client: {e}")
+        except Exception as e:
+            # For testing without AWS Bedrock: return mock client
+            print(f"Warning: Could not initialize Bedrock client: {e}")
             return MockLLMClient()
     return _llm_instance
 
 
 class MockLLMClient:
-    """Mock LLM client for testing without API key."""
+    """Mock LLM client for testing without AWS credentials."""
 
     def invoke(self, prompt: str, **kwargs) -> LLMResponse:
-        """Return mock response with empty content for testing."""
+        """Return mock response with empty JSON for testing."""
         return LLMResponse(content="{}", error="Mock client - no API key")
 
 
