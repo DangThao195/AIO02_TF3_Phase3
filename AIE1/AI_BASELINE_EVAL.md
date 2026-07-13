@@ -867,35 +867,35 @@ _Đề xuất các giải pháp kỹ thuật nâng cấp tầng AI trong các tu
 | **1** | **Tích hợp SDK `boto3`** | Thay thế `OpenAI` client bằng SDK `boto3` Bedrock, loại bỏ hoàn toàn LiteLLM Proxy. | 2 | **High** | [PROPOSAL](docs/analysis/BEDROCK_INTEGRATION_PROPOSAL.md) | Sẵn sàng / Chờ code |
 
 ### 🛡️ B. Độ Tin Cậy & Chịu Lỗi (Reliability)
-| STT | Giải pháp Kỹ thuật | Lý do / Lợi ích | Rủi ro | Tác động | Tài liệu | Trạng thái |
-| :---: | :--- | :--- | :---: | :---: | :--- | :--- |
-| **2** | **Thử lại & Trễ lũy thừa** | Tự động retry 3 lần (Backoff + Jitter) khi gặp lỗi mạng/Rate limit (429/500). | 2 | **High** | [RETRY](docs/analysis/LLM_RETRY_BACKOFF.md) | Sẵn sàng / Chờ code |
-| **3** | **Graceful Fallback 3 tầng** | Bọc LLM call để tự động chuyển hướng: LLM → Postgres Cache → Static Msg. | 1 | **High** | [FALLBACK](docs/adr/0002-fallback-mechanism.md) | Đang thiết kế |
+|  STT  | Giải pháp Kỹ thuật           | Lý do / Lợi ích                                                               | Rủi ro | Tác động | Tài liệu                                        | Trạng thái          |
+| :---: | :--------------------------- | :---------------------------------------------------------------------------- | :----: | :------: | :---------------------------------------------- | :------------------ |
+| **2** | **Thử lại & Trễ lũy thừa**   | Tự động retry 3 lần (Backoff + Jitter) khi gặp lỗi mạng/Rate limit (429/500). |   2    | **High** | [RETRY](docs/analysis/LLM_RETRY_BACKOFF.md)     | Sẵn sàng / Chờ code |
+| **3** | **Graceful Fallback 3 tầng** | Bọc LLM call để tự động chuyển hướng: LLM → Postgres Cache → Static Msg.      |   1    | **High** | [FALLBACK](docs/adr/0002-fallback-mechanism.md) | Đang thiết kế       |
 
 ### ⚡ C. Hiệu Năng & Tối Ưu Chi Phí
-| STT | Giải pháp Kỹ thuật | Lý do / Lợi ích | Rủi ro | Tác động | Tài liệu | Trạng thái |
-| :---: | :--- | :--- | :---: | :---: | :--- | :--- |
-| **4** | **Caching phản hồi LLM** | Lưu cache câu trả lời bằng Hash Key (SHA256), giảm 80% chi phí token, phản hồi < 10ms. | 2 | **High** | [CACHING](docs/analysis/LLM_CACHING_DESIGN.md) | Sẵn sàng / Chờ code |
-| **5** | **Phản hồi dạng luồng** | Chuyển đổi sang gRPC Streaming & Bedrock stream, giảm TTFT < 200ms. | 3 | **Medium** | [STREAMING](docs/analysis/LLM_STREAMING.md) | Sẵn sàng / Chờ code |
+|  STT  | Giải pháp Kỹ thuật       | Lý do / Lợi ích                                                                        | Rủi ro |  Tác động  | Tài liệu                                       | Trạng thái          |
+| :---: | :----------------------- | :------------------------------------------------------------------------------------- | :----: | :--------: | :--------------------------------------------- | :------------------ |
+| **4** | **Caching phản hồi LLM** | Lưu cache câu trả lời bằng Hash Key (SHA256), giảm 80% chi phí token, phản hồi < 10ms. |   2    |  **High**  | [CACHING](docs/analysis/LLM_CACHING_DESIGN.md) | Sẵn sàng / Chờ code |
+| **5** | **Phản hồi dạng luồng**  | Chuyển đổi sang gRPC Streaming & Bedrock stream, giảm TTFT < 200ms.                    |   3    | **Medium** | [STREAMING](docs/analysis/LLM_STREAMING.md)    | Sẵn sàng / Chờ code |
 
 ### 🔒 D. Bảo Mật & Lọc Dữ Liệu (Security)
-| STT | Giải pháp Kỹ thuật | Lý do / Lợi ích | Rủi ro | Tác động | Tài liệu | Trạng thái |
-| :---: | :--- | :--- | :---: | :---: | :--- | :--- |
-| **6** | **Middleware lọc PII** | Tự động che giấu Email, SĐT trong review gốc thành `[EMAIL]`, `[PHONE]`. | 1 | **Medium** | [Mục 4](AI_BASELINE_EVAL.md#L650) | Đang thiết kế |
-| **7** | **Chặn Prompt Injection** | Kiểm duyệt đầu vào lọc từ khóa độc hại, tránh rò rỉ system prompt. | 2 | **High** | [Mục 4](AI_BASELINE_EVAL.md#L650) | Đang thiết kế |
+|  STT  | Giải pháp Kỹ thuật        | Lý do / Lợi ích                                                          | Rủi ro |  Tác động  | Tài liệu                          | Trạng thái    |
+| :---: | :------------------------ | :----------------------------------------------------------------------- | :----: | :--------: | :-------------------------------- | :------------ |
+| **6** | **Middleware lọc PII**    | Tự động che giấu Email, SĐT trong review gốc thành `[EMAIL]`, `[PHONE]`. |   1    | **Medium** | [Mục 4](AI_BASELINE_EVAL.md#L650) | Đang thiết kế |
+| **7** | **Chặn Prompt Injection** | Kiểm duyệt đầu vào lọc từ khóa độc hại, tránh rò rỉ system prompt.       |   2    |  **High**  | [Mục 4](AI_BASELINE_EVAL.md#L650) | Đang thiết kế |
 
 ### 🚀 E. Mở Rộng & Trải Nghiệm Chat
-| STT | Giải pháp Kỹ thuật | Lý do / Lợi ích | Rủi ro | Tác động | Tài liệu | Trạng thái |
-| :---: | :--- | :--- | :---: | :---: | :--- | :--- |
-| **8** | **Dynamic Tool Registry** | Đăng ký động và phân phối tool (Dynamic Dispatch), loại bỏ khối `if/elif`. | 2 | **Medium** | [REGISTRY](docs/analysis/LLM_DYNAMIC_TOOL_REGISTRY.md) | Sẵn sàng / Chờ code |
-| **9** | **Conversation Memory** | Lưu trữ ngữ cảnh tin nhắn theo `session_id` vào Redis (TTL 30 phút). | 3 | **Medium** | [MEMORY](docs/analysis/LLM_CONVERSATION_MEMORY.md) | Sẵn sàng / Chờ code |
+|  STT  | Giải pháp Kỹ thuật        | Lý do / Lợi ích                                                            | Rủi ro |  Tác động  | Tài liệu                                               | Trạng thái          |
+| :---: | :------------------------ | :------------------------------------------------------------------------- | :----: | :--------: | :----------------------------------------------------- | :------------------ |
+| **8** | **Dynamic Tool Registry** | Đăng ký động và phân phối tool (Dynamic Dispatch), loại bỏ khối `if/elif`. |   2    | **Medium** | [REGISTRY](docs/analysis/LLM_DYNAMIC_TOOL_REGISTRY.md) | Sẵn sàng / Chờ code |
+| **9** | **Conversation Memory**   | Lưu trữ ngữ cảnh tin nhắn theo `session_id` vào Redis (TTL 30 phút).       |   3    | **Medium** | [MEMORY](docs/analysis/LLM_CONVERSATION_MEMORY.md)     | Sẵn sàng / Chờ code |
 
 ### 🐞 F. Đánh Giá Chất Lượng & Sửa Lỗi Logic
-| STT | Giải pháp Kỹ thuật | Lý do / Lợi ích | Rủi ro | Tác động | Tài liệu | Trạng thái |
-| :---: | :--- | :--- | :---: | :---: | :--- | :--- |
-| **10** | **Sửa lỗi Product ID Leak** | Thay thế mã sản phẩm trong prompt bằng `"this product"` để tránh LLM echo lại. | 1 | **High** | - | Đang xử lý |
-| **11** | **Chuẩn hóa Tool Output** | Đảm bảo `fetch_product_reviews` trả về `string` để tránh lỗi BadRequest (400). | 1 | **High** | - | Cần xử lý ngay |
-| **12** | **Sửa lỗi bộ Eval** | Khắc phục 4 điểm nghẽn của bộ eval (Ground Truth mismatch, nhạy cảm dải số). | 3 | **High** | [BOTTLENECK](docs/analysis/evaluation_bottlenecks.md) | Backlog |
+|  STT   | Giải pháp Kỹ thuật          | Lý do / Lợi ích                                                                | Rủi ro | Tác động | Tài liệu                                              | Trạng thái     |
+| :----: | :-------------------------- | :----------------------------------------------------------------------------- | :----: | :------: | :---------------------------------------------------- | :------------- |
+| **10** | **Sửa lỗi Product ID Leak** | Thay thế mã sản phẩm trong prompt bằng `"this product"` để tránh LLM echo lại. |   1    | **High** | -                                                     | Đang xử lý     |
+| **11** | **Chuẩn hóa Tool Output**   | Đảm bảo `fetch_product_reviews` trả về `string` để tránh lỗi BadRequest (400). |   1    | **High** | -                                                     | Cần xử lý ngay |
+| **12** | **Sửa lỗi bộ Eval**         | Khắc phục 4 điểm nghẽn của bộ eval (Ground Truth mismatch, nhạy cảm dải số).   |   3    | **High** | [BOTTLENECK](docs/analysis/evaluation_bottlenecks.md) | Backlog        |
 
 
 
