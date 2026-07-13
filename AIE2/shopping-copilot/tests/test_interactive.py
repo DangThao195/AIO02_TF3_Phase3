@@ -29,7 +29,7 @@ parser.add_argument("--live", action="store_true", help="Chế độ LIVE — g�
 parser.add_argument("--no-llm", action="store_true", help="Full mock — không cần Bedrock")
 parser.add_argument("--user-id", default="test_user_001", help="User ID cho session (default: test_user_001)")
 parser.add_argument("--debug", action="store_true", help="Bật debug logging")
-args = parser.parse_args()
+args, _ = parser.parse_known_args()
 
 # ── Logging ──
 log_level = logging.DEBUG if args.debug else logging.WARNING
