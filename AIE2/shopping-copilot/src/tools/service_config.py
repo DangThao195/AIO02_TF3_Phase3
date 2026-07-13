@@ -39,7 +39,7 @@ _TEST: dict[str, str] = {
     "REVIEWS": "localhost:9090",
     "RECOMMENDATION": "localhost:8081",
     "CURRENCY": "localhost:7001",
-    "SHIPPING": "http://localhost:50051",
+    "SHIPPING": "http://localhost:50052",
 }
 
 

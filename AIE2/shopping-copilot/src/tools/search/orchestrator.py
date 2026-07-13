@@ -11,7 +11,14 @@ Flow:
 """
 
 import asyncio
+import re
 from typing import List, Optional
+
+import grpc
+
+import src.protos.demo_pb2 as demo_pb2
+import src.protos.demo_pb2_grpc as demo_pb2_grpc
+
 from src.tools.search.models import SearchQuery, ScoredProduct, SearchResult, Product
 from src.tools.search.query_analyzer import QueryAnalyzerPipeline
 from src.tools.search.strategies import (
@@ -22,6 +29,25 @@ from src.tools.search.strategies import (
 from src.tools.search.ranker import ResultRanker
 from src.tools.search.reranker import LLMReranker
 from src.tools.search.cache import SearchCache
+from src.tools.service_config import CATALOG_ADDR
+
+_CATEGORY_LIST_PATTERNS: list[re.Pattern] = [
+    re.compile(r"danh.?mục", re.IGNORECASE),
+    re.compile(r"các.?loại", re.IGNORECASE),
+    re.compile(r"thể.?loại", re.IGNORECASE),
+    re.compile(r"có.*(những|gì)", re.IGNORECASE),
+    re.compile(r"category", re.IGNORECASE),
+]
+
+_CATEGORY_LABELS: dict[str, str] = {
+    "telescopes": "Kính thiên văn (Telescopes)",
+    "binoculars": "Ống nhòm (Binoculars)",
+    "flashlights": "Đèn pin (Flashlights)",
+    "accessories": "Phụ kiện (Accessories)",
+    "books": "Sách (Books)",
+    "travel": "Du lịch (Travel)",
+    "assembly": "Ống kính / Linh kiện (Assembly)",
+}
 
 
 class SearchOrchestrator:
@@ -56,6 +82,10 @@ class SearchOrchestrator:
 
         # Step 2: Parse query
         sq = self.analyzer.parse(raw_query)
+
+        # Step 2.5: Category list query
+        if self._is_category_list(sq):
+            return await self._list_categories(sq)
 
         # Step 3: Chạy strategies song parallel
         pools = await self._run_strategies_parallel(sq)
@@ -111,6 +141,37 @@ class SearchOrchestrator:
         # Lọc kết quả hợp lệ (list, không exception)
         pools = [r for r in results if isinstance(r, list)]
         return pools
+
+    @staticmethod
+    def _is_category_list(sq: SearchQuery) -> bool:
+        raw = sq.raw.strip().lower()
+        return any(p.search(raw) for p in _CATEGORY_LIST_PATTERNS)
+
+    async def _list_categories(self, sq: SearchQuery) -> SearchResult:
+        channel = grpc.aio.insecure_channel(CATALOG_ADDR)
+        stub = demo_pb2_grpc.ProductCatalogServiceStub(channel)
+        try:
+            response = await stub.ListProducts(demo_pb2.Empty())
+            cat_map: dict[str, int] = {}
+            for p in response.products:
+                for c in p.categories:
+                    cat_map[c] = cat_map.get(c, 0) + 1
+
+            lines = ["Danh mục sản phẩm hiện có:\n"]
+            for c in sorted(cat_map):
+                label = _CATEGORY_LABELS.get(c, c)
+                count = cat_map[c]
+                lines.append(f"  - {label}: {count} sản phẩm")
+            lines.append("\nGợi ý: Hãy nói 'tìm [danh mục]' để xem sản phẩm trong danh mục đó!")
+            return SearchResult(
+                query=sq, products=[], total=0,
+                strategies_used=["category_list"],
+                error="\n".join(lines),
+            )
+        except Exception as e:
+            return SearchResult.empty(f"Lỗi khi lấy danh mục: {e}")
+        finally:
+            await channel.close()
 
 
 # ============================================================================

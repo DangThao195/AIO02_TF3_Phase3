@@ -10,11 +10,11 @@ class AccountingService(grpc_svc.AccountingServicer):
 
     async def CreateOrder(self, request, context):
         await db.execute(
-            "INSERT INTO accounting.\"order\" (order_id) VALUES ($1) ON CONFLICT DO NOTHING",
+            "INSERT OR IGNORE INTO \"order\" (order_id) VALUES (?)",
             request.order_id,
         )
         row = await db.fetchrow(
-            "SELECT order_id FROM accounting.\"order\" WHERE order_id = $1",
+            "SELECT order_id FROM \"order\" WHERE order_id = ?",
             request.order_id,
         )
         if row is None:
@@ -25,7 +25,7 @@ class AccountingService(grpc_svc.AccountingServicer):
 
     async def GetOrder(self, request, context):
         order_row = await db.fetchrow(
-            "SELECT order_id FROM accounting.\"order\" WHERE order_id = $1",
+            "SELECT order_id FROM \"order\" WHERE order_id = ?",
             request.order_id,
         )
         if order_row is None:
@@ -35,13 +35,13 @@ class AccountingService(grpc_svc.AccountingServicer):
 
         item_rows = await db.fetch(
             """SELECT product_id, quantity, item_cost_currency_code, item_cost_units, item_cost_nanos
-               FROM accounting.orderitem WHERE order_id = $1""",
+               FROM orderitem WHERE order_id = ?""",
             request.order_id,
         )
         shipping_row = await db.fetchrow(
             """SELECT shipping_tracking_id, shipping_cost_currency_code, shipping_cost_units,
                       shipping_cost_nanos, street_address, city, state, country, zip_code, order_id
-               FROM accounting.shipping WHERE order_id = $1""",
+               FROM shipping WHERE order_id = ?""",
             request.order_id,
         )
 
@@ -75,7 +75,7 @@ class AccountingService(grpc_svc.AccountingServicer):
 
     async def AddOrderItem(self, request, context):
         exists = await db.fetchrow(
-            "SELECT 1 FROM accounting.\"order\" WHERE order_id = $1",
+            "SELECT 1 FROM \"order\" WHERE order_id = ?",
             request.order_id,
         )
         if exists is None:
@@ -84,10 +84,10 @@ class AccountingService(grpc_svc.AccountingServicer):
             return pb.OrderItem()
 
         await db.execute(
-            """INSERT INTO accounting.orderitem
+            """INSERT INTO orderitem
                (order_id, product_id, quantity, item_cost_currency_code, item_cost_units, item_cost_nanos)
-               VALUES ($1, $2, $3, $4, $5, $6)
-               ON CONFLICT (order_id, product_id) DO UPDATE SET
+               VALUES (?, ?, ?, ?, ?, ?)
+               ON CONFLICT(order_id, product_id) DO UPDATE SET
                quantity = excluded.quantity,
                item_cost_currency_code = excluded.item_cost_currency_code,
                item_cost_units = excluded.item_cost_units,
@@ -109,7 +109,7 @@ class AccountingService(grpc_svc.AccountingServicer):
 
     async def SetShipping(self, request, context):
         exists = await db.fetchrow(
-            "SELECT 1 FROM accounting.\"order\" WHERE order_id = $1",
+            "SELECT 1 FROM \"order\" WHERE order_id = ?",
             request.order_id,
         )
         if exists is None:
@@ -118,11 +118,11 @@ class AccountingService(grpc_svc.AccountingServicer):
             return pb.Shipping()
 
         await db.execute(
-            """INSERT INTO accounting.shipping
+            """INSERT INTO shipping
                (shipping_tracking_id, shipping_cost_currency_code, shipping_cost_units,
                 shipping_cost_nanos, street_address, city, state, country, zip_code, order_id)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-               ON CONFLICT (shipping_tracking_id) DO UPDATE SET
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(shipping_tracking_id) DO UPDATE SET
                shipping_cost_currency_code = excluded.shipping_cost_currency_code,
                shipping_cost_units = excluded.shipping_cost_units,
                shipping_cost_nanos = excluded.shipping_cost_nanos,
@@ -159,7 +159,7 @@ class AccountingService(grpc_svc.AccountingServicer):
         row = await db.fetchrow(
             """SELECT shipping_tracking_id, shipping_cost_currency_code, shipping_cost_units,
                       shipping_cost_nanos, street_address, city, state, country, zip_code, order_id
-               FROM accounting.shipping WHERE shipping_tracking_id = $1""",
+               FROM shipping WHERE shipping_tracking_id = ?""",
             request.shipping_tracking_id,
         )
         if row is None:
@@ -181,7 +181,7 @@ class AccountingService(grpc_svc.AccountingServicer):
 
     async def DeleteOrder(self, request, context):
         await db.execute(
-            "DELETE FROM accounting.\"order\" WHERE order_id = $1",
+            "DELETE FROM \"order\" WHERE order_id = ?",
             request.order_id,
         )
         return empty_pb2.Empty()

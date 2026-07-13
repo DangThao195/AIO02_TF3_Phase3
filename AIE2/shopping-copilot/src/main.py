@@ -117,7 +117,7 @@ def index():
 def chatbot():
     """Giao diện chatbot HTML với IO trace log."""
     import os
-    html_path = os.path.join(os.path.dirname(__file__), "static", "chatbot.html")
+    html_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "chatbot.html")
     if os.path.exists(html_path):
         with open(html_path, encoding="utf-8") as f:
             return HTMLResponse(content=f.read())

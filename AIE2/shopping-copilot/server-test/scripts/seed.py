@@ -2,19 +2,18 @@
 import asyncio
 import pathlib
 
-import asyncpg
-
-DB_DSN = "postgresql://otelu:otelp@localhost:5432/shopping"
+import aiosqlite
 
 
 async def main() -> None:
     sql_path = pathlib.Path(__file__).resolve().parent.parent / "database" / "init.sql"
     sql = sql_path.read_text(encoding="utf-8")
 
-    conn = await asyncpg.connect(DB_DSN)
+    db_path = sql_path.parent.parent / "shopping.db"
+    conn = await aiosqlite.connect(str(db_path))
     try:
-        await conn.execute(sql)
-        print("init.sql executed successfully")
+        await conn.executescript(sql)
+        print(f"init.sql executed successfully → {db_path}")
     finally:
         await conn.close()
 

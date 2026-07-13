@@ -9,18 +9,20 @@ from server import db
 class ProductReviewsService(grpc_svc.ProductReviewsServicer):
 
     async def CreateReview(self, request, context):
-        row = await db.fetchrow(
-            """INSERT INTO reviews.productreviews
+        await db.execute(
+            """INSERT INTO productreviews
                (product_id, username, description, score)
-               VALUES ($1, $2, $3, $4)
-               RETURNING id, product_id, username, description, score""",
+               VALUES (?, ?, ?, ?)""",
             request.product_id, request.username, request.description, request.score,
+        )
+        row = await db.fetchrow(
+            "SELECT id, product_id, username, description, score FROM productreviews WHERE id = last_insert_rowid()",
         )
         return self._row_to_proto(row)
 
     async def GetReview(self, request, context):
         row = await db.fetchrow(
-            "SELECT id, product_id, username, description, score FROM reviews.productreviews WHERE id = $1",
+            "SELECT id, product_id, username, description, score FROM productreviews WHERE id = ?",
             request.id,
         )
         if row is None:
@@ -31,7 +33,7 @@ class ProductReviewsService(grpc_svc.ProductReviewsServicer):
 
     async def ListReviewsByProduct(self, request, context):
         rows = await db.fetch(
-            "SELECT id, product_id, username, description, score FROM reviews.productreviews WHERE product_id = $1",
+            "SELECT id, product_id, username, description, score FROM productreviews WHERE product_id = ?",
             request.product_id,
         )
         return pb.ListReviewsResponse(
@@ -40,7 +42,7 @@ class ProductReviewsService(grpc_svc.ProductReviewsServicer):
 
     async def UpdateReview(self, request, context):
         row = await db.fetchrow(
-            "SELECT id, product_id, username, description, score FROM reviews.productreviews WHERE id = $1",
+            "SELECT id, product_id, username, description, score FROM productreviews WHERE id = ?",
             request.id,
         )
         if row is None:
@@ -51,18 +53,19 @@ class ProductReviewsService(grpc_svc.ProductReviewsServicer):
         desc = request.description if request.HasField("description") else row["description"]
         score = request.score if request.HasField("score") else row["score"]
 
-        updated = await db.fetchrow(
-            """UPDATE reviews.productreviews
-               SET description = $1, score = $2
-               WHERE id = $3
-               RETURNING id, product_id, username, description, score""",
+        await db.execute(
+            "UPDATE productreviews SET description = ?, score = ? WHERE id = ?",
             desc, score, request.id,
+        )
+        updated = await db.fetchrow(
+            "SELECT id, product_id, username, description, score FROM productreviews WHERE id = ?",
+            request.id,
         )
         return self._row_to_proto(updated)
 
     async def DeleteReview(self, request, context):
         await db.execute(
-            "DELETE FROM reviews.productreviews WHERE id = $1",
+            "DELETE FROM productreviews WHERE id = ?",
             request.id,
         )
         return empty_pb2.Empty()
