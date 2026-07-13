@@ -12,6 +12,7 @@ import random
 
 # Pip
 import grpc
+from dotenv import load_dotenv
 from opentelemetry import trace, metrics
 from opentelemetry._logs import set_logger_provider
 from opentelemetry.exporter.otlp.proto.grpc._log_exporter import (
@@ -452,6 +453,7 @@ def check_feature_flag(flag_name: str):
     return client.get_boolean_value(flag_name, False)
 
 if __name__ == "__main__":
+    load_dotenv()
     service_name = must_map_env('OTEL_SERVICE_NAME')
 
     api.set_provider(FlagdProvider(host=os.environ.get('FLAGD_HOST', 'flagd'), port=os.environ.get('FLAGD_PORT', 8013)))

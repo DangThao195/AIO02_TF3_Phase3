@@ -37,32 +37,19 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-#### 2. Cấu hình biến môi trường và chạy Server
-Sử dụng cú pháp `export` để thiết lập môi trường kết nối trực tiếp **AWS Bedrock**:
+#### 2. Cấu hình biến môi trường qua file `.env` (Khuyên dùng để tránh lỗi Terminal VSCode)
 
-```bash
-# Định tuyến LLM sang Bedrock trực tiếp
-export LLM_PROVIDER="bedrock"
-export LLM_MODEL="amazon.nova-lite-v1:0"
-export AWS_REGION="us-east-1"
+Để tránh các lỗi cú pháp lệnh môi trường khác nhau giữa các shell của VSCode Terminal (như PowerShell, CMD, hay Bash), dịch vụ hiện tại đã hỗ trợ tự động tải biến môi trường từ tệp `.env` cục bộ thông qua thư viện `python-dotenv`:
 
-# Cấu hình AWS Credentials để gọi API Bedrock từ máy host
-# (Nhớ thay thế bằng Key thật của bạn)
-export AWS_ACCESS_KEY_ID="AKIAxxxxxxxxxxxxxx"
-export AWS_SECRET_ACCESS_KEY="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-
-# Cấu hình kết nối gRPC và Database local
-export PRODUCT_REVIEWS_PORT="8085"
-export DB_CONNECTION_STRING="host=localhost user=otelu password=otelp dbname=demo"
-export PRODUCT_CATALOG_ADDR="localhost:8081"
-export FLAGD_HOST="localhost"
-export FLAGD_PORT="8013"
-export LLM_HOST="localhost"
-export LLM_PORT="8000"
-
-# Khởi chạy gRPC Server
-python product_reviews_server.py
-```
+1. Sao chép tệp cấu hình mẫu:
+   ```bash
+   cp .env.example .env
+   ```
+2. Mở tệp `.env` vừa tạo trong VSCode và điền đầy đủ thông tin AWS Credentials của bạn (nếu máy local chưa đăng nhập AWS CLI) và cấu hình khác.
+3. Khởi chạy gRPC Server trực tiếp:
+   ```bash
+   python product_reviews_server.py
+   ```
 
 ---
 
