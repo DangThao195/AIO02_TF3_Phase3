@@ -3,9 +3,22 @@
 components:
   product-reviews:
     envOverrides:
-      - name: LLM_BASE_URL
-        value: http://litellm-service:4000/v1        # Địa chỉ Service LiteLLM chạy trong cluster EKS
+      # Lựa chọn LLM Provider: 'openai' hoặc 'bedrock'
+      - name: LLM_PROVIDER
+        value: bedrock
+      
+      # Model ID của AWS Bedrock hoặc OpenAI tương ứng
       - name: LLM_MODEL
-        value: amazon.nova-lite-v1:0                 # Định dạng model Nova Lite chính xác
+        value: amazon.nova-lite-v1:0
+      
+      # Khu vực AWS Bedrock (chỉ dùng cho Provider 'bedrock')
+      - name: AWS_REGION
+        value: us-east-1
+
+      # Cấu hình API Key (chỉ dùng cho Provider 'openai' hoặc mock)
       - name: OPENAI_API_KEY
         valueFrom: { secretKeyRef: { name: llm-api-key, key: key } }
+      
+      # Địa chỉ LiteLLM/OpenAI Gateway (chỉ dùng cho Provider 'openai')
+      # - name: LLM_BASE_URL
+      #   value: http://litellm-service:4000/v1
