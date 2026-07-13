@@ -22,6 +22,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
 from pydantic import BaseModel, Field
 from typing import Any, List
+import argparse
+
+# ── Parse command-line args ──
+parser = argparse.ArgumentParser(description="Shopping Copilot API Server")
+parser.add_argument("--mock", action="store_true", help="Chạy với gRPC mock EKS")
+args, _ = parser.parse_known_args()
 
 # ── Logging setup (JSON-friendly format) ──
 logging.basicConfig(
@@ -52,6 +58,12 @@ _agent = None
 def _get_agent():
     global _agent
     if _agent is None:
+        if args.mock or os.getenv("MOCK_EKS") == "true":
+            logger.info("[MAIN] Initializing with EKS Microservices Mocked!")
+            # Import mock stubs setup
+            from tests.test_interactive import _setup_grpc_mocks
+            _setup_grpc_mocks()
+            
         from src.agent.copilot_agent import CopilotAgent
         _agent = CopilotAgent()
         logger.info("[MAIN] CopilotAgent initialized")
@@ -120,8 +132,40 @@ def chatbot():
     html_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "chatbot.html")
     if os.path.exists(html_path):
         with open(html_path, encoding="utf-8") as f:
-            return HTMLResponse(content=f.read())
+            content = f.read()
+            if args.mock or os.getenv("MOCK_EKS") == "true":
+                mock_badge = '<span style="background:var(--warn-bg); border:1px solid var(--warn); color:var(--warn); font-size:11px; padding:2px 8px; border-radius:99px; font-weight:600; margin-left:6px;">MOCK EKS</span>'
+                content = content.replace(
+                    '<h1>Shopping <span>Copilot</span></h1>',
+                    f'<h1>Shopping <span>Copilot</span>{mock_badge}</h1>'
+                )
+            return HTMLResponse(content=content)
     return HTMLResponse(content="<h1>chatbot.html not found</h1>", status_code=404)
+
+
+@app.get("/api/cart")
+def api_get_cart(user_id: str):
+    """Lấy danh sách sản phẩm trong giỏ hàng giả lập (dùng cho test UI)."""
+    try:
+        from tests.test_interactive import MOCK_CART, MOCK_PRODUCTS
+        items = MOCK_CART.get(user_id, [])
+        prod_map = {p["id"]: p for p in MOCK_PRODUCTS}
+        detailed_items = []
+        for item in items:
+            p_id = item["product_id"]
+            p_info = prod_map.get(p_id, {"name": p_id, "price": p_info.get("price", "0.00") if isinstance(p_info, dict) else "0.00"})
+            # Make sure we safely get fields
+            p_name = p_info.get("name", p_id) if isinstance(p_info, dict) else p_id
+            p_price = p_info.get("price", "0.00") if isinstance(p_info, dict) else "0.00"
+            detailed_items.append({
+                "product_id": p_id,
+                "name": p_name,
+                "price": p_price,
+                "quantity": item["quantity"]
+            })
+        return {"user_id": user_id, "items": detailed_items}
+    except Exception as e:
+        return {"user_id": user_id, "items": [], "error": str(e)}
 
 
 @app.post("/api/chat", response_model=ChatResponse)
@@ -230,6 +274,13 @@ def debug_ratelimit():
 # ── Entry point ──
 if __name__ == "__main__":
     import uvicorn
+    # Đảm bảo thư mục cha chứa 'src' được thêm vào sys.path để uvicorn import được 'src.main:app'
+    import sys
+    ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if ROOT not in sys.path:
+        sys.path.insert(0, ROOT)
+        
     port = int(os.getenv("PORT", "8001"))
-    logger.info("Starting Shopping Copilot API on port %d", port)
-    uvicorn.run(    "src.main:app", host="0.0.0.0", port=port, reload=False, log_level="info")
+    mode_str = "MOCK" if (args.mock or os.getenv("MOCK_EKS") == "true") else "LIVE"
+    logger.info("Starting Shopping Copilot API [%s] on port %d", mode_str, port)
+    uvicorn.run("src.main:app", host="0.0.0.0", port=port, reload=False, log_level="info")

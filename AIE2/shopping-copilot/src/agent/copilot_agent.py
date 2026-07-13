@@ -1,5 +1,6 @@
 """
 agent/copilot_agent.py — CopilotAgent: ReAct loop + guardrail pipeline + step tracking.
+Triển khai AWS Bedrock (Amazon Nova) làm LLM backend.
 
 Entry points (được main.py gọi):
     agent.chat(session_id, user_id, user_message) → dict with steps[]
@@ -14,13 +15,14 @@ import asyncio
 import logging
 from typing import Dict, Any, List, Optional
 
-from langchain_groq import ChatGroq
+from langchain_aws import ChatBedrockConverse
+from langchain_core.runnables import RunnableConfig
 from langchain_core.messages import AIMessage, ToolMessage, HumanMessage, SystemMessage
-from groq import RateLimitError, APIStatusError
 
 from src.guardrails import (
     rate_limiter,
     check_input,
+    check_input_bedrock,
     validate_tool_call,
     request_confirmation,
     verify_confirmation_token,
@@ -75,17 +77,22 @@ class CopilotAgent:
     def _end(self, start: int, action: str, status: str, detail: str):
         self._add_step(action, status, detail, _now_ms() - start)
 
-    def _build_llm(self) -> ChatGroq:
-        api_key = os.environ.get("GROQ_API_KEY")
-        model = os.environ.get("GROQ_MODEL", "qwen/qwen3.6-27b")
-        llm = ChatGroq(
-            api_key=api_key,
-            model=model,
-            temperature=0.3,
-            max_retries=0,        # fail fast — tự xử lý retry ở ReAct loop
-            timeout=30,           # timeout 30s per request
-        )
-        return llm.bind_tools(all_shopping_tools)
+    def _build_llm(self):
+        """Khởi tạo Bedrock LLM client sử dụng ChatBedrockConverse."""
+        model = os.getenv("BEDROCK_MODEL_ID", "apac.amazon.nova-lite-v1:0")
+        region = os.getenv("BEDROCK_REGION", "ap-southeast-1")
+        
+        try:
+            llm = ChatBedrockConverse(
+                model=model,
+                region_name=region,
+                temperature=0.1,
+                max_tokens=1024,
+            )
+            return llm.bind_tools(all_shopping_tools)
+        except Exception as e:
+            logger.error(f"[AGENT] Không thể khởi tạo Bedrock LLM: {e}")
+            return None
 
     # ── debug: expose memory stores ──
     @property
@@ -102,6 +109,14 @@ class CopilotAgent:
     async def chat(self, session_id: str, user_id: str, user_message: str) -> Dict[str, Any]:
         self._steps = []
 
+        if self.llm is None:
+            return {
+                "status": "error",
+                "reply": "LLM chưa được cấu hình. Vui lòng kiểm tra AWS credentials và BEDROCK_MODEL_ID.",
+                "session_id": session_id,
+                "steps": list(self._steps),
+            }
+
         # L1: Rate Limiter
         s, a = self._time("RateLimiter")
         rate_result = rate_limiter.check_rate_limit(user_id)
@@ -111,13 +126,23 @@ class CopilotAgent:
             return {"status": "error", "reply": detail, "session_id": session_id, "steps": list(self._steps)}
         self._end(s, a, "PASS", f"{rate_result.remaining_minute} req remaining this minute")
 
-        # L2a: Input Filter
+        # L2a: Input Filter (Regex)
         s, a = self._time("InputFilter")
         filter_result = check_input(user_message)
         if not filter_result.is_safe:
             detail = filter_result.blocked_reason or "Tin nhắn bị chặn bởi bộ lọc đầu vào."
             self._end(s, a, "BLOCK", detail)
             return {"status": "error", "reply": detail, "session_id": session_id, "steps": list(self._steps)}
+
+        # L2b: Input Filter (Bedrock Guardrails)
+        s_b, a_b = self._time("BedrockGuardrail")
+        bedrock_result = check_input_bedrock(user_message)
+        if not bedrock_result.is_safe:
+            detail = bedrock_result.blocked_reason or "Yêu cầu bị từ chối bởi chính sách bảo mật."
+            self._end(s_b, a_b, "BLOCK", detail)
+            self._end(s, a, "BLOCK", "Chặn bởi Bedrock Guardrails")
+            return {"status": "error", "reply": detail, "session_id": session_id, "steps": list(self._steps)}
+        self._end(s_b, a_b, "PASS", "Bedrock Guardrail passed")
         self._end(s, a, "PASS", "Không phát hiện prompt injection")
 
         # Session
@@ -144,35 +169,18 @@ class CopilotAgent:
             try:
                 response = await self.llm.ainvoke(messages)
                 self._end(s_llm, a_llm, "OK", f"iter={iterations + 1}")
-            except RateLimitError as e:
-                detail = f"Rate limited: {str(e)[:100]}"
-                self._end(s_llm, a_llm, "BLOCK", detail)
-                return {
-                    "status": "error",
-                    "reply": "Hệ thống AI đang quá tải. Vui lòng đợi vài giây rồi thử lại.",
-                    "session_id": session_id,
-                    "steps": list(self._steps),
-                }
-            except APIStatusError as e:
-                detail = f"API error {e.status_code}: {str(e)[:100]}"
-                self._end(s_llm, a_llm, "ERROR", detail)
-                return {
-                    "status": "error",
-                    "reply": f"Dịch vụ AI gặp lỗi (HTTP {e.status_code}). Vui lòng thử lại sau.",
-                    "session_id": session_id,
-                    "steps": list(self._steps),
-                }
             except Exception as e:
                 self._end(s_llm, a_llm, "ERROR", str(e)[:120])
                 return {
                     "status": "error",
-                    "reply": f"Lỗi kết nối AI: {str(e)[:120]}",
+                    "reply": f"Lỗi kết nối AWS Bedrock: {str(e)[:120]}",
                     "session_id": session_id,
                     "steps": list(self._steps),
                 }
 
             raw_tool_calls = getattr(response, "tool_calls", None) or []
             if raw_tool_calls:
+                messages.append(response)
                 for raw_tc in raw_tool_calls:
                     tc = _normalize_tool_call(raw_tc)
                     tc_name = tc["name"]
@@ -185,7 +193,7 @@ class CopilotAgent:
                     validation = validate_tool_call(tc_name, tc_args, user_id)
                     if not validation.is_valid:
                         self._end(s_tc, a_tc, "BLOCK", f"L3: {validation.violation_type} — {validation.blocked_reason} | args={args_preview}")
-                        messages.append(AIMessage(content=validation.blocked_reason))
+                        messages.append(ToolMessage(content=f"[GUARDRAIL] {validation.blocked_reason}", tool_call_id=tc_id))
                         continue
 
                     cache_key = (tc_name, dict(tc_args))
@@ -208,7 +216,7 @@ class CopilotAgent:
                     except Exception as e:
                         detail = f"Exception: {str(e)[:200]} | args={args_preview}"
                         self._end(s_ex, a_ex, "ERROR", detail)
-                        messages.append(AIMessage(content=f"Lỗi khi gọi {tc_name}: {str(e)[:120]}"))
+                        messages.append(ToolMessage(content=f"[ERROR] Lỗi khi gọi {tc_name}: {str(e)[:120]}", tool_call_id=tc_id))
                         continue
 
                     # Check for PENDING (confirmation gate)
@@ -247,6 +255,20 @@ class CopilotAgent:
             else:
                 # Final answer
                 final = response.content if hasattr(response, "content") else str(response)
+
+                # Chuẩn hóa nếu Bedrock trả về list of content blocks
+                if isinstance(final, list):
+                    text_parts = []
+                    for part in final:
+                        if isinstance(part, dict) and "text" in part:
+                            text_parts.append(part["text"])
+                        elif isinstance(part, str):
+                            text_parts.append(part)
+                        elif hasattr(part, "text"):
+                            text_parts.append(part.text)
+                        else:
+                            text_parts.append(str(part))
+                    final = "".join(text_parts)
 
                 # L5: Output Filter
                 s5, a5 = self._time("OutputFilter")
