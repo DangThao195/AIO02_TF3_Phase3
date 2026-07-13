@@ -2,7 +2,7 @@ import os
 import sys
 import pytest
 
-sys.path.append(os.path.dirname(__file__))
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from llm_diagnostician import LLMDiagnostician
 
 def test_cosine_similarity_internals():

@@ -29,6 +29,7 @@ def generate_rich_trace(scenario, culprit_service, error_service=None, latency_m
         "payment": {"span_id": "payment-span", "parent": "checkout"},
         "shipping": {"span_id": "shipping-span", "parent": "checkout"},
         "currency": {"span_id": "currency-span", "parent": "checkout"},
+        "fraud-detection": {"span_id": "fraud-span", "parent": "frontend"},
         "accounting": {"span_id": "accounting-span", "parent": None} # Kafka consumer
     }
     

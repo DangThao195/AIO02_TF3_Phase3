@@ -4,7 +4,7 @@ import os
 import sys
 
 # Thêm thư mục aiops-engine vào path để import
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from rca_engine import RCAEngine
 from evidence_collector import EvidenceCollector
@@ -14,7 +14,7 @@ from remediation_handler import RemediationHandler
 class TestAIOpsE2E(unittest.TestCase):
     def setUp(self):
         # Thiết lập đường dẫn tương đối tới thư mục fixtures
-        self.fixtures_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures")
+        self.fixtures_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fixtures")
         self.rca = RCAEngine()
         self.collector = EvidenceCollector()
         self.diagnostician = LLMDiagnostician()
@@ -36,7 +36,7 @@ class TestAIOpsE2E(unittest.TestCase):
             trace_data = json.load(f)
             
         culprit = self.rca.locate_culprit_service(trace_data)
-        self.assertEqual(culprit, "cart", f"Expected cart, got '{culprit}'")
+        self.assertEqual(culprit, "valkey-cart", f"Expected valkey-cart, got '{culprit}'")
 
     def test_inc3_rca_locates_fraud_detection(self):
         """Verify that RCA engine correctly identifies fraud-detection as the culprit for INC-3."""

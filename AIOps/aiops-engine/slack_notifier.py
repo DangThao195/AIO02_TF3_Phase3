@@ -60,59 +60,82 @@ class SlackNotifier:
 
 
         # Slack Block Kit payload structure
-        payload = {
-            "blocks": [
-                {
-                    "type": "header",
-                    "text": {
-                        "type": "plain_text",
-                        "text": f"🚨 AIOps Incident Alert: {incident_id}",
-                        "emoji": True
-                    }
-                },
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": f"*Nguyên nhân gốc (RCA):*\n{analysis_str}\n\n*Đối chiếu sự cố lịch sử:* `{diagnosis.get('matched_incident')}` | *Độ tự tin quyết định AI:* `{float(diagnosis.get('confidence_score', 1.0)) * 100}%`"
-                    }
-                },
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": f"*Lệnh khắc phục đề xuất:*\n`{diagnosis.get('action_command')}`"
-                    }
-                },
-                {
-                    "type": "actions",
-                    "elements": [
-                        {
-                            "type": "button",
-                            "text": {
-                                "type": "plain_text",
-                                "text": "✅ Approve (Duyệt chạy)",
-                                "emoji": True
-                            },
-                            "style": "primary",
-                            "value": "approve",
-                            "action_id": f"approve_{incident_id}"
-                        },
-                        {
-                            "type": "button",
-                            "text": {
-                                "type": "plain_text",
-                                "text": "❌ Reject (Từ chối)",
-                                "emoji": True
-                            },
-                            "style": "danger",
-                            "value": "reject",
-                            "action_id": f"reject_{incident_id}"
+        if incident_id.startswith("INC-ML-"):
+            # Thẻ cảnh báo sớm máy học dạng thông tin thuần túy
+            payload = {
+                "blocks": [
+                    {
+                        "type": "header",
+                        "text": {
+                            "type": "plain_text",
+                            "text": f"⚠️ Proactive ML Warning: {incident_id} (SLO Stable)",
+                            "emoji": True
                         }
-                    ]
-                }
-            ]
-        }
+                    },
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": f"{analysis_str}"
+                        }
+                    }
+                ]
+            }
+        else:
+            # Thẻ sự cố vỡ SLO đầy đủ kèm nút Approve/Reject tự khắc phục
+            payload = {
+                "blocks": [
+                    {
+                        "type": "header",
+                        "text": {
+                            "type": "plain_text",
+                            "text": f"🚨 AIOps Incident Alert: {incident_id}",
+                            "emoji": True
+                        }
+                    },
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": f"*Nguyên nhân gốc (RCA):*\n{analysis_str}\n\n*Đối chiếu sự cố lịch sử:* `{diagnosis.get('matched_incident')}` | *Độ tự tin quyết định AI:* `{float(diagnosis.get('confidence_score', 1.0)) * 100}%`"
+                        }
+                    },
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": f"*Lệnh khắc phục đề xuất:*\n`{diagnosis.get('action_command')}`"
+                        }
+                    },
+                    {
+                        "type": "actions",
+                        "elements": [
+                            {
+                                "type": "button",
+                                "text": {
+                                    "type": "plain_text",
+                                    "text": "✅ Approve (Duyệt chạy)",
+                                    "emoji": True
+                                },
+                                "style": "primary",
+                                "value": "approve",
+                                "action_id": f"approve_{incident_id}"
+                            },
+                            {
+                                "type": "button",
+                                "text": {
+                                    "type": "plain_text",
+                                    "text": "❌ Reject (Từ chối)",
+                                    "emoji": True
+                                },
+                                "style": "danger",
+                                "value": "reject",
+                                "action_id": f"reject_{incident_id}"
+                            }
+                        ]
+                    }
+                ]
+            }
 
         try:
             response = requests.post(

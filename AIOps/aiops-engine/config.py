@@ -29,6 +29,7 @@ OPENSEARCH_URL = os.getenv("OPENSEARCH_URL", "http://opensearch.techx-tf3.svc.cl
 AWS_REGION = os.getenv("AWS_REGION", "ap-southeast-1")
 BEDROCK_MODEL_ID = os.getenv("BEDROCK_MODEL_ID", "amazon.nova-micro-v1:0")
 BEDROCK_KB_ID = os.getenv("BEDROCK_KB_ID", None)
+S3_BUCKET_NAME = os.getenv("AIOPS_S3_BUCKET", "tf3-aiops-models-197826770971")
 
 # Simulation Sandbox Server URL
 SIMULATION_SERVER_URL = os.getenv("SIMULATION_SERVER_URL", "http://localhost:8000")
