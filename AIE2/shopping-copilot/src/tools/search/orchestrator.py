@@ -219,6 +219,7 @@ async def search_products_v2(query: str) -> str:
         p = sp.product
         output_lines.append(
             f"{i}. **{p.name}**\n"
+            f"   - ID: {p.id}\n"
             f"   - Giá: ${p.price_usd.units}\n"
             f"   - Danh mục: {', '.join(p.categories)}\n"
             f"   - Mô tả: {p.description[:100]}...\n"
