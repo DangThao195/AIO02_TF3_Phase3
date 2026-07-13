@@ -27,6 +27,8 @@ def run(port="3551", product_id="L9ECAV7KIM", question="Can you summarize the pr
         print(f"Error calling gRPC: {e}")
 
 if __name__ == "__main__":
-    # Cho phép truyền tham số port qua dòng lệnh
+    # Cho phép truyền tham số qua dòng lệnh: python test_client.py <port> <product_id> <question>
     target_port = sys.argv[1] if len(sys.argv) > 1 else "3551"
-    run(port=target_port)
+    target_product_id = sys.argv[2] if len(sys.argv) > 2 else "L9ECAV7KIM"
+    target_question = sys.argv[3] if len(sys.argv) > 3 else "Can you summarize the product reviews?"
+    run(port=target_port, product_id=target_product_id, question=target_question)
