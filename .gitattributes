@@ -1,0 +1,11 @@
+# Force LF for scripts/hooks - autocrlf=true on Windows would rewrite these to
+# CRLF on checkout and silently break the bash hook / CI scripts.
+*.sh text eol=lf
+.githooks/* text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+# gitleaks compares fingerprint lines exactly - a stray \r from CRLF checkout
+# would silently break the allowlist and resurrect these findings as failures.
+.gitleaksignore text eol=lf
+*.tf text eol=lf
+*.hcl text eol=lf

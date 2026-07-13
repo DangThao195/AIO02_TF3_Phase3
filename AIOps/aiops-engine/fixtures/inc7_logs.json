@@ -1,0 +1,402 @@
+[
+  {
+    "body": "INFO: [RequestID: req-115083] HTTP GET /products/details success. Processed in 8ms.",
+    "timestamp": 1783656829509
+  },
+  {
+    "body": "CRITICAL: [Breaker_ID: err-347463] Circuit breaker for LLM service is stuck in OPEN state. Current probe requests: 102.",
+    "timestamp": 1783657042509
+  },
+  {
+    "body": "CRITICAL: [Breaker_ID: err-741227] Circuit breaker for LLM service is stuck in OPEN state. Current probe requests: 93.",
+    "timestamp": 1783657066509
+  },
+  {
+    "body": "INFO: [RequestID: req-376874] HTTP GET /products/details success. Processed in 21ms.",
+    "timestamp": 1783656982509
+  },
+  {
+    "body": "INFO: [RequestID: req-779472] HTTP GET /products/details success. Processed in 15ms.",
+    "timestamp": 1783656817509
+  },
+  {
+    "body": "INFO: [RequestID: req-469053] HTTP GET /products/details success. Processed in 15ms.",
+    "timestamp": 1783656811509
+  },
+  {
+    "body": "INFO: [RequestID: req-669473] HTTP GET /products/details success. Processed in 37ms.",
+    "timestamp": 1783656844509
+  },
+  {
+    "body": "INFO: [RequestID: req-521805] HTTP GET /products/details success. Processed in 33ms.",
+    "timestamp": 1783656991509
+  },
+  {
+    "body": "CRITICAL: [Breaker_ID: err-839627] Circuit breaker for LLM service is stuck in OPEN state. Current probe requests: 91.",
+    "timestamp": 1783657090509
+  },
+  {
+    "body": "INFO: [RequestID: req-295865] HTTP GET /products/details success. Processed in 9ms.",
+    "timestamp": 1783656883509
+  },
+  {
+    "body": "INFO: [RequestID: req-544610] HTTP GET /products/details success. Processed in 21ms.",
+    "timestamp": 1783656937509
+  },
+  {
+    "body": "INFO: [RequestID: req-877474] HTTP GET /products/details success. Processed in 15ms.",
+    "timestamp": 1783656967509
+  },
+  {
+    "body": "INFO: [RequestID: req-666593] HTTP GET /products/details success. Processed in 5ms.",
+    "timestamp": 1783656901509
+  },
+  {
+    "body": "INFO: [RequestID: req-442723] HTTP GET /products/details success. Processed in 42ms.",
+    "timestamp": 1783657015509
+  },
+  {
+    "body": "INFO: [RequestID: req-222139] HTTP GET /products/details success. Processed in 40ms.",
+    "timestamp": 1783656979509
+  },
+  {
+    "body": "INFO: [RequestID: req-666081] HTTP GET /products/details success. Processed in 10ms.",
+    "timestamp": 1783656880509
+  },
+  {
+    "body": "INFO: [RequestID: req-359587] HTTP GET /products/details success. Processed in 44ms.",
+    "timestamp": 1783656820509
+  },
+  {
+    "body": "CRITICAL: [Breaker_ID: err-355080] Circuit breaker for LLM service is stuck in OPEN state. Current probe requests: 98.",
+    "timestamp": 1783657078509
+  },
+  {
+    "body": "CRITICAL: [Breaker_ID: err-858726] Circuit breaker for LLM service is stuck in OPEN state. Current probe requests: 94.",
+    "timestamp": 1783657096509
+  },
+  {
+    "body": "INFO: [RequestID: req-992089] HTTP GET /products/details success. Processed in 31ms.",
+    "timestamp": 1783656943509
+  },
+  {
+    "body": "CRITICAL: [Breaker_ID: err-280276] Circuit breaker for LLM service is stuck in OPEN state. Current probe requests: 98.",
+    "timestamp": 1783657087509
+  },
+  {
+    "body": "INFO: [RequestID: req-814396] HTTP GET /products/details success. Processed in 27ms.",
+    "timestamp": 1783656910509
+  },
+  {
+    "body": "CRITICAL: [Breaker_ID: err-820921] Circuit breaker for LLM service is stuck in OPEN state. Current probe requests: 96.",
+    "timestamp": 1783657060509
+  },
+  {
+    "body": "INFO: [RequestID: req-138800] HTTP GET /products/details success. Processed in 28ms.",
+    "timestamp": 1783656913509
+  },
+  {
+    "body": "INFO: [RequestID: req-949076] HTTP GET /products/details success. Processed in 8ms.",
+    "timestamp": 1783656853509
+  },
+  {
+    "body": "INFO: [RequestID: req-574377] HTTP GET /products/details success. Processed in 6ms.",
+    "timestamp": 1783656997509
+  },
+  {
+    "body": "INFO: [RequestID: req-231082] HTTP GET /products/details success. Processed in 20ms.",
+    "timestamp": 1783656970509
+  },
+  {
+    "body": "INFO: [RequestID: req-816485] HTTP GET /products/details success. Processed in 16ms.",
+    "timestamp": 1783656928509
+  },
+  {
+    "body": "INFO: [RequestID: req-998041] HTTP GET /products/details success. Processed in 20ms.",
+    "timestamp": 1783656802509
+  },
+  {
+    "body": "INFO: [RequestID: req-150876] HTTP GET /products/details success. Processed in 15ms.",
+    "timestamp": 1783656847509
+  },
+  {
+    "body": "INFO: [RequestID: req-613735] HTTP GET /products/details success. Processed in 36ms.",
+    "timestamp": 1783657024509
+  },
+  {
+    "body": "INFO: [RequestID: req-913325] HTTP GET /products/details success. Processed in 23ms.",
+    "timestamp": 1783656889509
+  },
+  {
+    "body": "INFO: [RequestID: req-357119] HTTP GET /products/details success. Processed in 43ms.",
+    "timestamp": 1783656949509
+  },
+  {
+    "body": "INFO: [RequestID: req-491034] HTTP GET /products/details success. Processed in 20ms.",
+    "timestamp": 1783656832509
+  },
+  {
+    "body": "INFO: [RequestID: req-525385] HTTP GET /products/details success. Processed in 6ms.",
+    "timestamp": 1783656994509
+  },
+  {
+    "body": "CRITICAL: [Breaker_ID: err-362880] Circuit breaker for LLM service is stuck in OPEN state. Current probe requests: 96.",
+    "timestamp": 1783657081509
+  },
+  {
+    "body": "INFO: [RequestID: req-482738] HTTP GET /products/details success. Processed in 36ms.",
+    "timestamp": 1783657003509
+  },
+  {
+    "body": "INFO: [RequestID: req-109002] HTTP GET /products/details success. Processed in 26ms.",
+    "timestamp": 1783657030509
+  },
+  {
+    "body": "INFO: [RequestID: req-176417] HTTP GET /products/details success. Processed in 44ms.",
+    "timestamp": 1783656877509
+  },
+  {
+    "body": "CRITICAL: [Breaker_ID: err-634784] Circuit breaker for LLM service is stuck in OPEN state. Current probe requests: 96.",
+    "timestamp": 1783657054509
+  },
+  {
+    "body": "INFO: [RequestID: req-861121] HTTP GET /products/details success. Processed in 22ms.",
+    "timestamp": 1783656862509
+  },
+  {
+    "body": "INFO: [RequestID: req-121235] HTTP GET /products/details success. Processed in 17ms.",
+    "timestamp": 1783657018509
+  },
+  {
+    "body": "INFO: [RequestID: req-656667] HTTP GET /products/details success. Processed in 41ms.",
+    "timestamp": 1783657027509
+  },
+  {
+    "body": "INFO: [RequestID: req-235006] HTTP GET /products/details success. Processed in 10ms.",
+    "timestamp": 1783656808509
+  },
+  {
+    "body": "CRITICAL: [Breaker_ID: err-847737] Circuit breaker for LLM service is stuck in OPEN state. Current probe requests: 102.",
+    "timestamp": 1783657093509
+  },
+  {
+    "body": "CRITICAL: [Breaker_ID: err-449588] Circuit breaker for LLM service is stuck in OPEN state. Current probe requests: 95.",
+    "timestamp": 1783657063509
+  },
+  {
+    "body": "INFO: [RequestID: req-818272] HTTP GET /products/details success. Processed in 15ms.",
+    "timestamp": 1783656835509
+  },
+  {
+    "body": "CRITICAL: [Breaker_ID: err-611806] Circuit breaker for LLM service is stuck in OPEN state. Current probe requests: 98.",
+    "timestamp": 1783657099509
+  },
+  {
+    "body": "INFO: [RequestID: req-351635] HTTP GET /products/details success. Processed in 9ms.",
+    "timestamp": 1783656871509
+  },
+  {
+    "body": "INFO: [RequestID: req-733192] HTTP GET /products/details success. Processed in 39ms.",
+    "timestamp": 1783656805509
+  },
+  {
+    "body": "INFO: [RequestID: req-282720] HTTP GET /products/details success. Processed in 8ms.",
+    "timestamp": 1783657036509
+  },
+  {
+    "body": "INFO: [RequestID: req-952445] HTTP GET /products/details success. Processed in 24ms.",
+    "timestamp": 1783657006509
+  },
+  {
+    "body": "CRITICAL: [Breaker_ID: err-507802] Circuit breaker for LLM service is stuck in OPEN state. Current probe requests: 105.",
+    "timestamp": 1783657069509
+  },
+  {
+    "body": "INFO: [RequestID: req-636295] HTTP GET /products/details success. Processed in 19ms.",
+    "timestamp": 1783656859509
+  },
+  {
+    "body": "INFO: [RequestID: req-473232] HTTP GET /products/details success. Processed in 29ms.",
+    "timestamp": 1783656973509
+  },
+  {
+    "body": "INFO: [RequestID: req-175875] HTTP GET /products/details success. Processed in 32ms.",
+    "timestamp": 1783656976509
+  },
+  {
+    "body": "CRITICAL: [Breaker_ID: err-559171] Circuit breaker for LLM service is stuck in OPEN state. Current probe requests: 96.",
+    "timestamp": 1783657045509
+  },
+  {
+    "body": "INFO: [RequestID: req-663570] HTTP GET /products/details success. Processed in 34ms.",
+    "timestamp": 1783657033509
+  },
+  {
+    "body": "INFO: [RequestID: req-109716] HTTP GET /products/details success. Processed in 35ms.",
+    "timestamp": 1783656916509
+  },
+  {
+    "body": "INFO: [RequestID: req-589952] HTTP GET /products/details success. Processed in 43ms.",
+    "timestamp": 1783657009509
+  },
+  {
+    "body": "INFO: [RequestID: req-306420] HTTP GET /products/details success. Processed in 30ms.",
+    "timestamp": 1783656964509
+  },
+  {
+    "body": "INFO: [RequestID: req-148726] HTTP GET /products/details success. Processed in 7ms.",
+    "timestamp": 1783656874509
+  },
+  {
+    "body": "INFO: [RequestID: req-859142] HTTP GET /products/details success. Processed in 8ms.",
+    "timestamp": 1783656823509
+  },
+  {
+    "body": "INFO: [RequestID: req-763998] HTTP GET /products/details success. Processed in 22ms.",
+    "timestamp": 1783656865509
+  },
+  {
+    "body": "CRITICAL: [Breaker_ID: err-351316] Circuit breaker for LLM service is stuck in OPEN state. Current probe requests: 102.",
+    "timestamp": 1783657057509
+  },
+  {
+    "body": "INFO: [RequestID: req-803698] HTTP GET /products/details success. Processed in 30ms.",
+    "timestamp": 1783656952509
+  },
+  {
+    "body": "CRITICAL: [Breaker_ID: err-210631] Circuit breaker for LLM service is stuck in OPEN state. Current probe requests: 105.",
+    "timestamp": 1783657072509
+  },
+  {
+    "body": "CRITICAL: [Breaker_ID: err-863337] Circuit breaker for LLM service is stuck in OPEN state. Current probe requests: 91.",
+    "timestamp": 1783657084509
+  },
+  {
+    "body": "INFO: [RequestID: req-170551] HTTP GET /products/details success. Processed in 28ms.",
+    "timestamp": 1783656946509
+  },
+  {
+    "body": "INFO: [RequestID: req-164448] HTTP GET /products/details success. Processed in 24ms.",
+    "timestamp": 1783656919509
+  },
+  {
+    "body": "CRITICAL: [Breaker_ID: err-430267] Circuit breaker for LLM service is stuck in OPEN state. Current probe requests: 90.",
+    "timestamp": 1783657051509
+  },
+  {
+    "body": "INFO: [RequestID: req-247815] HTTP GET /products/details success. Processed in 37ms.",
+    "timestamp": 1783656922509
+  },
+  {
+    "body": "INFO: [RequestID: req-896520] HTTP GET /products/details success. Processed in 16ms.",
+    "timestamp": 1783656907509
+  },
+  {
+    "body": "INFO: [RequestID: req-834175] HTTP GET /products/details success. Processed in 22ms.",
+    "timestamp": 1783656961509
+  },
+  {
+    "body": "INFO: [RequestID: req-667164] HTTP GET /products/details success. Processed in 32ms.",
+    "timestamp": 1783656904509
+  },
+  {
+    "body": "INFO: [RequestID: req-685968] HTTP GET /products/details success. Processed in 29ms.",
+    "timestamp": 1783656886509
+  },
+  {
+    "body": "INFO: [RequestID: req-648124] HTTP GET /products/details success. Processed in 18ms.",
+    "timestamp": 1783657021509
+  },
+  {
+    "body": "INFO: [RequestID: req-344026] HTTP GET /products/details success. Processed in 44ms.",
+    "timestamp": 1783656898509
+  },
+  {
+    "body": "INFO: [RequestID: req-588651] HTTP GET /products/details success. Processed in 22ms.",
+    "timestamp": 1783657000509
+  },
+  {
+    "body": "INFO: [RequestID: req-876100] HTTP GET /products/details success. Processed in 28ms.",
+    "timestamp": 1783656850509
+  },
+  {
+    "body": "INFO: [RequestID: req-102590] HTTP GET /products/details success. Processed in 26ms.",
+    "timestamp": 1783656856509
+  },
+  {
+    "body": "INFO: [RequestID: req-925232] HTTP GET /products/details success. Processed in 25ms.",
+    "timestamp": 1783656868509
+  },
+  {
+    "body": "INFO: [RequestID: req-371084] HTTP GET /products/details success. Processed in 10ms.",
+    "timestamp": 1783656934509
+  },
+  {
+    "body": "INFO: [RequestID: req-932866] HTTP GET /products/details success. Processed in 11ms.",
+    "timestamp": 1783656841509
+  },
+  {
+    "body": "INFO: [RequestID: req-762763] HTTP GET /products/details success. Processed in 27ms.",
+    "timestamp": 1783656892509
+  },
+  {
+    "body": "INFO: [RequestID: req-131521] HTTP GET /products/details success. Processed in 37ms.",
+    "timestamp": 1783656940509
+  },
+  {
+    "body": "INFO: [RequestID: req-228905] HTTP GET /products/details success. Processed in 34ms.",
+    "timestamp": 1783656895509
+  },
+  {
+    "body": "INFO: [RequestID: req-229519] HTTP GET /products/details success. Processed in 31ms.",
+    "timestamp": 1783656826509
+  },
+  {
+    "body": "INFO: [RequestID: req-365620] HTTP GET /products/details success. Processed in 19ms.",
+    "timestamp": 1783656925509
+  },
+  {
+    "body": "INFO: [RequestID: req-942601] HTTP GET /products/details success. Processed in 37ms.",
+    "timestamp": 1783656958509
+  },
+  {
+    "body": "INFO: [RequestID: req-280467] HTTP GET /products/details success. Processed in 39ms.",
+    "timestamp": 1783656985509
+  },
+  {
+    "body": "INFO: [RequestID: req-384124] HTTP GET /products/details success. Processed in 8ms.",
+    "timestamp": 1783656838509
+  },
+  {
+    "body": "CRITICAL: [Breaker_ID: err-378937] Circuit breaker for LLM service is stuck in OPEN state. Current probe requests: 90.",
+    "timestamp": 1783657075509
+  },
+  {
+    "body": "CRITICAL: [Breaker_ID: err-256914] Circuit breaker for LLM service is stuck in OPEN state. Current probe requests: 105.",
+    "timestamp": 1783657048509
+  },
+  {
+    "body": "INFO: [RequestID: req-954490] HTTP GET /products/details success. Processed in 24ms.",
+    "timestamp": 1783656955509
+  },
+  {
+    "body": "INFO: [RequestID: req-113934] HTTP GET /products/details success. Processed in 23ms.",
+    "timestamp": 1783657012509
+  },
+  {
+    "body": "INFO: [RequestID: req-349523] HTTP GET /products/details success. Processed in 27ms.",
+    "timestamp": 1783656988509
+  },
+  {
+    "body": "INFO: [RequestID: req-605429] HTTP GET /products/details success. Processed in 5ms.",
+    "timestamp": 1783656931509
+  },
+  {
+    "body": "INFO: [RequestID: req-497096] HTTP GET /products/details success. Processed in 26ms.",
+    "timestamp": 1783657039509
+  },
+  {
+    "body": "INFO: [RequestID: req-985600] HTTP GET /products/details success. Processed in 42ms.",
+    "timestamp": 1783656814509
+  }
+]
