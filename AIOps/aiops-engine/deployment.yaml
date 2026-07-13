@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aiops-engine
+  namespace: techx-tf3
+  labels:
+    app: aiops-engine
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aiops-engine
+  template:
+    metadata:
+      labels:
+        app: aiops-engine
+    spec:
+      containers:
+      - name: engine
+        image: 197826770971.dkr.ecr.ap-southeast-1.amazonaws.com/tf-2-ai-engine:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+        env:
+        # Chế độ Live chạy trên cụm EKS thật
+        - name: AIOPS_SIMULATION_MODE
+          value: "false"
+        
+        # Trỏ trực tiếp tới DNS nội bộ của cụm K8s (Không cần port-forward!)
+        - name: PROMETHEUS_URL
+          value: "http://prometheus-server.techx-tf3.svc.cluster.local"
+        - name: JAEGER_URL
+          value: "http://jaeger-query.techx-tf3.svc.cluster.local"
+        - name: OPENSEARCH_URL
+          value: "http://opensearch.techx-tf3.svc.cluster.local:9200"
+        
+        # Trích xuất thông tin AWS & Slack nhạy cảm từ K8s Secret (Không ghi trực tiếp vào git)
+        - name: SLACK_WEBHOOK_URL
+          valueFrom:
+            secretKeyRef:
+              name: aiops-engine-secrets
+              key: slack-webhook-url
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: aiops-engine-secrets
+              key: aws-access-key-id
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aiops-engine-secrets
+              key: aws-secret-access-key
+        - name: AWS_DEFAULT_REGION
+          value: "ap-southeast-1"
+        - name: BEDROCK_MODEL_ID
+          value: "amazon.nova-micro-v1:0"
+        - name: BEDROCK_KB_ID
+          value: "GH3FUCYVOJ"
+        
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aiops-engine
+  namespace: techx-tf3
+spec:
+  selector:
+    app: aiops-engine
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8000
+  type: ClusterIP
