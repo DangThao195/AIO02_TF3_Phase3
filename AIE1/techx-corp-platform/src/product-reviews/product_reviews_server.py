@@ -455,6 +455,11 @@ def check_feature_flag(flag_name: str):
 
 if __name__ == "__main__":
     load_dotenv()
+    # Cấu hình log ra console (stdout) cho môi trường local
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
     service_name = must_map_env('OTEL_SERVICE_NAME')
 
     api.set_provider(FlagdProvider(host=os.environ.get('FLAGD_HOST', 'flagd'), port=os.environ.get('FLAGD_PORT', 8013)))
