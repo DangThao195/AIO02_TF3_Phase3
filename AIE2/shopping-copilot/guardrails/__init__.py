@@ -5,8 +5,8 @@ Thành viên 2 (Agent) chỉ cần import:
     from guardrails import check_input, request_confirmation, with_fallback, ...
 """
 
-# ── Lớp 2: Input Filter — chặn Prompt Injection ──
-from guardrails.input_filter import check_input, InputFilterResult
+# ── Lớp 2: Input Filter — chặn Prompt Injection (2 tầng: Regex + Bedrock) ──
+from guardrails.input_filter import check_input, check_input_bedrock, InputFilterResult
 
 # ── Lớp 1: Confirmation Gate — chặn Excessive-Agency ──
 from guardrails.confirmation import (

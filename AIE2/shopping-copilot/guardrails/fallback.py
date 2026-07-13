@@ -16,7 +16,7 @@ logger = logging.getLogger("guardrails.fallback")
 
 # ── Config: Giới hạn vòng lặp tool-calling ──
 # Export biến này để agent module (Thành viên 2) dùng khi cấu hình LangChain agent
-MAX_TOOL_ITERATIONS = 3
+MAX_TOOL_ITERATIONS = 7
 
 
 class MaxIterationsExceeded(Exception):
@@ -41,11 +41,14 @@ def make_error_response(message: str, error_code: str = "INTERNAL_ERROR") -> Dic
     """
     Tạo response lỗi theo format chuẩn.
     Tất cả response lỗi trong Shopping Copilot tuân theo format này.
+    Gồm cả 'message' (cho test/API) và 'reply' (cho demo UI) để tương thích đồng bộ.
     """
     return {
         "status": "error",
         "message": message,
+        "reply": message,       # ← demo_chat.py + main.py đọc key này
         "error_code": error_code,
+        "token": None,
     }
 
 
@@ -87,33 +90,52 @@ def _register_grpc_handlers():
         pass  # grpc không được cài — bỏ qua handler này
 
 
-def _register_openai_handlers():
-    """Đăng ký handler cho lỗi OpenAI/LLM — gọi lazy lần đầu khi cần."""
+def _register_bedrock_handlers():
+    """Đăng ký handler cho lỗi AWS Bedrock — gọi lazy lần đầu khi cần."""
     global _ERROR_HANDLERS
     try:
-        import openai
+        from botocore.exceptions import ClientError, BotoCoreError
 
-        def _handle_openai_error(e: Exception) -> Dict[str, Any]:
-            if isinstance(e, openai.RateLimitError):
+        def _handle_bedrock_error(e: Exception) -> Dict[str, Any]:
+            """Phân loại lỗi Bedrock và trả thông báo tương ứng."""
+            if isinstance(e, ClientError):
+                error_code = e.response.get("Error", {}).get("Code", "")
+                if error_code == "ThrottlingException":
+                    return make_error_response(
+                        "Hệ thống AI đang bận, vui lòng thử lại sau ít phút.",
+                        "BEDROCK_THROTTLED"
+                    )
+                elif error_code == "ValidationException":
+                    return make_error_response(
+                        "Yêu cầu không hợp lệ. Vui lòng thử diễn đạt câu hỏi khác.",
+                        "BEDROCK_VALIDATION"
+                    )
+                elif error_code == "ModelTimeoutException":
+                    return make_error_response(
+                        "Hệ thống AI phản hồi chậm, vui lòng thử lại.",
+                        "BEDROCK_TIMEOUT"
+                    )
+                elif error_code == "AccessDeniedException":
+                    return make_error_response(
+                        "Hệ thống chưa được cấp quyền truy cập AI model. Vui lòng liên hệ quản trị viên.",
+                        "BEDROCK_ACCESS_DENIED"
+                    )
+                else:
+                    return make_error_response(
+                        "Hệ thống AI gặp sự cố tạm thời. Vui lòng thử lại sau.",
+                        f"BEDROCK_{error_code}"
+                    )
+            elif isinstance(e, BotoCoreError):
                 return make_error_response(
-                    "Hệ thống AI đang bận, vui lòng thử lại sau ít phút.",
-                    "LLM_RATE_LIMIT"
-                )
-            elif isinstance(e, openai.APITimeoutError):
-                return make_error_response(
-                    "Hệ thống AI phản hồi chậm, vui lòng thử lại.",
-                    "LLM_TIMEOUT"
-                )
-            elif isinstance(e, openai.APIError):
-                return make_error_response(
-                    "Hệ thống AI gặp sự cố tạm thời. Vui lòng thử lại sau.",
-                    "LLM_API_ERROR"
+                    "Không thể kết nối tới dịch vụ AI. Vui lòng thử lại sau.",
+                    "BEDROCK_CONNECTION"
                 )
             return None
 
-        _ERROR_HANDLERS.append((openai.OpenAIError, _handle_openai_error))
+        _ERROR_HANDLERS.append((ClientError, _handle_bedrock_error))
+        _ERROR_HANDLERS.append((BotoCoreError, _handle_bedrock_error))
     except ImportError:
-        pass  # openai không được cài — bỏ qua handler này
+        pass  # botocore không được cài — bỏ qua handler này
 
 
 # ── Đăng ký tất cả handlers ──
@@ -125,7 +147,7 @@ def _ensure_handlers():
     global _handlers_registered
     if not _handlers_registered:
         _register_grpc_handlers()
-        _register_openai_handlers()
+        _register_bedrock_handlers()
         _handlers_registered = True
 
 
@@ -167,19 +189,23 @@ def handle_exception(e: Exception) -> Dict[str, Any]:
 def with_fallback(fn: Callable) -> Callable:
     """
     Decorator bọc quanh hàm xử lý request chính của Agent.
-
-    Mọi exception xảy ra bên trong đều bị bắt và chuyển thành
-    response lỗi thân thiện — KHÔNG BAO GIỜ để lỗi thoát ra ngoài.
-
-    Cách dùng (Thành viên 2 sẽ gắn vào agent):
-        @with_fallback
-        def process_chat_request(user_message, session_id):
-            ...  # logic gọi LLM + tool
+    Hỗ trợ cả sync và async functions.
     """
-    @functools.wraps(fn)
-    def wrapper(*args, **kwargs):
-        try:
-            return fn(*args, **kwargs)
-        except Exception as e:
-            return handle_exception(e)
-    return wrapper
+    import inspect
+
+    if inspect.iscoroutinefunction(fn):
+        @functools.wraps(fn)
+        async def async_wrapper(*args, **kwargs):
+            try:
+                return await fn(*args, **kwargs)
+            except Exception as e:
+                return handle_exception(e)
+        return async_wrapper
+    else:
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            try:
+                return fn(*args, **kwargs)
+            except Exception as e:
+                return handle_exception(e)
+        return wrapper

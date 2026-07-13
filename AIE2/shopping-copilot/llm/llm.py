@@ -5,7 +5,10 @@ Uses groq Python client library for cost-efficient LLM calls
 
 import os
 from typing import Optional
+from dotenv import load_dotenv
 import json
+
+load_dotenv()
 
 try:
     from groq import Groq

@@ -1,6 +1,5 @@
 # tools/__init__.py
 
-from tools.catalog_tool import search_products_tool  # DEPRECATED: dùng search_products_v2 thay
 from tools.search import search_products_v2          # ✅ MỚI: multi-strategy search (tiếng Việt + Anh)
 from tools.cart_tool import add_to_cart_tool, get_cart_tool
 from tools.review_tool import get_product_reviews_tool

@@ -17,10 +17,14 @@ logger = logging.getLogger("guardrails.tool_validator")
 # ── Tool Allow-list: CHỈ những tool này được phép thực thi ──
 # Nếu LLM hallucinate ra tool "delete_database" → chặn ngay
 ALLOWED_TOOLS = frozenset([
-    "search_products_tool",
-    "add_to_cart_tool",
-    "get_cart_tool",
-    "get_product_reviews_tool",
+    "search_products_tool",          # deprecated — giữ để không break tool cũ
+    "search_products_v2",            # multi-strategy search (EN + VI)
+    "add_to_cart_tool",              # thêm vào giỏ hàng (write — cần L4 confirm)
+    "get_cart_tool",                 # xem giỏ hàng
+    "get_product_reviews_tool",      # xem đánh giá sản phẩm
+    "get_recommendations_tool",      # gợi ý sản phẩm
+    "convert_currency_tool",         # quy đổi tiền tệ
+    "get_shipping_quote_tool",       # phí vận chuyển
 ])
 
 # ── Giới hạn tham số ──

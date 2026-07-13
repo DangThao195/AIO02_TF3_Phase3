@@ -8,12 +8,15 @@ Trên EKS production: thay thế bằng Valkey (Redis-compatible) client.
 """
 
 import json
+import os
 import hashlib
 import time
 import logging
 from collections import OrderedDict
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Any
+
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 logger = logging.getLogger("memory.store")
 
@@ -46,7 +49,7 @@ def _now_ts() -> float:
 
 class SessionStore:
     """
-    Lưu trữ lịch sử hội thoại per-session trong bộ nhớ (dict).
+    Lưu trữ lịch sử hội thoại per-session, tự động persist ra file JSON.
 
     Mỗi session chứa:
     - messages: list[{role, content, timestamp}]
@@ -54,8 +57,32 @@ class SessionStore:
     - metadata: {total_turns, total_tool_calls, last_active_ts}
     """
 
-    def __init__(self):
+    def __init__(self, filepath: Optional[str] = None):
+        self._filepath = filepath or os.path.join(_BASE_DIR, "session.json")
         self._store: dict[str, dict] = {}
+        self._load()
+
+    # ── Persistence ──
+
+    def _load(self) -> None:
+        try:
+            if os.path.exists(self._filepath):
+                with open(self._filepath, encoding="utf-8") as f:
+                    data = json.load(f)
+                if isinstance(data, dict):
+                    self._store = data
+                    logger.info("[SESSION] Loaded %d sessions from %s", len(self._store), self._filepath)
+        except Exception as e:
+            logger.warning("[SESSION] Load failed — starting fresh: %s", e)
+
+    def _save(self) -> None:
+        try:
+            tmp = self._filepath + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(self._store, f, indent=2, ensure_ascii=False)
+            os.replace(tmp, self._filepath)
+        except Exception as e:
+            logger.error("[SESSION] Save failed: %s", e)
 
     # ── Public API ──
 
@@ -65,6 +92,7 @@ class SessionStore:
 
         if session is None:
             session = self._create(session_id, user_id)
+            self._save()
             logger.info("[SESSION] Created new session | id=%s | user=%s", session_id, user_id)
         else:
             # Kiểm tra TTL
@@ -72,6 +100,7 @@ class SessionStore:
             if _now_ts() - last_active > _SESSION_TTL_SECONDS:
                 logger.info("[SESSION] Expired session — reset | id=%s", session_id)
                 session = self._create(session_id, user_id)
+                self._save()
 
         return session
 
@@ -94,6 +123,7 @@ class SessionStore:
             session["messages"] = session["messages"][-_SESSION_MAX_MESSAGES:]
 
         session["metadata"]["total_turns"] += 1
+        self._save()
 
     def touch(self, session_id: str) -> None:
         """Cập nhật last_active_ts."""
@@ -101,6 +131,7 @@ class SessionStore:
         if session:
             session["metadata"]["last_active_ts"] = _now_ts()
             session["last_active"] = _now_iso()
+            self._save()
 
     def set_pending(self, session_id: str, token: str, action: str,
                     action_params: Optional[dict]) -> None:
@@ -115,6 +146,7 @@ class SessionStore:
             "action_params": action_params or {},
             "expires_at": expires_at,
         }
+        self._save()
         logger.info("[SESSION] Pending set | id=%s | action=%s", session_id, action)
 
     def clear_pending(self, session_id: str) -> None:
@@ -122,6 +154,7 @@ class SessionStore:
         session = self._store.get(session_id)
         if session:
             session["pending_confirmation"] = {}
+            self._save()
             logger.info("[SESSION] Pending cleared | id=%s", session_id)
 
     def dump(self, session_id: str) -> Optional[dict]:
@@ -163,16 +196,44 @@ class SessionStore:
 
 class CacheStore:
     """
-    Cache kết quả tool với TTL và LRU eviction.
+    Cache kết quả tool với TTL, LRU eviction, và persist ra file JSON.
 
     Key: "<tool_name>:<sha256(params)[:16]>"
     Chỉ cache read-only tools; write tools bị NEVER_CACHE.
     """
 
-    def __init__(self):
+    def __init__(self, filepath: Optional[str] = None):
+        self._filepath = filepath or os.path.join(_BASE_DIR, "cache.json")
         # OrderedDict để implement LRU (di chuyển entry lên đầu khi hit)
         self._store: OrderedDict[str, dict] = OrderedDict()
         self._stats = {"hits": 0, "misses": 0}
+        self._load()
+
+    # ── Persistence ──
+
+    def _load(self) -> None:
+        try:
+            if os.path.exists(self._filepath):
+                with open(self._filepath, encoding="utf-8") as f:
+                    data = json.load(f)
+                if isinstance(data, dict):
+                    self._store = OrderedDict(data.get("entries", data))
+                    self._stats = data.get("stats", {"hits": 0, "misses": 0})
+                    logger.info("[CACHE] Loaded %d entries from %s", len(self._store), self._filepath)
+        except Exception as e:
+            logger.warning("[CACHE] Load failed — starting fresh: %s", e)
+
+    def _save(self) -> None:
+        try:
+            tmp = self._filepath + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump({
+                    "entries": dict(self._store),
+                    "stats": dict(self._stats),
+                }, f, indent=2, ensure_ascii=False)
+            os.replace(tmp, self._filepath)
+        except Exception as e:
+            logger.error("[CACHE] Save failed: %s", e)
 
     # ── Public API ──
 
@@ -195,6 +256,7 @@ class CacheStore:
         if _now_ts() > entry["expires_at_ts"]:
             del self._store[key]
             self._stats["misses"] += 1
+            self._save()
             logger.debug("[CACHE] TTL expired | key=%s", key)
             return None
 
@@ -206,7 +268,7 @@ class CacheStore:
         return entry["result"]
 
     def set(self, tool_name: str, params: dict, result: str) -> None:
-        """Lưu kết quả vào cache."""
+        """Lưu kết quả vào cache và persist."""
         if tool_name in _NEVER_CACHE:
             return
 
@@ -232,6 +294,7 @@ class CacheStore:
             evicted_key, _ = self._store.popitem(last=False)
             logger.info("[CACHE] LRU evict | key=%s", evicted_key)
 
+        self._save()
         logger.debug("[CACHE] SET | tool=%s | ttl=%ds", tool_name, ttl)
 
     def stats(self) -> dict:
@@ -265,12 +328,13 @@ class CacheStore:
         entry = self._store.get(cache_key)
         if entry is None:
             return None
-        
+
         # Check TTL
         if _now_ts() > entry.get("expires_at_ts", 0):
             del self._store[cache_key]
+            self._save()
             return None
-        
+
         # LRU: move to end
         self._store.move_to_end(cache_key)
         entry["hit_count"] = entry.get("hit_count", 0) + 1
@@ -280,7 +344,7 @@ class CacheStore:
         """
         Set raw cached value by cache key with TTL.
         Used for generic caching (e.g., LLM parse results).
-        
+
         Args:
             cache_key: Arbitrary cache key string
             value: Value to cache (typically dict or str)
@@ -297,11 +361,13 @@ class CacheStore:
             "ttl_seconds": ttl,
         }
         self._store.move_to_end(cache_key)
-        
+
         # LRU eviction
         while len(self._store) > _CACHE_MAX_ENTRIES:
             evicted_key, _ = self._store.popitem(last=False)
             logger.debug("[CACHE] LRU evict raw | key=%s", evicted_key)
+
+        self._save()
 
     # ── Private ──
 

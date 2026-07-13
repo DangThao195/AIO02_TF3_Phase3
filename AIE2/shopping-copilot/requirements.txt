@@ -9,8 +9,12 @@
 # LangChain core (tool decorator, message types, runnable)
 langchain-core>=0.3.0
 
-# Groq provider — LLM inference nhanh, dùng trong Agent
-langchain-groq>=0.1.0
+# AWS Bedrock provider — LLM inference (Amazon Nova) + Guardrails
+langchain-aws>=0.2.0
+boto3>=1.35.0
+
+# Groq provider (giữ lại để rollback nếu cần)
+# langchain-groq>=0.1.0
 
 # Groq API client
 groq>=0.9.0
