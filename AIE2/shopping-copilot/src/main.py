@@ -249,6 +249,12 @@ def debug_ratelimit():
 # ── Entry point ──
 if __name__ == "__main__":
     import uvicorn
+    # Đảm bảo thư mục cha chứa 'src' được thêm vào sys.path để uvicorn import được 'src.main:app'
+    import sys
+    ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if ROOT not in sys.path:
+        sys.path.insert(0, ROOT)
+        
     port = int(os.getenv("PORT", "8001"))
     mode_str = "MOCK" if (args.mock or os.getenv("MOCK_EKS") == "true") else "LIVE"
     logger.info("Starting Shopping Copilot API [%s] on port %d", mode_str, port)
