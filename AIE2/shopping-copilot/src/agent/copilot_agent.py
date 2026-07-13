@@ -327,6 +327,11 @@ class CopilotAgent:
                 ),
             ))
             self._sessions.clear_pending(session_id)
+            
+            # Lưu lại lịch sử xác nhận của người dùng vào session
+            self._sessions.append_message(session_id, "user", "Xác nhận hành động")
+            self._sessions.append_message(session_id, "assistant", "✅ Đã thêm vào giỏ hàng thành công!")
+            
             return {"status": "ok", "reply": "✅ Đã thêm vào giỏ hàng thành công!"}
         except grpc.RpcError as e:
             return {"status": "error", "reply": f"Lỗi gRPC: {e.details()}"}

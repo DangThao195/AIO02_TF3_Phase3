@@ -145,22 +145,56 @@ def chatbot():
 
 @app.get("/api/cart")
 def api_get_cart(user_id: str):
-    """Lấy danh sách sản phẩm trong giỏ hàng giả lập (dùng cho test UI)."""
+    """Lấy danh sách sản phẩm trong giỏ hàng (giả lập hoặc gRPC thật tuỳ theo chế độ)."""
     try:
+        if not (args.mock or os.getenv("MOCK_EKS") == "true"):
+            import grpc
+            from src.protos import demo_pb2_grpc, demo_pb2
+            from src.tools.service_config import CART_ADDR, CATALOG_ADDR
+            
+            channel_cart = grpc.insecure_channel(CART_ADDR)
+            channel_cat = grpc.insecure_channel(CATALOG_ADDR)
+            try:
+                stub_cart = demo_pb2_grpc.CartServiceStub(channel_cart)
+                stub_cat = demo_pb2_grpc.ProductCatalogServiceStub(channel_cat)
+                
+                req = demo_pb2.GetCartRequest(user_id=user_id)
+                res = stub_cart.GetCart(req)
+                
+                detailed_items = []
+                for item in res.items:
+                    p_id = item.product_id
+                    try:
+                        p_res = stub_cat.GetProduct(demo_pb2.GetProductRequest(id=p_id))
+                        p_name = p_res.name
+                        p_price = f"{p_res.price_usd.units}.{p_res.price_usd.nanos // 10000000:02d}"
+                    except Exception:
+                        p_name = p_id
+                        p_price = "0.00"
+                        
+                    detailed_items.append({
+                        "product_id": p_id,
+                        "name": p_name,
+                        "price": p_price,
+                        "quantity": item.quantity
+                    })
+                return {"user_id": user_id, "items": detailed_items}
+            finally:
+                channel_cart.close()
+                channel_cat.close()
+                
+        # Fallback: Trả về mock data
         from tests.test_interactive import MOCK_CART, MOCK_PRODUCTS
         items = MOCK_CART.get(user_id, [])
         prod_map = {p["id"]: p for p in MOCK_PRODUCTS}
         detailed_items = []
         for item in items:
             p_id = item["product_id"]
-            p_info = prod_map.get(p_id, {"name": p_id, "price": p_info.get("price", "0.00") if isinstance(p_info, dict) else "0.00"})
-            # Make sure we safely get fields
-            p_name = p_info.get("name", p_id) if isinstance(p_info, dict) else p_id
-            p_price = p_info.get("price", "0.00") if isinstance(p_info, dict) else "0.00"
+            p_info = prod_map.get(p_id, {"name": p_id, "price": "0.00"})
             detailed_items.append({
                 "product_id": p_id,
-                "name": p_name,
-                "price": p_price,
+                "name": p_info.get("name", p_id),
+                "price": p_info.get("price", "0.00"),
                 "quantity": item["quantity"]
             })
         return {"user_id": user_id, "items": detailed_items}
