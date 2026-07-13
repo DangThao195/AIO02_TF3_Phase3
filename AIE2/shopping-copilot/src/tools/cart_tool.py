@@ -10,6 +10,29 @@ from src.guardrails.confirmation import request_confirmation
 from src.tools.service_config import CART_ADDR
 
 @tool
+def check_cart_item_tool(user_id: str, product_id: str) -> str:
+    """
+    Hữu ích khi người dùng muốn kiểm tra xem một sản phẩm có đang có trong giỏ hàng hay không.
+    Trả về kết quả rõ ràng để agent có thể dùng trực tiếp mà không cần suy đoán.
+    """
+    channel = grpc.insecure_channel(CART_ADDR)
+    stub = demo_pb2_grpc.CartServiceStub(channel)
+    try:
+        request = demo_pb2.GetCartRequest(user_id=user_id)
+        response = stub.GetCart(request)
+
+        for item in getattr(response, "items", []) or []:
+            if getattr(item, "product_id", "") == product_id:
+                return f"Sản phẩm '{product_id}' đang có trong giỏ hàng với số lượng {item.quantity}."
+
+        return f"Không tìm thấy sản phẩm '{product_id}' trong giỏ hàng của bạn."
+    except grpc.RpcError as e:
+        return f"Lỗi hệ thống khi kiểm tra giỏ hàng (gRPC): {e.details()}"
+    finally:
+        channel.close()
+
+
+@tool
 def add_to_cart_tool(user_id: str, product_id: str, quantity: int) -> str:
     """
     Hữu ích khi người dùng yêu cầu thêm sản phẩm vào giỏ hàng của họ.

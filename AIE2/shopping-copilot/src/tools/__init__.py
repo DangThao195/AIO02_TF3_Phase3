@@ -1,7 +1,7 @@
 # tools/__init__.py
 
 from src.tools.search import search_products_v2
-from src.tools.cart_tool import add_to_cart_tool, get_cart_tool
+from src.tools.cart_tool import add_to_cart_tool, get_cart_tool, check_cart_item_tool
 from src.tools.review_tool import get_product_reviews_tool
 from src.tools.recommendation_tool import get_recommendations_tool
 from src.tools.currency_tool import convert_currency_tool

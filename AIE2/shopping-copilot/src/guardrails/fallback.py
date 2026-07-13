@@ -151,6 +151,17 @@ def _ensure_handlers():
         _handlers_registered = True
 
 
+def _handle_bedrock_unavailable_error(e: Exception) -> Dict[str, Any]:
+    """Xử lý lỗi liên quan đến Bedrock khi model/service không khả dụng."""
+    message = str(e).lower()
+    if any(token in message for token in ["bedrock", "bedrock-runtime", "connection timeout", "timed out", "timeout", "unavailable", "service unavailable", "not found"]):
+        return make_error_response(
+            "Hệ thống AI hiện đang không khả dụng. Vui lòng thử lại sau ít phút.",
+            "BEDROCK_UNAVAILABLE"
+        )
+    return None
+
+
 def handle_exception(e: Exception) -> Dict[str, Any]:
     """
     Phân loại exception và trả về response thân thiện.
@@ -170,6 +181,10 @@ def handle_exception(e: Exception) -> Dict[str, Any]:
 
     if isinstance(e, CopilotServiceError):
         return make_error_response(e.args[0], e.error_code)
+
+    bedrock_fallback = _handle_bedrock_unavailable_error(e)
+    if bedrock_fallback is not None:
+        return bedrock_fallback
 
     # Quét qua các handler đã đăng ký
     for exc_type, handler_fn in _ERROR_HANDLERS:

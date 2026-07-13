@@ -54,6 +54,36 @@ def _normalize_tool_call(tc: Any) -> dict:
 
 
 class CopilotAgent:
+    def _should_return_tool_message_directly(self, content: Any) -> bool:
+        """Trả về True khi tool output đã chứa thông báo nghiệp vụ rõ ràng về missing item / empty cart."""
+        if content is None:
+            return False
+
+        if not isinstance(content, str):
+            try:
+                content = json.dumps(content, ensure_ascii=False)
+            except (TypeError, ValueError):
+                return False
+
+        text = content.strip().lower()
+        if not text:
+            return False
+
+        patterns = (
+            "not found",
+            "không tìm thấy",
+            "không tồn tại",
+            "không có trong giỏ hàng",
+            "empty cart",
+            "giỏ hàng trống",
+            "đang trống",
+            "không có sản phẩm",
+            "không có mặt hàng",
+            "no products",
+            "cart is empty",
+        )
+        return any(pattern in text for pattern in patterns)
+
     def __init__(self):
         self._sessions = SessionStore()
         self._cache = CacheStore()
@@ -243,6 +273,19 @@ class CopilotAgent:
                         }
                         self._sessions.append_message(session_id, "assistant", result_pending["reply"])
                         return result_pending
+
+                    # Truthfulness guard: preserve exact tool output for missing-item / empty-cart cases.
+                    if self._should_return_tool_message_directly(result):
+                        self._end(s_ex, a_ex, "OK", "Truthfulness guard: preserve exact tool message")
+                        messages.append(ToolMessage(content=result, tool_call_id=tc_id))
+                        self._sessions.append_message(session_id, "assistant", result)
+                        self._sessions.touch(session_id)
+                        return {
+                            "status": "ok",
+                            "reply": result,
+                            "session_id": session_id,
+                            "steps": list(self._steps),
+                        }
 
                     # Cache result (read-only tools)
                     if tc_name not in ("add_to_cart_tool", "get_cart_tool"):
