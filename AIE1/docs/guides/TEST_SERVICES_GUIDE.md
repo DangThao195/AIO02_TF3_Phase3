@@ -37,19 +37,47 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-#### 2. Cấu hình biến môi trường qua file `.env` (Khuyên dùng để tránh lỗi Terminal VSCode)
+#### 2. Cấu hình biến môi trường và chạy Server
 
-Để tránh các lỗi cú pháp lệnh môi trường khác nhau giữa các shell của VSCode Terminal (như PowerShell, CMD, hay Bash), dịch vụ hiện tại đã hỗ trợ tự động tải biến môi trường từ tệp `.env` cục bộ thông qua thư viện `python-dotenv`:
+Bạn có thể lựa chọn 1 trong 2 cách thiết lập môi trường dưới đây tùy theo thói quen và loại Terminal:
 
+##### 👉 Cách A.1: Sử dụng tệp `.env` cục bộ (Tự động & Khuyên dùng trên VSCode Terminal)
+Để tránh các lỗi cú pháp lệnh môi trường khác nhau giữa các shell của VSCode Terminal (như PowerShell, CMD, hay Bash), dịch vụ hiện tại hỗ trợ tự động tải biến môi trường từ tệp `.env` cục bộ:
 1. Sao chép tệp cấu hình mẫu:
    ```bash
    cp .env.example .env
    ```
-2. Mở tệp `.env` vừa tạo trong VSCode và điền đầy đủ thông tin AWS Credentials của bạn (nếu máy local chưa đăng nhập AWS CLI) và cấu hình khác.
+2. Mở tệp `.env` vừa tạo trong VSCode và điền đầy đủ thông tin AWS Credentials của bạn và cấu hình khác.
 3. Khởi chạy gRPC Server trực tiếp:
    ```bash
    python product_reviews_server.py
    ```
+
+##### 👉 Cách A.2: Sử dụng lệnh `export` trực tiếp (Dành cho Bash / WSL / Git Bash)
+Nếu terminal của bạn hỗ trợ lệnh `export` (như Git Bash, Ubuntu terminal, hoặc WSL), bạn chạy các lệnh sau:
+```bash
+# Định tuyến LLM sang Bedrock trực tiếp
+export LLM_PROVIDER="bedrock"
+export LLM_MODEL="amazon.nova-lite-v1:0"
+export AWS_REGION="us-east-1"
+
+# Cấu hình AWS Credentials (nếu máy local chưa cấu hình ~/.aws/credentials)
+export AWS_ACCESS_KEY_ID="AKIAxxxxxxxxxxxxxx"
+export AWS_SECRET_ACCESS_KEY="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# Cấu hình kết nối gRPC và Database local
+export PRODUCT_REVIEWS_PORT="8085"
+export DB_CONNECTION_STRING="host=localhost user=otelu password=otelp dbname=demo"
+export PRODUCT_CATALOG_ADDR="localhost:8081"
+export FLAGD_HOST="localhost"
+export FLAGD_PORT="8013"
+export LLM_HOST="localhost"
+export LLM_PORT="8000"
+export OTEL_SERVICE_NAME="product-reviews"
+
+# Khởi chạy gRPC Server
+python product_reviews_server.py
+```
 
 ---
 
