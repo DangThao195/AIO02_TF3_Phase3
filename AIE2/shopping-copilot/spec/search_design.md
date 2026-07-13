@@ -1207,6 +1207,293 @@ Giả sử 1000 query/ngày, với hit rate 85% cho LLM parse cache, 70% cho syn
 
 ---
 
-> **Tác giả:** AIO02 — TF3 | **Ngày:** 2026-07-10  
-> **Tham chiếu:** `agentic_design.md`, `spec/flow.md`  
-> Cập nhật tài liệu này khi có thay đổi kiến trúc hoặc thêm strategy mới.
+---
+
+## 11. Kế hoạch cải tiến — Phase 2
+
+> **Phiên bản:** 2.0.0 (draft) | **Ngày:** 2026-07-12 | **Nguồn:** Kết quả pipeline test + code review  
+> Tài liệu này đặc tả các thay đổi kiến trúc và xử lý lỗi cần thiết để đưa search tool lên trạng thái **production-ready**:
+> chống hallucination, không rò rỉ lỗi kỹ thuật ra người dùng, phân biệt rõ lỗi hạ tầng vs không có kết quả.
+
+### 11.1 Tổng quan các vấn đề đã phát hiện
+
+Qua pipeline test 29 case với `CopilotAgent` thật và code review toàn bộ search module, các vấn đề sau được xác nhận:
+
+| ID | Vấn đề | Mức độ | Module | Ảnh hưởng |
+|----|--------|--------|--------|-----------|
+| P1 | LLM hallucination trong query parser không được validate, ghi vào cache 24h | CRITICAL | query_analyzer.py | Search crash vì `int > str` TypeError |
+| P2 | gRPC channel leak khi exception xảy ra (3 strategies × mỗi lần call) | CRITICAL | strategies.py | Tài nguyên channel cạn kiệt sau nhiều lần retry |
+| P3 | LLM reranker gọi sync LLM trong async context, block event loop | CRITICAL | reranker.py | Toàn bộ event loop treo trong thời gian LLM call |
+| P4 | Không phân biệt lỗi hạ tầng với empty result thật | HIGH | orchestrator.py | Người dùng thấy "Không tìm thấy" khi product-catalog đang down |
+| P5 | Exception message chứa nội bộ rò rỉ qua tool error handler | HIGH | copilot_agent.py | LLM có thể lặp lại raw exception cho người dùng |
+| P6 | `print()` thay vì logging ở tất cả strategy error paths | HIGH | strategies.py | Không trace được lỗi production |
+| P7 | Synonym cache LLM output không được validate, cache vĩnh viễn | HIGH | synonym_cache.py | Từ điển sai ảnh hưởng vĩnh viễn đến search quality |
+| P8 | `price_min = 0` bị LLM override do falsy check | HIGH | query_analyzer.py | Mất price filter khi giá = 0 |
+| P9 | Product rỗng `id` gây dedup sai | MEDIUM | ranker.py | Chỉ giữ 1 trong nhiều product không có ID |
+| P10 | asyncio.gather timeout áp dụng cho tất cả strategies, không phải per-strategy | MEDIUM | orchestrator.py | 1 strategy chậm làm timeout toàn bộ |
+| P11 | Module-level singleton `_orchestrator` crash toàn bộ tool nếu init lỗi | MEDIUM | orchestrator.py | Import error không recover được |
+| P12 | Search cache (empty result) không phân biệt infrastructure error | MEDIUM | cache.py | Empty result sai bị cache, ảnh hưởng các query sau |
+
+### 11.2 Nguyên tắc thiết kế sửa đổi
+
+| Nguyên tắc | Mô tả |
+|---|---|
+| **Defense in depth cho LLM output** | Mọi đầu ra từ LLM phải qua schema validation trước khi dùng hoặc cache — type check + enum check + range check |
+| **Fail fast, fail safely** | Lỗi hạ tầng (gRPC down) khác với empty result — user message khác nhau. Exception không bao giờ chứa nội bộ |
+| **Resource cleanup bắt buộc** | Mọi resource (gRPC channel, HTTP session) phải được giải phóng qua context manager hoặc try/finally |
+| **Async đúng bản chất** | Không gọi sync LLM trong async context. Dùng `asyncio.to_thread()` hoặc async client |
+| **Cache có validation gate** | Cache không được lưu dữ liệu chưa qua validation. Poisoned cache phải detect và purge được |
+
+### 11.3 Đặc tả kỹ thuật từng module
+
+#### 11.3.1 Query Analyzer — LLM Output Validation Gate
+
+**File:** `tools/search/query_analyzer.py`
+
+**Vấn đề:** P1, P8
+
+**Yêu cầu:**
+
+- Hàm `_llm_parse_cached()` phải thêm một **validation gate** sau khi `json.loads()` và trước khi merge vào `SearchQuery`.
+- Validation gate kiểm tra:
+  - `price_min`: phải là `int` hoặc `float` hoặc `None`. Nếu là string → REJECT, dùng giá trị từ regex phase.
+  - `price_max`: tương tự. Giá trị phải ≥ 0. Nếu âm → REJECT.
+  - `category`: phải nằm trong tập `{"telescopes", "binoculars", "flashlights", "accessories", "books", "travel", "assembly", None}`. Nếu không → REJECT.
+  - `intent`: phải nằm trong `{"search", "browse", "compare"}`. Nếu không → fallback về `"unknown"`.
+  - `sort`: phải nằm trong `{"relevance", "price_asc", "price_desc"}`. Nếu không → fallback về `"relevance"`.
+  - `keywords_en`: phải là `list[str]`. Nếu không → dùng list rỗng.
+- Nếu validation REJECT bất kỳ field nào:
+  1. Log warning với nội dung "LLM parse hallucination detected" kèm field bị lỗi và giá trị.
+  2. Không cache kết quả này.
+  3. Giữ nguyên giá trị từ regex phase cho field đó.
+  4. Trả về `SearchQuery` đã merge một phần (chỉ lấy các field hợp lệ từ LLM).
+- Sửa lỗi P8: điều kiện `if llm_result.get("price_min")` phải là `if llm_result.get("price_min") is not None` và tương tự cho `price_max`.
+- Cache hit: nếu cache miss và LLM gọi fail → KHÔNG cache empty result.
+
+**Signature tham khảo (không phải code bắt buộc):**
+
+```
+def _validate_llm_parse(llm_raw: dict) -> dict:
+    """
+    Kiểm tra từng field của LLM output.
+    Chỉ giữ lại các field hợp lệ, loại bỏ field hallucinated.
+    
+    Args:
+        llm_raw: dict từ json.loads(response.content)
+    
+    Returns:
+        dict với chỉ các field đã được xác thực
+    """
+```
+
+#### 11.3.2 Strategies — gRPC Channel Lifecycle + Retry
+
+**File:** `tools/search/strategies.py`
+
+**Vấn đề:** P2, P6
+
+**Yêu cầu:**
+
+- Mỗi strategy function mở gRPC channel phải dùng **context manager** hoặc **try/finally** để đảm bảo channel được đóng.
+- Cụ thể tại 3 vị trí:
+  - `FullCatalogStrategy._get_all_products()` — channel dùng `insecure_channel`.
+  - `DirectDBStrategy._search_variant()` — channel dùng `insecure_channel`.
+  - `SynonymExpansionStrategy._search_keyword()` — channel dùng `insecure_channel`.
+- Pattern bắt buộc:
+  ```
+  channel = None
+  try:
+      channel = grpc.aio.insecure_channel(addr)
+      stub = ...
+      response = await stub.Method(request)
+      return ...
+  except grpc.aio.AioRpcError as e:
+      logger.error(...)
+      return []
+  except Exception as e:
+      logger.error(...)
+      return []
+  finally:
+      if channel:
+          await channel.close()
+  ```
+- Retry logic cho `UNAVAILABLE`:
+  - Retry 1 lần với delay 500ms nếu status code là `UNAVAILABLE`.
+  - Dùng `asyncio.sleep(0.5)` giữa retry.
+  - Nếu retry vẫn lỗi → trả `[]` như hiện tại.
+- Replace tất cả `print(...)` bằng `logger.error(...)` hoặc `logger.warning(...)`.
+- Retry không áp dụng cho `DEADLINE_EXCEEDED` hoặc các lỗi application-level khác.
+
+**Retry policy:**
+
+```
+UNAVAILABLE → retry 1 lần sau 500ms → nếu vẫn lỗi → [] 
+DEADLINE_EXCEEDED → [] ngay (không retry)
+INTERNAL / UNKNOWN → [] ngay (không retry)
+```
+
+#### 11.3.3 LLM Reranker — True Async Execution
+
+**File:** `tools/search/reranker.py`
+
+**Vấn đề:** P3
+
+**Yêu cầu:**
+
+- `LLMReranker.rerank()` hiện tại gọi `llm_model.invoke()` là synchronous call từ async function.
+- Giải pháp: dùng `asyncio.to_thread(llm_model.invoke, prompt)` để chạy synchronous LLM call trên thread pool.
+- Nếu `asyncio.to_thread` không khả dụng trên Python version hiện tại, dùng `loop.run_in_executor(None, llm_model.invoke, prompt)`.
+- Timeout cho LLM rerank: tối đa 5 giây. Dùng `asyncio.wait_for()`.
+  - Nếu timeout → bỏ qua rerank, giữ thứ tự từ ranker.
+- Log cảnh báo nếu LLM rerank bị timeout.
+
+**Sequence:**
+
+```
+1. Kiểm tra điều kiện trigger
+2. Nếu đủ điều kiện:
+   a. Tạo prompt
+   b. Chạy llm_model.invoke trên thread pool (asyncio.to_thread)
+   c. Chờ tối đa 5s
+   d. Parse kết quả
+   e. Nếu lỗi hoặc timeout → log warning, return original order
+3. Nếu không đủ điều kiện → return original order
+```
+
+#### 11.3.4 Orchestrator — Infrastructure Error vs Empty Result
+
+**File:** `tools/search/orchestrator.py`
+
+**Vấn đề:** P4, P10, P11
+
+**Yêu cầu:**
+
+- **Phân biệt 3 loại kết quả** thay vì 2 như hiện tại:
+  - `EMPTY_GENUINE`: tất cả strategy chạy thành công nhưng không có sản phẩm phù hợp.
+  - `EMPTY_INFRASTRUCTURE`: tất cả strategy đều fail do lỗi kết nối (UNAVAILABLE).
+  - `EMPTY_PARTIAL`: một số strategy fail, một số chạy OK nhưng không có kết quả.
+- Cơ chế:
+  - Mỗi strategy trả về một `SearchStrategyResult` thay vì `list[ScoredProduct]`:
+    ```
+    @dataclass
+    class SearchStrategyResult:
+        products: list[ScoredProduct]
+        status: str  # "OK" | "ERROR" | "TIMEOUT"
+        error_info: str | None
+    ```
+  - Orchestrator tổng hợp status từ tất cả strategies.
+  - Nếu tất cả đều ERROR/TIMEOUT → `EMPTY_INFRASTRUCTURE` → message: *"Dịch vụ tìm kiếm tạm thời không khả dụng. Vui lòng thử lại sau."*
+  - Nếu có ít nhất 1 strategy OK nhưng 0 product → `EMPTY_GENUINE` → message hiện tại: *"❌ Không tìm thấy sản phẩm phù hợp."*
+  - `EMPTY_PARTIAL` → vẫn trả empty nhưng log warning.
+- **Strategy timeout riêng:** Mỗi strategy có timeout riêng 3s thay vì gộp chung. Implement bằng `asyncio.wait_for()` trên từng task.
+- **Lazy initialization:** Chuyển `SearchOrchestrator()` singleton từ module-level sang lazy-init trong `search_products_v2()` function.
+- **Cache empty result chỉ khi `EMPTY_GENUINE`** — không cache khi infrastructure error.
+
+**User-facing messages:**
+
+| Tình huống | Message |
+|---|---|
+| EMPTY_GENUINE | "❌ Không tìm thấy sản phẩm phù hợp với tìm kiếm của bạn." |
+| EMPTY_INFRASTRUCTURE | "Dịch vụ tìm kiếm tạm thời không khả dụng. Vui lòng thử lại sau." |
+| EMPTY_PARTIAL | "❌ Không tìm thấy sản phẩm phù hợp." (giữ nguyên) |
+| ERROR (exception bất ngờ) | fallback về "Đã có lỗi xảy ra khi tìm kiếm." |
+
+#### 11.3.5 Agent — Exception Sanitization
+
+**File:** `agent/copilot_agent.py`
+
+**Vấn đề:** P5
+
+**Yêu cầu:**
+
+- Dòng `result = await tool_fn.ainvoke(tc_args)` trong try/except: exception message `str(e)[:120]` không được truyền trực tiếp vào `AIMessage`.
+- Thay bằng message an toàn:
+  - Nếu exception là `grpc.aio.AioRpcError` với `UNAVAILABLE`: *"Dịch vụ {tool_name} tạm thời không khả dụng."*
+  - Nếu exception là `asyncio.TimeoutError`: *"Dịch vụ {tool_name} phản hồi quá chậm, vui lòng thử lại."*
+  - Các exception khác: *"Không thể thực hiện thao tác này ngay lúc này."*
+- Chi tiết lỗi kỹ thuật (`str(e)`): chỉ ghi vào `logger.error()` ở backend, **không bao giờ** đưa vào messages gửi LLM.
+
+#### 11.3.6 Synonym Cache — Output Validation
+
+**File:** `tools/search/synonym_cache.py`
+
+**Vấn đề:** P7
+
+**Yêu cầu:**
+
+- Hàm `_llm_translate_batch()` phải validate kết quả LLM trước khi merge vào `_map`.
+- Validation:
+  - Key (từ VN) phải là string, không rỗng, chứa ký tự tiếng Việt.
+  - Value (từ EN) phải là string, không rỗng, chỉ chứa ASCII, không chứa ký tự đặc biệt hoặc số.
+  - Nếu key hoặc value không hợp lệ → log warning, **không** cache cặp từ đó.
+- `seed_from_llm()` tương tự: validate từng cặp từ trước khi merge.
+- Thêm cơ chế **giới hạn confidence**: sau 3 lần translate ra cùng một EN keyword cho một VN word, khóa bản ghi đó (không cho LLM ghi đè).
+- Cache expiry cho `_map`: sau 7 ngày, tự động xóa các entry chưa được sử dụng (hit_count = 0).
+
+#### 11.3.7 Ranker — Product ID Dedup
+
+**File:** `tools/search/ranker.py`
+
+**Vấn đề:** P9
+
+**Yêu cầu:**
+
+- Trong `merge_and_rank()`, sử dụng `product.id` làm key dedup.
+- Nếu `product.id` là rỗng (`""`) hoặc `None`: KHÔNG dedup entry đó — luôn giữ.
+- Log warning khi gặp product có ID rỗng: *"Product with empty ID encountered from strategy {strategy_name}"*.
+
+#### 11.3.8 Cache Strategy Revision
+
+**File:** `tools/search/cache.py`, `tools/search/orchestrator.py`
+
+**Vấn đề:** P12
+
+**Yêu cầu:**
+
+- `SearchCache.set_session_empty()` chỉ được gọi khi `EMPTY_GENUINE` (xem 11.3.4).
+- Khi infrastructure error xảy ra, empty result không được cache.
+- `SearchCache._search` (nếu có) cần thêm TTL check cho empty cache: empty cache TTL = 60s (thay vì vô thời hạn).
+- LLM parse cache (query_analyzer): thêm invalidated mechanism — nếu detect hallucination (P1), xóa cache entry tương ứng.
+
+### 11.4 Ma trận ảnh hưởng thay đổi
+
+| Thay đổi | File(s) ảnh hưởng | Loại thay đổi | Risk rollback |
+|---|---|---|---|
+| LLM output validation gate | query_analyzer.py | Logic addition | Low — chỉ reject, không crash |
+| gRPC channel lifecycle | strategies.py | Refactor (finally block) | Medium — cần test coverage |
+| Async LLM reranker | reranker.py | Refactor (to_thread) | Low — timeout fallback |
+| Infrastructure error enum | orchestrator.py + models.py | New dataclass + logic | Medium — new type |
+| Exception sanitization | copilot_agent.py | String change | Low — chỉ user message |
+| Synonym validation | synonym_cache.py | Logic addition | Low — chỉ reject bad entries |
+| Ranker dedup fix | ranker.py | Logic fix | Low — edge case |
+| Cache policy | cache.py, orchestrator.py | Logic change | Low — chỉ ảnh hưởng empty cache |
+
+### 11.5 Definition of Done cho Phase 2
+
+| # | Kiểm tra | Phương pháp verify |
+|---|---|---|
+| 1 | LLM hallucination trong price field bị reject và không cache | Unit test: mock LLM trả `{"price_max": "cheap"}` → verify Original price_max giữ nguyên, cache không ghi |
+| 2 | gRPC channel đóng trong mọi trường hợp (kể cả exception) | Unit test: mock strategy raise exception → verify channel.close() được gọi |
+| 3 | LLM rerank không block event loop | Integration test: gọi search query phức tạp trong async context → verify không có delay bất thường |
+| 4 | Infrastructure error ≠ empty result | Integration test: kill product-catalog → search trả "Dịch vụ tìm kiếm tạm thời không khả dụng" |
+| 5 | Exception message không chứa internal detail | Code review: verify tất cả AIMessage trong tool error path đều là message an toàn |
+| 6 | Synonym LLM output được validate trước khi cache | Unit test: mock LLM trả `{"tạ": "!!!"}` → verify không cache |
+| 7 | Product ID rỗng không bị dedup sai | Unit test: merge 2 product với id="" → verify cả 2 đều giữ |
+| 8 | Empty result chỉ cache khi genuine | Integration test: product-catalog down, search query → verify cache.empty không set |
+| 9 | Toàn bộ 29 pipeline test case vẫn PASS (không có UNEXPECTED) | Chạy `tests/run_pipeline.py` với delay ≥ 10s → verify 0 unexpected error |
+
+### 11.6 Thứ tự ưu tiên triển khai
+
+1. **P1 + P8** — LLM output validation (query_analyzer.py) — dễ nhất, ảnh hưởng lớn nhất đến stability.
+2. **P2** — gRPC channel lifecycle (strategies.py) — resource leak cần xử lý ngay.
+3. **P5** — Exception sanitization (copilot_agent.py) — bảo vệ user-facing messages.
+4. **P4** — Infrastructure vs empty result (orchestrator.py + models.py) — trải nghiệm người dùng.
+5. **P3** — Async reranker (reranker.py) — event loop health.
+6. **P7** — Synonym validation (synonym_cache.py) — search quality.
+7. **P6 + P9 + P10 + P11 + P12** — Các fix còn lại (logging, dedup, timeout, lazy init, cache).
+
+---
+
+> **Tác giả:** AIO02 — TF3 | **Ngày:** 2026-07-12  
+> **Tham chiếu:** `agentic_design.md`, `tests/test_results.json` (pipeline test run), code review `shopping-copilot/tools/search/`  
+> **Trạng thái:** Draft — chờ review từ CDO01/CDO02 trước khi triển khai Phase 2.

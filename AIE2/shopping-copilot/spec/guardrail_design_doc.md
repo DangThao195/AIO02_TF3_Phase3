@@ -1,9 +1,9 @@
 # Guardrail System — Shopping Copilot
 ## Tài liệu Thiết kế Kỹ thuật · TechX TF3 · AIO02
 
-> **Phiên bản:** 2.0.0 — Ngày cập nhật: 10/07/2026
+> **Phiên bản:** 2.1.0 — Ngày cập nhật: 10/07/2026
 > **Module:** `shopping-copilot/guardrails/`
-> **LLM Backend:** AWS Bedrock — Amazon Nova Lite (`apac.amazon.nova-lite-v1:0`)
+> **LLM Backend:** Groq — Qwen 3.6-27b (`qwen/qwen3.6-27b`)
 > **Mục đích:** Tài liệu này mô tả kiến trúc, luồng hoạt động, công nghệ sử dụng và chiến lược kiểm thử của hệ thống bảo vệ 6 lớp bao quanh AI Agent của Shopping Copilot.
 
 ---
@@ -68,7 +68,7 @@ flowchart TD
         A["🚦 Lớp 1\nRate Limiter\nguardrails/rate_limiter.py"]
         B["🔍 Lớp 2a\nInput Filter — Regex\n38+ patterns EN+VI"]
         B2["🧠 Lớp 2b\nBedrock Guardrails\nSemantic Classifier đa ngôn ngữ"]
-        C["🤖 Amazon Nova\nReAct Loop\nagent/copilot_agent.py"]
+        C["🤖 Groq LLM (Qwen)\nReAct Loop\nagent/copilot_agent.py"]
         D["✅ Lớp 3\nTool Validator\nguardrails/tool_validator.py"]
         E["🔐 Lớp 4\nConfirmation Gate\nguardrails/confirmation.py"]
         F["🌐 EKS Microservices\nProduct Catalog · Cart · Reviews"]
@@ -190,12 +190,15 @@ normalized = unicodedata.normalize("NFC", user_message)
 # Đảm bảo dấu tiếng Việt (ã, ắ, ổ...) luôn ở dạng nhất quán
 ```
 
-#### 2.3 Tầng 2 — AWS Bedrock Guardrails (Semantic Check)
+#### 2.3 Tầng 2 — AWS Bedrock Guardrails (Semantic Check) — ⏳ Chưa build
 
-Khi tin nhắn qua được Tầng 1 Regex, nó được đẩy qua **AWS Bedrock Guardrails** — một dịch vụ phân loại nội dung chuyên biệt của AWS:
+> **Trạng thái hiện tại:** Tầng 2 chưa được implement trong code. `check_input_bedrock()` là stub.
+> Agent hiện chỉ dùng Tầng 1 (Regex) làm input filter.
+
+Khi tin nhắn qua được Tầng 1 Regex, nó có thể được đẩy qua **AWS Bedrock Guardrails** — một dịch vụ phân loại nội dung chuyên biệt của AWS:
 
 ```python
-# Gọi Bedrock Guardrails API (ApplyGuardrail)
+# Gọi Bedrock Guardrails API (ApplyGuardrail) — ⏳ chưa implement
 response = bedrock_client.apply_guardrail(
     guardrailIdentifier="<guardrail-id>",
     guardrailVersion="DRAFT",
@@ -210,11 +213,11 @@ response = bedrock_client.apply_guardrail(
 
 | Cách | Vấn đề |
 |:---|:---|
-| Dùng Nova tự phán xét | LLM bị compromise trước khi kịp phán xét (self-referential paradox) |
+| Dùng LLM tự phán xét | LLM bị compromise trước khi kịp phán xét (self-referential paradox) |
 | Regex thuần | Không bao được đa ngôn ngữ, paraphrase, cách viết lóng |
 | **Bedrock Guardrails** | ✅ Model phân loại chuyên biệt (không phải LLM), deterministic, đa ngôn ngữ |
 
-Bedrock Guardrails là **classification model** được train riêng cho bài toán phát hiện tấn công — không phải LLM sinh text. Nó chạy **trước và độc lập** với LLM chính (Nova), nên không bị chiếm quyền bởi nội dung tấn công.
+Bedrock Guardrails là **classification model** được train riêng cho bài toán phát hiện tấn công — không phải LLM sinh text. Nó chạy **trước và độc lập** với LLM chính (Groq), nên không bị chiếm quyền bởi nội dung tấn công.
 
 #### 2.4 Phản hồi khi bị chặn
 - Trả về thông báo thân thiện, không để lộ lý do kỹ thuật chi tiết.
@@ -406,8 +409,8 @@ grpc.RpcError?               → Phân loại: UNAVAILABLE / DEADLINE_EXCEEDED /
 Exception không xác định     → "Đã có lỗi xảy ra. Vui lòng thử lại sau."
 ```
 
-#### 6.3 Giới hạn vòng lặp công cụ (`MAX_TOOL_ITERATIONS = 5`)
-Agent bị giới hạn tối đa **5 vòng gọi tool** trong một lượt chat. Nếu vượt quá (LLM bị lặp hoặc confused), Fallback bắt `MaxIterationsExceeded` và trả thông báo lịch sự cho user thay vì để hệ thống lặp vô hạn.
+#### 6.3 Giới hạn vòng lặp công cụ (`MAX_TOOL_ITERATIONS = 3`)
+Agent bị giới hạn tối đa **3 vòng gọi tool** trong một lượt chat. Nếu vượt quá (LLM bị lặp hoặc confused), Fallback bắt `MaxIterationsExceeded` và trả thông báo lịch sự cho user thay vì để hệ thống lặp vô hạn.
 
 ---
 
@@ -436,7 +439,7 @@ def chat(self, session_id, user_id, user_message):
     if not bedrock_result.is_safe:
         return {"status": "error", "reply": bedrock_result.blocked_reason}
 
-    # Gọi LLM (ReAct Loop) — Amazon Nova via Bedrock
+    # Gọi LLM (ReAct Loop) — Groq API (Qwen 3.6-27b)
     result = self._react_loop(...)
 
     # Lớp 5: Output Filter (trước khi trả)
@@ -533,17 +536,16 @@ def chat(self, session_id, user_id, user_message):
 | Công nghệ | Mục đích | Lớp áp dụng |
 |:---|:---|:---:|
 | **Python 3.13** | Ngôn ngữ triển khai | Tất cả |
-| **AWS Bedrock — Amazon Nova** | LLM Backend (ReAct agent + tool calling) | Agent Core |
-| **AWS Bedrock Guardrails** | Semantic content filter đa ngôn ngữ | L2 (Tầng 2) |
-| **LangChain `ChatBedrockConverse`** | LLM integration + tool binding | Agent Core |
-| **`boto3`** | AWS SDK — gọi Bedrock API | Agent, L2, L6 |
+| **Groq API — Qwen 3.6-27b** | LLM inference (ReAct loop) | Agent Core |
+| **LangChain Core `@tool` + `langchain-groq`** | Tool binding + LLM integration | Agent Core, Tools |
 | **`re` (Regex) + `unicodedata`** | Pattern matching + Unicode normalization | L2 (Tầng 1), L3, L5 |
 | **`hmac` + `hashlib`** | Ký và xác thực token HMAC-SHA256 | L4 |
 | **`threading.Lock`** | Thread safety cho Rate Limiter | L1 |
 | **`dataclasses`** | Cấu trúc kết quả trả về | Tất cả |
 | **`logging`** | Ghi audit log cho OTel/Grafana | Tất cả |
 | **FastAPI + Uvicorn** | HTTP endpoint + ASGI server | Tích hợp |
-| **gRPC** | Kết nối EKS Microservices | Tools |
+| **gRPC** | Kết nối EKS Microservices (Cart, Review, Recommendation, Currency) | Tools |
+| **REST (requests)** | Kết nối Shipping Service | Tools |
 
 ---
 
@@ -568,19 +570,20 @@ def chat(self, session_id, user_id, user_message):
 ```
 shopping-copilot/
 ├── agent/
-│   ├── copilot_agent.py     ← Orchestrator: ReAct loop + guardrail pipeline
-│   └── prompts.py           ← System prompt
+│   ├── agent.py             ← ⏳ (trống — chưa implement)
+│   └── copilot_agent.py     ← ⏳ (chưa tồn tại — spec trong agentic_design.md)
 ├── guardrails/
 │   ├── __init__.py          ← Export public API
 │   ├── rate_limiter.py      ← Lớp 1: Rate Limiter
-│   ├── input_filter.py      ← Lớp 2: Input Filter (Regex EN+VI + Bedrock Guardrails)
+│   ├── input_filter.py      ← Lớp 2: Input Filter (Regex EN+VI)
 │   ├── tool_validator.py    ← Lớp 3: Tool Validator
 │   ├── confirmation.py      ← Lớp 4: Confirmation Gate (HMAC)
 │   ├── output_filter.py     ← Lớp 5: Output Filter (PII Redact)
 │   └── fallback.py          ← Lớp 6: Fallback Handler
-├── tools/                   ← 7 gRPC/REST tools kết nối EKS
+├── tools/                   ← 6 tools + search module (gRPC/REST)
+├── llm/                     ← LLM client (Groq API)
 ├── memory/                  ← Session store + tool result cache
-└── .env                     ← BEDROCK_MODEL_ID, BEDROCK_REGION
+└── .env                     ← GROQ_API_KEY, GROQ_MODEL, service addresses
 ```
 
 ---

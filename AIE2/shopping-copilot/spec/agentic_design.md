@@ -14,21 +14,19 @@
 4. [Tool System](#4-tool-system)
 5. [Memory & Cache](#5-memory--cache)
 6. [Agent Core — ReAct Loop](#6-agent-core--react-loop)
-7. [Search Module (Multi-Strategy)](#7-search-module-multi-strategy)
-8. [API Server](#8-api-server)
-9. [Luồng xử lý tổng thể](#9-luồng-xử-lý-tổng-thể)
-10. [Cấu hình & Biến môi trường](#10-cấu-hình--biến-môi-trường)
-11. [Chi phí vận hành](#11-chi-phí-vận-hành)
-12. [Kiểm thử](#12-kiểm-thử)
-13. [Hạn chế & Roadmap](#13-hạn-chế--roadmap)
+7. [API Server](#7-api-server)
+8. [Luồng xử lý tổng thể](#8-luồng-xử-lý-tổng-thể)
+9. [Cấu hình & Biến môi trường](#9-cấu-hình--biến-môi-trường)
+10. [Chi phí vận hành](#10-chi-phí-vận-hành)
+11. [Kiểm thử](#11-kiểm-thử)
+12. [Hạn chế & Roadmap](#12-hạn-chế--roadmap)
 
 ---
 
 ## 1. Tổng quan hệ thống
 
 Shopping Copilot là AI Agent cho phép khách hàng TechX Corp tương tác bằng ngôn ngữ tự nhiên
-(đặc biệt là tiếng Việt) để tra cứu sản phẩm, xem đánh giá, thêm hàng vào giỏ, và thực hiện
-các tác vụ mua sắm thông qua backend EKS microservices.
+để tra cứu thông tin sản phẩm, xem đánh giá, thêm hàng vào giỏ thông qua backend EKS microservices.
 
 ### 1.1 Nguyên tắc kiến trúc
 
@@ -37,7 +35,6 @@ các tác vụ mua sắm thông qua backend EKS microservices.
 | **Defense-in-Depth** | 6 lớp bảo vệ độc lập — mỗi lớp giải quyết một vector tấn công |
 | **Zero-cost path** | Regex + cache là path chính, LLM là fallback |
 | **Stateless Token** | Confirmation token dùng HMAC, không lưu server-side |
-| **Multi-strategy Search** | Nhiều phương án tìm kiếm chạy song song |
 | **Grounded** | Mọi output đều trace được từ DB / catalog thật |
 | **Never trust LLM** | Input/Output luôn được kiểm tra độc lập với LLM |
 
@@ -86,9 +83,9 @@ các tác vụ mua sắm thông qua backend EKS microservices.
 ```
 shopping-copilot/
 │
-├── agent/                          # Agent core (ReAct loop) — chưa build
+├── agent/                          # Agent core (ReAct loop) — CHƯA BUILD
 │   ├── __init__.py                 # (trống — module marker)
-│   └── agent.py                    # (trống — dự phòng, chưa dùng)
+│   └── agent.py                    # ⏳ (trống — chưa implement)
 │
 ├── guardrails/                     # ✅ 6 lớp phòng thủ — ĐÃ BUILD
 │   ├── __init__.py                 # Export tập trung tất cả guardrail API
@@ -99,30 +96,33 @@ shopping-copilot/
 │   ├── output_filter.py            # L5: PII/System info redact
 │   └── fallback.py                 # L6: Exception → user-friendly response
 │
-├── tools/                          # LangChain tools → EKS gRPC
+├── tools/                          # LangChain tools → EKS gRPC (6 tool files)
 │   ├── __init__.py                 # ✅ Export + all_shopping_tools list
-│   ├── catalog_tool.py             # ⏳ search_products_tool (gRPC SearchProducts)
-│   ├── cart_tool.py                # ⏳ add_to_cart_tool, get_cart_tool
-│   ├── review_tool.py              # ⏳ get_product_reviews_tool
-│   ├── recommendation_tool.py      # ⏳ get_recommendations_tool
-│   ├── currency_tool.py            # ⏳ convert_currency_tool
-│   ├── shipping_tool.py            # ⏳ get_shipping_quote_tool (REST)
-│   │
-│   └── search/                     # ⏳ [MỚI] Multi-strategy search module
+│   ├── cart_tool.py                # ✅ add_to_cart_tool, get_cart_tool (gRPC)
+│   ├── review_tool.py              # ✅ get_product_reviews_tool (gRPC)
+│   ├── recommendation_tool.py      # ✅ get_recommendations_tool (gRPC)
+│   ├── currency_tool.py            # ✅ convert_currency_tool (gRPC)
+│   ├── shipping_tool.py            # ✅ get_shipping_quote_tool (REST)
+│   ├── catalog_tool.py             # ⏳ (thay bởi tools/search/)
+│   └── search/                     # ✅ Search module (multi-strategy)
 │       ├── __init__.py             # Export search_products_v2
-│       ├── models.py               # SearchQuery, ScoredProduct, SearchResult
-│       ├── query_analyzer.py       # RegexQueryAnalyzer + LLMQueryAnalyzer
-│       ├── orchestrator.py         # SearchOrchestrator
-│       ├── strategies.py           # FullCatalog, DirectDB, SynonymExpansion
-│       ├── ranker.py               # ResultRanker + merge/dedup
-│       ├── reranker.py             # LLMReranker (conditional)
-│       ├── synonym_cache.py        # VN→EN mapping + self-learning
-│       └── cache.py                # Search-specific cache (empty result, etc.)
+│       ├── orchestrator.py         # Query orchestration
+│       ├── query_analyzer.py       # Intent detection EN/VI
+│       ├── strategies.py           # Search strategies
+│       ├── ranker.py               # Result ranking
+│       ├── reranker.py             # Cross-encoder reranking
+│       ├── synonym_cache.py        # Synonym lookups
+│       ├── models.py               # Data models
+│       ├── cache.py                # Search result cache
+│       ├── examples.py             # Example queries
+│       ├── quickstart.py           # Quickstart demo
+│       ├── test_interactive.py     # Interactive test for search
+│       └── test_e2e.py             # End-to-end test
 │
-├── llm/                            # LLM abstraction layer — chưa build
+├── llm/                            # LLM abstraction layer — ĐÃ BUILD
 │   ├── __init__.py                 # (trống — module marker)
-│   ├── llm.py                      # ⏳ LLM client wrapper
-│   └── prompt.py                   # ⏳ System prompt templates
+│   ├── llm.py                      # ✅ LLMClient (Groq API), MockLLMClient
+│   └── prompt.py                   # ⏳ (trống — chưa có system prompt)
 │
 ├── memory/                         # ✅ Session & cache storage — ĐÃ BUILD
 │   ├── __init__.py                 # Export SessionStore, CacheStore
@@ -134,7 +134,6 @@ shopping-copilot/
 │
 ├── spec/                           # Tài liệu thiết kế
 │   ├── agentic_design.md           # Tài liệu này
-│   ├── search_design.md            # Multi-strategy search design
 │   └── guardrail_design_doc.md     # Guardrail system design
 │
 ├── tests/                          # Tests
@@ -151,17 +150,21 @@ shopping-copilot/
 |---|---|---|
 | `guardrails/*.py` | ✅ Đã build | Full 6 lớp đã hoàn thiện, có thể import ngay |
 | `memory/store.py` | ✅ Đã build | SessionStore + CacheStore với TTL/LRU |
-| `main.py` | ✅ Đã build | FastAPI + Chat/Confirm/Health endpoints |
+| `main.py` | ✅ Đã build | FastAPI + Chat/Confirm/Health endpoints (dùng `session_id` + `user_id`) |
 | `protos/demo_pb2*.py` | ✅ Đã build | Compiled protobuf từ TechX Corp |
-| `tools/__init__.py` | ✅ Đã build | Import list + `all_shopping_tools`, sẵn sàng bind agent |
+| `tools/__init__.py` | ✅ Đã build | Import 6 tools (bao gồm catalog + search) |
+| `tools/cart_tool.py` | ✅ Đã build | add_to_cart_tool (có bypass guardrail), get_cart_tool — gRPC CartService |
+| `tools/review_tool.py` | ✅ Đã build | get_product_reviews_tool — gRPC ProductReview |
+| `tools/recommendation_tool.py` | ✅ Đã build | get_recommendations_tool — gRPC Recommendation |
+| `tools/currency_tool.py` | ✅ Đã build | convert_currency_tool — gRPC Currency |
+| `tools/shipping_tool.py` | ✅ Đã build | get_shipping_quote_tool — REST Shipping |
+| `tools/search/` (module) | ✅ Đã build | Multi-strategy search (EN + VI) với 12 files |
+| `llm/llm.py` | ✅ Đã build | LLMClient dùng Groq API + MockLLMClient cho test |
+| `llm/prompt.py` | ⏳ Trống | Chưa có system prompt; spec chứa bản mẫu ở §6 |
+| `agent/copilot_agent.py` | ⏳ Chưa build | Chỉ có `agent/agent.py` rỗng — cần xây dựng ReAct loop tích hợp guardrail |
 | `tests/test_interactive.py` | ✅ Đã build | CLI test 3 chế độ (mock/live/no-llm) |
-| `.env` | ✅ Đã cấu hình | GROQ_API_KEY + service addresses |
-| `requirements.txt` | ✅ Đã cấu hình | langchain-core, langchain-groq, grpcio, fastapi, ... |
-| `tools/*_tool.py` (6 files) | ⏳ Chưa build | Chỉ có import trong `__init__`, cần implement gRPC client |
-| `tools/search/*` (8 files) | ⏳ Chưa build | Design hoàn chỉnh (`spec/search_design.md`) |
-| `agent/copilot_agent.py` | ⏳ Chưa build | Cần xây dựng class CopilotAgent tích hợp guardrail + ReAct |
-| `llm/llm.py` | ⏳ Chưa build | Cần LLM client wrapper |
-| `llm/prompt.py` | ⏳ Chưa build | Cần system prompt template |
+| `.env` | ✅ Đã cấu hình | GROQ_API_KEY + service addresses (có CATALOG_ADDR) |
+| `requirements.txt` | ✅ Đã cấu hình | langchain-core, langchain-groq, grpcio, fastapi, rapidfuzz, ... |
 
 ---
 
@@ -388,81 +391,83 @@ def chat(self, ...):
 Tools là LangChain `@tool` decorator functions, mỗi tool gọi một gRPC/REST endpoint
 trên EKS microservices.
 
-| Tool | File (spec) | Service | Method | Type |
-|---|---|---|---|---|
-| `search_products_tool` | `tools/catalog_tool.py` | ProductCatalog | `SearchProducts` | Read |
-| `search_products_v2` | `tools/search/__init__.py` | Multi-strategy | Orchestrator | Read |
-| `get_product_reviews_tool` | `tools/review_tool.py` | ProductReview | `GetProductReviews` | Read |
-| `add_to_cart_tool` | `tools/cart_tool.py` | Cart | `AddItem` | Write |
-| `get_cart_tool` | `tools/cart_tool.py` | Cart | `GetCart` | Read |
-| `get_recommendations_tool` | `tools/recommendation_tool.py` | Recommendation | `ListRecommendations` | Read |
-| `convert_currency_tool` | `tools/currency_tool.py` | Currency | `Convert` | Read |
-| `get_shipping_quote_tool` | `tools/shipping_tool.py` | Shipping | `GetQuote` | Read |
+| Tool | File | Service | Method | Type | L3 Allowed? |
+|---|---|---|---|---|---|---|
+| `search_products_tool` | `tools/catalog_tool.py` | ProductCatalog | `ListProducts` | Read | ✅ |
+| `search_products_v2` | `tools/search/orchestrator.py` | ProductCatalog (multi-strategy) | — | Read | ❌ (not in ALLOWED_TOOLS) |
+| `get_product_reviews_tool` | `tools/review_tool.py` | ProductReview | `GetProductReviews` | Read | ✅ |
+| `add_to_cart_tool` | `tools/cart_tool.py` | Cart | `AddItem` | Write | ✅ |
+| `get_cart_tool` | `tools/cart_tool.py` | Cart | `GetCart` | Read | ✅ |
+| `get_recommendations_tool` | `tools/recommendation_tool.py` | Recommendation | `ListRecommendations` | Read | ❌ (not in ALLOWED_TOOLS) |
+| `convert_currency_tool` | `tools/currency_tool.py` | Currency | `Convert` | Read | ❌ (not in ALLOWED_TOOLS) |
+| `get_shipping_quote_tool` | `tools/shipping_tool.py` | Shipping | `GetQuote` (REST) | Read | ❌ (not in ALLOWED_TOOLS) |
 
 ### 4.2 Cấu trúc mỗi tool
 
-Mỗi tool tuân theo LangChain @tool pattern:
+Mỗi tool tuân theo LangChain @tool pattern, gọi gRPC/REST tới EKS service.
+`user_id` hiện do LLM cung cấp làm tham số (không có AUTO_INJECT — cần refactor sau):
 
 ```python
-# tools/catalog_tool.py
-import json, os, grpc
+# tools/cart_tool.py
+import grpc
 from langchain_core.tools import tool
-from protos import demo_pb2_grpc, demo_pb2
+import protos.demo_pb2 as demo_pb2
+import protos.demo_pb2_grpc as demo_pb2_grpc
+import os
+
+CART_ADDR = os.getenv("CART_ADDR", "cart:7070")
 
 @tool
-def search_products_tool(query: str) -> str:
-    """Tìm kiếm sản phẩm theo tên — gRPC ProductCatalog.SearchProducts.
-
-    Args:
-        query: Từ khoá tìm kiếm (tiếng Anh).
+def get_cart_tool(user_id: str) -> str:
+    """Xem giỏ hàng hiện tại — gRPC CartService.GetCart.
+    Yêu cầu: user_id.
     """
-    channel = grpc.insecure_channel(os.environ["CATALOG_ADDR"])
-    stub = demo_pb2_grpc.ProductCatalogServiceStub(channel)
-    resp = stub.SearchProducts(demo_pb2.SearchProductsRequest(query=query))
-    products = [
-        {
-            "id": p.id,
-            "name": p.name,
-            "description": p.description,
-            "price_usd": p.price_usd.units + p.price_usd.nanos / 1e9,
-            "categories": list(p.categories),
-        }
-        for p in resp.results
+    channel = grpc.insecure_channel(CART_ADDR)
+    stub = demo_pb2_grpc.CartServiceStub(channel)
+    resp = stub.GetCart(demo_pb2.GetCartRequest(user_id=user_id))
+    items = [
+        f"-Sản phẩm ID: {i.product_id} | Số lượng: {i.quantity}"
+        for i in resp.items
     ]
-    return json.dumps(products, ensure_ascii=False)
+    return f"Chi tiết giỏ hàng của '{user_id}':\n" + "\n".join(items)
 ```
 
 ### 4.3 Mô hình Confirmation cho Write Tools
 
-`add_to_cart_tool` không thực thi AddItem ngay — mà gọi `request_confirmation`:
+`add_to_cart_tool` hiện có 2 chế độ (bypass guardrail khi chưa test):
 
 ```python
 # tools/cart_tool.py
-import json, os, grpc
-from langchain_core.tools import tool
 from guardrails.confirmation import request_confirmation
+import os
+
+CART_ADDR = os.getenv("CART_ADDR", "cart:7070")
+
+# Guardrail environment check
+try:
+    from guardrails.confirmation import request_confirmation
+    HAS_CONFIRMATION_SYSTEM = True
+except ImportError:
+    HAS_CONFIRMATION_SYSTEM = False
 
 @tool
 def add_to_cart_tool(user_id: str, product_id: str, quantity: int) -> str:
-    """Thêm sản phẩm vào giỏ hàng (cần xác nhận từ user).
+    """Thêm sản phẩm vào giỏ hàng. Yêu cầu: user_id, product_id, quantity."""
+    if int(quantity) <= 0:
+        return "Lỗi: Số lượng phải lớn hơn 0."
 
-    Args:
-        user_id: ID người dùng.
-        product_id: Mã sản phẩm (VD: OLJCESPC7Z).
-        quantity: Số lượng (1-99).
-    """
-    result = request_confirmation(user_id, "AddItem", {
-        "product_id": product_id,
-        "quantity": quantity,
-    })
-    if result.status == "PENDING":
-        return json.dumps({
-            "status": "pending",
-            "message": result.message,
-            "token": result.confirmation_token,
-            "action_data": {"product_id": product_id, "quantity": quantity},
-        }, ensure_ascii=False)
-    return json.dumps({"status": result.status, "message": result.message})
+    if HAS_CONFIRMATION_SYSTEM:
+        # ⏳ TODO: gọi request_confirmation, trả PENDING token
+        pass
+
+    # BYPASS mode (hiện tại): gọi gRPC AddItem trực tiếp
+    channel = grpc.insecure_channel(CART_ADDR)
+    stub = demo_pb2_grpc.CartServiceStub(channel)
+    stub.AddItem(demo_pb2.AddItemRequest(
+        user_id=user_id,
+        item=demo_pb2.CartItem(product_id=product_id, quantity=int(quantity)),
+    ))
+    return f"Thành công: Đã thêm {quantity} sản phẩm '{product_id}' vào giỏ."
 ```
 
 ### 4.4 Tích hợp vào agent
@@ -471,7 +476,8 @@ def add_to_cart_tool(user_id: str, product_id: str, quantity: int) -> str:
 
 ```python
 # tools/__init__.py
-from tools.catalog_tool import search_products_tool
+from tools.catalog_tool import search_products_tool     # DEPRECATED
+from tools.search import search_products_v2              # ✅ MỚI: multi-strategy
 from tools.cart_tool import add_to_cart_tool, get_cart_tool
 from tools.review_tool import get_product_reviews_tool
 from tools.recommendation_tool import get_recommendations_tool
@@ -479,7 +485,7 @@ from tools.currency_tool import convert_currency_tool
 from tools.shipping_tool import get_shipping_quote_tool
 
 all_shopping_tools = [
-    search_products_tool,
+    search_products_v2,             # Search (multi-strategy)
     get_product_reviews_tool,
     add_to_cart_tool,
     get_cart_tool,
@@ -489,8 +495,41 @@ all_shopping_tools = [
 ]
 ```
 
-Các tool files (6 files) hiện chưa có trên đĩa — `tools/__init__.py` đã có import
-nhưng các module được import chưa tồn tại. Cần implement từng file theo mẫu trên.
+**Lưu ý:** `ALLOWED_TOOLS` trong `guardrails/tool_validator.py` chỉ có 4 tools:
+`search_products_tool`, `add_to_cart_tool`, `get_cart_tool`, `get_product_reviews_tool`
+— các tool còn lại cần được thêm vào danh sách này khi build Agent.
+
+### 4.5 Identity & user_id
+
+Copilot nhận `user_id` từ client (Frontend gửi lên). Mỗi session có UUID riêng
+(`session_id`) do client tạo.
+
+```
+POST /api/chat { message: "thêm kính vào giỏ",
+                 session_id: "550e8400-e29b-...",
+                 user_id: "user_abc123" }
+
+  → main.py: gọi agent.chat(session_id, user_id, message)
+  → SessionStore.get_or_create(session_id, user_id)
+  → gRPC AddItem(user_id="user_abc123", ...)
+  → CartService lưu trong Valkey key="user_abc123"
+
+  Response: { reply: "Đã thêm...", session_id: "550e8400-e29b-..." }
+
+POST /api/chat { message: "giỏ hàng có gì?",
+                 session_id: "550e8400-e29b-...",
+                 user_id: "user_abc123" }
+
+  → SessionStore.get("550e8400-e29b-...") → session
+  → gRPC GetCart(user_id="user_abc123")
+  → CartService tra Valkey key="user_abc123"
+
+  Response: { reply: "Giỏ có: kính thiên văn x2", session_id: "550e8400-e29b-..." }
+```
+
+> **Lưu ý bảo mật:** `user_id` do client gửi — rủi ro IDOR nếu không có auth boundary.
+> L3 Tool Validator kiểm tra user isolation, nhưng đây là giải pháp tạm thời.
+> **Roadmap:** Copilot tự sinh session_token, không nhận user_id từ client.
 
 ---
 
@@ -508,13 +547,18 @@ In-memory session với TTL và sliding window:
 Schema mỗi session:
 ```json
 {
-  "user_id": "user_123",
-  "session_id": "uuid-...",
+  "user_id": "user_abc123",
+  "session_id": "550e8400-e29b-...",
   "created_at": "ISO8601",
   "last_active": "ISO8601",
+  "ttl_seconds": 1800,
   "messages": [
     {"role": "user|assistant|tool", "content": "...", "timestamp": "ISO8601", "tool_name": null}
   ],
+  "context_window": {
+    "max_messages": 20,
+    "strategy": "sliding_window"
+  },
   "pending_confirmation": {
     "token": "eyJ...",
     "action": "AddItem",
@@ -531,38 +575,36 @@ Schema mỗi session:
 
 **API:**
 ```python
-from memory import SessionStore, CacheStore
+from memory import SessionStore
 
 sessions = SessionStore()
 session = sessions.get_or_create(session_id, user_id)
 sessions.append_message(session_id, "user", content)
-sessions.append_message(session_id, "assistant", content)
 sessions.set_pending(session_id, token, "AddItem", params)
 sessions.clear_pending(session_id)
-sessions.touch(session_id)  # cập nhật last_active
+sessions.touch(session_id)
 ```
 
 ### 5.2 CacheStore
 
 - `_CACHE_MAX_ENTRIES = 500` — LRU eviction
 - Key: `"<tool_name>:<sha256(params)[:16]>"`
-- TTL per tool type (search: 300s, convert: 60s)
 - `_NEVER_CACHE` cho write tools: `add_to_cart_tool`, `get_cart_tool`, `get_shipping_quote_tool`
 
 ```python
 _CACHE_TTL_MAP = {
-    "search_products_tool":     300,
-    "get_product_reviews_tool": 300,
-    "get_recommendations_tool": 300,
-    "convert_currency_tool":     60,
+    "search_products_tool":     300,   # 5 phút
+    "get_product_reviews_tool": 300,   # 5 phút
+    "get_recommendations_tool": 300,   # 5 phút
+    "convert_currency_tool":     60,   # 1 phút
 }
 ```
 
 **API:**
 ```python
 cache = CacheStore()
-cached = cache.get("search_products_tool", {"query": "telescope"})
-cache.set("search_products_tool", {"query": "telescope"}, result_json)
+cached = cache.get("get_product_reviews_tool", {"product_id": "OLJCESPC7Z"})
+cache.set("get_product_reviews_tool", {"product_id": "OLJCESPC7Z"}, result_json)
 stats = cache.stats()  # {"hits": 10, "misses": 2, "hit_rate_pct": 83.3, ...}
 ```
 
@@ -570,9 +612,13 @@ stats = cache.stats()  # {"hits": 10, "misses": 2, "hit_rate_pct": 83.3, ...}
 
 ## 6. Agent Core — ReAct Loop
 
-**File:** `agent/copilot_agent.py` — chưa build. Đây là spec để implement.
+**File:** `agent/agent.py` — hiện là file rỗng, chưa có implementation.
+`agent/copilot_agent.py` — chưa tồn tại.
 
-### 6.1 Class CopilotAgent
+> Đây là spec để implement sau. Agent core sẽ gồm 1 class CopilotAgent
+> tích hợp guardrail pipeline + ReAct loop dùng LangChain.
+
+### 6.1 Class CopilotAgent (SPEC — chưa implement)
 
 ```python
 """
@@ -585,8 +631,9 @@ Entry points (được main.py gọi):
 
 import os
 import json
+import uuid
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from langchain_groq import ChatGroq
 from langchain_core.messages import AIMessage, ToolMessage, HumanMessage, SystemMessage
@@ -608,15 +655,13 @@ from tools import all_shopping_tools
 
 logger = logging.getLogger("agent.copilot_agent")
 
-# Map tool name → function
 TOOLS_MAP: Dict[str, tool] = {t.name: t for t in all_shopping_tools}
 
-# System prompt template
 SYSTEM_PROMPT = """Bạn là Shopping Copilot — trợ lý mua sắm AI cho TechX Corp.
-Chỉ hỗ trợ các tác vụ mua sắm: tìm kiếm sản phẩm, xem đánh giá, thêm vào giỏ hàng.
+Chỉ hỗ trợ các tác vụ mua sắm: tìm sản phẩm, xem đánh giá, thêm vào giỏ hàng.
 
 Các công cụ có sẵn:
-- search_products_tool: Tìm kiếm sản phẩm theo từ khoá.
+- search_products_v2: Tìm kiếm sản phẩm (hỗ trợ tiếng Việt + Anh).
 - get_product_reviews_tool: Xem đánh giá sản phẩm.
 - add_to_cart_tool: Thêm sản phẩm vào giỏ hàng.
 - get_cart_tool: Xem giỏ hàng hiện tại.
@@ -684,7 +729,7 @@ class CopilotAgent:
                     validation = validate_tool_call(
                         tool_call.name,
                         tool_call.args,
-                        session["user_id"],
+                        user_id,
                     )
                     if not validation.is_valid:
                         messages.append(AIMessage(content=validation.blocked_reason))
@@ -714,6 +759,7 @@ class CopilotAgent:
                             "status": "pending",
                             "reply": parsed["message"],
                             "token": parsed["token"],
+                            "session_id": session_id,
                         }
 
                     # Cache result (read-only tools)
@@ -739,19 +785,17 @@ class CopilotAgent:
                         getattr(response.usage_metadata, "total_tokens", 0),
                     )
 
-                return {"status": "ok", "reply": final}
+                return {"status": "ok", "reply": final, "session_id": session_id}
 
         raise MaxIterationsExceeded()
 
     def confirm(self, session_id: str, token: str) -> Dict[str, Any]:
-        # L4: Verify token
         is_valid, action_data = verify_confirmation_token(token)
         if not is_valid:
             return {"status": "error", "reply": "Token không hợp lệ hoặc đã hết hạn."}
 
-        session = self._sessions.get_or_create(session_id, action_data["user_id"])
+        session = self._sessions.get_or_create(session_id, session_id)
 
-        # Execute AddItem via gRPC
         import grpc
         from protos import demo_pb2_grpc, demo_pb2
 
@@ -766,17 +810,17 @@ class CopilotAgent:
         ))
 
         self._sessions.clear_pending(session_id)
-
         return {"status": "ok", "reply": "✅ Đã thêm vào giỏ hàng thành công!"}
 ```
 
 ### 6.2 Hướng dẫn build Agent
 
-1. Tạo file `agent/copilot_agent.py` với nội dung class ở trên
-2. Tạo 6 tool files trong `tools/` (mỗi file theo mẫu §4.2)
-3. Cập nhật `tools/__init__.py` nếu cần thêm import (hiện tại đã có)
-4. Tạo `llm/prompt.py` — export `SYSTEM_PROMPT` (có thể copy từ §6.1)
-5. Sửa `main.py` để import `CopilotAgent` từ đúng path (hiện tại đã đúng)
+1. Tạo file `agent/copilot_agent.py` với nội dung class ở §6.1
+2. Đồng bộ `ALLOWED_TOOLS` trong `guardrails/tool_validator.py` với 6 tools mới
+3. Sửa cơ chế confirmation trong `tools/cart_tool.py`: thay BYPASS bằng gọi `request_confirmation`, xử lý PENDING status
+4. Cân nhắc thay thế cơ chế `user_id` do LLM cấp bằng AUTO_INJECT từ session
+5. Điền nội dung `llm/prompt.py` với `SYSTEM_PROMPT` từ §6.1 (hoặc dùng inline trong agent)
+6. Sửa `main.py` nếu cần đổi API signature
 
 Sau khi build, chạy test với:
 ```bash
@@ -786,175 +830,108 @@ py tests/test_interactive.py --no-llm     # Full mock (test guardrail)
 
 ---
 
-## 7. Search Module (Multi-Strategy)
+## 7. API Server
 
-> **Tham chiếu:** `spec/search_design.md` — design hoàn chỉnh.
-
-### 7.1 Kiến trúc
-
-```
-User query
-    │
-    ▼
-┌──────────────────────────────────────┐
-│ Query Analyzer                       │
-│  • Regex phase (price, category,     │
-│    sort — $0, <1ms)                  │
-│  • LLM fallback (cache 24h,          │
-│    ~$0.000005/call)                  │
-└──────────┬───────────────────────────┘
-           │ SearchQuery
-           ▼
-┌──────────────────────────────────────┐
-│ Search Orchestrator                  │
-│  ┌───────────┐ ┌──────┐ ┌─────────┐ │
-│  │ Full      │ │Direct│ │Synonym  │ │
-│  │ Catalog   │ │ DB   │ │Expansion│ │
-│  │ (in-mem)  │ │(gRPC)│ │(VN→EN)  │ │
-│  └─────┬─────┘ └──┬───┘ └────┬────┘ │
-│        └────┬──────┘─────────┘       │
-│             ▼                        │
-│        Pool hợp nhất                  │
-└──────────┬───────────────────────────┘
-           ▼
-┌──────────────────────────────────────┐
-│ Result Merger & Ranker               │
-│  • Dedup theo product_id             │
-│  • Rule-based scoring                │
-│  • Price filter                      │
-│  • Top 15                            │
-└──────────┬───────────────────────────┘
-           ▼
-┌──────────────────────────────────────┐
-│ LLM Rerank (conditional)             │
-│  • pool > 5 AND query phức tạp       │
-│  • ~200 tokens = ~$0.00001           │
-└──────────┬───────────────────────────┘
-           ▼
-┌──────────────────────────────────────┐
-│ Result Formatter → LLM tổng hợp      │
-└──────────────────────────────────────┘
-```
-
-### 7.2 Các Strategy
-
-| Strategy | Luôn chạy? | Cost | Mô tả |
-|---|---|---|---|
-| `FullCatalogStrategy` | ✅ Luôn | $0 | Cache full catalog, filter in-memory |
-| `DirectDBStrategy` | ✅ Luôn | $0 | gRPC SearchProducts với nhiều query variant |
-| `SynonymExpansionStrategy` | ⚡ Khi có VN keywords | $0 / ~$0.000008 | VN→EN mapping + tự học qua LLM |
-
-### 7.3 Thay đổi khi migration
-
-Sau khi build `tools/search/`:
-- `tools/__init__.py`: thêm `from tools.search import search_products_v2`
-- Thay `search_products_tool` bằng `search_products_v2` trong `all_shopping_tools`
-- Cập nhật system prompt mô tả tool mới
-- `memory/store.py`: thêm `"search_products_v2": 300` vào `_CACHE_TTL_MAP`
-
----
-
-## 8. API Server
-
-**File:** `main.py` — ✅ Đã build, chạy được.
+**File:** `main.py` — ✅ Đã build. Dùng `session_id` (UUID do client tạo) + `user_id` (do client gửi).
 
 FastAPI với 4 endpoints:
 
 | Method | Path | Mô tả | Request | Response |
 |---|---|---|---|---|
-| `POST` | `/api/chat` | Gửi tin nhắn | `{message, session_id?, user_id?}` | `{status, reply, token?}` |
+| `POST` | `/api/chat` | Gửi tin nhắn | `{message, session_id, user_id}` | `{status, reply, token?, session_id}` |
 | `POST` | `/api/confirm` | Xác nhận hành động ghi | `{session_id, token}` | `{status, reply}` |
 | `GET` | `/health` | Health check | — | `{status: "ok"}` |
 | `GET` | `/` | Server info | — | `{service, version, endpoints}` |
 
 **CORS:** `allow_origins=["*"]`.
 
+**ChatRequest (hiện tại):**
+```python
+class ChatRequest(BaseModel):
+    message: str = Field(..., description="Tin nhắn của người dùng")
+    session_id: str = Field(default_factory=lambda: str(uuid.uuid4()),
+                            description="ID phiên chat")
+    user_id: str = Field(default="anonymous", description="ID người dùng")
+```
+
+**ConfimRequest (hiện tại):**
+```python
+class ConfirmRequest(BaseModel):
+    session_id: str = Field(..., description="ID phiên chat")
+    token: str = Field(..., description="HMAC token từ agent")
+```
+
 **Chạy:**
 ```bash
 py -m uvicorn main:app --reload --port 8001
-# hoặc
 py main.py
 ```
 
 ---
 
-## 9. Luồng xử lý tổng thể
+## 8. Luồng xử lý tổng thể
 
-### 9.1 Luồng Chat (Read Operation)
+### 8.1 Luồng Chat
 
 ```
-User → POST /api/chat {message: "tìm kính thiên văn"}
+POST /api/chat {message: "giỏ hàng có gì?",
+                session_id: "550e8400-e29b-...",
+                user_id: "user_abc123"}
   │
   ├─ main.py: agent.chat(session_id, user_id, message)
   │
-  ├─ [L6] @with_fallback ────────────────────────────── bọc exception
-  ├─ [L1] rate_limiter.check_rate_limit(user_id) ────── < 10 req/min
-  ├─ [L2a] check_input(message) ────────────────────── regex scan (38 patterns)
-  │
-  ├─ SessionStore.get_or_create(session_id, user_id)
-  ├─ Build messages: system prompt + history + user message
-  │
-  ├─ ReAct Loop:
-  │   ├─ LLM.invoke(messages) → tool_call (search_products_tool)
-  │   │
-  │   ├─ [L3] validate_tool_call(name, args, session.user_id)
-  │   │   ├─ Tool trong ALLOWED_TOOLS? ✅
-  │   │   ├─ user_id khớp session? ✅
-  │   │   └─ params hợp lệ? ✅
-  │   │
-  │   ├─ CacheStore.get("search_products_tool", {query})
-  │   │   ├─ HIT → dùng cached → append ToolMessage
-  │   │   └─ MISS → tool_fn.invoke(args)
-  │   │
-  │   ├─ Tool gọi gRPC SearchProducts(query) → ProductCatalog
-  │   ├─ CacheStore.set(...) → cache kết quả
-  │   └─ append ToolMessage(content) → quay lại LLM
-  │
-  ├─ LLM.invoke(messages) → final answer (không tool_call)
-  │
-  ├─ [L5] filter_output(final_answer)
-  │   ├─ Scan PII patterns → redact nếu có
-  │   └─ Scan internal info patterns → redact nếu có
-  │
-  ├─ SessionStore.append_message(session_id, "assistant", final)
-  ├─ rate_limiter.record_token_usage(user_id, tokens)
-  │
-  └─ Return {status: "ok", reply: "..."}
-```
-
-### 9.2 Luồng Confirm (Write Operation)
-
-```
-User → POST /api/chat {message: "thêm 2 kính vào giỏ"}
-  │
-  ├─ ... L1, L2a, Session ...
+  ├─ [L6] @with_fallback
+  ├─ [L1] rate_limiter.check_rate_limit(user_id)
+  ├─ [L2a] check_input(message) → regex scan
+  ├─ Session: get_or_create(session_id, user_id)
+  ├─ Build messages
   │
   ├─ ReAct Loop:
-  │   ├─ LLM.invoke → tool_call (add_to_cart_tool, args)
+  │   ├─ LLM.invoke → tool_call(get_cart_tool, {user_id})
+  │   ├─ [L3] validate_tool_call(user_id="user_abc123") → ✅
+  │   ├─ Tool gọi gRPC GetCart(user_id="user_abc123") → CartService
+  │   └─ append ToolMessage → quay lại LLM
+  │
+  ├─ LLM → final answer
+  ├─ [L5] filter_output
+  │
+  └─ Return {reply: "Giỏ hàng trống.", session_id: "550e8400-e29b-..."}
+```
+
+### 8.2 Luồng Chat — AddItem (BYPASS mode)
+
+```
+POST /api/chat {message: "thêm kính vào giỏ",
+                session_id: "550e8400-e29b-...",
+                user_id: "user_abc123"}
+  │
+  ├─ ... L1, L2a ...
+  │
+  ├─ ReAct Loop:
+  │   ├─ LLM.invoke → tool_call(add_to_cart_tool,
+  │   │                        {user_id, product_id, quantity})
   │   ├─ [L3] validate_tool_call → ✅
-  │   └─ tool_fn.invoke → request_confirmation("AddItem", args)
-  │       → ⏳ PENDING + HMAC token
-  │
-  └─ Return {status: "pending", token: "eyJ...", reply: "Vui lòng xác nhận"}
-         │
-         ▼
-User bấm [Xác nhận] trên Frontend
-         │
-         ▼
-POST /api/confirm {session_id, token}
+  │   ├─ Tool gọi gRPC AddItem(user_id="user_abc123", ...) — BYPASS
+  │   └─ Return {status: "ok", reply: "Đã thêm thành công!"}
+```
+
+### 8.3 Luồng Confirm (HIỆN TẠI: chưa active do BYPASS mode)
+
+```
+POST /api/confirm {session_id: "550e8400-e29b-...", token: "eyJ..."}
   │
   ├─ [L4] verify_confirmation_token(token)
   │   ├─ Format đúng? → ✅
   │   ├─ HMAC signature đúng? → ✅
   │   └─ Token chưa hết hạn (< 5 phút)? → ✅
   │
-  ├─ Gọi gRPC AddItem(user_id, product_id, quantity) → CartService
+  ├─ Gọi gRPC AddItem(user_id=action_data["user_id"], ...) → CartService
   ├─ SessionStore.clear_pending(session_id)
   │
   └─ Return {status: "ok", reply: "✅ Đã thêm vào giỏ hàng!"}
 ```
 
-### 9.3 Luồng Error
+### 8.4 Luồng Error
 
 ```
 Bất kỳ exception nào trong Agent.chat():
@@ -965,50 +942,46 @@ Bất kỳ exception nào trong Agent.chat():
       └─ Exception khác → "Đã có lỗi xảy ra. Vui lòng thử lại sau."
 ```
 
-### 9.4 Sơ đồ sequence đầy đủ
+### 8.5 Sơ đồ sequence đầy đủ
 
 ```mermaid
 sequenceDiagram
     participant U as 👤 User
-    participant FE as 🖥️ Frontend
+    participant FE as 🖥️ Client App
     participant API as 🚀 FastAPI
-    participant Agent as 🤖 CopilotAgent
+    participant Agent as 🤖 CopilotAgent (spec)
     participant GR as 🛡️ Guardrails
     participant LLM as 🧠 Groq LLM
-    participant EKS as ☸️ EKS (gRPC)
+    participant EKS as ☸️ CartService (gRPC)
 
-    U->>FE: "tìm kính thiên văn dưới 100 đô"
-    FE->>API: POST /api/chat
-    API->>Agent: chat(session, user, msg)
+    U->>FE: "giỏ hàng có gì?"
+    FE->>API: POST /api/chat {message, session_id, user_id}
+    API->>Agent: chat(session_id, user_id, msg)
 
     Agent->>GR: L1 Rate Limiter
     Agent->>GR: L2a Input Filter (Regex)
-    Agent->>Agent: Get/Create Session
+    Agent->>Agent: get_or_create Session
     Agent->>Agent: Build Messages
 
-    loop ReAct (max 3 iterations)
+    loop ReAct (max 3)
         Agent->>LLM: invoke(messages)
-        LLM-->>Agent: tool_call(search_products)
-        Agent->>GR: L3 validate_tool_call
-        Agent->>Agent: Cache check
-        Agent->>EKS: gRPC SearchProducts(query)
-        EKS-->>Agent: products[]
-        Agent->>Agent: Cache set
+        LLM-->>Agent: tool_call(get_cart_tool, {user_id})
+        Agent->>GR: L3 validate_tool_call(user_id)
+        Agent->>EKS: gRPC GetCart(user_id)
+        EKS-->>Agent: Cart{items: []}
         Agent->>Agent: append ToolMessage
     end
 
-    LLM-->>Agent: final answer (text)
+    LLM-->>Agent: "Giỏ hàng trống"
     Agent->>GR: L5 Output Filter
-    Agent->>Agent: Save to Session
-
-    Agent-->>API: {status: "ok", reply: "..."}
+    Agent-->>API: {reply, session_id}
     API-->>FE: JSON response
-    FE-->>U: 💬 "Có các sản phẩm..."
+    FE-->>U: 💬 "Giỏ hàng của bạn đang trống."
 ```
 
 ---
 
-## 10. Cấu hình & Biến môi trường
+## 9. Cấu hình & Biến môi trường
 
 **File:** `.env`
 
@@ -1017,53 +990,49 @@ sequenceDiagram
 | `GROQ_API_KEY` | — | API key cho Groq LLM inference |
 | `GROQ_MODEL` | `qwen/qwen3.6-27b` | Model ID trên Groq |
 | `CATALOG_ADDR` | `localhost:3550` | gRPC ProductCatalog address |
-| `CART_ADDR` | `localhost:7070` | gRPC Cart address |
-| `REVIEWS_ADDR` | `localhost:9090` | gRPC ProductReview address |
-| `RECO_ADDR` | `localhost:8081` | gRPC Recommendation address |
-| `CURRENCY_ADDR` | `localhost:7001` | gRPC Currency address |
-| `SHIPPING_ADDR` | `http://localhost:50051` | REST Shipping address |
-| `COPILOT_CONFIRMATION_SECRET` | `tf3-copilot-dev-secret...` | HMAC signing key cho confirmation token |
+| `CART_ADDR` | `cart:7070` | gRPC Cart address |
+| `REVIEWS_ADDR` | `product-reviews:9090` | gRPC ProductReview address |
+| `RECO_ADDR` | `recommendation:8080` | gRPC Recommendation address |
+| `CURRENCY_ADDR` | `currency:7001` | gRPC Currency address |
+| `SHIPPING_ADDR` | `http://shipping:50051` | REST Shipping address |
+| `COPILOT_CONFIRMATION_SECRET` | `tf3-copilot-dev-secret...` | HMAC signing key |
 | `PORT` | `8001` | FastAPI server port |
 
 ---
 
-## 11. Chi phí vận hành
+## 10. Chi phí vận hành
 
-### 11.1 Chi phí mỗi request (path thông thường)
+### 10.1 Chi phí mỗi request
 
 | Path | LLM calls | Tokens | Cost | Latency |
 |---|---|---|---|---|
 | Simple query (cache hit) | 1 | ~200 | ~$0.00001 | ~200ms |
 | Simple query (cache miss) | 1 | ~200 | ~$0.00001 | ~500ms |
-| Search with LLM rerank | 2 | ~400 | ~$0.00002 | ~1.2s |
-| Synonym LLM translate miss | 2 (small + main) | ~350 | ~$0.00002 | ~1s |
 
-### 11.2 Chi phí Guardrail
+### 10.2 Chi phí Guardrail
 
 | Lớp | Cost/request | Ghi chú |
 |---|---|---|
 | L1 Rate Limiter | $0 | In-memory |
 | L2a Regex | $0 | Local compute |
-| L2b Bedrock Guardrails | ~$0.001 | Chỉ khi có AWS credential, chưa tích hợp |
+| L2b Bedrock Guardrails | ~$0.001 | Chỉ khi có AWS credential |
 | L3-L5 | $0 | Local compute |
 | L6 Fallback | $0 | Chỉ khi có lỗi |
 
-### 11.3 1000 request/ngày (dự kiến)
+### 10.3 1000 request/ngày (dự kiến)
 
 | Hạng mục | Cost/ngày |
 |---|---|
-| LLM inference (main, 7 tool calls trung bình) | ~$0.01 - $0.07 |
-| LLM parse cache miss (10%) | ~$0.0005 |
-| Synonym LLM miss (4%) | ~$0.00032 |
+| LLM inference (main) | ~$0.01 - $0.05 |
 | Bedrock Guardrails (nếu bật) | ~$1.00 |
-| **Total (không Bedrock)** | **~$0.02 - $0.08/ngày** |
-| **Total (có Bedrock)** | **~$1.02 - $1.08/ngày** |
+| **Total (không Bedrock)** | **~$0.01 - $0.05/ngày** |
+| **Total (có Bedrock)** | **~$1.01 - $1.05/ngày** |
 
 ---
 
-## 12. Kiểm thử
+## 11. Kiểm thử
 
-### 12.1 Interactive CLI Test
+### 11.1 Interactive CLI Test
 
 **File:** `tests/test_interactive.py` — ✅ Đã build.
 
@@ -1085,7 +1054,7 @@ Commands:
 | `/new` | Tạo session mới |
 | `/quit` | Thoát |
 
-### 12.2 Ma trận kiểm thử Guardrail
+### 11.2 Ma trận kiểm thử Guardrail
 
 | # | Test Case | Layer | Input | Kỳ vọng |
 |---|---|---|---|---|
@@ -1106,39 +1075,47 @@ Commands:
 
 ---
 
-## 13. Hạn chế & Roadmap
+## 12. Hạn chế & Roadmap
 
-### 13.1 Hạn chế đã biết
+### 12.1 Hạn chế đã biết
 
 | # | Hạn chế | Ảnh hưởng | Kế hoạch khắc phục |
-|---|---|---|---|
+|---|---|---|---|---|
 | 1 | Rate Limiter per-pod | User có thể gửi N×10 req/phút qua N replicas | Valkey/Redis global limiter |
 | 2 | Session/Cache in-memory | Mất dữ liệu khi pod restart hoặc scale | Valkey session store |
-| 3 | Tool files (6 files) chưa build | Agent không thể gọi gRPC | Build Phase 2 |
-| 4 | Agent `copilot_agent.py` chưa build | Chưa có ReAct loop thật | Build theo spec §6 |
-| 5 | Search V2 `tools/search/` chưa build | Search chỉ dùng gRPC đơn giản | Build theo spec/search_design.md |
-| 6 | Chưa có pytest unit test | Cần test coverage guardrail | Thêm pytest tests |
-| 7 | Chưa tích hợp Bedrock Guardrails | Tầng L2b chưa hoạt động | Cần AWS creds + boto3 |
-| 8 | `llm/llm.py` + `llm/prompt.py` trống | Cần tách system prompt ra file riêng | Refactor nhỏ |
+| 3 | Agent `agent/copilot_agent.py` chưa build | Chưa có ReAct loop thật | Build theo spec §6 |
+| 4 | `add_to_cart_tool` chạy BYPASS mode | Bỏ qua confirmation gate | Tích hợp `request_confirmation` + PENDING flow |
+| 5 | `user_id` do LLM cấp (không AUTO_INJECT) | Rủi ro IDOR nếu LLM bịa sai user_id | Implement AUTO_INJECT_USER_TOOLS |
+| 6 | `ALLOWED_TOOLS` chỉ có 4/7 tools | search_products_v2, recommendation, currency, shipping bị L3 chặn | Đồng bộ ALLOWED_TOOLS với all_shopping_tools |
+| 7 | Chưa có pytest unit test | Cần test coverage guardrail | Thêm pytest tests |
+| 8 | Chưa tích hợp Bedrock Guardrails | Tầng L2b chưa hoạt động | Cần AWS creds + boto3 |
+| 9 | `llm/prompt.py` trống | System prompt chưa tách riêng | Copy từ spec §6.1 vào file |
+| 10 | `llm/llm.py` dùng Groq native client | Không bind_tools() LangChain | Refactor sang langchain-groq `ChatGroq` |
 
-### 13.2 Roadmap
+### 12.2 Roadmap
 
-**Phase 1 — Core Agent (Hiện tại — tuần 1)**
+**Phase 1 — Core Agent (Tuần 1) — Đã xong**
 - ✅ Guardrail 6 layers
 - ✅ Memory store (session + cache)
 - ✅ API server (FastAPI + endpoints)
-- ✅ Spec design (search + guardrail + agentic)
+- ✅ Tool implementations (6 files: 5 gRPC/REST + search module)
+- ✅ LLM client (`llm/llm.py` — Groq API)
+- ✅ Spec design (agentic + guardrail)
 - ✅ Interactive test CLI
-- ⏳ Tool implementations (6 files: `catalog_tool.py`, `cart_tool.py`, ...)
-- ⏳ Agent ReAct loop (`agent/copilot_agent.py`)
 
-**Phase 2 — Search & Migration (tuần 2)**
-- ⏳ Build `tools/search/` module (8 files theo spec/search_design.md)
-- ⏳ Migrate `search_products_tool` → `search_products_v2`
+**Phase 2 — Agent ReAct Loop (Tuần 1-2) — ĐANG LÀM**
+- ⏳ `agent/copilot_agent.py` — CopilotAgent class với guardrail pipeline
+- ⏳ Đồng bộ `ALLOWED_TOOLS` với `all_shopping_tools` (hiện chỉ 4/7)
+- ⏳ Tích hợp confirmation gate vào `add_to_cart_tool` (thay BYPASS)
+- ⏳ Implement AUTO_INJECT_USER_TOOLS cho user_id
+- ⏳ Điền `llm/prompt.py` với SYSTEM_PROMPT
+
+**Phase 3 — Integration & Testing (Tuần 2)**
 - ⏳ Integration tests với EKS port-forward
 - ⏳ Pytest unit tests cho guardrails
+- ⏳ Cross-VPC / PrivateLink connectivity
 
-**Phase 3 — Production Hardening (tuần 3)**
+**Phase 4 — Production Hardening (Tuần 3)**
 - ⏳ Valkey/Redis cho rate limiter + session store
 - ⏳ OpenTelemetry metrics (`guardrail_blocked_total{layer,reason}`)
 - ⏳ AWS Bedrock Guardrails integration (L2b)
@@ -1147,5 +1124,5 @@ Commands:
 ---
 
 > **Tác giả:** AIO02 — TF3 | **Ngày:** 2026-07-10
-> **Tham chiếu:** `spec/search_design.md`, `spec/guardrail_design_doc.md`
+> **Tham chiếu:** `spec/guardrail_design_doc.md`
 > Cập nhật tài liệu này khi có thay đổi kiến trúc hoặc thêm module mới.
