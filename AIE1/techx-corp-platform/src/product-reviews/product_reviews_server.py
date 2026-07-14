@@ -38,7 +38,12 @@ from metrics import (
 )
 
 # OpenAI
-from openai import OpenAI
+from openai import OpenAI, OpenAIError
+
+# Guardrails
+from guardrails.input_filter import check_input
+from guardrails.output_filter import filter_output
+from guardrails.fallback import handle_exception
 
 from google.protobuf.json_format import MessageToJson, MessageToDict
 
@@ -161,6 +166,12 @@ def get_ai_assistant_response(request_product_id, question):
         span.set_attribute("app.product.id", request_product_id)
         span.set_attribute("app.product.question", question)
 
+        # 1. User Input Guardrail
+        input_check = check_input(question)
+        if not input_check.is_safe:
+            ai_assistant_response.response = input_check.blocked_reason
+            return ai_assistant_response
+
         llm_rate_limit_error = check_feature_flag("llmRateLimitError")
         logger.info(f"llmRateLimitError feature flag: {llm_rate_limit_error}")
         if llm_rate_limit_error:
@@ -179,7 +190,16 @@ def get_ai_assistant_response(request_product_id, question):
 
                 user_prompt = f"Answer the following question about product ID:{request_product_id}: {question}"
                 messages = [
-                   {"role": "system", "content": "You are a helpful assistant that answers related to a specific product. Use tools as needed to fetch the product reviews and product information. Keep the response brief with no more than 1-2 sentences. If you don't know the answer, just say you don't know."},
+                   {"role": "system", "content": (
+                       "You are a product review assistant for TechX Corp. "
+                       "Your ONLY job is to answer questions about a specific product based on its reviews and product info. "
+                       "Use tools as needed to fetch product reviews and product information. "
+                       "Keep responses brief (1-2 sentences). "
+                       "STRICT RULES — you MUST follow these without exception:\n"
+                       "1. If the question is NOT about this product (e.g. math, general knowledge, coding, weather, anything unrelated to the product): respond with exactly 'OUT_OF_SCOPE'.\n"
+                       "2. If the question IS about the product but the reviews/info do not contain the answer: respond with exactly 'NO_INFO'.\n"
+                       "3. Never make up or infer information not present in the provided reviews or product data."
+                   )},
                    {"role": "user", "content": user_prompt}
                 ]
                 logger.info(f"Invoking mock LLM with model: techx-llm-rate-limit")
@@ -210,17 +230,31 @@ def get_ai_assistant_response(request_product_id, question):
 
         user_prompt = f"Answer the following question about product ID:{request_product_id}: {question}"
         messages = [
-           {"role": "system", "content": "You are a helpful assistant that answers related to a specific product. Use tools as needed to fetch the product reviews and product information. Keep the response brief with no more than 1-2 sentences. If you don't know the answer, just say you don't know."},
+           {"role": "system", "content": (
+               "You are a product review assistant for TechX Corp. "
+               "Your ONLY job is to answer questions about a specific product based on its reviews and product info. "
+               "Use tools as needed to fetch product reviews and product information. "
+               "Keep responses brief (1-2 sentences). "
+               "STRICT RULES — you MUST follow these without exception:\n"
+               "1. If the question is NOT about this product (e.g. math, general knowledge, coding, weather, anything unrelated to the product): respond with exactly 'OUT_OF_SCOPE'.\n"
+               "2. If the question IS about the product but the reviews/info do not contain the answer: respond with exactly 'NO_INFO'.\n"
+               "3. Never make up or infer information not present in the provided reviews or product data."
+           )},
            {"role": "user", "content": user_prompt}
         ]
 
-        # use the LLM to summarize the product reviews
-        initial_response = client.chat.completions.create(
-            model=llm_model,
-            messages=messages,
-            tools=tools,
-            tool_choice="auto"
-        )
+        try:
+            # use the LLM to summarize the product reviews
+            initial_response = client.chat.completions.create(
+                model=llm_model,
+                messages=messages,
+                tools=tools,
+                tool_choice="auto",
+                timeout=3.0 # Strict timeout for fallback
+            )
+        except Exception as e:
+            ai_assistant_response.response = handle_exception(e)
+            return ai_assistant_response
 
         response_message = initial_response.choices[0].message
         tool_calls = response_message.tool_calls
@@ -242,9 +276,28 @@ def get_ai_assistant_response(request_product_id, question):
                 logger.info(f"Processing tool call: '{function_name}' with arguments: {function_args}")
 
                 if function_name == "fetch_product_reviews":
-                    function_response = fetch_product_reviews(
+                    function_response_raw = fetch_product_reviews(
                         product_id=function_args.get("product_id")
                     )
+                    
+                    # 2. Review Content Guardrail
+                    try:
+                        reviews_data = json.loads(function_response_raw)
+                        safe_reviews = []
+                        for review in reviews_data:
+                            # review is [username, description, score]
+                            if len(review) >= 2:
+                                desc = review[1]
+                                if check_input(desc).is_safe:
+                                    safe_reviews.append(review)
+                                else:
+                                    review[1] = "[Review removed due to security policy]"
+                                    safe_reviews.append(review)
+                        function_response = json.dumps(safe_reviews)
+                    except Exception as e:
+                        logger.error(f"Error filtering reviews: {e}")
+                        function_response = function_response_raw
+                        
                     logger.info(f"Function response for fetch_product_reviews: '{function_response}'")
 
                 elif function_name == "fetch_product_info":
@@ -289,12 +342,26 @@ def get_ai_assistant_response(request_product_id, question):
 
             logger.info(f"Invoking the LLM with the following messages: '{messages}'")
 
-            final_response = client.chat.completions.create(
-                model=llm_model,
-                messages=messages
-            )
+            try:
+                final_response = client.chat.completions.create(
+                    model=llm_model,
+                    messages=messages,
+                    timeout=3.0 # Strict timeout for fallback
+                )
+            except Exception as e:
+                ai_assistant_response.response = handle_exception(e)
+                return ai_assistant_response
 
             result = final_response.choices[0].message.content
+            
+            # 3. Output Guardrail & Hallucination Check
+            if "OUT_OF_SCOPE" in result:
+                result = "Câu hỏi này nằm ngoài phạm vi hỗ trợ. Tôi chỉ trả lời các câu hỏi liên quan đến sản phẩm."
+            elif "NO_INFO" in result:
+                result = "Không có thông tin trong đánh giá."
+            else:
+                output_check = filter_output(result)
+                result = output_check.filtered_response
 
             ai_assistant_response.response = result
 
@@ -302,7 +369,18 @@ def get_ai_assistant_response(request_product_id, question):
 
         else:
             logger.info(f"Returning an AI assistant response: '{response_message}'")
-            ai_assistant_response.response = response_message.content
+            
+            result = response_message.content
+            # 3. Output Guardrail & Hallucination Check
+            if "OUT_OF_SCOPE" in result:
+                result = "Câu hỏi này nằm ngoài phạm vi hỗ trợ. Tôi chỉ trả lời các câu hỏi liên quan đến sản phẩm."
+            elif "NO_INFO" in result:
+                result = "Không có thông tin trong đánh giá."
+            else:
+                output_check = filter_output(result)
+                result = output_check.filtered_response
+
+            ai_assistant_response.response = result
 
         # Collect metrics for this service
         product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
