@@ -66,3 +66,23 @@ AIE xuất các Prometheus Metrics theo định dạng OpenTelemetry Prometheus 
 * **Export Interval:**
   * Traces: Batch export mỗi 5 giây.
   * Metrics: Pull-based Prometheus endpoint `/metrics` hoặc Push-based OTLP metric exporter mỗi 30 giây.
+
+---
+
+## 5. Phân định Trách nhiệm Giám sát (Monitoring Ownership)
+
+Để tối ưu hóa vận hành, trách nhiệm giám sát (Alerting & Dashboards) được phân định rõ ràng giữa hai nhóm:
+
+### 5.1 Nhóm AI (AIE Team) - Giám sát tầng Ứng dụng & Nghiệp vụ AI
+Nhóm AI chịu trách nhiệm thiết lập Dashboard và Cảnh báo cho các chỉ số đặc thù của AI:
+* **Token & Chi phí:** Theo dõi lượng token tiêu thụ (`copilot_llm_tokens_total`) để kiểm soát hóa đơn AWS Bedrock.
+* **Độ an toàn (Guardrails):** Theo dõi số lượng request bị block bởi các lớp Guardrail (`copilot_guardrail_blocks_total`) để phát hiện tấn công Prompt Injection hoặc lỗi logic lọc dữ liệu.
+* **Hiệu năng ReAct Loop:** Theo dõi độ trễ của từng bước trong Agent (`LLMInvoke`, `InputFilter`, `OutputFilter`, `Exec: <tool_name>`).
+* **Hành vi gọi Tool:** Thống kê tỷ lệ gọi thành công/thất bại của các tools (`copilot_tool_calls_total`).
+
+### 5.2 Nhóm DevOps/Platform (CDO Team) - Giám sát Hạ tầng & Kết nối mạng
+Nhóm CDO chịu trách nhiệm thiết lập Dashboard và Cảnh báo cho các chỉ số hạ tầng vật lý:
+* **Tài nguyên tính toán:** CPU/RAM của EKS Pods, trạng thái khởi động Pod, số lượng replica thực tế.
+* **Mạng & Cổng kết nối:** Trạng thái hoạt động của VPC Endpoint kết nối Bedrock, kết nối gRPC nội bộ giữa các microservices.
+* **Lưu lượng tổng:** Số lượng request và HTTP status code tổng quát tại Application Load Balancer (ALB).
+* **Database & Storage:** Tài nguyên máy chủ RDS PostgreSQL (CPU, IOPS, Connections).
