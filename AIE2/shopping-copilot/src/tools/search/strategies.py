@@ -383,7 +383,7 @@ class BedrockRAGStrategy(SearchStrategy):
 
     def __init__(self):
         self._kb_id = os.environ.get("BEDROCK_KB_ID")
-        self._region = os.environ.get("AWS_REGION", "ap-southeast-1")
+        self._region = os.environ.get("BEDROCK_KB_REGION", "us-east-1")
 
     @property
     def name(self) -> str:
