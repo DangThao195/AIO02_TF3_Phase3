@@ -23,6 +23,11 @@ from openai import (
     AuthenticationError,
     PermissionDeniedError,
 )
+try:
+    from botocore.exceptions import ClientError, BotoCoreError
+except ImportError:  # pragma: no cover
+    ClientError = None
+    BotoCoreError = None
 
 try:
     from tenacity import (
@@ -62,6 +67,21 @@ def _is_transient(exc: BaseException) -> bool:
     """
     if isinstance(exc, _NON_RETRYABLE):
         return False
+    if ClientError is not None and isinstance(exc, ClientError):
+        error_code = str(exc.response.get("Error", {}).get("Code", "")).lower()
+        if error_code in {"validationexception", "accessdeniedexception", "unrecognizedclientexception"}:
+            return False
+        if error_code in {
+            "throttlingexception",
+            "toomanyrequestsexception",
+            "internalserverexception",
+            "serviceunavailableexception",
+            "modeltimeoutexception",
+        }:
+            return True
+        return True
+    if BotoCoreError is not None and isinstance(exc, BotoCoreError):
+        return True
     if isinstance(exc, (RateLimitError, InternalServerError, APIConnectionError)):
         return True
     # Với các OpenAIError khác (status không rõ) → retry thận trọng

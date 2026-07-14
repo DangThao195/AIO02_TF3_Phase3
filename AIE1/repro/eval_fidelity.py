@@ -23,6 +23,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
+try:
+    import boto3
+except ImportError:  # pragma: no cover
+    boto3 = None
+
 import grpc
 import psycopg2
 from openai import OpenAI
@@ -40,10 +45,12 @@ except ImportError as exc:
 
 DB_CONN = os.environ.get(
     "DB_CONNECTION_STRING",
-    "Host=localhost;Username=otelu;Password=otelp;Database=demo;Port=5432",
+    "Host=localhost;Username=otelu;Password=otelp;Database=otel;Port=5432",
 )
-PRODUCT_REVIEWS_ADDR = os.environ.get("PRODUCT_REVIEWS_ADDR", "localhost:50054")
-JUDGE_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+PRODUCT_REVIEWS_ADDR = os.environ.get("PRODUCT_REVIEWS_ADDR", "localhost:8085")
+JUDGE_PROVIDER = os.environ.get("JUDGE_PROVIDER", "openai").lower()
+JUDGE_REGION = os.environ.get("JUDGE_REGION", os.environ.get("AWS_REGION", "us-east-1"))
+JUDGE_API_KEY = os.environ.get("JUDGE_API_KEY", os.environ.get("OPENAI_API_KEY", ""))
 JUDGE_BASE_URL = os.environ.get("JUDGE_BASE_URL", "https://api.openai.com/v1")
 DEFAULT_JUDGE_MODEL = os.environ.get("JUDGE_MODEL", "gpt-4o-mini")
 
@@ -101,14 +108,25 @@ def parse_args() -> argparse.Namespace:
         help="Evaluate every distinct product_id that has at least one review in the database.",
     )
     parser.add_argument(
+        "--judge-provider",
+        default=JUDGE_PROVIDER,
+        choices=["openai", "bedrock"],
+        help="Judge provider to use.",
+    )
+    parser.add_argument(
         "--judge-model",
         default=DEFAULT_JUDGE_MODEL,
-        help="OpenAI-compatible judge model id.",
+        help="Judge model id.",
     )
     parser.add_argument(
         "--judge-base-url",
         default=JUDGE_BASE_URL,
         help="OpenAI-compatible base URL for the judge model.",
+    )
+    parser.add_argument(
+        "--judge-region",
+        default=JUDGE_REGION,
+        help="AWS region for Bedrock judge calls.",
     )
     parser.add_argument(
         "--grpc-timeout-seconds",
@@ -137,7 +155,16 @@ def parse_args() -> argparse.Namespace:
 
 def parse_db_conn_string(conn_str: str) -> Dict[str, str]:
     result: Dict[str, str] = {}
-    for part in conn_str.split(";"):
+    normalized = (conn_str or "").strip()
+    if not normalized:
+        return result
+
+    if ";" in normalized:
+        parts = normalized.split(";")
+    else:
+        parts = normalized.split()
+
+    for part in parts:
         if "=" not in part:
             continue
         key, value = part.split("=", 1)
@@ -149,9 +176,9 @@ def open_db_connection():
     conn_dict = parse_db_conn_string(DB_CONN)
     return psycopg2.connect(
         host=conn_dict.get("host", "localhost"),
-        user=conn_dict.get("username", "otelu"),
+        user=conn_dict.get("username", conn_dict.get("user", "otelu")),
         password=conn_dict.get("password", "otelp"),
-        database=conn_dict.get("database", "demo"),
+        database=conn_dict.get("database", conn_dict.get("dbname", "otel")),
         port=conn_dict.get("port", "5432"),
     )
 
@@ -464,20 +491,35 @@ def judge_fidelity(
     judge_model: str,
     judge_base_url: str,
     judge_timeout_seconds: int,
+    judge_provider: str,
+    judge_region: str,
 ) -> Dict[str, Any]:
-    if not JUDGE_API_KEY:
-        raise RuntimeError("OPENAI_API_KEY is required for LLM judge evaluation.")
-
-    client = OpenAI(api_key=JUDGE_API_KEY, base_url=judge_base_url)
     prompt = build_judge_prompt(product_id, raw_reviews, fact_sheet, ai_summary)
-    response = client.chat.completions.create(
-        model=judge_model,
-        messages=[{"role": "user", "content": prompt}],
-        response_format={"type": "json_object"},
-        timeout=judge_timeout_seconds,
-    )
 
-    payload = parse_judge_payload(response.choices[0].message.content)
+    if judge_provider == "bedrock":
+        if boto3 is None:
+            raise RuntimeError("boto3 is required for judge_provider=bedrock. Install boto3 before running the evaluator.")
+        client = boto3.client("bedrock-runtime", region_name=judge_region)
+        response = client.converse(
+            modelId=judge_model,
+            system=[{"text": "You are a strict factual auditor for AI-generated product-review summaries. Return JSON only."}],
+            messages=[{"role": "user", "content": [{"text": prompt}]}],
+            inferenceConfig={"temperature": 0.0, "maxTokens": 1200},
+        )
+        response_text = response["output"]["message"]["content"][0]["text"]
+    else:
+        if not JUDGE_API_KEY:
+            raise RuntimeError("JUDGE_API_KEY or OPENAI_API_KEY is required for OpenAI-compatible judge evaluation.")
+        client = OpenAI(api_key=JUDGE_API_KEY, base_url=judge_base_url)
+        response = client.chat.completions.create(
+            model=judge_model,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+            timeout=judge_timeout_seconds,
+        )
+        response_text = response.choices[0].message.content
+
+    payload = parse_judge_payload(response_text)
     metrics = payload.get("summary_metrics", {})
     claims = payload.get("claims", [])
 
@@ -549,6 +591,10 @@ def aggregate_case_result(
     error: str = "",
 ) -> Dict[str, Any]:
     if error:
+        format_passed = bool(rule_checks.get("format_passed", False))
+        failure_reasons = ["invalid_run"]
+        if not format_passed:
+            failure_reasons.extend(rule_checks.get("format_findings", []))
         return {
             "product_id": product_id,
             "status": "invalid_run",
@@ -559,9 +605,9 @@ def aggregate_case_result(
             "rule_checks": rule_checks,
             "judge_result": None,
             "fidelity_passed": False,
-            "format_passed": False,
+            "format_passed": format_passed,
             "passed": False,
-            "failure_reasons": ["invalid_run"],
+            "failure_reasons": failure_reasons,
         }
 
     if rule_checks["hard_fail"]:
@@ -651,6 +697,8 @@ def evaluate_one_product(
     product_id: str,
     judge_model: str,
     judge_base_url: str,
+    judge_provider: str,
+    judge_region: str,
     grpc_timeout_seconds: int,
     judge_timeout_seconds: int,
 ) -> Dict[str, Any]:
@@ -702,6 +750,8 @@ def evaluate_one_product(
                 judge_model=judge_model,
                 judge_base_url=judge_base_url,
                 judge_timeout_seconds=judge_timeout_seconds,
+                judge_provider=judge_provider,
+                judge_region=judge_region,
             )
 
         return aggregate_case_result(
@@ -747,6 +797,8 @@ def main() -> int:
             product_id=product_id,
             judge_model=args.judge_model,
             judge_base_url=args.judge_base_url,
+            judge_provider=args.judge_provider,
+            judge_region=args.judge_region,
             grpc_timeout_seconds=args.grpc_timeout_seconds,
             judge_timeout_seconds=args.judge_timeout_seconds,
         )
@@ -756,7 +808,9 @@ def main() -> int:
     report = {
         "run_id": datetime.now(timezone.utc).isoformat(),
         "candidate_source": f"grpc://{PRODUCT_REVIEWS_ADDR}",
-        "judge_base_url": args.judge_base_url,
+        "judge_provider": args.judge_provider,
+        "judge_base_url": args.judge_base_url if args.judge_provider == "openai" else "",
+        "judge_region": args.judge_region if args.judge_provider == "bedrock" else "",
         "judge_model": args.judge_model,
         "selection": {
             "all_products": args.all_products,

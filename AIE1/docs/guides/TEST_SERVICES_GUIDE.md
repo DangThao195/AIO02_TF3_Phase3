@@ -1,4 +1,4 @@
-# Hướng Dẫn Chạy & Thử Nghiệm Toàn Diện Dịch Vụ Product Reviews (Local Testing Guide)
+﻿# Hướng Dẫn Chạy & Thử Nghiệm Toàn Diện Dịch Vụ Product Reviews (Local Testing Guide)
 
 Tài liệu này hướng dẫn chi tiết các bước thiết lập môi trường chạy thử nghiệm local (máy host) bằng cách sử dụng **cú pháp `export` (POSIX shell/Bash)**, tích hợp trực tiếp **AWS Bedrock (boto3)**, và phân định rõ ràng các câu lệnh chạy trên **WSL2 (Ubuntu) / Git Bash** hay **Windows PowerShell / CMD**.
 
@@ -46,6 +46,10 @@ pip install -r requirements.txt
 ```
 
 #### 2. Cấu hình biến môi trường và chạy Server
+> [!NOTE]
+> Với stack Docker local của repo này, database thực tế là `otel`, không phải `demo`.
+> Nếu dùng PostgreSQL publish port khác `5432`, hãy thay thêm `port=<published_port>` trong `DB_CONNECTION_STRING`.
+
 Bạn có thể lựa chọn 1 trong 2 cách thiết lập môi trường dưới đây tùy theo loại Terminal bạn đang sử dụng:
 
 ##### 👉 Lựa chọn A.2.1: Sử dụng lệnh `export` trực tiếp (Khuyên dùng cho WSL / Git Bash / macOS)
@@ -67,7 +71,7 @@ export AWS_SECRET_ACCESS_KEY="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
 # Cấu hình kết nối gRPC và Database local
 export PRODUCT_REVIEWS_PORT="8085"
-export DB_CONNECTION_STRING="host=localhost user=otelu password=otelp dbname=demo"
+export DB_CONNECTION_STRING="host=localhost user=otelu password=otelp dbname=otel"
 export PRODUCT_CATALOG_ADDR="localhost:8081"
 export FLAGD_HOST="localhost"
 export FLAGD_PORT="8013"
@@ -157,7 +161,7 @@ Sử dụng script **[test_client.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20
 cd repro/
 
 # Cấu hình môi trường cho script đánh giá
-export DB_CONNECTION_STRING="host=localhost user=otelu password=otelp dbname=demo port=5432"
+export DB_CONNECTION_STRING="host=localhost user=otelu password=otelp dbname=otel port=5432"
 export PRODUCT_REVIEWS_ADDR="localhost:8085"  # Đổi thành 3551 nếu chạy Docker
 
 # Chạy chấm điểm Fidelity (Ví dụ: sử dụng Nova Lite làm Giám khảo)
@@ -165,3 +169,4 @@ python3 eval_fidelity.py --judge-model amazon.nova-lite-v1:0
 ```
 > [!NOTE]
 > Kết quả chấm điểm dạng JSON sẽ được lưu tự động trong thư mục `repro/artifacts/`.
+
