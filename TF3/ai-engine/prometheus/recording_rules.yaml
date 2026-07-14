@@ -1,0 +1,117 @@
+# SLI/SLO recording rules (C1 §OUTPUT.2). AIO writes, CDO reviews + merges into Prometheus.
+#
+# Chuẩn: Google SRE Workbook ch.5 "Multiwindow, Multi-Burn-Rate Alerting" — cùng mô hình mà
+# sloth (github.com/slok/sloth) và pyrra (github.com/pyrra-dev/pyrra) sinh ra tự động.
+# 4 CẶP burn-rate (page nhanh → ticket chậm) cần các cửa sổ: 5m,30m,1h,2h,6h,1d,3d.
+#
+# Metric đã xác nhận trên hệ thật (OTel spanmetrics connector):
+#   traces_span_metrics_calls_total{service_name, span_name, status_code}   # status_code="STATUS_CODE_ERROR"
+#   traces_span_metrics_duration_milliseconds_bucket{service_name, le}       # cần le="1000" cho latency-ratio
+#   traces_span_metrics_duration_milliseconds_count{service_name}
+#
+# NOTE (ADR + C1 change request): scrape thật 60s (không phải 30s). Cửa sổ 5m ~5 điểm — sát ngưỡng.
+# Cửa sổ dài (1d,3d) chỉ có data sau khi Prometheus chạy đủ thời gian đó (cần retention ≥ 3 ngày).
+
+groups:
+  - name: techx_sli
+    interval: 30s
+    rules:
+      # ── checkout success ratio (revenue-critical, SLO ≥ 99%) ──
+      # Entry span of the checkout service; total vs error over 5m/30m/1h/6h/3d windows.
+      - record: sli:checkout_error:ratio_rate5m
+        expr: |
+          sum(rate(traces_span_metrics_calls_total{service_name="checkout",status_code="STATUS_CODE_ERROR"}[5m]))
+          /
+          clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="checkout"}[5m])), 1e-9)
+      - record: sli:checkout_error:ratio_rate30m
+        expr: |
+          sum(rate(traces_span_metrics_calls_total{service_name="checkout",status_code="STATUS_CODE_ERROR"}[30m]))
+          / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="checkout"}[30m])), 1e-9)
+      - record: sli:checkout_error:ratio_rate1h
+        expr: |
+          sum(rate(traces_span_metrics_calls_total{service_name="checkout",status_code="STATUS_CODE_ERROR"}[1h]))
+          / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="checkout"}[1h])), 1e-9)
+      - record: sli:checkout_error:ratio_rate6h
+        expr: |
+          sum(rate(traces_span_metrics_calls_total{service_name="checkout",status_code="STATUS_CODE_ERROR"}[6h]))
+          / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="checkout"}[6h])), 1e-9)
+      - record: sli:checkout_error:ratio_rate3d
+        expr: sum(rate(traces_span_metrics_calls_total{service_name="checkout",status_code="STATUS_CODE_ERROR"}[3d])) / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="checkout"}[3d])), 1e-9)
+
+      # ── frontend/browse error ratio (SLO ≥ 99.5%) — đủ 7 cửa sổ ──
+      - record: sli:frontend_error:ratio_rate5m
+        expr: sum(rate(traces_span_metrics_calls_total{service_name="frontend",status_code="STATUS_CODE_ERROR"}[5m])) / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="frontend"}[5m])), 1e-9)
+      - record: sli:frontend_error:ratio_rate30m
+        expr: sum(rate(traces_span_metrics_calls_total{service_name="frontend",status_code="STATUS_CODE_ERROR"}[30m])) / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="frontend"}[30m])), 1e-9)
+      - record: sli:frontend_error:ratio_rate1h
+        expr: sum(rate(traces_span_metrics_calls_total{service_name="frontend",status_code="STATUS_CODE_ERROR"}[1h])) / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="frontend"}[1h])), 1e-9)
+      - record: sli:frontend_error:ratio_rate2h
+        expr: sum(rate(traces_span_metrics_calls_total{service_name="frontend",status_code="STATUS_CODE_ERROR"}[2h])) / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="frontend"}[2h])), 1e-9)
+      - record: sli:frontend_error:ratio_rate6h
+        expr: sum(rate(traces_span_metrics_calls_total{service_name="frontend",status_code="STATUS_CODE_ERROR"}[6h])) / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="frontend"}[6h])), 1e-9)
+      - record: sli:frontend_error:ratio_rate1d
+        expr: sum(rate(traces_span_metrics_calls_total{service_name="frontend",status_code="STATUS_CODE_ERROR"}[1d])) / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="frontend"}[1d])), 1e-9)
+      - record: sli:frontend_error:ratio_rate3d
+        expr: sum(rate(traces_span_metrics_calls_total{service_name="frontend",status_code="STATUS_CODE_ERROR"}[3d])) / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="frontend"}[3d])), 1e-9)
+
+      # ── cart error ratio (SLO ≥ 99.5%) — đủ 7 cửa sổ ──
+      - record: sli:cart_error:ratio_rate5m
+        expr: sum(rate(traces_span_metrics_calls_total{service_name="cart",status_code="STATUS_CODE_ERROR"}[5m])) / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="cart"}[5m])), 1e-9)
+      - record: sli:cart_error:ratio_rate30m
+        expr: sum(rate(traces_span_metrics_calls_total{service_name="cart",status_code="STATUS_CODE_ERROR"}[30m])) / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="cart"}[30m])), 1e-9)
+      - record: sli:cart_error:ratio_rate1h
+        expr: sum(rate(traces_span_metrics_calls_total{service_name="cart",status_code="STATUS_CODE_ERROR"}[1h])) / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="cart"}[1h])), 1e-9)
+      - record: sli:cart_error:ratio_rate2h
+        expr: sum(rate(traces_span_metrics_calls_total{service_name="cart",status_code="STATUS_CODE_ERROR"}[2h])) / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="cart"}[2h])), 1e-9)
+      - record: sli:cart_error:ratio_rate6h
+        expr: sum(rate(traces_span_metrics_calls_total{service_name="cart",status_code="STATUS_CODE_ERROR"}[6h])) / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="cart"}[6h])), 1e-9)
+      - record: sli:cart_error:ratio_rate1d
+        expr: sum(rate(traces_span_metrics_calls_total{service_name="cart",status_code="STATUS_CODE_ERROR"}[1d])) / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="cart"}[1d])), 1e-9)
+      - record: sli:cart_error:ratio_rate3d
+        expr: sum(rate(traces_span_metrics_calls_total{service_name="cart",status_code="STATUS_CODE_ERROR"}[3d])) / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="cart"}[3d])), 1e-9)
+
+      # ── latency: p95 (DASHBOARD, duration) + ratio-under-1s (SLO, 0..1) ──
+      - record: sli:frontend_latency:p95_5m
+        expr: histogram_quantile(0.95, sum by (le) (rate(traces_span_metrics_duration_milliseconds_bucket{service_name="frontend"}[5m]))) / 1000
+      - record: sli:frontend_latency:ratio_under1s_5m
+        expr: sum(rate(traces_span_metrics_duration_milliseconds_bucket{service_name="frontend",le="1000"}[5m])) / clamp_min(sum(rate(traces_span_metrics_duration_milliseconds_count{service_name="frontend"}[5m])), 1e-9)
+      - record: sli:frontend_latency:ratio_under1s_1h
+        expr: sum(rate(traces_span_metrics_duration_milliseconds_bucket{service_name="frontend",le="1000"}[1h])) / clamp_min(sum(rate(traces_span_metrics_duration_milliseconds_count{service_name="frontend"}[1h])), 1e-9)
+
+  # ══════════════ TẦNG 2: SLO (burn-rate 4 cặp + error budget), tái dùng ở alert/dashboard/engine ══════════════
+  # burn_rate = error_ratio / error_budget.  budget: checkout 0.01 ; frontend/cart 0.005.
+  - name: techx_slo
+    interval: 30s
+    rules:
+      # checkout burn-rate ở mọi cửa sổ của 4 cặp
+      - record: slo:checkout:burn_rate_5m
+        expr: sli:checkout_error:ratio_rate5m / 0.01
+      - record: slo:checkout:burn_rate_30m
+        expr: sli:checkout_error:ratio_rate30m / 0.01
+      - record: slo:checkout:burn_rate_1h
+        expr: sli:checkout_error:ratio_rate1h / 0.01
+      - record: slo:checkout:burn_rate_2h
+        expr: sli:checkout_error:ratio_rate2h / 0.01
+      - record: slo:checkout:burn_rate_6h
+        expr: sli:checkout_error:ratio_rate6h / 0.01
+      - record: slo:checkout:burn_rate_1d
+        expr: sli:checkout_error:ratio_rate1d / 0.01
+      - record: slo:checkout:burn_rate_3d
+        expr: sli:checkout_error:ratio_rate3d / 0.01
+      # frontend + cart burn-rate 1h (dùng cho page nhanh; mở rộng nếu cần đủ 4 cặp/service)
+      - record: slo:frontend:burn_rate_1h
+        expr: sli:frontend_error:ratio_rate1h / 0.005
+      - record: slo:frontend:burn_rate_5m
+        expr: sli:frontend_error:ratio_rate5m / 0.005
+      - record: slo:cart:burn_rate_1h
+        expr: sli:cart_error:ratio_rate1h / 0.005
+      - record: slo:cart:burn_rate_5m
+        expr: sli:cart_error:ratio_rate5m / 0.005
+
+      # Error budget REMAINING (0..1). <0.10 => freeze thay đổi rủi ro (BUDGET.md / error-budget policy).
+      - record: slo:checkout:error_budget_remaining
+        expr: clamp_max(1 - (sli:checkout_error:ratio_rate1h / 0.01), 1)
+      - record: slo:frontend:error_budget_remaining
+        expr: clamp_max(1 - (sli:frontend_error:ratio_rate1h / 0.005), 1)
+      - record: slo:cart:error_budget_remaining
+        expr: clamp_max(1 - (sli:cart_error:ratio_rate1h / 0.005), 1)

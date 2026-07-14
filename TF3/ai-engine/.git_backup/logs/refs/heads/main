@@ -1,0 +1,5 @@
+0000000000000000000000000000000000000000 2142f69585ef51d5b38973ad6d71bc059a038065 kietoichoiDXD <kiehih57@gmail.com> 1783531988 +0700	commit (initial): @
+2142f69585ef51d5b38973ad6d71bc059a038065 4c50a513285f1998234eb114219197b9b1b71d40 kietoichoiDXD <kiehih57@gmail.com> 1783532000 +0700	commit (amend): feat: TF3 AI Engine - AIOps (detect/correlate/RCA) + AIE (gateway/guardrail/cost)
+4c50a513285f1998234eb114219197b9b1b71d40 34819b6ad532a62ec3e930c3331a116fdc44f506 kietoichoiDXD <kiehih57@gmail.com> 1783559867 +0700	commit: docs: add AIOps backlog (risk x business, P0-P3)
+34819b6ad532a62ec3e930c3331a116fdc44f506 3959141d64c15ae17524b0639cdec145ab1bb91d kietoichoiDXD <kiehih57@gmail.com> 1783560577 +0700	commit: feat(c6): remediation safety gate + dry-run + approval + audit; merge AIOps backlog
+3959141d64c15ae17524b0639cdec145ab1bb91d db3a4c93a01cc31c258679a0ef70b9b94fd0e738 kietoichoiDXD <kiehih57@gmail.com> 1783571440 +0700	commit: feat(slo): complete MWMB 4-pair burn-rate + error-budget + latency-ratio + CDO handoff
