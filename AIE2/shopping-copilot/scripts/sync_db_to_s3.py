@@ -1,8 +1,6 @@
 import os
 import re
 import sqlite3
-import psycopg2
-from psycopg2.extras import RealDictCursor
 import boto3
 
 # AWS Configuration
@@ -14,7 +12,10 @@ def get_db_connection():
     """Kết nối database (tự động chọn PostgreSQL trên EKS hoặc SQLite ở local)"""
     db_conn_str = os.getenv("DB_CONNECTION_STRING")
     if db_conn_str:
-        # Chạy trên EKS (PostgreSQL)
+        # Import động để tránh lỗi thiếu thư viện khi chạy ở local chỉ cần SQLite
+        import psycopg2
+        from psycopg2.extras import RealDictCursor
+        
         print("Connecting to PostgreSQL on EKS...")
         # Parse connection string: host=postgresql user=otelu password=otelp dbname=otel
         params = {}
