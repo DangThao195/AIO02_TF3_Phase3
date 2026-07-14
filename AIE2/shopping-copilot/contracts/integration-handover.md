@@ -69,17 +69,18 @@ Thêm scrape target vào Prometheus của TF:
 
 Shopping Copilot cần đọc dữ liệu **product reviews** từ database của `product-reviews` service để phục vụ tính năng hỏi-đáp dựa trên review thật (RAG — không hallucinate).
 
-**AIE cần CDO cung cấp:**
+Sau khi kiểm tra cấu hình chạy hiện tại của microservice `product-reviews` trên cluster EKS, thông tin kết nối Database của hệ thống như sau:
 
-| Thông tin | Mô tả |
-|---|---|
-| **DB Host** | Địa chỉ nội bộ của PostgreSQL trong cluster (hoặc DNS RDS) |
-| **DB Port** | Thường là `5432` |
-| **DB Name** | Database chứa bảng reviews của `product-reviews` |
-| **Credentials** | Tên Secret/ConfigMap trong K8s chứa username + password (AIE sẽ mount vào Pod) |
-| **Quyền truy cập** | `SELECT` trên bảng `productreviews` — chỉ đọc, không ghi |
+| Thông tin | Giá trị mặc định trên EKS | Ghi chú |
+|---|---|---|
+| **DB Host** | `postgresql` (hoặc `postgresql.<namespace>.svc.cluster.local`) | CDO cấu hình qua DNS nội bộ K8s |
+| **DB Port** | `5432` | Cổng PostgreSQL tiêu chuẩn |
+| **DB Name** | `otel` | Tên database của hệ thống |
+| **DB User** | `otelu` | AIE chỉ cần quyền `SELECT` |
+| **DB Password** | `otelp` | Mật khẩu truy cập |
+| **Bảng dữ liệu** | `productreviews` | Chứa review của khách hàng |
 
-> ⚠️ AIE **chỉ cần quyền đọc (SELECT)**. Không cần quyền ghi/xoá. CDO có thể tạo một DB user riêng (`copilot_readonly`) với quyền tối thiểu.
+> ⚠️ CDO cần cấu hình các tham số kết nối Database trên dưới dạng các biến môi trường (hoặc Secrets) tương ứng cho Pod `shopping-copilot` khi triển khai. AIE **chỉ cần quyền đọc (SELECT)**, đảm bảo an toàn dữ liệu.
 
 ---
 
