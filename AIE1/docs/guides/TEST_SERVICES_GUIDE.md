@@ -1,96 +1,167 @@
-# Hướng Dẫn Chạy & Thử Nghiệm Toàn Diện Dịch Vụ Product Reviews (Real LLM & Fidelity Eval)
+# Hướng Dẫn Chạy & Thử Nghiệm Toàn Diện Dịch Vụ Product Reviews (Local Testing Guide)
 
-Tài liệu này hướng dẫn chi tiết các bước thiết lập môi trường chạy thử nghiệm thực tế (Real LLM) thông qua proxy LiteLLM kết nối AWS Bedrock, đo đạc chỉ số (Latency, Token) và chạy bộ kiểm toán Fidelity Evaluation.
+Tài liệu này hướng dẫn chi tiết các bước thiết lập môi trường chạy thử nghiệm local (máy host) bằng cách sử dụng **cú pháp `export` (POSIX shell/Bash)**, tích hợp trực tiếp **AWS Bedrock (boto3)**, và phân định rõ ràng các câu lệnh chạy trên **WSL2 (Ubuntu) / Git Bash** hay **Windows PowerShell / CMD**.
 
 ---
 
-## BƯỚC 1: Khởi động hạ tầng cơ sở và Database (Terminal 1 - WSL2)
+## 📋 1. Chuẩn Bị Hạ Tầng Nền (Postgres, Catalog, Flagd)
+> [!IMPORTANT]
+> **Chạy ở Terminal 1 [WSL2 (Ubuntu) / Git Bash / Linux]** hoặc **Command Prompt / PowerShell** đều được:
 
-Mở **Terminal 1 (WSL2)**, di chuyển vào thư mục dự án và khởi động các container nền:
+Trước khi chạy service `product-reviews`, bạn cần dựng các service nền như Database PostgreSQL và Catalog Service bằng Docker Compose để có dữ liệu thử nghiệm:
 
 ```bash
-cd "/mnt/c/Users/ASUS/OneDrive/Obsidian Vault/XBrain-Phase3/techx-corp-platform"
+# 1. Di chuyển vào thư mục chứa docker-compose
+cd AIE1/techx-corp-platform/
 
-# 1. Khai báo ánh xạ cổng Postgres ra máy host vật lý phục vụ script eval chạy bên ngoài
-export POSTGRES_PORT="5432:5432"
-
-# 2. Khởi động các dịch vụ hạ tầng cốt lõi
-docker compose up -d postgresql product-catalog otel-collector flagd
+# 2. Khởi động các container hạ tầng nền
+docker compose up -d postgresql product-catalog flagd otel-collector
 ```
+*(Tham số `-d` chạy ngầm, sau khi chạy xong container sẽ giải phóng terminal để bạn gõ tiếp).*
 
 ---
 
-## BƯỚC 2: Thiết lập Bedrock Proxy (Terminal 2 - PowerShell)
+## 🛠️ 2. Các Phương Pháp Chạy Dịch Vụ product-reviews (Server)
 
-Mở **Terminal 2 (PowerShell)** để khởi chạy LiteLLM làm proxy dịch mã OpenAI API sang Bedrock Converse API, đồng thời xử lý các tham số không tương thích:
+### Cách A: Chạy Trực Tiếp Bằng Python Trên Máy Host (Khuyên dùng để Debug)
 
-```powershell
-cd "C:\Users\ASUS\OneDrive\Obsidian Vault\XBrain-Phase3\repro"
+#### 1. Cài đặt thư viện dependencies và môi trường ảo
+> [!IMPORTANT]
+> **Chạy ở Terminal 1 [WSL2 (Ubuntu) / Git Bash / Linux]**:
+> Nếu chạy trên WSL Ubuntu mới cài và báo lỗi `ensurepip` hoặc thiếu `pip3`, hãy chạy lệnh cài đặt nền trước:
+> `sudo apt update && sudo apt install -y python3-pip python3-venv`
 
-# Khởi chạy LiteLLM Proxy với file cấu hình định tuyến cho AWS Bedrock
-litellm --config litellm_config.yaml --port 4000
+```bash
+# Di chuyển vào thư mục nguồn của dịch vụ
+cd src/product-reviews/
+
+# Khởi tạo môi trường ảo (Dùng python3 trên Linux/WSL)
+python3 -m venv venv
+
+# Kích hoạt môi trường ảo
+source venv/bin/activate
+
+# Cài đặt các package (boto3, openai, psycopg2, grpcio, v.v.)
+pip install -r requirements.txt
+```
+
+#### 2. Cấu hình biến môi trường và chạy Server
+Bạn có thể lựa chọn 1 trong 2 cách thiết lập môi trường dưới đây tùy theo loại Terminal bạn đang sử dụng:
+
+##### 👉 Lựa chọn A.2.1: Sử dụng lệnh `export` trực tiếp (Khuyên dùng cho WSL / Git Bash / macOS)
+> [!IMPORTANT]
+> **Chạy ở Terminal 1 [WSL2 (Ubuntu) / Git Bash / Linux]**:
+
+```bash
+# Kích hoạt venv nếu chưa kích hoạt
+source venv/bin/activate
+
+# Định tuyến LLM sang Bedrock trực tiếp
+export LLM_PROVIDER="bedrock"
+export LLM_MODEL="amazon.nova-lite-v1:0"
+export AWS_REGION="us-east-1"
+
+# Cấu hình AWS Credentials (nếu máy local chưa cấu hình ~/.aws/credentials)
+export AWS_ACCESS_KEY_ID="AKIAxxxxxxxxxxxxxx"
+export AWS_SECRET_ACCESS_KEY="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# Cấu hình kết nối gRPC và Database local
+export PRODUCT_REVIEWS_PORT="8085"
+export DB_CONNECTION_STRING="host=localhost user=otelu password=otelp dbname=demo"
+export PRODUCT_CATALOG_ADDR="localhost:8081"
+export FLAGD_HOST="localhost"
+export FLAGD_PORT="8013"
+export LLM_HOST="localhost"
+export LLM_PORT="8000"
+export OTEL_SERVICE_NAME="product-reviews"
+
+# Khởi chạy gRPC Server (giữ nguyên tab terminal này không tắt)
+python3 product_reviews_server.py
+```
+
+##### 👉 Lựa chọn A.2.2: Sử dụng tệp `.env` cục bộ (Dành cho mọi Terminal kể cả cmd/powershell của Windows)
+> [!IMPORTANT]
+> **Chạy ở Terminal 1 [Windows PowerShell / CMD / VSCode Default Terminal]**:
+
+1. Sao chép tệp cấu hình mẫu:
+   ```bash
+   cp .env.example .env
+   ```
+2. Mở tệp `.env` vừa tạo trong VSCode và điền đầy đủ thông tin AWS Credentials của bạn và cấu hình khác.
+3. Khởi chạy gRPC Server trực tiếp (Dùng venv trên Windows):
+   ```powershell
+   # Kích hoạt venv trên Windows PowerShell:
+   .\venv\Scripts\Activate.ps1
+   
+   python product_reviews_server.py
+   ```
+
+---
+
+### Cách B: Chạy Bằng Docker Compose (Chạy Đóng Gói)
+> [!IMPORTANT]
+> **Chạy ở Terminal 1 [WSL2 / Windows PowerShell / CMD]**:
+
+Nếu bạn muốn chạy dịch vụ bên trong môi trường container khép kín:
+
+1. Thêm cấu hình môi trường vào tệp `.env.override` tại thư mục **[techx-corp-platform](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIE1/techx-corp-platform)**:
+   ```ini
+   LLM_PROVIDER=bedrock
+   LLM_MODEL=amazon.nova-lite-v1:0
+   AWS_REGION=us-east-1
+   AWS_ACCESS_KEY_ID=AKIAxxxxxxxxxxxxxx
+   AWS_SECRET_ACCESS_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+   ```
+
+2. Thực hiện build lại Docker image và khởi chạy container:
+   ```bash
+   docker compose build product-reviews
+   docker compose up -d product-reviews
+   ```
+
+---
+
+## 🧪 3. Thực Thi Các Kịch Bản Kiểm Thử (Terminal 2 - Mới)
+> [!IMPORTANT]
+> **Mở Terminal 2 mới song song** (không chạy chung terminal đang chạy server ở trên).
+
+### Kịch bản 1: Gọi lấy Tóm tắt AI qua Client Python mẫu
+Sử dụng script **[test_client.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIE1/techx-corp-platform/src/product-reviews/test_client.py)** đã được tích hợp sẵn:
+
+* **Phương án 1.1: Chạy trong WSL2 / Git Bash (Terminal 2 - WSL2)**:
+  ```bash
+  cd AIE1/techx-corp-platform/src/product-reviews/
+  source venv/bin/activate
+  
+  # Cổng 8085 nếu chạy server trực tiếp bằng Python, 3551 nếu chạy bằng Docker
+  python3 test_client.py 8085 
+  ```
+* **Phương án 1.2: Chạy trên Windows Host (Terminal 2 - PowerShell / CMD)**:
+  *(Yêu cầu máy Windows của bạn đã cài python và cài thư viện: `pip install grpcio grpcio-tools`)*
+  ```powershell
+  cd AIE1/techx-corp-platform/src/product-reviews/
+  
+  # Cổng 8085 nếu chạy server trực tiếp bằng Python, 3551 nếu chạy bằng Docker
+  python test_client.py 8085
+  ```
+
+---
+
+### Kịch bản 2: Đánh giá chất lượng Độ trung thực (Fidelity Evaluation)
+> [!IMPORTANT]
+> **Chạy ở Terminal 2 [WSL2 (Ubuntu) / Git Bash]**:
+
+Để chạy chấm điểm sự ảo giác (Hallucination) của AI Assistant dựa trên tập dữ liệu đánh giá thực tế trong Postgres:
+
+```bash
+cd repro/
+
+# Cấu hình môi trường cho script đánh giá
+export DB_CONNECTION_STRING="host=localhost user=otelu password=otelp dbname=demo port=5432"
+export PRODUCT_REVIEWS_ADDR="localhost:8085"  # Đổi thành 3551 nếu chạy Docker
+
+# Chạy chấm điểm Fidelity (Ví dụ: sử dụng Nova Lite làm Giám khảo)
+python3 eval_fidelity.py --judge-model amazon.nova-lite-v1:0
 ```
 > [!NOTE]
-> Giữ nguyên terminal này chạy ẩn để duy trì dịch vụ proxy.
-
----
-
-## BƯỚC 3: Cấu hình và chạy Dịch Vụ gRPC (Terminal 1 - WSL2)
-
-Quay lại **Terminal 1 (WSL2)** để cấu hình cho container `product-reviews` gọi LLM thông qua LiteLLM proxy ở máy host:
-
-```bash
-# Trỏ base URL về máy Windows host thông qua Docker Gateway
-export LLM_BASE_URL="http://host.docker.internal:4000/v1"
-export LLM_MODEL="amazon.nova-lite-v1:0" # Hoặc "amazon.nova-micro-v1:0" / "meta.llama3-3-70b-instruct-v1:0"
-export OPENAI_API_KEY="dummy"
-
-# Khởi động dịch vụ product-reviews
-docker compose up -d product-reviews
-```
-
----
-
-## BƯỚC 4: Tiến hành các Kịch Bản Kiểm Thử (Terminal 3 - PowerShell)
-
-Mở một **Terminal 3 (PowerShell) mới** để chạy các script Python kiểm thử:
-
-```powershell
-cd "C:\Users\ASUS\OneDrive\Obsidian Vault\XBrain-Phase3\repro"
-```
-
-### 1. Gọi lấy Tóm tắt AI đơn lẻ
-Chạy script **[repro/get_summary.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/repro/get_summary.py)** để in nhanh phản hồi của AI Assistant:
-```powershell
-python get_summary.py
-```
-
-### 2. Đo đạc lượng Token tiêu thụ thực tế
-Chạy script **[repro/check_tokens.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/repro/check_tokens.py)** để thống kê chi tiết số Input/Output tokens qua 2 lượt gọi RAG:
-```powershell
-# Thiết lập biến môi trường kết nối proxy cho PowerShell hiện tại
-$env:LLM_BASE_URL="http://localhost:4000/v1"
-$env:LLM_MODEL="amazon.nova-lite-v1:0" # Đổi tên model tương ứng khi cần test
-$env:OPENAI_API_KEY="dummy"
-
-python check_tokens.py
-```
-
-### 3. Đo đạc Baseline Hiệu năng (Latency & Error Rate)
-Chạy script **[repro/benchmark.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/repro/benchmark.py)** gửi dồn dập 20 requests liên tục:
-```powershell
-python benchmark.py 20
-```
-
-### 4. Đánh giá kiểm toán Độ trung thực (Fidelity Evaluation)
-Chạy script **[repro/eval_fidelity.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/repro/eval_fidelity.py)** để kéo reviews gốc từ database Postgres, gọi gRPC lấy tóm tắt candidate, và đối chiếu chấm điểm Fidelity 1-5 bằng LLM Judge:
-```powershell
-# Cấu hình kết nối Database và LLM Judge
-$env:DB_CONNECTION_STRING="host=localhost user=otelu password=otel dbname=otel port=5432"
-$env:PRODUCT_REVIEWS_ADDR="localhost:3551"
-$env:OPENAI_API_KEY="dummy"
-
-# Chạy chấm điểm Fidelity (sử dụng Nova Lite làm Giám khảo)
-python eval_fidelity.py --judge-model amazon.nova-lite-v1:0 --judge-base-url http://localhost:4000/v1
-```
-*Kết quả chi tiết dạng JSON của phiên chạy sẽ được lưu tự động trong thư mục `repro/artifacts/`.*
+> Kết quả chấm điểm dạng JSON sẽ được lưu tự động trong thư mục `repro/artifacts/`.

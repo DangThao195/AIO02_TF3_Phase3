@@ -4,7 +4,7 @@ import json
 import time
 
 # Thêm thư mục aiops-engine vào path để import
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from anomaly_detector import AnomalyDetector
 from rca_engine import RCAEngine

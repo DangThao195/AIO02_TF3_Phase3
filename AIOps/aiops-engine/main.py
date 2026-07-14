@@ -46,56 +46,109 @@ async def active_metrics_polling_loop():
     await asyncio.sleep(5)  # Đợi uvicorn khởi tạo xong cổng kết nối
     while ACTIVE_POLLING_ENABLED:
         try:
+            # Chỉ bỏ qua nếu có sự cố đang xử lý (active) thực tế (không phải là cảnh báo sớm ML)
+            running_incidents = {k: v for k, v in active_incidents.items() if v.get("status") != "proactive_warning"}
+            if running_incidents:
+                logger.info("Active running incident exists. Skipping duplicate polling run.")
+                await asyncio.sleep(POLLING_INTERVAL_SECONDS)
+                continue
+
             logger.info("Active Polling Check: checking system SLO via Prometheus...")
             is_breached = detector.check_slo_burn_rate()
+            
             if is_breached:
-                if active_incidents:
-                    logger.info("Active incident exists. Skipping duplicate diagnostic run to save API costs.")
-                    await asyncio.sleep(POLLING_INTERVAL_SECONDS)
-                    continue
                 logger.warning("SLO Burn Rate breach detected via Active Polling!")
-                incident_id = f"INC-{int(time.time())}"
                 
-                # Nếu đang trong kịch bản giả lập Sandbox
-                if simulation_state["scenario"].startswith("inc"):
-                    trace_id = f"mock-{simulation_state['scenario']}"
+                # Check xem đã có cảnh báo sớm ML trong cache chưa để nâng cấp
+                proactive_inc_id = None
+                for inc_id, inc_data in list(active_incidents.items()):
+                    if inc_data.get("status") == "proactive_warning":
+                        proactive_inc_id = inc_id
+                        break
+                        
+                if proactive_inc_id:
+                    logger.warning(f"Promoting proactive ML warning {proactive_inc_id} to active incident due to SLO breach!")
+                    loop = asyncio.get_running_loop()
+                    loop.run_in_executor(
+                        None,
+                        process_incident_promotion_background,
+                        proactive_inc_id
+                    )
                 else:
-                    trace_id = rca_engine.fetch_latest_trace_id("frontend")
-                
-                # Gọi RCA để xác định thủ phạm
-                if trace_id.startswith("mock-"):
-                    inc_num = trace_id.split("-")[-1]
-                    fixture_path = f"fixtures/{inc_num}_trace_response.json"
-                    if not os.path.exists(fixture_path):
-                        fixture_path = f"aiops-engine/{fixture_path}"
-                    try:
-                        with open(fixture_path, "r", encoding="utf-8") as f:
-                            trace_data = json.load(f)
-                        logger.info(f"Loaded JAEGER MOCK Trace data from fixture: {fixture_path}")
-                    except Exception as e:
-                        logger.error(f"Failed to load mock trace fixture {fixture_path}: {e}")
-                        trace_data = {}
-                else:
-                    trace_data = rca_engine.fetch_trace(trace_id)
+                    incident_id = f"INC-{int(time.time())}"
+                    # Nếu đang trong kịch bản giả lập Sandbox
+                    if simulation_state["scenario"].startswith("inc"):
+                        trace_id = f"mock-{simulation_state['scenario']}"
+                    else:
+                        trace_id = rca_engine.fetch_latest_trace_id("frontend")
                     
-                culprit_service = rca_engine.locate_culprit_service(trace_data)
-                if culprit_service == "unknown-service":
-                    culprit_service = "checkout"  # Fallback mặc định
+                    # Gọi RCA để xác định thủ phạm
+                    if trace_id.startswith("mock-"):
+                        inc_num = trace_id.split("-")[-1]
+                        fixture_path = f"fixtures/{inc_num}_trace_response.json"
+                        if not os.path.exists(fixture_path):
+                            fixture_path = f"aiops-engine/{fixture_path}"
+                        try:
+                            with open(fixture_path, "r", encoding="utf-8") as f:
+                                trace_data = json.load(f)
+                            logger.info(f"Loaded JAEGER MOCK Trace data from fixture: {fixture_path}")
+                        except Exception as e:
+                            logger.error(f"Failed to load mock trace fixture {fixture_path}: {e}")
+                            trace_data = {}
+                    else:
+                        trace_data = rca_engine.fetch_trace(trace_id)
+                        
+                    culprit_service = rca_engine.locate_culprit_service(trace_data)
+                    if culprit_service == "unknown-service":
+                        culprit_service = "checkout"  # Fallback mặc định
+                        
+                    logger.info(f"Triggering CMDR Pipeline for {incident_id} (Culprit: {culprit_service}, Trace ID: {trace_id})")
                     
-                logger.info(f"Triggering CMDR Pipeline for {incident_id} (Culprit: {culprit_service}, Trace ID: {trace_id})")
-                
-                # Chạy luồng chẩn đoán và sửa lỗi bất đồng bộ trong ThreadPoolExecutor
-                loop = asyncio.get_running_loop()
-                loop.run_in_executor(
-                    None,
-                    process_incident_background,
-                    incident_id,
-                    culprit_service,
-                    trace_id,
-                    time.time()
-                )
+                    # Chạy luồng chẩn đoán và sửa lỗi bất đồng bộ
+                    loop = asyncio.get_running_loop()
+                    loop.run_in_executor(
+                        None,
+                        process_incident_background,
+                        incident_id,
+                        culprit_service,
+                        trace_id,
+                        time.time()
+                    )
             else:
-                logger.info("Active Polling Check: system is stable.")
+                # Lớp 2: Quét máy học (Isolation Forest) cho từng dịch vụ chủ động
+                logger.info("SLO is stable. Running ML Isolation Forest proactive scans on core services...")
+                
+                SERVICES = ["frontend", "checkout", "payment", "product-catalog", "product-reviews", "shipping", "recommendation"]
+                detected_culprit = None
+                
+                for service in SERVICES:
+                    res = detector.check_service_anomaly(service)
+                    if res.get("prediction") == -1:
+                        logger.warning(f"ML Isolation Forest proactively detected ANOMALY on service: {service} (Score: {res.get('score'):.4f})!")
+                        detected_culprit = service
+                        break  # Báo cảnh báo sớm cho dịch vụ đầu tiên phát hiện lỗi
+                        
+                if detected_culprit:
+                    incident_id = f"INC-ML-{int(time.time())}"
+                    
+                    if simulation_state["scenario"].startswith("inc"):
+                        trace_id = f"mock-{simulation_state['scenario']}"
+                    else:
+                        trace_id = rca_engine.fetch_latest_trace_id(detected_culprit)
+                        
+                    logger.info(f"Triggering PROACTIVE CMDR Pipeline for {incident_id} (Culprit: {detected_culprit}, Trace ID: {trace_id})")
+                    
+                    loop = asyncio.get_running_loop()
+                    loop.run_in_executor(
+                        None,
+                        process_proactive_anomaly_background, # Gọi hàm chẩn đoán rút gọn (chỉ RCA, không LLM/Slack)
+                        incident_id,
+                        detected_culprit,
+                        trace_id,
+                        time.time()
+                    )
+                else:
+                    logger.info("Active Polling Check: All services are healthy under ML Isolation Forest scans.")
         except Exception as e:
             logger.error(f"Error in active metrics polling loop: {str(e)}")
             
@@ -254,6 +307,156 @@ def process_incident_background(incident_id: str, culprit_service: str, trace_id
         notifier.send_incident_notification(incident_id, diagnosis)
         active_incidents.pop(incident_id, None)
 
+
+
+def process_proactive_anomaly_background(incident_id: str, culprit_service: str, trace_id: str, alert_time: float):
+    """
+    Chạy chẩn đoán sớm cho máy học: Chạy RCA để tìm nguyên nhân gốc từ Jaeger trace
+    và OpenSearch logs, không gọi Bedrock LLM và không đề xuất phương án khắc phục tự động.
+    """
+    logger.info(f"--- [PROACTIVE ML WARNING] Processing early anomaly for {culprit_service} ({incident_id}) ---")
+    
+    # 1. Thu thập bằng chứng
+    logger.info("[PROACTIVE] Step 1: Generating Evidence Pack...")
+    evidence = evidence_collector.build_evidence_pack(culprit_service, alert_time, trace_id)
+    
+    # 2. Phân tích Jaeger Trace RCA & logs lỗi
+    logs_summary = []
+    for log in evidence.get("logs", [])[:5]:
+        msg = log.get("message", "")
+        if len(msg) > 100:
+            msg = msg[:100] + "..."
+        logs_summary.append(f"• `[{log.get('severity', 'ERROR')}]` {msg}")
+        
+    logs_section = "\n".join(logs_summary) if logs_summary else "• *Không tìm thấy logs lỗi liên quan trong OpenSearch.*"
+    
+    rca_path = f"Phát hiện bất thường bắt nguồn từ dịch vụ `{culprit_service}`."
+    if "trace_analysis" in evidence:
+        rca_path = f"Trace Path / Dependency chain: {evidence['trace_analysis']}"
+        
+    analysis_str = (
+        f"*Thông tin chẩn đoán chủ động (ML early warning):*\n"
+        f"• Dịch vụ phát sinh bất thường: `{culprit_service}`\n"
+        f"• Trace ID: `{trace_id}`\n"
+        f"• Phân tích đường đi lỗi (RCA): {rca_path}\n\n"
+        f"*Logs lỗi chi tiết thu thập từ OpenSearch:*\n{logs_section}"
+    )
+    
+    diagnosis = {
+        "incident_id": incident_id,
+        "culprit_service": culprit_service,
+        "analysis": analysis_str,
+        "proposed_action": "none",
+        "action_command": "",
+        "rollback_command": "",
+        "confidence_score": 1.0,
+        "matched_incident": "N/A",
+        "status": "proactive_warning",
+        "evidence": evidence,
+        "alert_time": alert_time,
+        "trace_id": trace_id
+    }
+    
+    active_incidents[incident_id] = diagnosis
+    
+    # 3. Gửi Slack cảnh báo sớm dạng thông tin (Proactive Warning Card)
+    logger.info(f"[PROACTIVE] Sending early warning Slack card (RCA only) for {incident_id}...")
+    notifier.send_incident_notification(incident_id, diagnosis)
+
+def process_incident_promotion_background(incident_id: str):
+    """
+    Nâng cấp sự cố chẩn đoán sớm lên sự cố chính thức khi SLO bị vỡ: Gọi Bedrock và bắn Slack card.
+    """
+    logger.info(f"--- Promoting Proactive Warning {incident_id} to Active Diagnostics due to SLO breach ---")
+    inc_data = active_incidents.get(incident_id)
+    if not inc_data:
+        logger.error(f"Incident data for {incident_id} not found in cache.")
+        return
+        
+    inc_data["status"] = "active"
+    evidence = inc_data["evidence"]
+    culprit_service = inc_data["culprit_service"]
+    
+    # 2. Giai đoạn 4: Gọi Bedrock Chẩn đoán
+    logger.info("Step 2: Invoking LLM Bedrock Diagnostician (Promoted Path)...")
+    diagnosis = diagnostician.diagnose(evidence)
+    
+    diagnosis["incident_id"] = incident_id
+    diagnosis["culprit_service"] = culprit_service
+    
+    # 3. Giai đoạn 5.1 & 5.2: Bộ lọc an toàn & Phân loại rủi ro (Risk Assessment)
+    proposed_action = diagnosis.get("proposed_action", "none")
+    
+    COMMAND_TEMPLATES = {
+        "scale":       "kubectl -n techx-tf3 scale deploy/{service} --replicas=2",
+        "restart":     "kubectl -n techx-tf3 rollout restart deployment/{service}",
+        "cache-flush": "kubectl -n techx-tf3 scale deploy/{service} --replicas=1",
+        "breaker-force": "kubectl -n techx-tf3 scale deploy/{service} --replicas=1",
+        "none": ""
+    }
+    ROLLBACK_TEMPLATES = {
+        "scale":       "kubectl -n techx-tf3 scale deploy/{service} --replicas=1",
+        "restart":     "kubectl -n techx-tf3 rollout undo deployment/{service}",
+        "cache-flush": "kubectl -n techx-tf3 scale deploy/{service} --replicas=2",
+        "breaker-force": "kubectl -n techx-tf3 scale deploy/{service} --replicas=2",
+        "none": ""
+    }
+    
+    if proposed_action in COMMAND_TEMPLATES:
+        action_command = COMMAND_TEMPLATES[proposed_action].format(service=culprit_service)
+        rollback_command = ROLLBACK_TEMPLATES[proposed_action].format(service=culprit_service)
+    else:
+        action_command = diagnosis.get("action_command", "")
+        rollback_command = diagnosis.get("rollback_command", "")
+        
+    diagnosis["action_command"] = action_command
+    diagnosis["rollback_command"] = rollback_command
+    active_incidents[incident_id] = diagnosis
+    
+    # Validation Gate
+    if not handler.validate_action(proposed_action, action_command):
+        logger.warning("Action failed safety validation gate. Rejecting.")
+        diagnosis["analysis"] = f"[SAFETY REJECTED] {diagnosis['analysis']}"
+        diagnosis["action_command"] = "Command blocked due to C6 policy violation."
+        notifier.send_incident_notification(incident_id, diagnosis)
+        return
+        
+    confidence_score = float(diagnosis.get("confidence_score", 1.0))
+    logger.info(f"LLM Decision Confidence Score: {confidence_score * 100}%")
+    
+    current_risk = "UNKNOWN"
+    if proposed_action in ["cache-flush", "breaker-force"]:
+        current_risk = "LOW"
+    elif proposed_action in ["scale", "restart", "toggle-tf-flag"]:
+        current_risk = "MEDIUM"
+    else:
+        current_risk = "HIGH"
+        
+    if current_risk == "LOW" and confidence_score < 0.80:
+        logger.warning(f"Confidence score {confidence_score} < 0.80. Elevating LOW RISK action to MEDIUM RISK for safety.")
+        current_risk = "MEDIUM"
+        
+    if current_risk == "LOW":
+        logger.info(f"Action '{proposed_action}' classified as LOW RISK. Auto-executing...")
+        success = handler.execute_k8s_command(action_command)
+        if success:
+            logger.info("Low risk action executed successfully.")
+            is_resolved = handler.verify_remediation("http_server_active_requests")
+            if is_resolved:
+                active_incidents.pop(incident_id, None)
+        else:
+            logger.error("Low risk action execution failed.")
+            active_incidents.pop(incident_id, None)
+            
+    elif current_risk == "MEDIUM":
+        logger.info(f"Action '{proposed_action}' classified as MEDIUM RISK. Sending Slack card...")
+        notifier.send_incident_notification(incident_id, diagnosis)
+        
+    else:
+        logger.warning(f"Action '{proposed_action}' classified as HIGH RISK. Rejecting automatically.")
+        diagnosis["analysis"] = f"[AUTO-REJECTED] Dangerous/Uncertain command blocked: {diagnosis['analysis']}"
+        notifier.send_incident_notification(incident_id, diagnosis)
+        active_incidents.pop(incident_id, None)
 
 
 @app.post("/webhook/alerts")
@@ -417,7 +620,7 @@ from fastapi import HTTPException
 
 @app.post("/simulate/inject")
 async def simulate_inject(scenario: str):
-    if scenario not in ["stable", "inc1", "inc2", "inc3", "inc4", "inc5", "inc6", "inc7", "inc8", "incnew"]:
+    if scenario not in ["stable", "inc1", "inc2", "inc3", "inc4", "inc5", "inc6", "inc7", "inc8", "incnew", "ml_proactive"]:
         raise HTTPException(status_code=400, detail="Invalid scenario")
     simulation_state["scenario"] = scenario
     simulation_state["start_time"] = time.time()
@@ -576,3 +779,78 @@ async def mock_opensearch_logs(request: Request):
             }
         }
     return {"hits": {"hits": []}}
+
+# --- ENDPOINT TEST ANOMALY MACHINE LEARNING (ISOLATION FOREST) ---
+class MetricPayload(BaseModel):
+    service: str
+    rps: float
+    cpu_usage: float
+    memory_usage: float
+    latency_p90: float
+    error_rate: float
+
+@app.post("/anomaly/predict")
+async def predict_metric_anomaly(payload: MetricPayload):
+    service = payload.service
+    if service not in detector.models:
+        return {
+            "status": "error",
+            "message": f"No Isolation Forest model loaded for service: {service}. Available: {list(detector.models.keys())}"
+        }
+    
+    # 1. Tạo baseline 12 mẫu normal để làm nền tính toán rolling features
+    baseline_rows = []
+    base_time = datetime.datetime.now() - datetime.timedelta(hours=1)
+    
+    for i in range(12):
+        baseline_rows.append({
+            "timestamp": base_time + datetime.timedelta(minutes=5 * i),
+            "service": service,
+            "rps": 80.0,
+            "cpu_usage": 0.35,
+            "memory_usage": 0.50,
+            "latency_p90": 0.05,
+            "error_rate": 0.001
+        })
+        
+    # Thêm payload hiện tại vào dòng thứ 13
+    baseline_rows.append({
+        "timestamp": datetime.datetime.now(),
+        "service": service,
+        "rps": payload.rps,
+        "cpu_usage": payload.cpu_usage,
+        "memory_usage": payload.memory_usage,
+        "latency_p90": payload.latency_p90,
+        "error_rate": payload.error_rate
+    })
+    
+    import pandas as pd
+    df_raw = pd.DataFrame(baseline_rows)
+    
+    # 2. Áp dụng feature engineering (14 đặc trưng)
+    from train_anomaly_model_local import feature_engineering as local_fe
+    df_features = local_fe(df_raw)
+    
+    feature_cols = [
+        "rps", "cpu_usage", "memory_usage", "latency_p90", "error_rate",
+        "error_ratio", "latency_deviation", "rps_delta", "cpu_per_rps", "memory_growth",
+        "hour_of_day", "day_of_week", "is_business_hours", "is_high_traffic_period"
+    ]
+    
+    # Lấy vector hàng cuối cùng đại diện cho payload
+    X_t = df_features[feature_cols].iloc[-1].values.reshape(1, -1)
+    
+    # 3. Dự đoán trực tiếp bằng model
+    model = detector.models[service]
+    prediction = int(model.predict(X_t)[0])
+    score = float(model.decision_function(X_t)[0])
+    
+    return {
+        "status": "success",
+        "service": service,
+        "prediction": prediction, # 1: Normal, -1: Anomaly
+        "anomaly_detected": True if prediction == -1 else False,
+        "anomaly_score": score,
+        "features": df_features[feature_cols].iloc[-1].to_dict()
+    }
+

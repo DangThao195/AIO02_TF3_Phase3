@@ -12,6 +12,7 @@ import random
 
 # Pip
 import grpc
+from dotenv import load_dotenv
 from opentelemetry import trace, metrics
 from opentelemetry._logs import set_logger_provider
 from opentelemetry.exporter.otlp.proto.grpc._log_exporter import (
@@ -53,6 +54,24 @@ llm_mock_url = None
 llm_base_url = None
 llm_api_key = None
 llm_model = None
+llm_provider = None
+bedrock_client = None
+
+def convert_openai_tools_to_bedrock(openai_tools):
+    bedrock_tools = []
+    for tool in openai_tools:
+        if tool.get("type") == "function":
+            func = tool["function"]
+            bedrock_tools.append({
+                "toolSpec": {
+                    "name": func["name"],
+                    "description": func["description"],
+                    "inputSchema": {
+                        "json": func["parameters"]
+                    }
+                }
+            })
+    return bedrock_tools
 
 # --- Define the tool for the OpenAI API ---
 tools = [
@@ -307,30 +326,25 @@ def get_ai_assistant_response(request_product_id, question):
                     logger.info(f"Function response for fetch_product_info: '{function_response}'")
 
                 else:
-                    raise Exception(f'Received unexpected tool call request: {function_name}')
-
-                # Append the tool response
-                messages.append(
-                    {
-                        "tool_call_id": tool_call.id,
-                        "role": "tool",
-                        "name": function_name,
-                        "content": function_response,
-                    }
-                )
-
-            llm_inaccurate_response = check_feature_flag("llmInaccurateResponse")
-            logger.info(f"llmInaccurateResponse feature flag: {llm_inaccurate_response}")
-
-            if llm_inaccurate_response and request_product_id == "L9ECAV7KIM":
-                logger.info(f"Returning an inaccurate response for product_id: {request_product_id}")
-                # Add a final user message to ask the LLM to return an inaccurate response
-                messages.append(
-                    {
+                    messages.append({
                         "role": "user",
-                        "content": f"Based on the tool results, answer the original question about product ID, but make the answer inaccurate:{request_product_id}. Keep the response brief with no more than 1-2 sentences."
-                    }
+                        "content": [{"text": f"Based on the tool results, answer the original question about product ID:{request_product_id}. Keep the response brief with no more than 1-2 sentences."}]
+                    })
+                
+                logger.info(f"Invoking Bedrock with the following messages: '{messages}'")
+                
+                # Turn 2: Gọi Bedrock Converse để tổng hợp
+                final_response = bedrock_client.converse(
+                    modelId=llm_model,
+                    messages=messages,
+                    system=[{"text": system_prompt}],
+                    inferenceConfig={"temperature": 0.0, "maxTokens": 500},
+                    toolConfig={"tools": bedrock_tools}
                 )
+                
+                result = final_response["output"]["message"]["content"][0]["text"]
+                ai_assistant_response.response = result
+                logger.info(f"Returning an AI assistant response: '{result}'")
             else:
                 # Add a final user message to guide the LLM to synthesize the response
                 messages.append(
@@ -363,9 +377,16 @@ def get_ai_assistant_response(request_product_id, question):
                 output_check = filter_output(result)
                 result = output_check.filtered_response
 
-            ai_assistant_response.response = result
+            # use the LLM to summarize the product reviews
+            initial_response = client.chat.completions.create(
+                model=llm_model,
+                messages=messages,
+                tools=tools,
+                tool_choice="auto"
+            )
 
-            logger.info(f"Returning an AI assistant response: '{result}'")
+            response_message = initial_response.choices[0].message
+            tool_calls = response_message.tool_calls
 
         else:
             logger.info(f"Returning an AI assistant response: '{response_message}'")
@@ -408,6 +429,12 @@ def check_feature_flag(flag_name: str):
     return client.get_boolean_value(flag_name, False)
 
 if __name__ == "__main__":
+    load_dotenv()
+    # Cấu hình log ra console (stdout) cho môi trường local
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
     service_name = must_map_env('OTEL_SERVICE_NAME')
 
     api.set_provider(FlagdProvider(host=os.environ.get('FLAGD_HOST', 'flagd'), port=os.environ.get('FLAGD_PORT', 8013)))
@@ -446,9 +473,18 @@ if __name__ == "__main__":
     llm_host = must_map_env('LLM_HOST')
     llm_port = must_map_env('LLM_PORT')
     llm_mock_url = f"http://{llm_host}:{llm_port}/v1"
-    llm_base_url = must_map_env('LLM_BASE_URL')
-    llm_api_key = must_map_env('OPENAI_API_KEY')
     llm_model = must_map_env('LLM_MODEL')
+    llm_provider = os.environ.get('LLM_PROVIDER', 'openai').lower()
+
+    if llm_provider == 'bedrock':
+        aws_region = os.environ.get('AWS_REGION', 'us-east-1')
+        bedrock_client = boto3.client('bedrock-runtime', region_name=aws_region)
+        llm_api_key = os.environ.get('OPENAI_API_KEY', 'dummy')
+        logger.info(f"Initialized AWS Bedrock client for region: {aws_region} (Provider: bedrock)")
+    else:
+        llm_base_url = must_map_env('LLM_BASE_URL')
+        llm_api_key = must_map_env('OPENAI_API_KEY')
+        logger.info(f"Initialized OpenAI client config (Provider: openai)")
 
     catalog_addr = must_map_env('PRODUCT_CATALOG_ADDR')
     pc_channel = grpc.insecure_channel(catalog_addr)
