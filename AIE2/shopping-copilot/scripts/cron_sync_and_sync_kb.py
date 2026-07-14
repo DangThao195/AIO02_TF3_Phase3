@@ -1,10 +1,9 @@
 import os
-import re
 import sqlite3
 import boto3
 
 def load_env():
-    """Tự động đọc file .env ở thư mục gốc"""
+    """Nạp biến môi trường từ tệp .env (khi chạy local)"""
     for path in [".env", "../.env", "../../.env"]:
         if os.path.exists(path):
             with open(path, "r", encoding="utf-8") as f:
@@ -15,24 +14,22 @@ def load_env():
                         os.environ[k.strip()] = v.strip().strip('"').strip("'")
             break
 
-# Nạp cấu hình từ .env trước
+# Nạp config
 load_env()
 
-# AWS Configuration
-S3_BUCKET_NAME = os.getenv("PRODUCTS_S3_BUCKET")
-AWS_REGION = os.getenv("BEDROCK_GUARDRAIL_REGION")
+# Cấu hình từ môi trường
+S3_BUCKET_NAME = os.getenv("PRODUCTS_S3_BUCKET", "techx-products-catalog-us")
+AWS_REGION = os.getenv("BEDROCK_KB_REGION", "us-east-1")
 AWS_PROFILE = os.getenv("AWS_PROFILE", "default")
+BEDROCK_KB_ID = os.getenv("BEDROCK_KB_ID")
+BEDROCK_KB_DATA_SOURCE_ID = os.getenv("BEDROCK_KB_DATA_SOURCE_ID") or os.getenv("DATA_SOURCE_ID")
 
 def get_db_connection():
     """Kết nối database (tự động chọn PostgreSQL trên EKS hoặc SQLite ở local)"""
     db_conn_str = os.getenv("DB_CONNECTION_STRING")
     if db_conn_str:
-        # Import động để tránh lỗi thiếu thư viện khi chạy ở local chỉ cần SQLite
         import psycopg2
-        from psycopg2.extras import RealDictCursor
-        
         print("Connecting to PostgreSQL on EKS...")
-        # Parse connection string: host=postgresql user=otelu password=otelp dbname=otel
         params = {}
         for pair in db_conn_str.split():
             k, v = pair.split("=")
@@ -45,23 +42,21 @@ def get_db_connection():
             port=int(params.get("port", 5432))
         )
     else:
-        # Chạy local (SQLite)
         db_path = os.path.join("server-test", "shopping.db")
         if not os.path.exists(db_path):
-            db_path = os.path.join("../server-test", "shopping.db") # fallback
+            db_path = os.path.join("../server-test", "shopping.db")
         print(f"Connecting to SQLite local: {db_path}...")
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
         return conn
 
 def serialize_product(p):
-    """Định dạng bản ghi product thành text tự nhiên phục vụ RAG"""
+    """Gói sản phẩm thành định dạng text tự nhiên"""
     p_id = p.get("id") or p.get("product_id")
     name = p.get("name")
     desc = p.get("description", "")
     price = p.get("price_units") if p.get("price_units") is not None else p.get("price", 0)
     cats = p.get("categories", "")
-    
     return (
         f"Product ID: {p_id}\n"
         f"Product Name: {name}\n"
@@ -70,28 +65,51 @@ def serialize_product(p):
         f"Description: {desc}\n"
     )
 
-def upload_to_s3(file_name, content):
-    """Upload tệp text lên S3 Staging Bucket"""
-    session = boto3.Session(profile_name=AWS_PROFILE)
-    s3 = session.client("s3", region_name=AWS_REGION)
-    
-    try:
-        s3.put_object(
-            Bucket=S3_BUCKET_NAME,
-            Key=f"products/{file_name}",
-            Body=content.encode("utf-8"),
-            ContentType="text/plain"
-        )
-        print(f"-> Uploaded: products/{file_name}")
-    except Exception as e:
-        print(f"❌ Lỗi upload sản phẩm {file_name}: {e}")
+def upload_to_s3(s3_client, file_name, content):
+    """Upload tệp lên S3"""
+    s3_client.put_object(
+        Bucket=S3_BUCKET_NAME,
+        Key=f"products/{file_name}",
+        Body=content.encode("utf-8"),
+        ContentType="text/plain"
+    )
 
-def run():
-    print(f"=== DB TO S3 SYNC START (Bucket: {S3_BUCKET_NAME}) ===")
+def trigger_bedrock_sync():
+    """Gọi AWS API để ra lệnh cho Bedrock KB sync với S3"""
+    if not BEDROCK_KB_ID or not BEDROCK_KB_DATA_SOURCE_ID:
+        print("⚠️ Bỏ qua kích hoạt Sync Bedrock KB: Thiếu BEDROCK_KB_ID hoặc BEDROCK_KB_DATA_SOURCE_ID trong config.")
+        return
+        
+    print(f"Kích hoạt đồng bộ Bedrock Knowledge Base (ID: {BEDROCK_KB_ID})...")
+    # Sử dụng Session và AWS Profile tương ứng nếu có
+    if os.getenv("AWS_EXECUTION_ENV") or not AWS_PROFILE:
+        # Nếu chạy trên Lambda / ECS Task (dùng IAM Role trực tiếp, không profile)
+        client = boto3.client("bedrock-agent", region_name=AWS_REGION)
+    else:
+        session = boto3.Session(profile_name=AWS_PROFILE)
+        client = session.client("bedrock-agent", region_name=AWS_REGION)
+        
+    try:
+        response = client.start_ingestion_job(
+            knowledgeBaseId=BEDROCK_KB_ID,
+            dataSourceId=BEDROCK_KB_DATA_SOURCE_ID
+        )
+        job_id = response["ingestionJob"]["ingestionJobId"]
+        print(f"✅ Ingestion Job đã bắt đầu chạy thành công! ID: {job_id}")
+    except Exception as e:
+        print(f"❌ Lỗi kích hoạt đồng bộ Bedrock KB: {e}")
+
+def lambda_handler(event, context):
+    """Hàm entry point nếu chạy trên AWS Lambda"""
+    run_sync()
+    return {"statusCode": 200, "body": "Sync completed successfully"}
+
+def run_sync():
+    print(f"=== SYNC PROCESS START (S3 Bucket: {S3_BUCKET_NAME}) ===")
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # 1. Query danh sách sản phẩm
+    # 1. Quét sản phẩm từ Database
     products = []
     try:
         if isinstance(conn, sqlite3.Connection):
@@ -106,11 +124,9 @@ def run():
                     "price_units": r["price_units"]
                 })
         else:
-            # PostgreSQL
             cursor.execute("SELECT id, name, description, categories, price_units FROM products")
             rows = cursor.fetchall()
             for r in rows:
-                # categories in PG is text or list, let's normalize
                 products.append({
                     "id": r[0],
                     "name": r[1],
@@ -127,14 +143,32 @@ def run():
 
     print(f"Tìm thấy {len(products)} sản phẩm. Bắt đầu đẩy lên S3...")
 
-    # 2. Xử lý & Upload từng sản phẩm thành file text
+    # 2. Khởi tạo S3 Client
+    if os.getenv("AWS_EXECUTION_ENV") or not AWS_PROFILE:
+        s3 = boto3.client("s3", region_name=AWS_REGION)
+    else:
+        session = boto3.Session(profile_name=AWS_PROFILE)
+        s3 = session.client("s3", region_name=AWS_REGION)
+
+    # 3. Đẩy từng sản phẩm lên S3
+    success_count = 0
     for p in products:
         p_id = p["id"]
         content = serialize_product(p)
         file_name = f"{p_id}.txt"
-        upload_to_s3(file_name, content)
+        try:
+            upload_to_s3(s3, file_name, content)
+            success_count += 1
+        except Exception as e:
+            print(f"❌ Lỗi upload sản phẩm {p_id}: {e}")
+            
+    print(f"Đã tải lên {success_count}/{len(products)} tệp tin mô tả sản phẩm.")
+
+    # 4. Kích hoạt đồng bộ RAG
+    if success_count > 0:
+        trigger_bedrock_sync()
         
-    print("=== SYNC COMPLETED SUCCESSFULLY ===")
+    print("=== PROCESS COMPLETED ===")
 
 if __name__ == "__main__":
-    run()
+    run_sync()

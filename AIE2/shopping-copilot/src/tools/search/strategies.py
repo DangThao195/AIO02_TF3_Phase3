@@ -382,8 +382,15 @@ class BedrockRAGStrategy(SearchStrategy):
     _name = "bedrock_rag"
 
     def __init__(self):
-        self._kb_id = os.environ.get("BEDROCK_KB_ID")
-        self._region = os.environ.get("BEDROCK_KB_REGION", "us-east-1")
+        pass
+
+    @property
+    def kb_id(self) -> Optional[str]:
+        return os.environ.get("BEDROCK_KB_ID")
+
+    @property
+    def region(self) -> str:
+        return os.environ.get("BEDROCK_KB_REGION", "us-east-1")
 
     @property
     def name(self) -> str:
@@ -391,27 +398,33 @@ class BedrockRAGStrategy(SearchStrategy):
 
     def should_run(self, sq: SearchQuery) -> bool:
         """Only run if BEDROCK_KB_ID is configured in the environment."""
-        return bool(self._kb_id)
+        return bool(self.kb_id)
 
     async def search(self, sq: SearchQuery) -> List[ScoredProduct]:
-        if not self._kb_id:
+        kb_id = self.kb_id
+        if not kb_id:
             return []
 
+        print(f"\n[RAG] 🔍 Kích hoạt Bedrock RAG tìm kiếm ngữ nghĩa cho: '{sq.raw}' (Region: {self.region}, KB_ID: {kb_id})")
         try:
             # Run blocking boto3 client calls in asyncio executor to prevent event loop blocking
             loop = asyncio.get_event_loop()
             results = await loop.run_in_executor(None, self._query_kb, sq.raw)
+            print(f"[RAG] ✅ Tìm thấy {len(results)} sản phẩm phù hợp từ Vector KB.")
             return results
         except Exception as e:
-            print(f"BedrockRAGStrategy error: {e}")
+            print(f"❌ [RAG] Lỗi BedrockRAGStrategy: {e}")
             return []
 
     def _query_kb(self, query_text: str) -> List[ScoredProduct]:
+        kb_id = self.kb_id
+        region = self.region
+        
         session = boto3.Session(profile_name=os.environ.get("AWS_PROFILE"))
-        client = session.client("bedrock-agent-runtime", region_name=self._region)
+        client = session.client("bedrock-agent-runtime", region_name=region)
         
         response = client.retrieve(
-            knowledgeBaseId=self._kb_id,
+            knowledgeBaseId=kb_id,
             retrievalQuery={
                 'text': query_text
             },
