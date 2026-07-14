@@ -1,4 +1,4 @@
-﻿#!/usr/bin/python
+#!/usr/bin/python
 
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
@@ -13,6 +13,7 @@ import random
 import boto3
 import grpc
 from dotenv import load_dotenv
+load_dotenv(override=True)
 from opentelemetry import trace, metrics
 from opentelemetry._logs import set_logger_provider
 from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
