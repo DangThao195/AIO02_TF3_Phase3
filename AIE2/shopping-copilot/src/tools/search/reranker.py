@@ -45,7 +45,8 @@ class LLMReranker:
                 price_range_str = f"<${sq.price_max}"
 
         # Call LLM
-        response = llm_model.invoke(f"""
+        try:
+            response = llm_model.invoke(f"""
 You are a product ranking assistant for an astronomy equipment store.
 Given a user's shopping query and a list of products, re-rank them by relevance.
 
@@ -65,6 +66,9 @@ Products to rank:
 
 Reranked order (comma-separated numbers):
 """)
+        except Exception as e:
+            print(f"LLM reranker invocation error: {e}. Keeping original order.")
+            return products
 
         # Parse LLM output
         try:

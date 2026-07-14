@@ -57,6 +57,19 @@ class RegexQueryAnalyzer:
         "có", "muốn", "muon", "mua", "bán", "ban", "ở đâu", "o dau", "nào", "nao"
     ])
 
+    # Color mapping VN -> EN
+    COLOR_MAP = {
+        "đỏ": "red",
+        "do": "red",
+        "xanh": "blue",
+        "đen": "black",
+        "trắng": "white",
+        "vàng": "yellow",
+        "hồng": "pink",
+        "tím": "purple",
+        "cam": "orange",
+    }
+
     def parse(self, raw: str) -> SearchQuery:
         """Parse query qua regex phase."""
         raw_clean = raw.strip().lower()
@@ -77,6 +90,15 @@ class RegexQueryAnalyzer:
         keywords = self._tokenize(raw_clean)
         sq.keywords_vn = [kw for kw in keywords if self._is_vietnamese(kw)]
         sq.keywords_en = [kw for kw in keywords if not self._is_vietnamese(kw)]
+
+        # 4.1 Extract simple color attribute
+        for vn_color, en_color in self.COLOR_MAP.items():
+            if re.search(rf"\b{vn_color}\b", raw_clean, re.IGNORECASE):
+                sq.attributes["color"] = en_color
+                # also add to keywords_en to help text search
+                if en_color not in sq.keywords_en:
+                    sq.keywords_en.append(en_color)
+                break
 
         # 5. Detect intent
         if not raw_clean or len(raw_clean) < 2:
@@ -183,7 +205,8 @@ class QueryAnalyzerPipeline:
             return cached
 
         # LLM call
-        response = self.llm.invoke(f"""
+        try:
+            response = self.llm.invoke(f"""
 You are a shopping query parser for an astronomy equipment store.
 
 Product categories: telescopes, binoculars, accessories, flashlights, books, travel, assembly
@@ -200,13 +223,18 @@ Return ONLY a JSON object with these fields (or empty object if cannot parse):
 
 Query: "{raw}"
 """)
+        except Exception as e:
+            # Log and return None so pipeline falls back to regex-only parse
+            print(f"LLM parse invocation error: {e}")
+            return None
 
         try:
             result = json.loads(response.content if hasattr(response, 'content') else response)
             # Cache 24h
             self.cache.set_raw(cache_key, result, ttl=86400)
             return result
-        except (json.JSONDecodeError, AttributeError):
+        except (json.JSONDecodeError, AttributeError) as e:
+            print(f"LLM parse JSON error: {e}")
             return None
 
     def _merge_llm_result(self, sq: SearchQuery, llm_result: Dict) -> None:

@@ -68,6 +68,7 @@ class SearchQuery:
     intent: Literal["search", "browse", "compare", "unknown"] = "search"
     sort: Literal["relevance", "price_asc", "price_desc"] = "relevance"
     is_complex: bool = False                    # Có multi-intent? → trigger LLM rerank
+    attributes: dict = field(default_factory=dict)  # Structured attributes (color, brand, etc.)
 
     @property
     def has_price_filter(self) -> bool:

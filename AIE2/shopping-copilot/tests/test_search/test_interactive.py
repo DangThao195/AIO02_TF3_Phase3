@@ -10,6 +10,12 @@ Hỗ trợ hai mode:
 
 import sys
 import os
+from pathlib import Path
+
+# Ensure project `shopping-copilot` root is on sys.path so `import src` works
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 import logging
 from typing import Optional
 

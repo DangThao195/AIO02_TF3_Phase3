@@ -234,7 +234,12 @@ class DirectDBStrategy(SearchStrategy):
         return list(set(variants))
 
     async def _search_variant(self, query: str, sq: SearchQuery) -> List[ScoredProduct]:
-        """Gọi gRPC SearchProducts với 1 query variant."""
+        """Gọi gRPC SearchProducts với 1 query variant.
+
+        Nếu gRPC không khả dụng (ví dụ đang chạy server-test local), thử gọi trực tiếp
+        vào module `server.db` (nếu import được) để tận dụng các hàm db_* mới.
+        """
+        # First attempt: try gRPC
         try:
             channel = grpc.aio.insecure_channel(CATALOG_ADDR)
             stub = demo_pb2_grpc.ProductCatalogServiceStub(channel)
@@ -261,9 +266,28 @@ class DirectDBStrategy(SearchStrategy):
 
             await channel.close()
             return scored
-        except Exception as e:
-            print(f"DirectDBStrategy error for variant '{query}': {e}")
-            return []
+        except Exception:
+            # gRPC failed — try local DB functions if available (server-test)
+            try:
+                import server.db as local_db  # type: ignore
+
+                rows = await local_db.db_execute_text_search(query, limit=50)
+                scored = []
+                for r in rows:
+                    product = Product(
+                        id=r["id"],
+                        name=r["name"],
+                        description=r["description"] or "",
+                        categories=(r["categories"].split(",") if r["categories"] else []),
+                        price_usd=demo_pb2.Money(units=r["price_units"] if r["price_units"] is not None else 0)
+                    )
+                    base_score = self._base_score(product, sq, query)
+                    if base_score > 0:
+                        scored.append(ScoredProduct(product=product, score=base_score, strategy_name=self.name))
+                return scored
+            except Exception as e:
+                print(f"DirectDBStrategy error for variant '{query}': {e}")
+                return []
 
     def _base_score(self, p: Product, sq: SearchQuery, query_variant: str) -> float:
         """Base score từ direct DB match."""

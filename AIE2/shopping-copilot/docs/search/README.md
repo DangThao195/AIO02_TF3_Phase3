@@ -1,221 +1,112 @@
 # tools/search/README.md
 
-# Multi-Strategy Search Module
+# Multi-Strategy Search Module — LLM-synthesized DB queries (updated)
 
-Mô-đun tìm kiếm thông minh cho storefront với hỗ trợ **tiếng Việt + tiếng Anh**, sử dụng kiến trúc multi-strategy không cần vector database.
+Tài liệu này mô tả cập nhật cho mô-đun tìm kiếm: thay vì quét toàn bộ database hoặc tải toàn bộ catalog khi DB lớn, hệ thống sẽ sử dụng LLM để sinh các truy vấn (query templates / parameter sets / synonyms đa ngôn ngữ) và gọi các API DB chuyên biệt để trả về tập kết quả nhỏ, có thể xử lý tiếp bằng các chiến lược ranking và (tuỳ chọn) LLM rerank.
 
-## Tóm tắt kiến trúc
+Mục tiêu chính:
+- Tránh full-table scan / tải toàn bộ DB khi dataset lớn.
+- Dùng LLM để mở rộng/sinh variant truy vấn (synonym multilingual VN↔EN), không để LLM trả về kết quả trực tiếp từ embedding.
+- Định nghĩa rõ 5 API/handler DB cần thiết để giao tiếp an toàn, có thể tối ưu index và hạn chế I/O.
 
-```
-Input Query (Tiếng Việt/Anh)
-    ↓
-┌─────────────────────────────┐
-│ Phase 1: Query Analyzer     │
-│ - Regex parse (price, sort) │
-│ - LLM fallback (category)   │
-└────────────┬────────────────┘
-             ↓
-      SearchQuery object
-             ↓
-┌─────────────────────────────────────────────┐
-│ Phase 2: Strategy Orchestrator (song song) │
-│                                             │
-│ ┌──────────────┐  ┌──────────┐  ┌────────┐│
-│ │Full Catalog  │  │Direct DB │  │Synonym││
-│ │In-memory     │  │gRPC      │  │Expand ││
-│ │Filter        │  │          │  │VN→EN  ││
-│ └──────────────┘  └──────────┘  └────────┘│
-└────────────┬────────────────────────────────┘
-             ↓
-      Pools merged
-             ↓
-┌─────────────────────────────┐
-│ Phase 3: Merge & Rank       │
-│ - Dedup (product_id)        │
-│ - Rule-based score          │
-│ - Sort by relevance/price   │
-└────────────┬────────────────┘
-             ↓
-      Top K results
-             ↓
-┌─────────────────────────────┐
-│ Phase 4: LLM Rerank         │
-│ (conditional, pool > 5)     │
-└────────────┬────────────────┘
-             ↓
-      Final results → LLM
-```
+## Kiến trúc (tóm tắt)
 
-## File Structure
+Input query (Tiếng Việt / Tiếng Anh / Mixed)
+       ↓
+- Phase 1: Query Analyzer
+       - Regex & rule parse (price range, sort, filters)
+       - LLM (cached) để sinh query variants và synonyms (VN↔EN)
+       ↓
+- Phase 2: DB Query Layer (gọi API nhẹ, trả list size nhỏ)
+       - Gọi 1..N DB handlers (see "DB API" below)
+       ↓
+- Phase 3: Merge, Dedup, Rule-based Score
+       - Gộp pool, loại trùng theo `product_id`, apply rule scores
+       ↓
+- Phase 4: Optional LLM Rerank (chỉ khi pool > threshold)
+       - LLM làm final re-ranking / answer shaping
 
-```
-tools/search/
-├── __init__.py              # Export search_products_v2
-├── models.py                # SearchQuery, Product, ScoredProduct, SearchResult
-├── query_analyzer.py        # Regex + LLM parse
-├── strategies.py            # 3 strategies: FullCatalog, DirectDB, SynonymExpansion
-├── ranker.py                # Merge + dedup + rule-based rank
-├── reranker.py              # LLM rerank (conditional)
-├── synonym_cache.py         # VN→EN keyword mapping
-├── cache.py                 # Search cache logic (empty result cache)
-├── orchestrator.py          # Main orchestrator + search_products_v2 tool
-└── README.md                # This file
-```
+## Vì sao chọn approach này
+- LLM chỉ sinh truy vấn (parameterized), không quét toàn bộ DB.
+- DB handlers có thể tối ưu bằng index, limit, pagination, trả về tập nhỏ (N ≪ total rows).
+- Giảm chi phí I/O và latency trên DB lớn; vẫn duy trì khả năng xử lý ngôn ngữ tự nhiên phong phú.
 
-## Cách dùng
+## DB API (mới) — bắt buộc
 
-### 1. Import tool
+Ghi chú: tất cả hàm DB trả về danh sách sản phẩm/records tối đa với `limit` bắt buộc và hỗ trợ `filters`/`sort`.
 
-```python
-from tools import search_products_v2
+- `db_query_variants(query_variants: List[QueryVariant], filters: Dict, limit: int) -> List[Product]`
+       - Mục đích: nhận một tập biến thể truy vấn (do LLM sinh ra), chạy từng truy vấn dưới dạng parameterized SQL / stored procedure / gRPC call, merge sơ bộ kết quả, trả list (có thể kèm score từ DB như text_rank)
+       - Yêu cầu: mỗi truy vấn phải map trực tiếp tới truy vấn được index hóa (WHERE trên indexed columns) để tránh scan.
 
-# Dùng trong LangChain agent
-agent_tools = [search_products_v2, ...]
-```
+- `db_query_conditions(conditioned_query: ConditionedQuery, limit: int) -> List[Product]`
+       - Mục đích: chạy các truy vấn có điều kiện phức tạp (price range, category_id, attributes) do analyzer chuyển thành cấu trúc điều kiện. Trả kết quả đã lọc.
+       - Yêu cầu: hỗ trợ pagination, trả về `total_estimate` nếu DB hỗ trợ (useful để decide rerank/LLM fallback).
 
-### 2. Gọi tool
+- `db_execute_text_search(text_query: str, limit: int) -> List[Product]`
+       - Mục đích: gọi full-text / trigram / search index (nếu có) với `text_query` được sanitize; phù hợp cho fuzzy/name searches.
+       - Yêu cầu: đảm bảo `limit` nhỏ, use text-indexed path, không fallback vào table scan.
 
-```python
-# Synchronous wrapper (trong LangChain)
-result = search_products_v2.invoke({"query": "kính thiên văn dưới 100 đô"})
-print(result)
-```
+Ngoài 3 API trên, thêm 2 hàm helper để phục vụ tìm kiếm chi tiết và mapping:
 
-### 3. Ví dụ queries
+- `get_category(category_hint: str) -> List[Category]`
+       - Trả về các category suggestions / canonical category ids từ hint (dùng cho filter và để LLM sinh queries theo category_id thay vì text).
 
-- **Tiếng Việt**: "kính thiên văn rẻ nhất", "ống nhòm từ 50-100 đô", "sách về sao chổi"
-- **Tiếng Anh**: "cheapest telescope", "binoculars under 50 dollars", "comet book"
-- **Mixed**: "solar filter rẻ nhất", "book about telescopes"
+- `get_full_product_name(product_id_or_partial: str) -> Optional[str]`
+       - Trả về tên sản phẩm đầy đủ / canonical cho một id hoặc partial identifier — hữu ích khi user tìm kiếm đúng sản phẩm (autocomplete, exact match)
 
-## Chi tiết các Strategy
+Tóm lại: 3 hàm query (variants/conditions/text_search) + 2 helper (category / fullname) = 5 endpoints nhẹ, an toàn, tối ưu.
 
-### Strategy A: FullCatalogStrategy
-- **Khi**: Luôn chạy
-- **Làm gì**: Load toàn bộ catalog, filter in-memory
-- **Cost**: $0 (cache 5 phút)
-- **Ưu điểm**: Cực nhanh, toàn bộ dữ liệu
+## Integration points với hệ thống hiện tại
+- QueryAnalyzer: tuỳ chỉnh để xuất `QueryVariant[]` cho `db_query_variants` thay vì cố gắng lấy tất cả sản phẩm bằng cách quét.
+- Strategies:
+       - FullCatalogStrategy: giữ nguyên nhưng chỉ dùng khi catalog đã được cache bộ nhớ nhỏ hoặc DB size chấp nhận được.
+       - DirectDBStrategy: chuyển sang gọi `db_query_variants` / `db_query_conditions` / `db_execute_text_search`.
+       - SynonymExpansionStrategy: giờ LLM sinh biến thể (VN↔EN) và lưu vào `synonym_cache`.
+- Existing helper functions in codebase: tích hợp trực tiếp (không thay đổi) — README này giả định các hàm hỗ trợ (cache, DB client, LLM wrapper) đã có sẵn.
 
-### Strategy B: DirectDBStrategy
-- **Khi**: Luôn chạy
-- **Làm gì**: Gọi gRPC SearchProducts với nhiều query variant
-- **Cost**: $0 (DB call)
-- **Ưu điểm**: Tìm exact match, fallback cho query phức tạp
+## Caching & Rate / Cost considerations
+- Cache LLM-produced query variants by query-hash (TTL ~ 24h) để giảm chi phí LLM.
+- Cache `get_category` và synonym map vĩnh viễn hoặc dài hạn.
+- DB handlers phải enforce `limit` thấp (e.g., 50) và trả `total_estimate` nếu được.
 
-### Strategy C: SynonymExpansionStrategy
-- **Khi**: Query có từ khoá tiếng Việt
-- **Làm gì**: Dịch VN→EN (cache vĩnh viễn), search EN keywords
-- **Cost**: ~$0.000008 (LLM translate, 1 lần cache miss)
-- **Ưu điểm**: Giải quyết "kính thiên văn" → "telescope"
+## Scoring / Merge rules (tóm tắt)
+- Dedup theo `product_id`.
+- Score components: exact name, keyword in name, category match, fuzzy name, price proximity, boosted if user-specified filters match.
+- Sau merge, nếu pool > 5 (configurable) thì gọi LLM rerank.
 
-## Scoring Rules
+## Pseudocode — orchestrator (ý tưởng)
 
-**Weights**:
-- Exact name match: 100
-- Keyword in name: 50 (mỗi keyword)
-- Keyword in category: 30 (mỗi keyword)
-- Keyword in description: 20 (mỗi keyword)
-- Fuzzy name match (>80%): 40
-- Category match: 60
-
-**Adjustments**:
-- Price > max: discard (-1)
-- Price < min: discard (-1)
-- Price proximity bonus: +10
-- Category match bonus: +5
-
-## Cache Strategy
-
-| Layer | TTL | Scope |
-|-------|-----|-------|
-| Full catalog | 300s | Global |
-| LLM parse | 86400s (24h) | Global, by query hash |
-| Synonym map | ∞ | Global, persistent |
-| Empty result | 1800s (session) | Session-level |
-
-## Chi phí vận hành (dự kiến)
-
-Với 1000 query/ngày sau warm-up:
-
-- Regex-only: **$0**
-- LLM parse cache hit: **$0**
-- LLM parse miss (10%): **$0.000005**
-- Synonym miss (4%): **$0.000008**
-- LLM rerank (1%): **$0.000015**
-- **Total/ngày**: ~**$0.001**
-
-## Debugging
-
-### Enable verbose logging
-
-```python
-import logging
-logging.basicConfig(level=logging.DEBUG)
-# Sẽ thấy: "Strategy X: Y results", "LLM parse: ...", etc.
+```py
+def search_pipeline(user_query):
+              sq = analyzer.parse(user_query)
+              variants = llm.synthesize_query_variants(sq)  # cached
+              # call DB in parallel but each call limited
+              results_a = db_query_variants(variants['variants'], filters=sq.filters, limit=50)
+              results_b = db_query_conditions(sq.conditioned, limit=50)
+              results_c = db_execute_text_search(sq.text_for_search, limit=50)
+              merged = ranker.merge_and_score([results_a, results_b, results_c], sq)
+              if len(merged) > rerank_threshold:
+                            merged = llm_reranker.rerank(merged, user_query)
+              return merged[:top_k]
 ```
 
-### Test từng strategy riêng lẻ
+## Examples & Prompts (LLM)
+- Prompt to LLM should be constrained and deterministic: give explicit output schema (list of query variants, each variant: field_filters, keywords_en, keywords_vn, sql_template_name)
+- Example: "From the user query, produce up to 8 parameterized query variants: {filters:{price_min,price_max}, keywords:['telescope','kính thiên văn'], category_id:..., prefer_match:'name|category'}"
 
-```python
-from tools.search.strategies import FullCatalogStrategy
-from tools.search.query_analyzer import QueryAnalyzerPipeline
+## Debugging & Observability
+- Log: produced query variants, DB calls (which template used + returned count + total_estimate), cache hits/misses, rerank calls and costs.
+- Metrics: queries/sec, LLM calls, avg DB rows returned, pct queries that triggered rerank.
 
-analyzer = QueryAnalyzerPipeline()
-sq = analyzer.parse("kính thiên văn dưới 100")
+## Migration notes
+- Nếu DB nhỏ: keep FullCatalogStrategy as primary (fast, in-memory).
+- If DB large: switch FullCatalog to read-only cached snapshot or disable and rely on DB handlers described above.
 
-strategy = FullCatalogStrategy()
-results = await strategy.search(sq)
-print(f"Found {len(results)} products")
-for r in results:
-    print(f"  - {r.product.name}: score={r.score}")
-```
+## Next steps
+- Implement/validate the 5 DB handlers in the data access layer and add unit tests for query templates.
+- Add guarded LLM prompts with strict output schema.
+- Instrument metrics for DB row counts and LLM call frequency.
 
-### Inspect merged results
-
-```python
-from tools.search.ranker import ResultRanker
-
-ranker = ResultRanker()
-merged = ranker.merge_and_rank([pool_a, pool_b, pool_c], sq)
-print(f"Merged {len(merged)} unique products")
-```
-
-## Troubleshooting
-
-### Không tìm được sản phẩm
-
-1. **Kiểm tra regex parse**: In ra `SearchQuery` để xem category/keywords
-   ```python
-   analyzer = QueryAnalyzerPipeline()
-   sq = analyzer.parse("query của tôi")
-   print(f"Categories: {sq.category}, Keywords EN: {sq.keywords_en}, VN: {sq.keywords_vn}")
-   ```
-
-2. **Kiểm tra strategy output**: Chạy từng strategy riêng lẻ
-
-3. **Kiểm tra synonym cache**: 
-   ```python
-   from tools.search.synonym_cache import SynonymCache
-   cache = SynonymCache()
-   print(cache.get_map())
-   ```
-
-### Performance chậm
-
-- Kiểm tra gRPC latency: `DirectDBStrategy` timeout = 3s
-- Kiểm tra full catalog cache: Có cache hit không?
-- Nếu LLM rerank chạy: Có kích hoạt điều kiện `pool > 5` không?
-
-### LLM parse sai intent
-
-Cập nhật `QueryAnalyzerPipeline.llm_parse_cached()` với custom prompt nếu cần.
-
-## Tương lai
-
-- [ ] Semantic search fallback (nếu có budget embedding)
-- [ ] A/B test scoring weights
-- [ ] Tự học synonym từ user behavior
-- [ ] Product tagging cho filter nhanh hơn
-
-## Liên hệ
-
-Mô-đun này là phần của AI Shopping Copilot (AIO02) — TF3 Phase 3.
+---
+Mô-đun này là phần của AI Shopping Copilot (AIO02) — TF3 Phase 3. Nếu muốn, tôi có thể mở PR mẫu với patch tích hợp orchestrator pseudocode vào `tools/search/orchestrator.py`.

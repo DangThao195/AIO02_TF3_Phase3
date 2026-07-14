@@ -92,6 +92,20 @@ class SearchOrchestrator:
 
         # Step 4: Merge + dedup + rule rank
         merged = self.ranker.merge_and_rank(pools, sq)
+        # If user specified structured attributes (e.g., color), filter merged results
+        if sq.attributes.get("color"):
+            color = sq.attributes.get("color").lower()
+            filtered = []
+            for sp in merged:
+                name = (sp.product.name or "").lower()
+                desc = (sp.product.description or "").lower()
+                cats = " ".join(sp.product.categories).lower() if sp.product.categories else ""
+                if color in name or color in desc or color in cats:
+                    filtered.append(sp)
+            if filtered:
+                merged = filtered
+            # If no product matched color, keep merged (avoid surprising empty result)
+
         top_n = self.ranker.top_k(merged, self.DEFAULT_TOP_K)
 
         # Step 5: LLM rerank nếu cần
@@ -201,7 +215,33 @@ async def search_products_v2(query: str) -> str:
     - Xếp hạng kết quả theo relevance
     - Gợi ý sản phẩm phù hợp nhất
     """
-    result = await _orchestrator.search(query)
+    # Quick guard: if query appears unrelated to shopping, return clear customer-facing message
+    SHOPPING_KEYWORDS = (
+        "mua", "mua hàng", "giá", "đơn", "sản phẩm", "tìm", "tìm kiếm",
+        "kính", "telescope", "kính thiên văn", "ống nhòm", "binocular",
+        "sách", "book", "đèn pin", "headphone", "tai nghe", "headphones",
+    )
+    low = query.lower()
+    if not any(k in low for k in SHOPPING_KEYWORDS):
+        return (
+            "Xin lỗi — yêu cầu của bạn không phải là truy vấn tìm sản phẩm. "
+            "Nếu bạn cần hỗ trợ khác, vui lòng liên hệ bộ phận chăm sóc khách hàng."
+        )
+
+    try:
+        result = await _orchestrator.search(query)
+    except Exception as e:
+        msg = str(e)
+        # Map common LLM / AWS Bedrock validation error to friendly message
+        if "ValidationException" in msg or "Converse" in msg or "conversation" in msg:
+            return (
+                "Lỗi kết nối đến dịch vụ LLM: cuộc hội thoại hiện tại không hợp lệ. "
+                "Vui lòng thử lại sau 1 vài phút hoặc liên hệ hỗ trợ kỹ thuật nếu vẫn gặp lỗi."
+            )
+        # Generic fallback
+        return (
+            "Đã xảy ra lỗi khi xử lý truy vấn. Vui lòng thử lại sau hoặc liên hệ bộ phận hỗ trợ."
+        )
     
     # Format output cho LLM
     if result.error:
