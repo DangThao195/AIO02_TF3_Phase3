@@ -3,10 +3,25 @@ import re
 import sqlite3
 import boto3
 
+def load_env():
+    """Tự động đọc file .env ở thư mục gốc"""
+    for path in [".env", "../.env", "../../.env"]:
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        os.environ[k.strip()] = v.strip().strip('"').strip("'")
+            break
+
+# Nạp cấu hình từ .env trước
+load_env()
+
 # AWS Configuration
-S3_BUCKET_NAME = os.getenv("PRODUCTS_S3_BUCKET", "techx-products-catalog-f6230446")
+S3_BUCKET_NAME = os.getenv("PRODUCTS_S3_BUCKET")
 AWS_REGION = os.getenv("AWS_REGION", "ap-southeast-1")
-AWS_PROFILE = os.getenv("AWS_PROFILE", None)
+AWS_PROFILE = os.getenv("AWS_PROFILE", "default")
 
 def get_db_connection():
     """Kết nối database (tự động chọn PostgreSQL trên EKS hoặc SQLite ở local)"""
