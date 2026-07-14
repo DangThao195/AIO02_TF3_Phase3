@@ -6,7 +6,7 @@
 | Producer | **AIO02** (Cost Meter trong AI gateway) |
 | Consumer | **CDO giữ trụ Cost Optimization** (tổng hợp vào ngân sách TF theo `onboarding/BUDGET.md`) + cả TF ở Ops Review |
 | Nhịp giao | Báo cáo tuần (trước Ops Review) + cảnh báo tức thời khi chạm ngưỡng |
-| Trạng thái | Draft — chờ CDO review |
+| Trạng thái | **Approved — Đang áp dụng** |
 
 ## Mục đích
 
@@ -90,7 +90,7 @@ Tag `feature` hiện có: `review-summary`, `review-qa` (hỏi-đáp), `rca-assi
 
 ## Tiêu chí nghiệm thu
 
-- [ ] CDO Cost pillar query được 4 metric trên trong Prometheus.
-- [ ] Báo cáo tuần đầu tiên nộp đúng format, CDO đọc hiểu không cần AIO giải thích miệng.
-- [ ] Trần ngân sách AI tuần đã được CDO chốt bằng văn bản (ADR).
-- [ ] Test cảnh báo 80% bằng trần giả lập thấp.
+- [x] CDO Cost pillar query được 4 metric trên trong Prometheus.
+- [x] Báo cáo tuần đầu tiên nộp đúng format, CDO đọc hiểu không cần AIO giải thích miệng.
+- [x] Trần ngân sách AI tuần đã được CDO chốt bằng văn bản (ADR).
+- [x] Test cảnh báo 80% bằng trần giả lập thấp.

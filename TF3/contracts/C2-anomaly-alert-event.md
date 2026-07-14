@@ -6,7 +6,7 @@
 | Producer | **AIO02** (AI engine — detection + correlation) |
 | Consumer | **CDO on-call** (bất kỳ ai đang trực, mọi trụ) |
 | Kênh giao | Webhook JSON (format tương thích Alertmanager) → kênh chat TF3 + dashboard |
-| Trạng thái | Draft — chờ CDO review |
+| Trạng thái | **Approved — Đang áp dụng** |
 
 ## Mục đích
 
@@ -104,7 +104,7 @@ CDO **không phải làm gì** ở phía input — mục này để CDO hiểu a
 
 ## Tiêu chí nghiệm thu
 
-- [ ] Fire-drill: bắn 1 alert giả lập đủ schema vào kênh, người trực CDO xác nhận đọc hiểu + tìm được evidence trong <5 phút.
-- [ ] Lớp dự phòng Alertmanager hoạt động khi tắt engine (đã test).
-- [ ] Dashboard đếm alert volume + precision đang chạy.
-- [ ] ADR ký tên bởi AIO02 + đại diện CDO01, CDO02.
+- [x] Fire-drill: bắn 1 alert giả lập đủ schema vào kênh, người trực CDO xác nhận đọc hiểu + tìm được evidence trong <5 phút.
+- [x] Lớp dự phòng Alertmanager hoạt động khi tắt engine (đã test).
+- [x] Dashboard đếm alert volume + precision đang chạy.
+- [x] ADR ký tên bởi AIO02 + đại diện CDO01, CDO02.

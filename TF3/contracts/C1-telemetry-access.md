@@ -5,7 +5,7 @@
 | Version | 1.0.0 |
 | Producer (bên cung cấp) | **CDO01 + CDO02** (chủ hạ tầng observability) |
 | Consumer (bên dùng) | **AIO02** (AI engine — detection, RCA, cost meter) |
-| Trạng thái | Draft — chờ CDO review |
+| Trạng thái | **Approved — Đang áp dụng** |
 | Review cadence | Standup hằng ngày khi có thay đổi; chốt lại mỗi Ops Review |
 
 ## Mục đích
@@ -75,7 +75,7 @@ cái gì, ở đâu, và CDO cam kết gì để model/detector của AIO không
 
 ## Tiêu chí nghiệm thu (Definition of Done)
 
-- [ ] AIO query được cả 3 nguồn từ pod trong cluster (có bằng chứng: script + output).
-- [ ] `telemetry-dependencies.md` tồn tại và được CDO xác nhận đã đọc.
-- [ ] Absent-check cho metric quan trọng chạy và có alert meta.
-- [ ] Hai bên ký tên vào ADR khởi tạo contract này.
+- [x] AIO query được cả 3 nguồn từ pod trong cluster (có bằng chứng: script + output).
+- [x] `telemetry-dependencies.md` tồn tại và được CDO xác nhận đã đọc.
+- [x] Absent-check cho metric quan trọng chạy và có alert meta.
+- [x] Hai bên ký tên vào ADR khởi tạo contract này.

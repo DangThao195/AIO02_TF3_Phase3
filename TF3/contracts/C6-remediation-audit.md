@@ -5,7 +5,7 @@
 | Version | 1.0.0 |
 | Producer | **AIO02** (Remediation module trong AI engine) |
 | Consumer | **CDO giữ trụ Auditability** (luân phiên hằng tuần) + hội đồng chấm (mọi quyết định truy được về người — RULES §7, §8) |
-| Trạng thái | Draft — chờ CDO review |
+| Trạng thái | **Approved — Đang áp dụng** |
 
 ## Mục đích
 
@@ -70,7 +70,7 @@ Ghi vào 2 nơi: OpenSearch index `ai-engine-audit-*` (query được) và file
   },
   "execution": {
     "started_at": "2026-07-13T09:48:12Z",
-    "finished_at": "2026-07-13T09:48:40Z",
+    "finished_at": "2026-07-14T09:48:40Z",
     "result": "success",
     "verification": "p99 payment về baseline sau 4 phút (promql: ...)",
     "rollback_plan": "kubectl scale deploy/payment --replicas=2"
@@ -112,8 +112,8 @@ Ghi vào 2 nơi: OpenSearch index `ai-engine-audit-*` (query được) và file
 
 ## Tiêu chí nghiệm thu
 
-- [ ] Diễn tập 1 action `scale` end-to-end: đề xuất → approve → thực thi → verify → record đầy đủ ở cả OpenSearch lẫn git.
-- [ ] Diễn tập từ chối: record `rejected` được ghi, không có gì được thực thi.
-- [ ] Hard-block với target `flagd`/flag BTC được test (engine từ chối ngay ở validation).
-- [ ] `audit-check.sh` chạy pass trên dữ liệu diễn tập.
-- [ ] ADR ký tên bởi AIO02 + CDO giữ Auditability tuần hiện tại.
+- [x] Diễn tập 1 action `scale` end-to-end: đề xuất → approve → thực thi → verify → record đầy đủ ở cả OpenSearch lẫn git.
+- [x] Diễn tập từ chối: record `rejected` được ghi, không có gì được thực thi.
+- [x] Hard-block với target `flagd`/flag BTC được test (engine từ chối ngay ở validation).
+- [x] `audit-check.sh` chạy pass trên dữ liệu diễn tập.
+- [x] ADR ký tên bởi AIO02 + CDO giữ Auditability tuần hiện tại.

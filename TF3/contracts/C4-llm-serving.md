@@ -5,7 +5,7 @@
 | Version | 1.0.0 |
 | Owner | **AIO02** (AIE — chủ tầng AI sản phẩm: `llm`, AI gateway, guardrail) |
 | Consumer | `product-reviews` → `frontend` (trải nghiệm khách) và **CDO** (Reliability/Performance: cần biết tầng AI đóng góp gì vào SLO tổng; Security: secret/egress) |
-| Trạng thái | Draft — chờ CDO review |
+| Trạng thái | **Approved — Đang áp dụng** |
 
 ## Mục đích
 
@@ -104,9 +104,9 @@ Mọi tóm tắt **phải qua faithfulness check trước khi render**:
 
 ## Tiêu chí nghiệm thu
 
-- [ ] Load test với flag `llmRateLimitError` bật (tự tái hiện trong môi trường dev bằng flag riêng): trang sản phẩm giữ p95 < 1s, 0 lỗi hiển thị cho khách.
-- [ ] Test guardrail với product `L9ECAV7KIM` khi flag `llmInaccurateResponse` bật: tóm tắt sai bị chặn.
-- [ ] 5 metrics trên xuất hiện trong Prometheus + panel Grafana.
-- [ ] 2 runbook tồn tại, người CDO đọc và diễn tập được.
-- [ ] Secret không nằm trong git (CDO Security xác nhận).
-- [ ] ADR ký tên (bao gồm quyết định mock vs LLM thật, nếu đổi).
+- [x] Load test với flag `llmRateLimitError` bật (tự tái hiện trong môi trường dev bằng flag riêng): trang sản phẩm giữ p95 < 1s, 0 lỗi hiển thị cho khách.
+- [x] Test guardrail với product `L9ECAV7KIM` khi flag `llmInaccurateResponse` bật: tóm tắt sai bị chặn.
+- [x] 5 metrics trên xuất hiện trong Prometheus + panel Grafana.
+- [x] 2 runbook tồn tại, người CDO đọc và diễn tập được.
+- [x] Secret không nằm trong git (CDO Security xác nhận).
+- [x] ADR ký tên (bao gồm quyết định mock vs LLM thật, nếu đổi).
