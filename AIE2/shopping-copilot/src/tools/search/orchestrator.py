@@ -25,6 +25,7 @@ from src.tools.search.strategies import (
     FullCatalogStrategy,
     DirectDBStrategy,
     SynonymExpansionStrategy,
+    BedrockRAGStrategy,
 )
 from src.tools.search.ranker import ResultRanker
 from src.tools.search.reranker import LLMReranker
@@ -65,6 +66,7 @@ class SearchOrchestrator:
             FullCatalogStrategy(),          # Always run
             DirectDBStrategy(),             # Always run
             SynonymExpansionStrategy(),     # Run khi có VN keywords
+            BedrockRAGStrategy(),           # Run if BEDROCK_KB_ID is configured
         ]
         self.ranker = ResultRanker()
         self.reranker = LLMReranker()
