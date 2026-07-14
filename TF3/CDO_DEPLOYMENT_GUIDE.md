@@ -8,10 +8,10 @@ Tài liệu này hướng dẫn đội ngũ CDO cách kéo Docker Image, cấu h
 
 Ảnh Docker của AIOps Engine đã được đóng gói và đẩy lên ECR dưới quyền truy cập mở (**Public Pull Policy - Không cần mật khẩu/đăng nhập**):
 
-*   **Image URI:** `197826770971.dkr.ecr.us-east-1.amazonaws.com/tf-2-ai-engine:latest`
+*   **Image URI:** `197826770971.dkr.ecr.us-east-1.amazonaws.com/tf-2-ai-engine:v1.0.0`
 *   **Lệnh pull chạy thử trực tiếp:**
     ```bash
-    docker pull 197826770971.dkr.ecr.us-east-1.amazonaws.com/tf-2-ai-engine:latest
+    docker pull 197826770971.dkr.ecr.us-east-1.amazonaws.com/tf-2-ai-engine:v1.0.0
     ```
 
 ---
