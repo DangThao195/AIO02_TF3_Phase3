@@ -207,3 +207,42 @@ python3 eval_fidelity.py --judge-model amazon.nova-lite-v1:0
 > [!NOTE]
 > Kết quả chấm điểm dạng JSON sẽ được lưu tự động trong thư mục `repro/artifacts/`.
 
+---
+
+### Kịch bản 3: Đo đạc tốc độ & độ trễ (Latency Benchmark)
+> [!IMPORTANT]
+> **Chạy ở Terminal 2 [WSL2 (Ubuntu) / Git Bash]**:
+> Script này sẽ giả lập gửi liên tiếp các cuộc gọi gRPC đến server Python đang chạy để đo đạc chính xác các thông số Latency (Average, p95, p99) và tỷ lệ lỗi.
+
+```bash
+cd repro/
+
+# Cấu hình địa chỉ gRPC của server Python
+export PRODUCT_REVIEWS_ADDR="localhost:8085"
+
+# Khởi chạy đo đạc (Tham số đầu vào là số lượng request muốn test, ví dụ: 20)
+python3 benchmark.py 20
+```
+
+---
+
+### Kịch bản 4: Đo đạc số lượng Token & ước tính chi phí (Cost Estimation)
+> [!IMPORTANT]
+> **Chạy ở Terminal 2 [WSL2 (Ubuntu) / Git Bash]**:
+> Script này gọi trực tiếp vào API Bedrock để đo đạc chính xác số lượng Input/Output Token tiêu thụ và tự động tính toán chi phí vận hành cho 1 request cũng như cho 10,000 requests.
+
+```bash
+cd repro/
+
+# Cấu hình AWS Credentials để gọi trực tiếp Bedrock API
+export AWS_ACCESS_KEY_ID="YOUR_AWS_ACCESS_KEY_ID"
+export AWS_SECRET_ACCESS_KEY="YOUR_AWS_SECRET_ACCESS_KEY"
+export AWS_REGION="us-east-1"
+
+# Cách 1: Chạy đo đạc cho mô hình Nova Lite (Mô hình tóm tắt chính)
+python3 check_bedrock_tokens.py amazon.nova-lite-v1:0
+
+# Cách 2: Chạy đo đạc cho mô hình Nova Micro (Mô hình Judge đánh giá)
+python3 check_bedrock_tokens.py amazon.nova-micro-v1:0
+```
+
