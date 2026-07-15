@@ -181,15 +181,15 @@ ATTACK_PATTERNS: List[Tuple[re.Pattern, str]] = [
 
 # ── Thông báo từ chối thân thiện cho từng loại ──
 BLOCK_MESSAGES = {
-    "SYSTEM_OVERRIDE": "Yêu cầu này không được phép vì có chứa nội dung cố gắng thay đổi hành vi của hệ thống.",
-    "PROMPT_DISCLOSURE": "Tôi không thể chia sẻ thông tin cấu hình nội bộ của hệ thống.",
-    "JAILBREAK": "Yêu cầu này không được phép vì có chứa nội dung giả mạo danh tính hệ thống.",
-    "DELIMITER_INJECTION": "Yêu cầu này không được phép vì có chứa ký tự điều khiển đáng ngờ.",
-    "PII_EXTRACTION": "Tôi không thể cung cấp thông tin nhạy cảm của khách hàng hoặc hệ thống.",
-    "OFF_TOPIC": "Tôi chỉ hỗ trợ mua sắm. Vui lòng đặt câu hỏi liên quan đến sản phẩm hoặc đơn hàng.",
-    "UNAUTHORIZED_ACTION": "Tôi là trợ lý ảo và không có quyền thực hiện thanh toán hay chốt đơn. Vui lòng tự thực hiện quy trình checkout trên trang web.",
-    "ENCODING_EVASION": "Yêu cầu này không được phép vì có chứa nội dung được mã hoá đáng ngờ.",
-    "BEDROCK_GUARDRAIL": "Yêu cầu này đã bị hệ thống bảo mật phát hiện là không phù hợp.",
+    "SYSTEM_OVERRIDE": "This request is not allowed because it contains content that attempts to modify system behavior.",
+    "PROMPT_DISCLOSURE": "I cannot share internal system configuration information.",
+    "JAILBREAK": "This request is not allowed because it contains content that attempts to impersonate the system.",
+    "DELIMITER_INJECTION": "This request is not allowed because it contains suspicious control characters.",
+    "PII_EXTRACTION": "I cannot provide sensitive customer or system information.",
+    "OFF_TOPIC": "I only assist with product reviews. Please ask questions related to it",
+    "UNAUTHORIZED_ACTION": "I am a virtual assistant and cannot process payments or complete orders. Please complete the checkout process on the website directly.",
+    "ENCODING_EVASION": "This request is not allowed because it contains suspicious encoded content.",
+    "BEDROCK_GUARDRAIL": "This request has been flagged by the security system as inappropriate.",
 }
 
 
@@ -206,7 +206,7 @@ def check_input(user_message: str) -> InputFilterResult:
     if not user_message or not user_message.strip():
         return InputFilterResult(
             is_safe=False,
-            blocked_reason="Tin nhắn trống, vui lòng nhập nội dung.",
+            blocked_reason="Message is empty. Please enter your request.",
             original_input=user_message or "",
             blocked_tier="REGEX",
         )
@@ -217,7 +217,7 @@ def check_input(user_message: str) -> InputFilterResult:
     # Quét qua từng pattern (dùng cả bản gốc và bản normalized)
     for pattern, attack_type in ATTACK_PATTERNS:
         if pattern.search(user_message) or pattern.search(normalized):
-            reason = BLOCK_MESSAGES.get(attack_type, "Yêu cầu bị từ chối vì lý do bảo mật.")
+            reason = BLOCK_MESSAGES.get(attack_type, "Request denied for security reasons.")
 
             logger.warning(
                 f"[INPUT_FILTER] BLOCKED | tier=REGEX | type={attack_type} | "
