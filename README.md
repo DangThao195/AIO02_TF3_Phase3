@@ -1,85 +1,37 @@
-# TechX AI Engine (TF3 / AIO02)
+# Phase 3 - TechX Corp Service Takeover
 
-AIOps (detection · RCA · remediation) + AIE (gateway · guardrail · cost) for the TechX Corp
-platform. Python 3.11+. Deploys as its own `ai-engine` namespace; reads telemetry **read-only**.
+Chào mừng đến Phase 3. Đây là vòng cuối: các bạn **tiếp quản một sản phẩm AI đang chạy** của TechX Corp - một storefront thương mại điện tử gồm nhiều microservice trên Kubernetes, có hàng đợi, cơ sở dữ liệu, một tính năng AI tóm tắt review, và đầy đủ observability. Hệ thống này **đang sống và chưa hoàn hảo**: có chỗ chưa tối ưu về chi phí, bảo mật, độ tin cậy, khả năng mở rộng và truy vết.
 
-> Full design & 3-week roadmap: **[PLAN.md](PLAN.md)** · Contracts: **[../contracts/](../contracts/)**
+Nhiệm vụ không phải "làm bài tập". Nhiệm vụ là **vận hành sản phẩm này như một kỹ sư thật**: tự đánh giá, tự ưu tiên, giữ SLA, xử lý sự cố, cải tiến dưới ràng buộc - và bảo vệ được mọi quyết định của mình.
 
-## Status
+## Đọc gì trước
 
-| Phase | Scope | State |
-|---|---|---|
-| 0 | Scaffold: config, telemetry clients, schemas (C2/C6), metrics | ✅ done |
-| 1 | **AIE core**: gateway (429/breaker/cache/fallback), guardrail, cost meter | ✅ done, 9/9 tests pass |
-| 2 | AIOps: burn-rate detector, C2 alert emitter, dashboards | ⏳ next |
-| 3 | ML anomaly, RCA Evidence Pack (C3), remediation+audit (C6) | ⏳ |
+1. **[RULES.md](RULES.md)** - thể lệ đầy đủ: cấu trúc TF, 5 trụ (Security / Reliability / Performance Efficiency / Cost Optimization / Auditability) + trụ AI, timeline 3 tuần, và **luật chơi** (đọc kỹ mục luật - có điều khoản disqualify).
+2. **[onboarding/](onboarding/)** - hiểu hệ thống bạn tiếp quản: [ARCHITECTURE](onboarding/ARCHITECTURE.md), [SLO](onboarding/SLO.md), [BUDGET](onboarding/BUDGET.md), [INCIDENT_HISTORY](onboarding/INCIDENT_HISTORY.md), [AI_FEATURE](onboarding/AI_FEATURE.md) (nhóm AIO), [PITCH_GUIDE](onboarding/PITCH_GUIDE.md).
+3. **[GETTING_STARTED.md](GETTING_STARTED.md)** - cách build hệ thống từ source, đẩy image lên ECR của TF, rồi deploy và kiểm tra.
 
-## Quick start (local, no cluster needed)
+## Repo này có gì
 
-```sh
-cd ai-engine
-pip install -e ".[dev]"
-pytest -q                     # Tier-1 unit tests (breaker, cache, gateway, guardrail)
-```
+| Đường dẫn | Nội dung |
+|---|---|
+| `RULES.md` | Thể lệ Phase 3 (bắt buộc đọc) |
+| `onboarding/` | Kiến trúc, SLO, ngân sách, lịch sử sự cố, pitch guide - hiểu hệ thống trước khi đụng vào |
+| `GETTING_STARTED.md` | Hướng dẫn build → deploy → verify |
+| `mandates/` | Directive bắt buộc BTC thả vào trong lúc vận hành (trống lúc đầu) |
+| `techx-corp-platform/` | Toàn bộ source code sản phẩm (microservice, AI review + LLM, observability) |
+| `techx-corp-chart/` | Helm chart để deploy lên Kubernetes |
+| `deploy/` | Script build/push image + các values file mẫu để deploy |
 
-## What Phase 1 gives you (C4)
+## Việc đầu tiên: đưa hệ thống lên chạy
 
-- **AI Gateway** (`aie/gateway.py`) — wraps every llm call in `product-reviews`:
-  cache → breaker → timeout-bounded call → **429 is NOT retried blindly** → guardrail → fallback.
-  The customer never sees a red error.
-- **Faithfulness guardrail** (`aie/guardrail.py`) — verifies the summary against the **real
-  reviews from Postgres** (not the text alone). Blocks the `llmInaccurateResponse` fault on
-  `L9ECAV7KIM` (sentiment inversion vs real avg ~4.6). **Fail-closed.**
-- **Cost meter** (`aie/cost_meter.py`) — request-level token/USD showback, tagged by feature/model.
-- **5 metrics** (`common/metrics.py`): `ai_gateway_requests_total`, `ai_gateway_latency_seconds`,
-  `ai_cache_hit_ratio`, `ai_guardrail_block_total`, `ai_breaker_state` + cost + engine-health.
+Chính việc dựng được hệ thống và đưa nó lên chạy **là bước tiếp quản đầu tiên** - và đã được tính điểm. Bắt đầu từ [GETTING_STARTED.md](GETTING_STARTED.md).
 
-## Integration into `product-reviews` (no file-sample edits, no flagd changes)
+Sau khi hệ thống chạy: đọc kiến trúc, hiểu SLO/ngân sách/lịch sử, dựng backlog ưu tiên, và chuẩn bị cho buổi pitch bảo vệ ưu tiên cuối Tuần 1.
 
-Wrap the two `client.chat.completions.create` call sites in `product_reviews_server.py`:
+## Vài điều cần nhớ
 
-```python
-from ai_engine.aie.gateway import AIGateway, LLMTimeout, RateLimitError
-from ai_engine.aie.guardrail import FaithfulnessGuardrail
-from ai_engine.common.config import GatewayConfig
+- **Mỗi TF tự build image → đẩy lên ECR của account mình → deploy trên account của mình.** BTC cấp source + một image seed để khởi động.
+- **Sự cố sẽ đến trong lúc vận hành.** Nhiệm vụ là phát hiện và xử lý để khách hàng ít bị ảnh hưởng nhất - **không phải tắt nó đi**. Cơ chế tạo sự cố do BTC kiểm soát; can thiệp/vô hiệu hóa nó = disqualify (xem RULES - mục Luật chơi).
+- **Mọi quyết định phải truy được về người** (ADR / decision log ký tên). Đây là thứ được chấm.
 
-gateway = AIGateway(GatewayConfig(), guardrail=FaithfulnessGuardrail())
-
-def call_llm() -> str:
-    # existing llm call, mapped to raise RateLimitError on 429 / LLMTimeout on timeout
-    ...
-
-result = gateway.summarize(product_id, reviews, call_llm)
-summary = result.text        # None => hide AI block, show raw reviews (fallback)
-```
-
-This **reads** the flag path via the existing OpenFeature hooks unchanged (RULES §8 compliant).
-
-## Fallback coverage (audited + tested)
-
-Every failure point degrades gracefully — the customer never sees a red error, on-call is
-never left blind. Proven by `tests/test_fallback_upgrades.py`.
-
-| Failure point | Fallback | Where |
-|---|---|---|
-| LLM 429 | no blind retry → cache → hide summary | gateway (`RateLimitError`) |
-| LLM timeout / 5xx | retry ≤2 (backoff+jitter) → cache → hide | gateway |
-| **LLM hangs** | **hard deadline abandons the call** (protects p95) | `_call_with_timeout` |
-| Circuit open | serve fallback immediately, no call | breaker |
-| **Retry storm** | **retry budget denies retries >20%/5m** | `_RetryBudget` |
-| Guardrail error | fail-closed → hide summary | `_safe_guardrail` |
-| **Model quality drift** | **guardrail-block burst trips the breaker** | gateway step [4] |
-| No reviews (DB gone) | fail-closed | guardrail |
-| Telemetry blind | `ai_engine_blind=1` + meta-alert, never silent | telemetry (C1) |
-| Alert webhook down | dashboard + Alertmanager still show it | alert_emitter (C2) |
-| Engine dies | Alertmanager burn-rate rules keep paging | `prometheus/burnrate_alerts.yaml` |
-
-Rows in **bold** are the resilience upgrades added after auditing against production LLM
-resilience guidance (circuit-breaker + fallback + retry-budget layering; LLM breakers watch
-quality, not just error rate).
-
-## Runbooks
-
-- [runbooks/RB-LLM-429.md](runbooks/RB-LLM-429.md) — 429 storm
-- [runbooks/RB-LLM-BADSUMMARY.md](runbooks/RB-LLM-BADSUMMARY.md) — suspected wrong summary
-- [runbooks/RB-PAY-01.md](runbooks/RB-PAY-01.md) — checkout burn-rate
+Chúc các đội giữ được service khỏe và tỏa sáng.

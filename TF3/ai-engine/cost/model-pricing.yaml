@@ -1,0 +1,38 @@
+# Model pricing for AI cost showback (C5). USD per 1K tokens.
+# Mock llm = $0 (no entry). Backend = AWS Bedrock (us-east-1) — chi phí nằm TRONG trần
+# ngân sách AWS ($300/tuần đo bằng Cost Explorer/Budgets), giải quyết comment reviewer A1.
+#
+# Giá lấy THẬT từ AWS Price List API (acct 197826770971, us-east-1, on-demand standard) —
+# xác minh 2026-07-10. Claude 4.x lấy giá niêm yết Anthropic-on-Bedrock (Price List API chưa
+# expose on-demand cho account này; đối chiếu hoá đơn tuần, sai số ≤5% — C5, cập nhật + ADR).
+#
+# Chiến lược route (bảo vệ trần): baseline rẻ cho volume cao, Opus cho câu khó/RCA.
+
+techx-llm: {}   # mock — free (dev/local)
+
+# ---- Baseline: Nova Lite (tóm tắt review + guardrail, volume cao) ----
+# ✅ giá API thật. ~$0.084 / 1000 req ở profile ~800 in / 150 out.
+amazon.nova-lite-v1:0:
+  input_per_1k: 0.00006     # $0.06 / 1M input tokens
+  output_per_1k: 0.00024    # $0.24 / 1M output tokens
+
+# ---- Route heavy: Claude Opus 4.8 (câu Q&A phức tạp / RCA suy luận sâu, volume thấp) ----
+# ⚠️ giá niêm yết (Price List API chưa list cho account) — đối chiếu hoá đơn tuần đầu.
+# Dùng qua inference profile: us.anthropic.claude-opus-4-8 (cross-region).
+us.anthropic.claude-opus-4-8:
+  input_per_1k: 0.015       # ~$15 / 1M input tokens
+  output_per_1k: 0.075      # ~$75 / 1M output tokens
+
+# ---- Model tham chiếu (giá API thật) — để so sánh / route thay thế nếu đổi ----
+amazon.nova-micro-v1:0:            # rẻ nhất: $0.03/$0.14 per 1M
+  input_per_1k: 0.00003
+  output_per_1k: 0.00014
+anthropic.claude-3-haiku-20240307-v1:0:   # Claude rẻ, ổn định tiếng Việt
+  input_per_1k: 0.00025     # $0.25 / 1M
+  output_per_1k: 0.00125    # $1.25 / 1M
+google.gemma-3-12b-it:             # "gần Gemini nhất trên Bedrock", $0.09/$0.29 per 1M
+  input_per_1k: 0.00009
+  output_per_1k: 0.00029
+openai.gpt-oss-120b-1:0:           # $0.15/$0.60 per 1M
+  input_per_1k: 0.00015
+  output_per_1k: 0.00060

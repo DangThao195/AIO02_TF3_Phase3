@@ -1,0 +1,39 @@
+[project]
+name = "techx-ai-engine"
+version = "0.1.0"
+description = "TF3 AI Engine — AIOps (detection/RCA/remediation) + AIE (gateway/guardrail/cost) for TechX Corp Platform"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.6",
+    "httpx>=0.27",          # async read-only clients: Prometheus/OpenSearch/Jaeger
+    "prometheus-client>=0.20",  # engine self-metrics + /metrics endpoint
+    "PyYAML>=6.0",          # model-pricing.yaml, rules
+    "openai>=1.30",         # OpenAI-compatible client for llm (guardrail judge, real LLM)
+]
+
+[project.optional-dependencies]
+ml = [
+    "scikit-learn>=1.4",    # IsolationForest anomaly (Phase 3)
+    "numpy>=1.26",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.4",
+]
+# Tier-2 telemetry tests use lightweight hand-rolled fakes (see tests/), no httpx-mock dep needed.
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

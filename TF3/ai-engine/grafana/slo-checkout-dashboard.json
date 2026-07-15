@@ -1,0 +1,63 @@
+{
+  "__comment": "SLO dashboard for checkout (C1 §OUTPUT.3 + C2). Import into Grafana; datasource=Prometheus. UID slo-checkout is referenced by AlertEvent.evidence.grafana_panel.",
+  "uid": "slo-checkout",
+  "title": "TF3 · SLO — Checkout (revenue-critical)",
+  "tags": ["tf3", "slo", "ai-engine"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "type": "stat", "title": "Checkout success rate (SLO ≥ 99%)",
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": {
+        "unit": "percentunit", "min": 0.9, "max": 1,
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "red", "value": null },
+          { "color": "orange", "value": 0.99 },
+          { "color": "green", "value": 0.995 } ] } } },
+      "targets": [ { "expr": "1 - sli:checkout_error:ratio_rate5m", "legendFormat": "success" } ]
+    },
+    {
+      "type": "stat", "title": "Error budget burn (1h)",
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 0 },
+      "fieldConfig": { "defaults": {
+        "unit": "none", "decimals": 1,
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": null },
+          { "color": "orange", "value": 6 },
+          { "color": "red", "value": 14.4 } ] } } },
+      "targets": [ { "expr": "sli:checkout_error:ratio_rate1h / 0.01", "legendFormat": "burn x" } ]
+    },
+    {
+      "type": "stat", "title": "Storefront p95 latency (SLO < 1s)",
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 0 },
+      "fieldConfig": { "defaults": {
+        "unit": "s", "decimals": 2,
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": null },
+          { "color": "red", "value": 1 } ] } } },
+      "targets": [ { "expr": "sli:frontend_latency:p95_5m", "legendFormat": "p95" } ]
+    },
+    {
+      "type": "timeseries", "title": "Checkout error ratio — multiwindow (5m vs 1h)",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 6 },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "custom": { "fillOpacity": 8 } } },
+      "targets": [
+        { "expr": "sli:checkout_error:ratio_rate5m", "legendFormat": "error 5m (short)" },
+        { "expr": "sli:checkout_error:ratio_rate1h", "legendFormat": "error 1h (long)" },
+        { "expr": "vector(0.144)", "legendFormat": "critical threshold (14.4x)" },
+        { "expr": "vector(0.06)", "legendFormat": "warning threshold (6x)" }
+      ]
+    },
+    {
+      "type": "timeseries", "title": "Blast radius — error rate by downstream service",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 15 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 6 } } },
+      "targets": [ {
+        "expr": "sum by (service_name) (rate(traces_span_metrics_calls_total{service_name=~\"checkout|payment|cart|kafka\",status_code=\"STATUS_CODE_ERROR\"}[5m]))",
+        "legendFormat": "{{service_name}}" } ]
+    }
+  ]
+}
