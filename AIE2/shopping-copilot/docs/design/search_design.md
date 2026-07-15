@@ -1,9 +1,8 @@
-# Đặc tả thiết kế — Multi-Strategy Search Tool
+# Đặc tả thiết kế — Search Tool v2 (SQL Matching + RAG)
 
-> **Phiên bản:** 1.0.0 | **Ngày:** 2026-07-10 | **Đội:** AIO02 — TF3  
-> Tài liệu này mô tả chi tiết kiến trúc, luồng xử lý, và cách triển khai module search mới
-> thay thế `search_products_tool` hiện tại. Thiết kế dựa trên constraint: **không vector storage,
-> không embedding model**, query từ người dùng Việt, tên sản phẩm tiếng Anh.
+> **Phiên bản:** 2.0.0 | **Ngày:** 2026-07-14 | **Đội:** AIO02 — TF3  
+> Tài liệu này dành cho cả team non-tech và tech. Phần mô tả được trình bày trực quan,
+> hạn chế code, ưu tiên biểu đồ và bảng.
 
 ---
 
@@ -12,19 +11,14 @@
 1. [Tổng quan](#1-tổng-quan)
 2. [Kiến trúc tổng thể](#2-kiến-trúc-tổng-thể)
 3. [Chi tiết các module](#3-chi-tiết-các-module)
-   - 3.1 [SearchQuery — Cấu trúc dữ liệu trung tâm](#31-searchquery--cấu-trúc-dữ-liệu-trung-tâm)
-   - 3.2 [Query Analyzer](#32-query-analyzer)
-   - 3.3 [Search Orchestrator](#33-search-orchestrator)
-   - 3.4 [Các Strategy](#34-các-strategy)
-   - 3.5 [Result Merger & Ranker](#35-result-merger--ranker)
-   - 3.6 [LLM Rerank Trigger](#36-llm-rerank-trigger)
-4. [Cache strategy](#4-cache-strategy)
-5. [Synonym Cache](#5-synonym-cache)
-6. [Cấu trúc thư mục & file mới](#6-cấu-trúc-thư-mục--file-mới)
-7. [Tích hợp vào hệ thống hiện tại](#7-tích-hợp-vào-hệ-thống-hiện-tại)
-8. [Kế hoạch triển khai](#8-kế-hoạch-triển-khai)
-9. [Chi phí vận hành](#9-chi-phí-vận-hành)
-10. [Definition of Done](#10-definition-of-done)
+4. [Cache Strategy](#4-cache-strategy)
+5. [Schema.json — Cấu trúc database](#5-schemajson--cấu-trúc-database)
+6. [gRPC SearchBySQL — Cổng kết nối mới](#6-grpc-searchbysql--cổng-kết-nối-mới)
+7. [Cấu trúc thư mục & file mới](#7-cấu-trúc-thư-mục--file-mới)
+8. [Tích hợp vào hệ thống hiện tại](#8-tích-hợp-vào-hệ-thống-hiện-tại)
+9. [Kế hoạch triển khai](#9-kế-hoạch-triển-khai)
+10. [Chi phí vận hành](#10-chi-phí-vận-hành)
+11. [Definition of Done](#11-definition-of-done)
 
 ---
 
@@ -32,1468 +26,548 @@
 
 ### 1.1 Vấn đề
 
-- **Search hiện tại:** `search_products_tool` gửi thẳng query → gRPC → `LIKE %query%` trên DB.
-- **User Việt Nam** search tiếng Việt: `"kính thiên văn"` → `LIKE '%kính thiên văn%'` → **0 kết quả**.
-- **Tên sản phẩm hoàn toàn tiếng Anh** (astronomy/outdoor equipment).
-- **Không thể dùng embedding/vector** do chi phí.
-- **Catalog có thể scale** lên hàng trăm sản phẩm trong tương lai.
+- **Search hiện tại:** Chỉ gửi nguyên câu query → database → tìm kiếm `LIKE %câu gõ%`
+- **User Việt Nam** gõ tiếng Việt: `"kính thiên văn"` → **0 kết quả** (vì tên sản phẩm là tiếng Anh)
+- **Tên sản phẩm hoàn toàn tiếng Anh** (thiết bị thiên văn: telescope, binoculars, ...)
+- **Thiết kế cũ (v1.0):** dùng 3 chiến thuật phức tạp (quét catalog, gọi DB, dịch từ điển) nhưng
+  không tận dụng được sức mạnh của SQL query và Knowledge Base
 
 ### 1.2 Giải pháp
 
-Xây dựng **Search Orchestrator** với multi-strategy pattern:
+Xây dựng **Search Orchestrator** — một bộ điều phối với hai luồng xử lý chạy song song:
 
+```mermaid
+flowchart LR
+    A["User query"] --> B["SearchOrchestrator"]
+    B --> C["Flow 1: SQL Matching"]
+    B --> D["Flow 2: RAG"]
+    C --> E["Reranker"]
+    D --> E
+    E --> F["Kết quả cuối cùng"]
 ```
-LLM Parse Query → Nhiều Strategy chạy song song → Merge + Dedup → Rule Rank → LLM Rerank (nếu cần) → Final
-```
+
+**Nguyên lý hoạt động:**
+
+| Luồng | Làm gì? | Công nghệ |
+|---|---|---|
+| **Flow 1 — SQL** | Trích xuất thông tin từ câu hỏi → build câu lệnh SQL → gửi xuống database | LLM + gRPC |
+| **Flow 2 — RAG** | Viết lại câu hỏi cho chi tiết hơn → gửi vào Knowledge Base → lấy kết quả | LLM + Bedrock KB |
+| **Reranker** | Trộn 2 kết quả, loại trùng, xếp hạng lại | Rule-based hoặc LLM |
+
+### 1.3 Nguyên tắc thiết kế
+
+| Nguyên tắc | Ý nghĩa |
+|---|---|
+| **Hai luồng độc lập** | SQL flow và RAG flow chạy song song, không ảnh hưởng nhau |
+| **LLM-first** | AI làm nhiệm vụ chính: trích xuất thông tin và viết lại câu hỏi |
+| **SQL-native** | Tận dụng SQL để lọc chính xác (giá, danh mục, tên) |
+| **RAG-augmented** | Knowledge Base giúp tìm semantic — hiểu ý định hơn là từ khóa |
+| **Cache mọi thứ** | Kết quả AI được lưu lại 24h để không tốn tiền gọi lại |
+| **Grounded** | Mọi kết quả phải truy xuất được từ database thật |
 
 ---
 
 ## 2. Kiến trúc tổng thể
 
-### 2.1 Sơ đồ luồng xử lý
+### 2.1 Luồng xử lý chi tiết
 
-```
-User query (str)
-    │
-    ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│  1. QUERY ANALYZER                                                   │
-│                                                                      │
-│  ┌─────────────────────────┐   ┌──────────────────────────────┐     │
-│  │ Regex Phase             │   │ LLM Parse (fallback)          │     │
-│  │ • Price: /dưới (\d+)/  │──▶│ • Category detection          │     │
-│  │ • Sort: /rẻ nhất/      │   │ • Intent classification       │     │
-│  │ └──────┬────────────────┘   │ • Keyword extraction          │     │
-│  │        │ regex fail         │ • Cached 24h theo hash query │     │
-│  │        │ (query phức tạp)   └──────────────────────────────┘     │
-│  ▼        ▼                                                          │
-│  SearchQuery(simplified)  SearchQuery(full)                          │
-└──────────────────────────────────┬───────────────────────────────────┘
-                                   │
-                                   ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│  2. SEARCH ORCHESTRATOR                                             │
-│                                                                      │
-│  ┌──────────────────────────────────────────────────────────────┐   │
-│  │ Chạy song song (asyncio.gather, timeout mỗi strategy 3s)    │   │
-│  │                                                              │   │
-│  │  ┌──────────────────┐  ┌──────────────┐  ┌────────────────┐ │   │
-│  │  │ Strategy A       │  │ Strategy B   │  │ Strategy C     │ │   │
-│  │  │ Full Catalog     │  │ Direct DB    │  │ Synonym        │ │   │
-│  │  │ In-memory filter │  │ gRPC variant │  │ VN→EN Expand   │ │   │
-│  │  └──────┬───────────┘  └──────┬───────┘  └───────┬────────┘ │   │
-│  │         └──────────┬──────────┘                  │           │   │
-│  │                    ▼                             │           │   │
-│  │         Pool A: 0~N items           Pool C: 0~N items        │   │
-│  │                    └──────────┬──────────────────┘           │   │
-│  │                               ▼                              │   │
-│  │                    Pool hợp nhất (raw)                        │   │
-│  └──────────────────────────────────────────────────────────────┘   │
-└──────────────────────────────────┬───────────────────────────────────┘
-                                   │
-                                   ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│  3. RESULT MERGER & RANKER                                          │
-│                                                                      │
-│  • Dedup theo product_id (giữ entry từ strategy có score cao nhất)  │
-│  • Price filter (nếu có)                                            │
-│  • Rule-based score:                                                 │
-│      exact_name_match    = 100                                      │
-│      keyword_in_name     =  50                                      │
-│      keyword_in_cat      =  30                                      │
-│      keyword_in_desc     =  20                                      │
-│      fuzzy_name_match    =  40                                      │
-│      sum all, apply price penalty                                   │
-│  • Sort descending theo score                                       │
-│  • Giữ top 15 (hoặc tất cả nếu ≤ 15)                               │
-└──────────────────────────────────┬───────────────────────────────────┘
-                                   │
-                                   │ pool > 5 AND query phức tạp?
-                                   ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│  4. LLM RERANK (conditional)                                         │
-│                                                                      │
-│  • Chỉ chạy khi: pool > 5 AND (query có multi-intent OR             │
-│                   có LLM parse phase trước đó)                       │
-│  • Prompt: "Given query '{query}', rank these products...           │
-│             Consider: relevance, price fit, category match"          │
-│  • Output: thứ tự ưu tiên mới                                       │
-│  • Cost: ~200 tokens = ~$0.00001                                    │
-└──────────────────────────────────┬───────────────────────────────────┘
-                                   │
-                                   ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│  5. RESULT FORMATTER → LLM tổng hợp câu trả lời                     │
-│                                                                      │
-│  • Format: tiếng Việt, grounded, đề xuất sản phẩm kèm lý do         │
-│  • Nếu 0 kết quả: trả toàn bộ catalog + "Không tìm thấy phù hợp"   │
-│  • Nếu có kết quả: top 3-5, mỗi sản phẩm kèm giá + lý do đề xuất   │
-└──────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    Q["User query"] --> O
+
+    subgraph O["SearchOrchestrator"]
+        direction TB
+        O1["Load schema context"] --> O2
+    
+        subgraph O2["Chạy song song (timeout 5s)"]
+            F1 --> F2
+        end
+    
+        subgraph F1["Flow 1: SQL Matching"]
+            direction TB
+            F1a["EntityExtractor<br/>LLM + schema → trích xuất thông tin"] 
+            F1b["SQLBuilder<br/>Build câu SQL"]
+            F1c["SQLExecutor<br/>Gọi gRPC SearchBySQL"]
+            F1a --> F1b --> F1c
+        end
+    
+        subgraph F2["Flow 2: RAG"]
+            direction TB
+            F2a["PromptRewriter<br/>LLM viết lại câu hỏi"]
+            F2b["KBClient<br/>Query Knowledge Base"]
+            F2a --> F2b
+        end
+    end
+
+    O --> R
+
+    subgraph R["Reranker"]
+        direction TB
+        R1["Merge + Dedup<br/>Gộp 2 luồng, loại trùng"]
+        R2["Rerank<br/>Rule-based hoặc LLM"]
+        R1 --> R2
+    end
+
+    R --> out["Kết quả cuối cùng"]
 ```
 
-### 2.2 Nguyên tắc thiết kế
+### 2.2 So sánh với thiết kế cũ (v1.0)
 
-| Nguyên tắc | Mô tả |
-|---|---|
-| **Multi-strategy** | Không phụ thuộc một phương án duy nhất — fallback chain |
-| **Zero-cost path** | Regex + in-memory filter là path chính, LLM là fallback |
-| **Cache mọi thứ** | Synonym map, LLM parse result, empty result session-level |
-| **Song song hoá** | Các strategy chạy đồng thời, timeout mỗi strategy 3s |
-| **Grounded** | Kết quả phải trace được từ DB / catalog thật |
+| Khía cạnh | v1.0 (cũ) | v2.0 (mới) |
+|---|---|---|
+| **Cách tiếp cận** | 3 chiến thuật chạy đồng thời | 2 luồng độc lập |
+| **Lọc sản phẩm** | Ém điểm trong bộ nhớ theo công thức | SQL WHERE — chính xác tuyệt đối |
+| **Tìm semantic** | Từ điển Việt-Anh thủ công | RAG qua Knowledge Base |
+| **AI dùng để** | Dự phòng + xếp hạng có điều kiện | Trích xuất thông tin + viết lại câu hỏi |
+| **Kết nối database** | Qua gRPC cũ (chỉ LIKE) | Qua gRPC mới (SQL tự do) |
+| **Hỗ trợ tiếng Việt** | Regex + từ điển | AI tự xử lý |
+| **Thay đổi backend** | Không cần | Cần thêm một cổng gRPC mới |
 
 ---
 
 ## 3. Chi tiết các module
 
-### 3.1 SearchQuery — Cấu trúc dữ liệu trung tâm
+### 3.1 Tổng quan các file và nhiệm vụ
 
-```python
-# tools/search/models.py
-
-@dataclass
-class SearchQuery:
-    """Cấu trúc query đã được parse, dùng cho mọi strategy."""
-    raw: str                                    # Query gốc từ user
-    keywords_en: list[str]                      # Từ khoá tiếng Anh đã extract
-    keywords_vn: list[str]                      # Từ khoá tiếng Việt gốc
-    price_min: int | None = None                # Lọc giá tối thiểu (USD)
-    price_max: int | None = None                # Lọc giá tối đa (USD)
-    category: str | None = None                 # Category slug (telescopes, ...)
-    intent: Literal["search", "browse",         # Ý định người dùng
-                     "compare", "unknown"] = "search"
-    sort: Literal["relevance", "price_asc",     # Cách sắp xếp
-                  "price_desc"] = "relevance"
-    is_complex: bool = False                    # Có multi-intent? → trigger LLM rerank
-
-    @property
-    def has_price_filter(self) -> bool:
-        return self.price_min is not None or self.price_max is not None
-
-    @property
-    def has_category(self) -> bool:
-        return self.category is not None
+```
+search/
+├── __init__.py              → Cổng ra: biến search thành tool cho AI Agent gọi
+├── orchestrator.py          → Bộ điều phối: chạy 2 luồng, gọi reranker
+├── models.py                → Khuôn dữ liệu: định nghĩa các object dùng chung
+├── schema.json              → Bản đồ database: mô tả bảng, cột cho AI đọc
+├── schema_loader.py         → Đọc bản đồ database → nạp vào prompt cho AI
+├── reranker.py              → Bộ xếp hạng: trộn, loại trùng, sắp xếp kết quả
+│
+├── flow1/                   → Luồng 1: SQL Matching
+│   ├── __init__.py           → Đầu ra: Flow1SQL.run()
+│   ├── entity_extractor.py  → AI trích xuất thông tin từ câu hỏi
+│   ├── sql_builder.py       → Biến thông tin thành câu SQL
+│   └── sql_executor.py      → Gửi SQL xuống database qua gRPC
+│
+└── flow2/                   → Luồng 2: RAG
+    ├── __init__.py           → Đầu ra: Flow2RAG.run()
+    ├── prompt_rewriter.py   → AI viết lại câu hỏi cho chi tiết
+    └── kb_client.py         → Kết nối Knowledge Base (bản mock trước)
 ```
 
-### 3.2 Query Analyzer
+### 3.2 Models — Các object dùng chung
 
-**File:** `tools/search/query_analyzer.py`
+**File:** `src/tools/search/models.py`
 
-Có 2 phase chạy tuần tự: **Regex Phase** (nhanh, rẻ) → **LLM Parse Phase** (chỉ khi regex không bắt được category/intent).
+Module này định nghĩa 3 khuôn dữ liệu chính:
 
-#### Phase 1: Regex Parse (cost: $0, latency: <1ms)
+| Object | Dùng để làm gì | Các trường quan trọng |
+|---|---|---|
+| **SearchEntity** | Chứa thông tin AI trích xuất được → dùng để build SQL | `select_fields` (cột cần lấy), `from_table` (bảng), `where_conditions` (điều kiện lọc), `order_by` (sắp xếp), `limit` (giới hạn) |
+| **ScoredProduct** | Một sản phẩm kèm điểm số | `product_id`, `name`, `price_units`, `categories`, `score`, `source` ("sql" hoặc "rag") |
+| **SearchResult** | Kết quả cuối cùng trả về | `products` (danh sách), `total` (tổng số), `query` (câu gốc), `flows_used` (luồng nào chạy), `rerank_mode` (cách xếp hạng) |
 
-```python
-class RegexQueryAnalyzer:
-    """Parse query dùng regex patterns — zero LLM cost."""
+### 3.3 Schema Loader — Nạp bản đồ database cho AI
 
-    PRICE_PATTERNS: list[tuple[Pattern, str]] = [
-        # dưới/under/below X đô/usd/$
-        (re.compile(
-            r"(dưới|duoi|du?o[i̛]?i|d?uoi|below|under|<|nhỏ.?hơn|ít.?hơn|it.?hon|nho.?hon)\s*(\d+)\s*(đô|usd|\$|dola|do la)",
-            re.IGNORECASE
-        ), "max"),
-        # trên/over/above X đô
-        (re.compile(
-            r"(trên|tren|over|above|>|lớn.?hơn|lon.?hon|nhiêu.?hơn|nhieu.?hon)\s*(\d+)\s*(đô|usd|\$|dola|do la)",
-            re.IGNORECASE
-        ), "min"),
-        # từ X đến Y đô / X-Y đô
-        (re.compile(
-            r"(từ|tu|from)\s*(\d+)\s*(đến|den|->|to|\-)\s*(\d+)\s*(đô|usd|\$|dola|do la)",
-            re.IGNORECASE
-        ), "range"),
-        # X đô (đơn lẻ — coi là giá tham khảo)
-        (re.compile(
-            r"(\d+)\s*(đô|usd|\$|dola|do la)",
-            re.IGNORECASE
-        ), "approx"),
-    ]
+**File:** `src/tools/search/schema_loader.py`
 
-    SORT_PATTERNS: list[tuple[Pattern, str]] = [
-        (re.compile(r"rẻ.?nhất|re.?nhat|giá.?thấp.?nhất|gia.?thap.?nhat|cheapest|lowest"), "price_asc"),
-        (re.compile(r"mắc.?nhất|mac.?nhat|đắt.?nhất|dat.?nhat|giá.?cao.?nhất|gia.?cao.?nhat|most.?expensive|highest"), "price_desc"),
-    ]
+**Nhiệm vụ:** Đọc file `schema.json` (mô tả cấu trúc database) và chuyển thành đoạn text để
+nhét vào prompt cho AI.
 
-    # Category map: pattern VN → category slug
-    CATEGORY_PATTERNS: list[tuple[Pattern, str]] = [
-        (re.compile(r"kính.?thiên.?văn|kính.?viễn.?vọng|dòm.?sao|telescope|kinh.thien.van"), "telescopes"),
-        (re.compile(r"ống.?nhòm|kiếng.?nhòm|ong.nhom|binocular"), "binoculars"),
-        (re.compile(r"đèn.?pin|đèn|den.pin|flashlight|đèn.?đội|den.doi"), "flashlights"),
-        (re.compile(r"phụ.?kiện|phu.kien|accessor"), "accessories"),
-        (re.compile(r"sách|book|sach|sach."), "books"),
-        (re.compile(r"du.?lịch|du.lich|travel|du.lich"), "travel"),
-        (re.compile(r"ống.?kính|ong.kinh|lens|assembly"), "assembly"),
-    ]
-
-    KEYWORD_STOP_WORDS = frozenset({
-        "tìm|tim|kiếm|kiem|cho|cho tôi|giúp|giup|hãy|hay|có|có không|"
-        "muốn|muon|mua|bán|ban|ở đâu|o dau|nào|nao"
-    })
-
-    def parse(self, raw: str) -> SearchQuery:
-        raw_clean = raw.strip().lower()
-        sq = SearchQuery(raw=raw)
-
-        # 1. Price
-        sq.price_min, sq.price_max = self._extract_price(raw_clean)
-
-        # 2. Sort
-        sq.sort = self._extract_sort(raw_clean)
-
-        # 3. Category
-        sq.category = self._extract_category(raw_clean)
-
-        # 4. Keywords — loại bỏ stop words, tách token
-        keywords = self._tokenize(raw_clean)
-        sq.keywords_vn = [kw for kw in keywords if self._is_vietnamese(kw)]
-        sq.keywords_en = [kw for kw in keywords if not self._is_vietnamese(kw)]
-
-        # 5. Intent heuristic
-        if not raw_clean or len(raw_clean) < 2:
-            sq.intent = "browse"
-        elif sq.has_price_filter or sq.has_category:
-            sq.intent = "search"
-        else:
-            sq.intent = "unknown"
-
-        # 6. Complex query detection (multi-intent)
-        sq.is_complex = (
-            sq.has_price_filter and sq.has_category
-        ) or len(keywords) > 5
-
-        return sq
-
-    def _extract_price(self, text: str) -> tuple[int | None, int | None]:
-        # Triển khai matching với PRICE_PATTERNS
-        # Trả về (price_min, price_max)
-        ...
-
-    def _extract_sort(self, text: str) -> str:
-        ...
-
-    def _extract_category(self, text: str) -> str | None:
-        for pattern, slug in self.CATEGORY_PATTERNS:
-            if pattern.search(text):
-                return slug
-        return None
-
-    def _is_vietnamese(self, word: str) -> bool:
-        """Kiểm tra nếu từ chứa ký tự tiếng Việt hoặc không phải ASCII word."""
-        return bool(re.search(r'[àáạãảâầấậẫẩăằắặẵẳèéẹẽẻêềếệễểđìíịĩỉòóọõỏôồốộỗổơờớợỡỡởùúụũủưừứựữửỳýỵỹỷ]', word, re.IGNORECASE)) or not word.isascii()
+**Ví dụ output khi AI nhận được:**
+```
+Table: products
+- id (TEXT): Mã sản phẩm (VD: OLJCESPC7Z)
+- name (TEXT): Tên sản phẩm tiếng Anh
+- price_units (INTEGER): Giá USD (VD: 101 = $101)
+- categories (TEXT): Danh mục, cách nhau bằng dấu phẩy (telescopes, binoculars, ...)
 ```
 
-#### Phase 2: LLM Parse (fallback, cost: ~$0.000003/cached)
+Nhờ có đoạn text này, AI biết được:
+- Có những bảng nào
+- Mỗi bảng có cột gì, kiểu dữ liệu ra sao
+- Giá trị mẫu để AI tham chiếu
 
-Chỉ chạy khi:
-- Regex không phát hiện được category (`sq.category is None`)
-- Hoặc query có multi-intent (`is_complex = True`)
-- Hoặc query dài > 50 ký tự
+### 3.4 Flow 1 — SQL Matching
 
-```python
-def llm_parse_query(raw: str) -> dict | None:
-    """Dùng LLM để parse category + intent từ query.
-    Kết quả được cache 24h theo SHA256(query)[:16]."""
+**Thư mục:** `src/tools/search/flow1/`
 
-    cache_key = f"llm_parse:{hashlib.sha256(raw.encode()).hexdigest()[:16]}"
-    cached = cache_store.get_raw(cache_key)
-    if cached:
-        return cached
+Luồng này gồm 3 bước, mỗi bước một file:
 
-    # Chỉ gọi LLM nếu cache miss
-    response = llm_small.invoke(f"""
-You are a shopping query parser for an astronomy equipment store.
+```mermaid
+flowchart LR
+    A["Câu hỏi người dùng<br/>(VD: kính thiên văn dưới 100 đô)"] 
+    A --> B["entity_extractor<br/>AI + schema → trích xuất thông tin"]
 
-Products categories: telescopes, binoculars, accessories, flashlights, books, travel, assembly
-All product names are in English. Prices in USD.
+    B -- "{ category: telescopes,<br/>price_max: 100 }" --> C["sql_builder<br/>Build câu SQL"]
 
-Parse this Vietnamese or English shopping query.
-Return ONLY a JSON object with these fields:
-- "category": one of the categories above, or null if unclear
-- "intent": "search" | "browse" | "compare"
-- "keywords_en": list of English keywords extracted from the query
-- "price_max": maximum price in USD, or null
-- "price_min": minimum price in USD, or null
-- "sort": "relevance" | "price_asc" | "price_desc"
+    C -- "SELECT ... WHERE categories LIKE '%telescopes%'<br/>AND price_units <= 100" --> D["sql_executor<br/>Gửi xuống database"]
 
-Query: {raw}
-""")
-
-    result = json.loads(response.content)
-    cache_store.set_raw(cache_key, result, ttl=86400)  # 24h
-    return result
+    D --> E["Danh sách sản phẩm"]
 ```
 
-**Cache hit ratio dự kiến:** Sau 200-300 query đầu, >80% query pattern phổ biến đã được cache.
+| Bước | File | Làm gì? | Ví dụ |
+|---|---|---|---|
+| 1 | `entity_extractor.py` | AI đọc câu hỏi + bản đồ database → trích xuất: lọc gì, sắp xếp thế nào | `"kính thiên văn dưới 100 đô"` → `{category: telescopes, price_max: 100}` |
+| 2 | `sql_builder.py` | Biến thông tin trên thành câu SQL | `SELECT * FROM products WHERE categories LIKE '%telescopes%' AND price_units <= 100` |
+| 3 | `sql_executor.py` | Gửi câu SQL qua gRPC đến database, nhận danh sách sản phẩm | Trả về các sản phẩm telescopes giá ≤ $100 |
 
----
+**Cơ chế Cache:** Kết quả bước 1 (AI trích xuất) được lưu 24h — cùng câu hỏi sẽ không gọi AI lại.
 
-### 3.3 Search Orchestrator
+### 3.5 Flow 2 — RAG
 
-**File:** `tools/search/orchestrator.py`
+**Thư mục:** `src/tools/search/flow2/`
 
-```python
-class SearchOrchestrator:
-    """
-    Điều phối toàn bộ quy trình search:
-    1. Parse query (regex → LLM fallback)
-    2. Chạy strategies song song
-    3. Merge + rank
-    4. LLM rerank (conditional)
-    5. Format kết quả
-    """
+```mermaid
+flowchart LR
+    A["Câu hỏi người dùng"] 
+    A --> B["prompt_rewriter<br/>AI viết lại câu hỏi chi tiết hơn"]
 
-    STRATEGY_TIMEOUT = 3.0  # seconds per strategy
-    DEFAULT_TOP_K = 15      # Số lượng tối đa cho ranker phase
-    RERANK_THRESHOLD = 5    # Chỉ rerank nếu pool > ngưỡng này
+    B -- "Enriched query<br/>(tiếng Anh, nhiều context)" --> C["kb_client<br/>Gửi vào Knowledge Base"]
 
-    def __init__(self):
-        self.analyzer = QueryAnalyzerPipeline()        # Regex + LLM parse
-        self.strategies: list[SearchStrategy] = [
-            FullCatalogStrategy(),                     # Always
-            DirectDBStrategy(),                        # Always
-            SynonymExpansionStrategy(),                # Nếu query có VN keywords
-        ]
-        self.ranker = ResultRanker()
-        self.reranker = LLMReranker()
-        self.cache = SearchCache()
-
-    async def search(self, raw_query: str) -> SearchResult:
-        """Entry point cho toàn bộ search pipeline."""
-
-        # Step 1: Kiểm tra session cache cho empty result
-        cached_empty = self.cache.get_session_empty(raw_query)
-        if cached_empty:
-            return SearchResult.empty(f"Query '{raw_query}' không có kết quả (session cache)")
-
-        # Step 2: Parse query
-        sq = self.analyzer.parse(raw_query)
-
-        # Step 3: Chạy strategies song song
-        pool = await self._run_strategies_parallel(sq)
-
-        # Step 4: Merge + dedup + rule rank
-        merged = self.ranker.merge_and_rank(pool, sq)
-        top_n = merged[:self.DEFAULT_TOP_K]
-
-        # Step 5: LLM rerank nếu cần
-        if len(top_n) > self.RERANK_THRESHOLD and (sq.is_complex or sq.intent == "compare"):
-            top_n = await self.reranker.rerank(top_n, sq)
-
-        # Step 6: Format + return
-        if not top_n:
-            # Cache empty result ở session level
-            self.cache.set_session_empty(raw_query)
-            return SearchResult.empty(
-                "Không tìm thấy sản phẩm phù hợp. "
-                "Đây là toàn bộ mặt hàng đang bán:\n" + self._format_products(all_products())
-            )
-
-        return SearchResult(
-            query=sq,
-            products=top_n,
-            total=len(top_n),
-            strategies_used=[s.name for s in self.strategies if s.was_used],
-        )
-
-    async def _run_strategies_parallel(self, sq: SearchQuery) -> list[ScoredProduct]:
-        """Chạy tất cả strategies song song với timeout."""
-        tasks = [
-            asyncio.create_task(strategy.search(sq))
-            for strategy in self.strategies
-            if strategy.should_run(sq)
-        ]
-
-        try:
-            results = await asyncio.wait_for(
-                asyncio.gather(*tasks, return_exceptions=True),
-                timeout=self.STRATEGY_TIMEOUT
-            )
-        except asyncio.TimeoutError:
-            results = [t.result() if t.done() else []
-                       for t in tasks]
-
-        # Gộp tất cả pool
-        pool = []
-        for r in results:
-            if isinstance(r, list):
-                pool.extend(r)
-        return pool
+    C --> D["Danh sách sản phẩm<br/>(từ KB)"]
 ```
 
-### 3.4 Các Strategy
+| Bước | File | Làm gì? | Ví dụ |
+|---|---|---|---|
+| 1 | `prompt_rewriter.py` | AI viết lại câu hỏi gốc thành mô tả chi tiết bằng tiếng Anh | `"kính thiên văn"` → `"Telescope for astronomy, beginner-friendly, good optics, under $100"` |
+| 2 | `kb_client.py` | Gửi câu đã viết lại vào Knowledge Base | **Hiện tại: mock** (trả danh sách mẫu). **Sau này:** gọi Bedrock KB thật |
 
-#### 3.4.1 Strategy Interface
+**Lưu ý:** `kb_client.py` hiện ở chế độ **mock** (tự tạo dữ liệu mẫu). Bạn có thể gắn Bedrock
+Knowledge Base thật sau bằng cách set biến môi trường `USE_REAL_KB=true`.
 
-```python
-# tools/search/strategies.py
+### 3.6 Reranker — Bộ xếp hạng
 
-class SearchStrategy(ABC):
-    """Interface cho mọi search strategy."""
+**File:** `src/tools/search/reranker.py`
 
-    @property
-    @abstractmethod
-    def name(self) -> str: ...
+Sau khi 2 luồng chạy xong, Reranker làm 3 việc:
 
-    @abstractmethod
-    def should_run(self, sq: SearchQuery) -> bool:
-        """Strategy có nên chạy với query này không?"""
-        ...
-
-    @abstractmethod
-    async def search(self, sq: SearchQuery) -> list[ScoredProduct]:
-        """Thực thi search, trả về danh sách có score."""
-        ...
-
-    @property
-    def was_used(self) -> bool:
-        return self._was_used
+```mermaid
+flowchart LR
+    A["Kết quả từ Flow 1 (SQL)"] --> C
+    B["Kết quả từ Flow 2 (RAG)"] --> C
+    C["Merge + Dedup<br/>Gộp chung, loại sản phẩm trùng"] --> D
+    D["Rerank<br/>Xếp hạng lại"] --> E["Top 15 sản phẩm tốt nhất"]
 ```
 
-#### 3.4.2 Strategy A: FullCatalogStrategy (always run, $0)
+**Cách xếp hạng — có 2 chế độ, bạn có thể chuyển đổi:**
 
-```python
-class FullCatalogStrategy(SearchStrategy):
-    """
-    Load toàn bộ catalog vào cache (ListProducts).
-    Filter + score in-memory.
-    Luôn chạy — là baseline nhanh nhất.
-    """
+| Chế độ | Cách hoạt động | Chi phí | Khi nào dùng |
+|---|---|---|---|
+| **Rule-based** ("rule") | Tính điểm theo công thức: SQL +20, đúng tên +100, đúng danh mục +60... | Miễn phí | Mặc định, tiết kiệm |
+| **LLM** ("llm") | Đưa danh sách sản phẩm cho AI → AI tự quyết định thứ tự | ~$0.00001/query | Khi cần độ chính xác cao |
 
-    name = "full_catalog"
-    CACHE_TTL = 300  # 5 phút
+**Cách chuyển chế độ:** Chỉ cần gán `Reranker.MODE = "llm"` hoặc `"rule"` trong code.
 
-    async def search(self, sq: SearchQuery) -> list[ScoredProduct]:
-        self._was_used = True
-        products = await self._get_all_products()
-        scored = []
+### 3.7 Orchestrator — Bộ điều phối trung tâm
 
-        for p in products:
-            score = self._score_product(p, sq)
-            if score > 0:
-                scored.append(ScoredProduct(p, score))
+**File:** `src/tools/search/orchestrator.py`
 
-        scored.sort(key=lambda x: x.score, reverse=True)
-        return scored
+Đây là module quan trọng nhất, điều phối toàn bộ quy trình:
 
-    def _score_product(self, p: Product, sq: SearchQuery) -> float:
-        """
-        Rule-based scoring — dùng để rank sản phẩm theo relevance.
-
-        Weight:
-        - Exact name match:         100
-        - Keyword in name:           50  (mỗi keyword)
-        - Keyword in category:       30  (mỗi keyword)
-        - Keyword in description:    20  (mỗi keyword)
-        - Fuzzy name match >80%:     40
-        - Category match:            60
-
-        Penalty:
-        - Price > max:               -1000 (loại)
-        - Price < min:               -1000 (loại)
-        """
-        score = 0.0
-        name_lower = p.name.lower()
-        desc_lower = p.description.lower() if p.description else ""
-        cats_lower = [c.lower() for c in p.categories]
-
-        # Price penalty (loại bỏ nếu ngoài khoảng)
-        if sq.has_price_filter:
-            price = p.price_usd.units
-            if sq.price_max is not None and price > sq.price_max:
-                return -1
-            if sq.price_min is not None and price < sq.price_min:
-                return -1
-
-        # Category match
-        if sq.category and sq.category in cats_lower:
-            score += 60
-
-        # Name match
-        if sq.raw.lower() == name_lower:
-            score += 100
-        elif sq.raw.lower() in name_lower:
-            score += 80
-
-        # Keyword matches
-        for kw in sq.keywords_en:
-            if kw in name_lower:
-                score += 50
-            if kw in desc_lower:
-                score += 20
-            for cat in cats_lower:
-                if kw in cat:
-                    score += 30
-
-        # Fuzzy match cho misspell
-        for kw in sq.keywords_en:
-            if len(kw) > 3:
-                from rapidfuzz import fuzz
-                if fuzz.partial_ratio(kw, name_lower) > 80:
-                    score += 40
-                    break
-
-        return score
-
-    async def _get_all_products(self) -> list[Product]:
-        """Lấy từ cache hoặc gọi ListProducts gRPC."""
-        cached = cache_store.get_raw("full_catalog")
-        if cached:
-            return [Product.from_dict(d) for d in cached]
-
-        # Gọi gRPC ListProducts
-        products = await grpc_list_products()
-        # Cache
-        cache_store.set_raw("full_catalog",
-                           [p.to_dict() for p in products],
-                           ttl=self.CACHE_TTL)
-        return products
+```mermaid
+flowchart TB
+    Q["User query"] --> S["SchemaLoader<br/>Đọc bản đồ database"]
+    S --> P["Chạy song song"]
+    
+    subgraph P["Chạy song song (timeout 5s)"]
+        P1["Flow 1: SQL pipeline"]
+        P2["Flow 2: RAG pipeline"]
+    end
+    
+    P1 --> M
+    P2 --> M
+    
+    M["Reranker<br/>Merge + Dedup + Rerank"]
+    M --> F["Kết quả cuối"]
 ```
 
-#### 3.4.3 Strategy B: DirectDBStrategy (always run, $0)
-
-```python
-class DirectDBStrategy(SearchStrategy):
-    """
-    Gọi SearchProducts gRPC với nhiều query variant.
-    Dùng cho query tiếng Anh khớp trực tiếp tên sản phẩm.
-    """
-
-    name = "direct_db"
-
-    async def search(self, sq: SearchQuery) -> list[ScoredProduct]:
-        self._was_used = True
-        pool = []
-
-        # Build variants
-        variants = self._build_variants(sq)
-        for variant in variants:
-            try:
-                results = await grpc_search_products(variant)
-                for p in results:
-                    pool.append(ScoredProduct(p, score=self._base_score(p, sq)))
-            except Exception:
-                continue
-
-        return pool
-
-    def _build_variants(self, sq: SearchQuery) -> list[str]:
-        """Build nhiều query variant để tăng recall."""
-        variants = [sq.raw]  # query gốc
-
-        # Nếu có category, gửi category slug
-        if sq.category:
-            variants.append(sq.category)
-
-        # Mỗi keyword riêng lẻ
-        for kw in sq.keywords_en:
-            if kw not in variants:
-                variants.append(kw)
-
-        return list(set(variants))
-
-    def _base_score(self, p: Product, sq: SearchQuery) -> float:
-        """Score cơ bản — sẽ được merge và rescore ở ranker."""
-        name_lower = p.name.lower()
-        if sq.raw.lower() in name_lower:
-            return 50
-        for kw in sq.keywords_en:
-            if kw in name_lower:
-                return 30
-        return 10
-```
-
-#### 3.4.4 Strategy C: SynonymExpansionStrategy (chạy khi query có VN keywords)
-
-```python
-class SynonymExpansionStrategy(SearchStrategy):
-    """
-    Mở rộng query tiếng Việt sang tiếng Anh dùng synonym cache.
-    Cache miss → LLM translate 1 lần → cache vĩnh viễn.
-    """
-
-    name = "synonym_expansion"
-
-    def __init__(self):
-        self.synonym_cache = SynonymCache()
-
-    def should_run(self, sq: SearchQuery) -> bool:
-        # Chỉ chạy khi query có từ khoá tiếng Việt
-        return len(sq.keywords_vn) > 0
-
-    async def search(self, sq: SearchQuery) -> list[ScoredProduct]:
-        self._was_used = True
-        en_keywords = self.synonym_cache.expand(sq.keywords_vn)
-
-        if not en_keywords:
-            return []
-
-        # Dùng DB strategy để search với từng keyword
-        pool = []
-        for kw in en_keywords:
-            try:
-                results = await grpc_search_products(kw)
-                for p in results:
-                    pool.append(ScoredProduct(p, score=35))  # Synonym match base score
-            except Exception:
-                continue
-
-        return pool
-```
-
-### 3.5 Result Merger & Ranker
-
-**File:** `tools/search/ranker.py`
-
-```python
-@dataclass
-class ScoredProduct:
-    """Sản phẩm kèm score từ strategy."""
-    product: Product
-    score: float
-    strategy_name: str = ""
-
-class ResultRanker:
-    """Merge kết quả từ nhiều strategy, dedup, rescore, rank."""
-
-    def merge_and_rank(
-        self,
-        pools: list[list[ScoredProduct]],
-        sq: SearchQuery
-    ) -> list[ScoredProduct]:
-        """Merge nhiều pool, dedup theo product_id, rescore, sort."""
-        merged: dict[str, ScoredProduct] = {}
-
-        for pool in pools:
-            for sp in pool:
-                pid = sp.product.id
-                # Dedup: giữ entry có score cao nhất
-                if pid not in merged or sp.score > merged[pid].score:
-                    merged[pid] = sp
-
-        scored = list(merged.values())
-
-        # Rescore với price/sort adjustment
-        for sp in scored:
-            sp.score = self._adjust_score(sp, sq)
-
-        # Sort
-        reverse = sq.sort != "price_asc"
-        scored.sort(key=lambda x: (
-            x.score,
-            -x.product.price_usd.units if sq.sort == "price_desc"
-            else x.product.price_usd.units if sq.sort == "price_asc"
-            else 0
-        ), reverse=reverse)
-
-        return scored
-
-    def _adjust_score(self, sp: ScoredProduct, sq: SearchQuery) -> float:
-        """Điều chỉnh score dựa trên price và sort."""
-        score = sp.score
-
-        # Price proximity bonus (nếu có price filter)
-        if sq.has_price_filter:
-            price = sp.product.price_usd.units
-            if sq.price_max:
-                # Sản phẩm gần price_max nhất được bonus nhẹ (không phải rẻ nhất)
-                proximity = 1.0 - (sq.price_max - min(price, sq.price_max)) / max(sq.price_max, 1)
-                score += proximity * 10
-
-        return score
-```
-
-### 3.6 LLM Rerank Trigger
-
-**File:** `tools/search/reranker.py`
-
-Chỉ chạy khi:
-- Pool > 5 sản phẩm
-- Query phức tạp (multi-intent: vừa category vừa price, hoặc so sánh)
-
-```python
-class LLMReranker:
-    """Dùng LLM để rerank top products dựa trên query intent."""
-
-    async def rerank(
-        self,
-        products: list[ScoredProduct],
-        sq: SearchQuery
-    ) -> list[ScoredProduct]:
-        """Rerank top products. Input: max 15 products. Output: same list reordered."""
-
-        if len(products) <= 1:
-            return products
-
-        product_lines = [
-            f"{i+1}. {p.product.name} — ${p.product.price_usd.units} — "
-            f"Categories: {', '.join(p.product.categories)}"
-            for i, p in enumerate(products)
-        ]
-
-        response = await llm_small.ainvoke(f"""
-You are a product ranking assistant. Given a user's shopping query and a list of products,
-re-rank the products by relevance to the query.
-
-Rules:
-- Consider: keyword match, price fit, category match, user intent
-- Output ONLY a comma-separated list of the original product numbers in new order
-- If no clear ranking difference, keep original order
-- Max 15 products
-
-User query: "{sq.raw}"
-Price range: {f'${sq.price_min} - ${sq.price_max}' if sq.has_price_filter else 'no filter'}
-Category: {sq.category or 'any'}
-
-Products:
-{chr(10).join(product_lines)}
-
-New order (comma-separated numbers):
-""")
-
-        try:
-            indices = [
-                int(x.strip()) - 1
-                for x in response.content.strip().split(",")
-                if x.strip().isdigit()
-            ]
-            # Filter valid indices, preserve original for invalid
-            reranked = []
-            seen = set()
-            for idx in indices:
-                if 0 <= idx < len(products) and idx not in seen:
-                    reranked.append(products[idx])
-                    seen.add(idx)
-            # Append any missing products
-            for i, p in enumerate(products):
-                if i not in seen:
-                    reranked.append(p)
-            return reranked
-        except (ValueError, json.JSONDecodeError):
-            # Fallback: giữ nguyên thứ tự
-            return products
-```
+**Nguyên tắc an toàn:**
+- Nếu Flow 1 lỗi → vẫn lấy kết quả từ Flow 2 (và ngược lại)
+- Nếu cả 2 đều lỗi → trả về "Không tìm thấy sản phẩm phù hợp"
+- Mỗi flow có timeout 5 giây riêng
 
 ---
 
 ## 4. Cache Strategy
 
-### 4.1 Cache layers
+Hệ thống lưu lại kết quả của AI và database để:
+- **Tiết kiệm tiền:** Không gọi AI cho cùng câu hỏi nhiều lần
+- **Tăng tốc:** Trả kết quả ngay từ bộ nhớ
 
-| Layer | Scope | TTL | Dữ liệu | Xoá khi |
-|---|---|---|---|---|
-| **Full catalog** | Global | 300s | `ListProducts()` response | TTL expire |
-| **LLM parse result** | Global | 86400s (24h) | Query → structured parse | TTL expire |
-| **Synonym map** | Global | ∞ | VN word → EN keyword | Không — tri thức vĩnh viễn |
-| **Empty result** | Session | 1800s (session) | `query_hash → empty` | Hết session |
-| **gRPC search result** | Global | 300s | `search_products_tool` calls | TTL expire |
-
-### 4.2 Cache key design
-
-```python
-# CacheStore mở rộng thêm 2 method:
-
-def get_raw(self, key: str) -> Any | None:
-    """Get by raw key (không hash params). Dùng cho full catalog, LLM parse, etc."""
-    entry = self._store.get(key)
-    if entry and _now_ts() > entry["expires_at_ts"]:
-        del self._store[key]
-        return None
-    return entry["result"] if entry else None
-
-def set_raw(self, key: str, value: Any, ttl: int = 300) -> None:
-    """Set by raw key."""
-    expires_ts = _now_ts() + ttl
-    self._store[key] = {
-        "result": value,
-        "expires_at_ts": expires_ts,
-        "hit_count": 0,
-    }
-    self._store.move_to_end(key)
-```
-
-### 4.3 Session-level empty result cache
-
-```python
-# memory/store.py — thêm vào SessionStore
-
-def set_search_empty(self, session_id: str, query: str) -> None:
-    """Đánh dấu query này không có kết quả trong session hiện tại."""
-    session = self._store.get(session_id)
-    if session is None:
-        return
-    if "empty_searches" not in session:
-        session["empty_searches"] = {}
-    query_hash = hashlib.sha256(query.encode()).hexdigest()[:16]
-    session["empty_searches"][query_hash] = _now_ts()
-
-def is_search_empty_cached(self, session_id: str, query: str) -> bool:
-    """Kiểm tra query đã từng empty trong session này chưa (trong vòng 30 phút)."""
-    session = self._store.get(session_id)
-    if session is None:
-        return False
-    query_hash = hashlib.sha256(query.encode()).hexdigest()[:16]
-    cached_ts = session.get("empty_searches", {}).get(query_hash)
-    if cached_ts is None:
-        return False
-    if _now_ts() - cached_ts > 1800:  # 30 phút
-        del session["empty_searches"][query_hash]
-        return False
-    return True
-```
+| Dữ liệu được cache | Phạm vi | Thời gian sống | Tác dụng |
+|---|---|---|---|
+| Kết quả AI trích xuất thông tin | Toàn hệ thống | 24h | Cùng câu hỏi → không gọi AI lại |
+| Câu hỏi đã viết lại cho RAG | Toàn hệ thống | 24h | Tiết kiệm LLM call |
+| Kết quả SQL | Toàn hệ thống | 5 phút | Cùng câu SQL → trả từ cache |
+| Kết quả rỗng (không tìm thấy) | Từng session | 30 phút | Tránh gọi lại query vô ích |
 
 ---
 
-## 5. Synonym Cache
+## 5. Schema.json — Cấu trúc database
 
-**File:** `tools/search/synonym_cache.py`
+**File:** `src/tools/search/schema.json`
 
-### 5.1 Seed data (one-time)
+Đây là file mô tả cấu trúc database cho AI đọc. AI dùng file này để biết:
+- Có những bảng nào
+- Mỗi bảng có cột gì
+- Kiểu dữ liệu và giá trị mẫu
 
-Dùng LLM sinh mapping 1 lần khi triển khai:
+### Bảng 1: products (Sản phẩm)
 
-```python
-class SynonymCache:
-    """
-    Bản đồ VN→EN keyword mapping.
-    Seed bằng LLM 1 lần, tự học khi gặp từ mới.
-    Lưu trong memory/cache.json (persist qua restart nếu cần).
-    """
+| Cột | Kiểu | Mô tả | Ví dụ |
+|---|---|---|---|
+| `id` | TEXT (khóa chính) | Mã sản phẩm | `OLJCESPC7Z` |
+| `name` | TEXT | Tên sản phẩm (tiếng Anh) | `National Park Foundation Explorascope` |
+| `description` | TEXT | Mô tả sản phẩm | *đoạn text dài* |
+| `price_units` | INTEGER | Giá (phần nguyên, USD) | `101` (= $101) |
+| `price_nanos` | INTEGER | Giá (phần lẻ, nano) | `960000000` (= $0.96) |
+| `categories` | TEXT | Danh mục (phân cách bằng dấu phẩy) | `telescopes,travel` |
 
-    # Seed map — được sinh bởi LLM 1 lần, hardcode sau khi review
-    _SEED_MAP: dict[str, str] = {
-        # Category keywords
-        "kính thiên văn": "telescope",
-        "kính viễn vọng": "telescope",
-        "dòm sao": "telescope",
-        "ống nhòm": "binoculars",
-        "kiếng nhòm": "binoculars",
-        "đèn pin": "flashlight",
-        "đèn": "flashlight",
-        "phụ kiện": "accessory",
-        "sách": "book",
-        "du lịch": "travel",
-        "ống kính": "lens",
+**Giá trị danh mục:** `telescopes`, `binoculars`, `accessories`, `flashlights`, `books`, `travel`, `assembly`
 
-        # Price-related (trả về empty string — xử lý ở price filter)
-        "giá rẻ": "",
-        "rẻ": "",
-        "đắt": "",
-        "miễn phí": "",
+### Bảng 2: productreviews (Đánh giá)
 
-        # Common English words VN users might type
-        "telescope": "telescope",
-        "kính": "telescope",
-        "solar": "solar",
-        "flashlight": "flashlight",
-        "book": "book",
-        "comet": "comet",
-        "assembly": "assembly",
-        "cleaning": "cleaning",
-        "kit": "kit",
-        "filter": "filter",
-    }
-
-    def __init__(self):
-        self._map: dict[str, str] = dict(self._SEED_MAP)
-        self._pending_llm: set[str] = set()  # Từ đang chờ LLM translate
-
-    def expand(self, vn_keywords: list[str]) -> list[str]:
-        """
-        Mở rộng danh sách từ khoá VN → EN.
-        Cache miss → gọi LLM translate → cache vĩnh viễn.
-        """
-        en_keywords = set()
-        need_llm = []
-
-        for kw in vn_keywords:
-            if kw in self._map:
-                en = self._map[kw]
-                if en:  # Skip empty string (price keywords)
-                    en_keywords.add(en)
-            else:
-                need_llm.append(kw)
-
-        # LLM translate cho từ mới — gọi batch 1 lần
-        if need_llm:
-            translations = self._llm_translate_batch(need_llm)
-            for vn, en in translations.items():
-                self._map[vn] = en
-                if en:
-                    en_keywords.add(en)
-
-        return list(en_keywords)
-
-    def _llm_translate_batch(self, vn_words: list[str]) -> dict[str, str]:
-        """Translate batch VN→EN bằng Groq 8b-instant."""
-        response = llm_small.invoke(f"""
-Translate these Vietnamese shopping keywords to English.
-Only return valid product-related translations. If the word is not product-related, return empty string.
-
-Format: JSON object {{"vi_word": "en_translation", ...}}
-
-Words: {json.dumps(vn_words, ensure_ascii=False)}
-""")
-        try:
-            return json.loads(response.content)
-        except (json.JSONDecodeError, AttributeError):
-            return {w: "" for w in vn_words}
-```
-
-### 5.2 Tổng hợp seed bằng LLM (chạy 1 lần)
-
-```bash
-# scripts/seed_synonym_cache.py
-# Chạy 1 lần khi deploy:
-# python scripts/seed_synonym_cache.py
-
-"""
-Dùng LLM sinh VN→EN mapping từ catalog thật.
-Output: dict lưu vào SynonymCache._SEED_MAP (hardcode sau review).
-"""
-categories = ["telescopes", "binoculars", "accessories",
-              "flashlights", "books", "travel", "assembly"]
-
-products = [
-    "National Park Foundation Explorascope",
-    "Starsense Explorer Refractor Telescope",
-    "Eclipsmart Travel Refractor Telescope",
-    "Lens Cleaning Kit",
-    "Roof Binoculars",
-    "Solar System Color Imager",
-    "Red Flashlight",
-    "Optical Tube Assembly",
-    "Solar Filter",
-    "The Comet Book",
-]
-
-response = llm_small.invoke(f"""
-An astronomy equipment store has these product categories:
-{', '.join(categories)}
-
-Products:
-{chr(10).join(f'- {p}' for p in products)}
-
-Generate a comprehensive Vietnamese→English keyword mapping for product search.
-Include common Vietnamese words for each category and product type.
-Also include common misspellings and variations.
-
-Return JSON: {{"vi_word_or_phrase": "english_keyword"}}
-Focus on words that Vietnamese customers would use to search.
-""")
-```
+| Cột | Kiểu | Mô tả |
+|---|---|---|
+| `id` | INTEGER (khóa chính) | Mã đánh giá |
+| `product_id` | TEXT (khóa ngoại) | Mã sản phẩm được đánh giá |
+| `username` | TEXT | Người đánh giá |
+| `description` | TEXT | Nội dung đánh giá |
+| `score` | REAL | Điểm (0.0 → 5.0) |
 
 ---
 
-## 6. Cấu trúc thư mục & file mới
+## 6. gRPC SearchBySQL — Cổng kết nối mới
+
+### 6.1 Thay đổi ở tầng giao tiếp
+
+Hiện tại database chỉ hiểu được câu lệnh LIKE đơn giản qua gRPC cũ. Chúng ta cần **mở thêm
+một cổng mới** cho phép gửi câu SQL đầy đủ:
+
+```mermaid
+flowchart LR
+    A["Search tool mới"] 
+    A -- "Câu SQL: SELECT ... WHERE ..." --> B["Cổng SearchBySQL (MỚI)"]
+    B --> C["Database"]
+    C --> D["Kết quả chính xác"]
+```
+
+| Cổng cũ (SearchProducts) | Cổng mới (SearchBySQL) |
+|---|---|
+| Chỉ hiểu `LIKE %từ khóa%` | Hiểu được mọi câu SELECT |
+| Không filter được giá | `WHERE price_units <= 100` |
+| Không sort được | `ORDER BY price_units ASC` |
+| Không join được bảng | Có thể JOIN với bảng khác |
+
+### 6.2 Cơ chế bảo vệ (security)
+
+Vì cho phép gửi SQL trực tiếp, backend có 5 lớp bảo vệ:
+
+1. **Chỉ SELECT** — không cho phép INSERT, UPDATE, DELETE, DROP
+2. **Giới hạn tần suất** — mỗi user chỉ được gọi N lần/phút
+3. **Timeout** — query quá 5 giây sẽ bị hủy
+4. **Giới hạn dòng trả về** — tối đa 100 sản phẩm
+5. **Validate tên cột** — chỉ cho phép cột có trong schema
+
+### 6.3 Backend (mock server)
+
+Trong môi trường test, một handler mới sẽ được thêm vào mock server để:
+1. Nhận câu SQL
+2. Kiểm tra chỉ là SELECT
+3. Chạy trên SQLite
+4. Ánh xạ kết quả sang định dạng sản phẩm
+5. Trả về danh sách
+
+---
+
+## 7. Cấu trúc thư mục & file mới
+
+### Toàn bộ thay đổi trong repo
 
 ```
 shopping-copilot/
-├── tools/
-│   ├── __init__.py                   # [SỬA] Thay search_products_tool → search_products_v2
-│   ├── catalog_tool.py               # [GIỮ] search_products_tool (gRPC wrapper cũ)
-│   ├── cart_tool.py
-│   ├── review_tool.py
-│   ├── recommendation_tool.py
-│   ├── currency_tool.py
-│   ├── shipping_tool.py
-│   │
-│   └── search/                       # [MỚI] Multi-strategy search module
-│       ├── __init__.py               # Export search_products_v2
-│       ├── models.py                 # SearchQuery, ScoredProduct, SearchResult
-│       ├── query_analyzer.py         # RegexQueryAnalyzer + LLMQueryAnalyzer
-│       ├── orchestrator.py           # SearchOrchestrator
-│       ├── strategies.py             # FullCatalog, DirectDB, SynonymExpansion
-│       ├── ranker.py                 # ResultRanker + merge/dedup
-│       ├── reranker.py               # LLMReranker (conditional)
-│       ├── synonym_cache.py          # VN→EN mapping + self-learning
-│       └── cache.py                  # Search-specific cache (empty result, etc.)
 │
-├── spec/
-│   └── search_design.md              # [MỚI] Tài liệu này
+├── src/tools/search/                          ← [MỚI] Toàn bộ module search mới
+│   ├── __init__.py                            ← Cổng ra cho AI Agent
+│   ├── orchestrator.py                        ← Bộ điều phối
+│   ├── models.py                              ← Khuôn dữ liệu
+│   ├── schema.json                            ← Bản đồ database
+│   ├── schema_loader.py                       ← Đọc bản đồ database
+│   ├── reranker.py                            ← Bộ xếp hạng
+│   ├── flow1/                                 ← Luồng SQL
+│   │   ├── __init__.py
+│   │   ├── entity_extractor.py
+│   │   ├── sql_builder.py
+│   │   └── sql_executor.py
+│   └── flow2/                                 ← Luồng RAG
+│       ├── __init__.py
+│       ├── prompt_rewriter.py
+│       └── kb_client.py
 │
-└── memory/
-    └── store.py                      # [SỬA] Thêm set_search_empty, is_search_empty_cached
+├── src/protos/demo.proto                      ← [SỬA] Thêm cổng SearchBySQL
+├── src/llm/prompt.py                          ← [SỬA] Cập nhật mô tả tool
+├── src/memory/store.py                        ← [SỬA] Bật cache cho search mới
+│
+└── server-test/                               ← [SỬA] Mock server cho test
+    ├── proto/demo.proto
+    └── server/
+        ├── handlers/sql_query_handler.py      ← [MỚI] Xử lý SearchBySQL
+        └── main.py
 ```
 
----
+### Ý nghĩa các ký hiệu
 
-## 7. Tích hợp vào hệ thống hiện tại
-
-### 7.1 Thay đổi trong `tools/__init__.py`
-
-```python
-# tools/__init__.py
-
-from tools.catalog_tool import search_products_tool   # Giữ nguyên (gRPC wrapper)
-from tools.search import search_products_v2           # MỚI: multi-strategy
-
-from tools.cart_tool import add_to_cart_tool, get_cart_tool
-from tools.review_tool import get_product_reviews_tool
-from tools.recommendation_tool import get_recommendations_tool
-from tools.currency_tool import convert_currency_tool
-from tools.shipping_tool import get_shipping_quote_tool
-
-# Danh sách đầy đủ tất cả các công cụ bàn giao cho AI Agent
-all_shopping_tools = [
-    # NHÓM SEARCH (thay thế)
-    search_products_v2,               # MỚI: multi-strategy search
-    
-    # Nhóm Core (giữ nguyên)
-    get_product_reviews_tool,
-    add_to_cart_tool,
-    get_cart_tool,
-    
-    # Nhóm Mở rộng (giữ nguyên)
-    get_recommendations_tool,
-    convert_currency_tool,
-    get_shipping_quote_tool,
-]
-```
-
-### 7.2 Thay đổi trong `agent/prompts.py`
-
-Cập nhật mô tả tool cho LLM:
-
-```python
-# Trong SYSTEM_PROMPT, cập nhật mô tả tool:
-"""
-- `search_products_v2`: Tìm kiếm sản phẩm thông minh bằng tiếng Việt hoặc tiếng Anh.
-  Hỗ trợ: tìm theo tên, danh mục, khoảng giá (vd: "dưới 50 đô", "từ 100-200 USD").
-  Tự động gợi ý sản phẩm phù hợp nhất. KHÔNG dùng tool cũ search_products_tool nữa.
-  Có thể gọi với query tự nhiên bất kỳ.
-"""
-```
-
-### 7.3 Sửa `agent/copilot_agent.py`
-
-Trong `CopilotAgent.chat()`, search tool không cần qua confirmation gate (read-only). Logic hiện tại đã đúng:
-- `add_to_cart_tool` → confirmation gate
-- Các tool còn lại → read → cache
-
-Chỉ cần đảm bảo cache cho `search_products_v2` được enable trong `CacheStore`:
-
-```python
-# memory/store.py — thêm dòng:
-_CACHE_TTL_MAP = {
-    "search_products_v2":          300,   # 5 phút (thay thế search_products_tool)
-    "get_product_reviews_tool":    300,
-    "get_recommendations_tool":    300,
-    "convert_currency_tool":        60,
-}
-```
-
-### 7.4 Async support cho CopilotAgent
-
-Tool mới sử dụng `async/await` (chạy strategies song song). Cần đảm bảo agent gọi đúng:
-
-```python
-# agent/copilot_agent.py
-
-# Trong _react_loop, thay đổi chỗ gọi tool:
-if tool_name == "search_products_v2":
-    # Tool async — chạy qua event loop
-    tool_output = await tool_fn.ainvoke(tool_args)
-else:
-    # Tool sync — chạy bình thường
-    tool_output = tool_fn.invoke(tool_args)
-```
-
----
-
-## 8. Kế hoạch triển khai
-
-### Phase 1 — Core (Buổi 1-2)
-
-| Bước | File | Mô tả | Verification |
-|---|---|---|---|
-| 1 | `tools/search/models.py` | `SearchQuery`, `ScoredProduct`, `SearchResult` dataclasses | Pytest import |
-| 2 | `tools/search/query_analyzer.py` | Regex phase: price, category, sort patterns + tests | `pytest -k query_analyzer` |
-| 3 | `tools/search/synonym_cache.py` | Seed map + `expand()` method | Test với 10 query VN mẫu |
-| 4 | `tools/search/strategies.py` | `FullCatalogStrategy` (in-memory filter + score) | Verify filter đúng catalog thật |
-| 5 | `tools/search/ranker.py` | `ResultRanker.merge_and_rank()` | Test dedup + rescore |
-
-### Phase 2 — Orchestrator (Buổi 2-3)
-
-| Bước | File | Mô tả | Verification |
-|---|---|---|---|
-| 6 | `tools/search/orchestrator.py` | `SearchOrchestrator` với parallel strategies | End-to-end test |
-| 7 | `tools/search/__init__.py` | Export `search_products_v2` (LangChain tool wrapper) | Agent gọi được |
-| 8 | `tools/search/strategies.py` | `DirectDBStrategy` (gRPC variants) | Test với port-forward |
-| 9 | `tools/search/cache.py` | Empty result cache, LLM parse cache | Hit/miss test |
-
-### Phase 3 — LLM Integration (Buổi 3-4)
-
-| Bước | File | Mô tả | Verification |
-|---|---|---|---|
-| 10 | `tools/search/query_analyzer.py` | LLM parse phase (fallback) + cache | Test query phức tạp |
-| 11 | `tools/search/reranker.py` | `LLMReranker` (conditional) | Test multi-intent query |
-| 12 | `tools/search/synonym_cache.py` | `_llm_translate_batch` (tự học) | Test từ mới |
-
-### Phase 4 — Integration (Buổi 4-5)
-
-| Bước | File | Mô tả | Verification |
-|---|---|---|---|
-| 13 | `tools/__init__.py` | Thay `search_products_tool` → `search_products_v2` | Agent dùng tool mới |
-| 14 | `agent/prompts.py` | Cập nhật mô tả tool + system prompt | LLM biết dùng search V2 |
-| 15 | `memory/store.py` | Thêm session empty cache | Session test |
-| 16 | `tests/test_search.py` | Write integration tests | `pytest tests/test_search.py -v` |
-
-### Phase 5 — Seed & Tune (Buổi 5)
-
-| Bước | Mô tả | Verification |
-|---|---|---|
-| 17 | Chạy seed synonym cache bằng LLM 1 lần | Review mapping output |
-| 18 | Test với 20 query VN mẫu thực tế | Hit rate > 80% |
-| 19 | Tune score weights nếu cần | Precision/recall OK |
-
----
-
-## 9. Chi phí vận hành
-
-### 9.1 Chi phí một lần
-
-| Item | Tokens | Model | Cost |
-|---|---|---|---|
-| Seed synonym cache | ~800 | 8b-instant | ~$0.00004 |
-| Seed catalog tag (option) | ~2000 | 8b-instant | ~$0.00010 |
-| **Total one-time** | | | **~$0.00014** |
-
-### 9.2 Chi phí vận hành mỗi query
-
-| Path | LLM calls | Tokens | Cost | Latency |
-|---|---|---|---|---|
-| **Regex-only** (query đơn giản, cache hit) | 0 | 0 | **$0** | <50ms |
-| **Regex + strategy** (thường gặp) | 0 | 0 | **$0** | ~200ms |
-| **Regex + LLM parse miss** (query mới) | 1 (8b, cached 24h) | ~100 | ~$0.000005 | ~500ms |
-| **Regex + synonym miss** (từ mới) | 1 (8b, cached ∞) | ~150 | ~$0.000008 | ~500ms |
-| **Regex + strategy + rerank** (query phức tạp) | 2 (parse + rerank) | ~300 | ~$0.000015 | ~1.2s |
-| **Worst case** (cache hoàn toàn miss) | 3 | ~500 | ~$0.000025 | ~2s |
-
-### 9.3 Dự kiến sau warm-up
-
-Giả sử 1000 query/ngày, với hit rate 85% cho LLM parse cache, 70% cho synonym cache:
-
-| Loại | % query | Giá/query | Cost/ngày |
-|---|---|---|---|
-| Regex-only (simple) | 40% | $0 | $0 |
-| Regex + cache hit | 45% | $0 | $0 |
-| LLM parse miss | 10% | $0.000005 | $0.0005 |
-| Synonym miss | 4% | $0.000008 | $0.00032 |
-| Worst case (rerank) | 1% | $0.000015 | $0.00015 |
-| **Total** | **100%** | | **~$0.001/ngày** |
-
----
-
-## 10. Definition of Done
-
-| # | Kiểm tra | Phương pháp verify |
-|---|---|---|
-| 1 | Regex parse bắt được price (`dưới 50 đô`, `từ 100-200 USD`) | `pytest -k test_regex_price` |
-| 2 | Regex parse bắt được category (`kính thiên văn`, `ống nhòm`) | `pytest -k test_regex_category` |
-| 3 | FullCatalogStrategy filter đúng price range | `pytest -k test_full_catalog_price` |
-| 4 | FullCatalogStrategy filter đúng category | `pytest -k test_full_catalog_category` |
-| 5 | DirectDBStrategy gọi gRPC variant thành công | Integration test với port-forward |
-| 6 | SynonymCache expand VN→EN đúng 10 mẫu | `pytest -k test_synonym_basic` |
-| 7 | SynonymCache tự học từ mới qua LLM | `pytest -k test_synonym_llm_learn` |
-| 8 | Orcherstator merge + dedup không trùng product_id | `pytest -k test_merge_dedup` |
-| 9 | Rerank chỉ chạy khi pool > 5 và query phức tạp | `pytest -k test_rerank_conditional` |
-| 10 | Empty result được cache ở session level | `pytest -k test_empty_cache` |
-| 11 | LLM parse result cache 24h hoạt động | `pytest -k test_llm_parse_cache` |
-| 12 | Agent gọi được `search_products_v2` thay vì tool cũ | Integration test với agent |
-| 13 | Search VN trả về grounded kết quả từ catalog thật | Manual test 10 query mẫu |
-| 14 | `search_products_tool` cũ vẫn hoạt động (fallback) | `pytest -k test_legacy_tool` |
-| 15 | P95 latency < 2s cho query phức tạp | Load test 50 query |
-| 16 | Chi phí trung bình < $0.00001/query | Tính từ log latency + LLM tokens |
-
----
-
----
-
-## 11. Kế hoạch cải tiến — Phase 2
-
-> **Phiên bản:** 2.0.0 (draft) | **Ngày:** 2026-07-12 | **Nguồn:** Kết quả pipeline test + code review  
-> Tài liệu này đặc tả các thay đổi kiến trúc và xử lý lỗi cần thiết để đưa search tool lên trạng thái **production-ready**:
-> chống hallucination, không rò rỉ lỗi kỹ thuật ra người dùng, phân biệt rõ lỗi hạ tầng vs không có kết quả.
-
-### 11.1 Tổng quan các vấn đề đã phát hiện
-
-Qua pipeline test 29 case với `CopilotAgent` thật và code review toàn bộ search module, các vấn đề sau được xác nhận:
-
-| ID | Vấn đề | Mức độ | Module | Ảnh hưởng |
-|----|--------|--------|--------|-----------|
-| P1 | LLM hallucination trong query parser không được validate, ghi vào cache 24h | CRITICAL | query_analyzer.py | Search crash vì `int > str` TypeError |
-| P2 | gRPC channel leak khi exception xảy ra (3 strategies × mỗi lần call) | CRITICAL | strategies.py | Tài nguyên channel cạn kiệt sau nhiều lần retry |
-| P3 | LLM reranker gọi sync LLM trong async context, block event loop | CRITICAL | reranker.py | Toàn bộ event loop treo trong thời gian LLM call |
-| P4 | Không phân biệt lỗi hạ tầng với empty result thật | HIGH | orchestrator.py | Người dùng thấy "Không tìm thấy" khi product-catalog đang down |
-| P5 | Exception message chứa nội bộ rò rỉ qua tool error handler | HIGH | copilot_agent.py | LLM có thể lặp lại raw exception cho người dùng |
-| P6 | `print()` thay vì logging ở tất cả strategy error paths | HIGH | strategies.py | Không trace được lỗi production |
-| P7 | Synonym cache LLM output không được validate, cache vĩnh viễn | HIGH | synonym_cache.py | Từ điển sai ảnh hưởng vĩnh viễn đến search quality |
-| P8 | `price_min = 0` bị LLM override do falsy check | HIGH | query_analyzer.py | Mất price filter khi giá = 0 |
-| P9 | Product rỗng `id` gây dedup sai | MEDIUM | ranker.py | Chỉ giữ 1 trong nhiều product không có ID |
-| P10 | asyncio.gather timeout áp dụng cho tất cả strategies, không phải per-strategy | MEDIUM | orchestrator.py | 1 strategy chậm làm timeout toàn bộ |
-| P11 | Module-level singleton `_orchestrator` crash toàn bộ tool nếu init lỗi | MEDIUM | orchestrator.py | Import error không recover được |
-| P12 | Search cache (empty result) không phân biệt infrastructure error | MEDIUM | cache.py | Empty result sai bị cache, ảnh hưởng các query sau |
-
-### 11.2 Nguyên tắc thiết kế sửa đổi
-
-| Nguyên tắc | Mô tả |
+| Ký hiệu | Ý nghĩa |
 |---|---|
-| **Defense in depth cho LLM output** | Mọi đầu ra từ LLM phải qua schema validation trước khi dùng hoặc cache — type check + enum check + range check |
-| **Fail fast, fail safely** | Lỗi hạ tầng (gRPC down) khác với empty result — user message khác nhau. Exception không bao giờ chứa nội bộ |
-| **Resource cleanup bắt buộc** | Mọi resource (gRPC channel, HTTP session) phải được giải phóng qua context manager hoặc try/finally |
-| **Async đúng bản chất** | Không gọi sync LLM trong async context. Dùng `asyncio.to_thread()` hoặc async client |
-| **Cache có validation gate** | Cache không được lưu dữ liệu chưa qua validation. Poisoned cache phải detect và purge được |
-
-### 11.3 Đặc tả kỹ thuật từng module
-
-#### 11.3.1 Query Analyzer — LLM Output Validation Gate
-
-**File:** `tools/search/query_analyzer.py`
-
-**Vấn đề:** P1, P8
-
-**Yêu cầu:**
-
-- Hàm `_llm_parse_cached()` phải thêm một **validation gate** sau khi `json.loads()` và trước khi merge vào `SearchQuery`.
-- Validation gate kiểm tra:
-  - `price_min`: phải là `int` hoặc `float` hoặc `None`. Nếu là string → REJECT, dùng giá trị từ regex phase.
-  - `price_max`: tương tự. Giá trị phải ≥ 0. Nếu âm → REJECT.
-  - `category`: phải nằm trong tập `{"telescopes", "binoculars", "flashlights", "accessories", "books", "travel", "assembly", None}`. Nếu không → REJECT.
-  - `intent`: phải nằm trong `{"search", "browse", "compare"}`. Nếu không → fallback về `"unknown"`.
-  - `sort`: phải nằm trong `{"relevance", "price_asc", "price_desc"}`. Nếu không → fallback về `"relevance"`.
-  - `keywords_en`: phải là `list[str]`. Nếu không → dùng list rỗng.
-- Nếu validation REJECT bất kỳ field nào:
-  1. Log warning với nội dung "LLM parse hallucination detected" kèm field bị lỗi và giá trị.
-  2. Không cache kết quả này.
-  3. Giữ nguyên giá trị từ regex phase cho field đó.
-  4. Trả về `SearchQuery` đã merge một phần (chỉ lấy các field hợp lệ từ LLM).
-- Sửa lỗi P8: điều kiện `if llm_result.get("price_min")` phải là `if llm_result.get("price_min") is not None` và tương tự cho `price_max`.
-- Cache hit: nếu cache miss và LLM gọi fail → KHÔNG cache empty result.
-
-**Signature tham khảo (không phải code bắt buộc):**
-
-```
-def _validate_llm_parse(llm_raw: dict) -> dict:
-    """
-    Kiểm tra từng field của LLM output.
-    Chỉ giữ lại các field hợp lệ, loại bỏ field hallucinated.
-    
-    Args:
-        llm_raw: dict từ json.loads(response.content)
-    
-    Returns:
-        dict với chỉ các field đã được xác thực
-    """
-```
-
-#### 11.3.2 Strategies — gRPC Channel Lifecycle + Retry
-
-**File:** `tools/search/strategies.py`
-
-**Vấn đề:** P2, P6
-
-**Yêu cầu:**
-
-- Mỗi strategy function mở gRPC channel phải dùng **context manager** hoặc **try/finally** để đảm bảo channel được đóng.
-- Cụ thể tại 3 vị trí:
-  - `FullCatalogStrategy._get_all_products()` — channel dùng `insecure_channel`.
-  - `DirectDBStrategy._search_variant()` — channel dùng `insecure_channel`.
-  - `SynonymExpansionStrategy._search_keyword()` — channel dùng `insecure_channel`.
-- Pattern bắt buộc:
-  ```
-  channel = None
-  try:
-      channel = grpc.aio.insecure_channel(addr)
-      stub = ...
-      response = await stub.Method(request)
-      return ...
-  except grpc.aio.AioRpcError as e:
-      logger.error(...)
-      return []
-  except Exception as e:
-      logger.error(...)
-      return []
-  finally:
-      if channel:
-          await channel.close()
-  ```
-- Retry logic cho `UNAVAILABLE`:
-  - Retry 1 lần với delay 500ms nếu status code là `UNAVAILABLE`.
-  - Dùng `asyncio.sleep(0.5)` giữa retry.
-  - Nếu retry vẫn lỗi → trả `[]` như hiện tại.
-- Replace tất cả `print(...)` bằng `logger.error(...)` hoặc `logger.warning(...)`.
-- Retry không áp dụng cho `DEADLINE_EXCEEDED` hoặc các lỗi application-level khác.
-
-**Retry policy:**
-
-```
-UNAVAILABLE → retry 1 lần sau 500ms → nếu vẫn lỗi → [] 
-DEADLINE_EXCEEDED → [] ngay (không retry)
-INTERNAL / UNKNOWN → [] ngay (không retry)
-```
-
-#### 11.3.3 LLM Reranker — True Async Execution
-
-**File:** `tools/search/reranker.py`
-
-**Vấn đề:** P3
-
-**Yêu cầu:**
-
-- `LLMReranker.rerank()` hiện tại gọi `llm_model.invoke()` là synchronous call từ async function.
-- Giải pháp: dùng `asyncio.to_thread(llm_model.invoke, prompt)` để chạy synchronous LLM call trên thread pool.
-- Nếu `asyncio.to_thread` không khả dụng trên Python version hiện tại, dùng `loop.run_in_executor(None, llm_model.invoke, prompt)`.
-- Timeout cho LLM rerank: tối đa 5 giây. Dùng `asyncio.wait_for()`.
-  - Nếu timeout → bỏ qua rerank, giữ thứ tự từ ranker.
-- Log cảnh báo nếu LLM rerank bị timeout.
-
-**Sequence:**
-
-```
-1. Kiểm tra điều kiện trigger
-2. Nếu đủ điều kiện:
-   a. Tạo prompt
-   b. Chạy llm_model.invoke trên thread pool (asyncio.to_thread)
-   c. Chờ tối đa 5s
-   d. Parse kết quả
-   e. Nếu lỗi hoặc timeout → log warning, return original order
-3. Nếu không đủ điều kiện → return original order
-```
-
-#### 11.3.4 Orchestrator — Infrastructure Error vs Empty Result
-
-**File:** `tools/search/orchestrator.py`
-
-**Vấn đề:** P4, P10, P11
-
-**Yêu cầu:**
-
-- **Phân biệt 3 loại kết quả** thay vì 2 như hiện tại:
-  - `EMPTY_GENUINE`: tất cả strategy chạy thành công nhưng không có sản phẩm phù hợp.
-  - `EMPTY_INFRASTRUCTURE`: tất cả strategy đều fail do lỗi kết nối (UNAVAILABLE).
-  - `EMPTY_PARTIAL`: một số strategy fail, một số chạy OK nhưng không có kết quả.
-- Cơ chế:
-  - Mỗi strategy trả về một `SearchStrategyResult` thay vì `list[ScoredProduct]`:
-    ```
-    @dataclass
-    class SearchStrategyResult:
-        products: list[ScoredProduct]
-        status: str  # "OK" | "ERROR" | "TIMEOUT"
-        error_info: str | None
-    ```
-  - Orchestrator tổng hợp status từ tất cả strategies.
-  - Nếu tất cả đều ERROR/TIMEOUT → `EMPTY_INFRASTRUCTURE` → message: *"Dịch vụ tìm kiếm tạm thời không khả dụng. Vui lòng thử lại sau."*
-  - Nếu có ít nhất 1 strategy OK nhưng 0 product → `EMPTY_GENUINE` → message hiện tại: *"❌ Không tìm thấy sản phẩm phù hợp."*
-  - `EMPTY_PARTIAL` → vẫn trả empty nhưng log warning.
-- **Strategy timeout riêng:** Mỗi strategy có timeout riêng 3s thay vì gộp chung. Implement bằng `asyncio.wait_for()` trên từng task.
-- **Lazy initialization:** Chuyển `SearchOrchestrator()` singleton từ module-level sang lazy-init trong `search_products_v2()` function.
-- **Cache empty result chỉ khi `EMPTY_GENUINE`** — không cache khi infrastructure error.
-
-**User-facing messages:**
-
-| Tình huống | Message |
-|---|---|
-| EMPTY_GENUINE | "❌ Không tìm thấy sản phẩm phù hợp với tìm kiếm của bạn." |
-| EMPTY_INFRASTRUCTURE | "Dịch vụ tìm kiếm tạm thời không khả dụng. Vui lòng thử lại sau." |
-| EMPTY_PARTIAL | "❌ Không tìm thấy sản phẩm phù hợp." (giữ nguyên) |
-| ERROR (exception bất ngờ) | fallback về "Đã có lỗi xảy ra khi tìm kiếm." |
-
-#### 11.3.5 Agent — Exception Sanitization
-
-**File:** `agent/copilot_agent.py`
-
-**Vấn đề:** P5
-
-**Yêu cầu:**
-
-- Dòng `result = await tool_fn.ainvoke(tc_args)` trong try/except: exception message `str(e)[:120]` không được truyền trực tiếp vào `AIMessage`.
-- Thay bằng message an toàn:
-  - Nếu exception là `grpc.aio.AioRpcError` với `UNAVAILABLE`: *"Dịch vụ {tool_name} tạm thời không khả dụng."*
-  - Nếu exception là `asyncio.TimeoutError`: *"Dịch vụ {tool_name} phản hồi quá chậm, vui lòng thử lại."*
-  - Các exception khác: *"Không thể thực hiện thao tác này ngay lúc này."*
-- Chi tiết lỗi kỹ thuật (`str(e)`): chỉ ghi vào `logger.error()` ở backend, **không bao giờ** đưa vào messages gửi LLM.
-
-#### 11.3.6 Synonym Cache — Output Validation
-
-**File:** `tools/search/synonym_cache.py`
-
-**Vấn đề:** P7
-
-**Yêu cầu:**
-
-- Hàm `_llm_translate_batch()` phải validate kết quả LLM trước khi merge vào `_map`.
-- Validation:
-  - Key (từ VN) phải là string, không rỗng, chứa ký tự tiếng Việt.
-  - Value (từ EN) phải là string, không rỗng, chỉ chứa ASCII, không chứa ký tự đặc biệt hoặc số.
-  - Nếu key hoặc value không hợp lệ → log warning, **không** cache cặp từ đó.
-- `seed_from_llm()` tương tự: validate từng cặp từ trước khi merge.
-- Thêm cơ chế **giới hạn confidence**: sau 3 lần translate ra cùng một EN keyword cho một VN word, khóa bản ghi đó (không cho LLM ghi đè).
-- Cache expiry cho `_map`: sau 7 ngày, tự động xóa các entry chưa được sử dụng (hit_count = 0).
-
-#### 11.3.7 Ranker — Product ID Dedup
-
-**File:** `tools/search/ranker.py`
-
-**Vấn đề:** P9
-
-**Yêu cầu:**
-
-- Trong `merge_and_rank()`, sử dụng `product.id` làm key dedup.
-- Nếu `product.id` là rỗng (`""`) hoặc `None`: KHÔNG dedup entry đó — luôn giữ.
-- Log warning khi gặp product có ID rỗng: *"Product with empty ID encountered from strategy {strategy_name}"*.
-
-#### 11.3.8 Cache Strategy Revision
-
-**File:** `tools/search/cache.py`, `tools/search/orchestrator.py`
-
-**Vấn đề:** P12
-
-**Yêu cầu:**
-
-- `SearchCache.set_session_empty()` chỉ được gọi khi `EMPTY_GENUINE` (xem 11.3.4).
-- Khi infrastructure error xảy ra, empty result không được cache.
-- `SearchCache._search` (nếu có) cần thêm TTL check cho empty cache: empty cache TTL = 60s (thay vì vô thời hạn).
-- LLM parse cache (query_analyzer): thêm invalidated mechanism — nếu detect hallucination (P1), xóa cache entry tương ứng.
-
-### 11.4 Ma trận ảnh hưởng thay đổi
-
-| Thay đổi | File(s) ảnh hưởng | Loại thay đổi | Risk rollback |
-|---|---|---|---|
-| LLM output validation gate | query_analyzer.py | Logic addition | Low — chỉ reject, không crash |
-| gRPC channel lifecycle | strategies.py | Refactor (finally block) | Medium — cần test coverage |
-| Async LLM reranker | reranker.py | Refactor (to_thread) | Low — timeout fallback |
-| Infrastructure error enum | orchestrator.py + models.py | New dataclass + logic | Medium — new type |
-| Exception sanitization | copilot_agent.py | String change | Low — chỉ user message |
-| Synonym validation | synonym_cache.py | Logic addition | Low — chỉ reject bad entries |
-| Ranker dedup fix | ranker.py | Logic fix | Low — edge case |
-| Cache policy | cache.py, orchestrator.py | Logic change | Low — chỉ ảnh hưởng empty cache |
-
-### 11.5 Definition of Done cho Phase 2
-
-| # | Kiểm tra | Phương pháp verify |
-|---|---|---|
-| 1 | LLM hallucination trong price field bị reject và không cache | Unit test: mock LLM trả `{"price_max": "cheap"}` → verify Original price_max giữ nguyên, cache không ghi |
-| 2 | gRPC channel đóng trong mọi trường hợp (kể cả exception) | Unit test: mock strategy raise exception → verify channel.close() được gọi |
-| 3 | LLM rerank không block event loop | Integration test: gọi search query phức tạp trong async context → verify không có delay bất thường |
-| 4 | Infrastructure error ≠ empty result | Integration test: kill product-catalog → search trả "Dịch vụ tìm kiếm tạm thời không khả dụng" |
-| 5 | Exception message không chứa internal detail | Code review: verify tất cả AIMessage trong tool error path đều là message an toàn |
-| 6 | Synonym LLM output được validate trước khi cache | Unit test: mock LLM trả `{"tạ": "!!!"}` → verify không cache |
-| 7 | Product ID rỗng không bị dedup sai | Unit test: merge 2 product với id="" → verify cả 2 đều giữ |
-| 8 | Empty result chỉ cache khi genuine | Integration test: product-catalog down, search query → verify cache.empty không set |
-| 9 | Toàn bộ 29 pipeline test case vẫn PASS (không có UNEXPECTED) | Chạy `tests/run_pipeline.py` với delay ≥ 10s → verify 0 unexpected error |
-
-### 11.6 Thứ tự ưu tiên triển khai
-
-1. **P1 + P8** — LLM output validation (query_analyzer.py) — dễ nhất, ảnh hưởng lớn nhất đến stability.
-2. **P2** — gRPC channel lifecycle (strategies.py) — resource leak cần xử lý ngay.
-3. **P5** — Exception sanitization (copilot_agent.py) — bảo vệ user-facing messages.
-4. **P4** — Infrastructure vs empty result (orchestrator.py + models.py) — trải nghiệm người dùng.
-5. **P3** — Async reranker (reranker.py) — event loop health.
-6. **P7** — Synonym validation (synonym_cache.py) — search quality.
-7. **P6 + P9 + P10 + P11 + P12** — Các fix còn lại (logging, dedup, timeout, lazy init, cache).
+| `[MỚI]` | File/ thư mục được tạo mới hoàn toàn |
+| `[SỬA]` | File có sẵn, cần thay đổi nội dung |
+| `[GIỮ]` | File không cần động đến |
 
 ---
 
-> **Tác giả:** AIO02 — TF3 | **Ngày:** 2026-07-12  
-> **Tham chiếu:** `agentic_design.md`, `tests/test_results.json` (pipeline test run), code review `shopping-copilot/tools/search/`  
-> **Trạng thái:** Draft — chờ review từ CDO01/CDO02 trước khi triển khai Phase 2.
+## 8. Tích hợp vào hệ thống hiện tại
+
+### 8.1 Các thay đổi cần làm
+
+| File hiện tại | Thay đổi | Mức độ |
+|---|---|---|
+| `src/tools/search/__init__.py` | **Tạo mới** — export tool `search_products_v2` | Dễ |
+| `src/llm/prompt.py` | Sửa mô tả của search tool (cho AI Agent hiểu) | Dễ |
+| `src/memory/store.py` | Thêm dòng `"search_products_v2": 300` vào cache map | Dễ |
+| `src/protos/demo.proto` | Thêm 1 dòng RPC mới + 1 message mới | Trung bình |
+| `src/tools/__init__.py` | **Không cần sửa** — đã tự động import | — |
+
+### 8.2 Tool mới hoạt động thế nào
+
+```mermaid
+flowchart LR
+    A["AI Agent<br/>(CopilotAgent)"] 
+    A -- "Gọi search_products_v2('kính thiên văn dưới 100 đô')" --> B["search/__init__.py<br/>Cổng ra"]
+    B --> C["SearchOrchestrator<br/>Xử lý 2 luồng"]
+    C --> D["Kết quả dạng text<br/>'Tìm thấy 3 sản phẩm: 1. Explorascope - $101...'"]
+    D --> A
+```
+
+### 8.3 Cập nhật mô tả cho AI Agent
+
+AI Agent cần được biết tool mới làm được gì. Mô tả sẽ được cập nhật như sau:
+
+> `search_products_v2`: Tìm kiếm sản phẩm thông minh (tiếng Việt và tiếng Anh).
+> Có thể tìm theo tên, danh mục, khoảng giá (VD: "dưới 50 đô", "từ 100-200 USD").
+> Dùng SQL matching + RAG để có kết quả chính xác nhất.
+
+### 8.4 Tái tạo protobuf
+
+Sau khi sửa file `demo.proto`, cần chạy lệnh để sinh lại các file giao tiếp:
+
+```bash
+# Cho shopping-copilot
+python -m grpc_tools.protoc -I src/protos --python_out=src/protos --grpc_python_out=src/protos src/protos/demo.proto
+
+# Cho mock server
+python -m grpc_tools.protoc -I server-test/proto --python_out=server-test/server --grpc_python_out=server-test/server server-test/proto/demo.proto
+```
+
+---
+
+## 9. Kế hoạch triển khai
+
+### Phase 1 — Xây dựng lõi (Buổi 1)
+
+| Bước | Làm gì | File | Kiểm tra |
+|---|---|---|---|
+| 1 | Tạo khuôn dữ liệu | `search/models.py` | Import được không lỗi |
+| 2 | Tạo bản đồ database | `search/schema.json` | Đọc được bằng Python |
+| 3 | Viết bộ đọc bản đồ database | `search/schema_loader.py` | Output là text có cấu trúc |
+| 4 | Viết AI trích xuất thông tin | `search/flow1/entity_extractor.py` | Test 5 câu mẫu |
+| 5 | Viết bộ build SQL | `search/flow1/sql_builder.py` | SQL chạy được trên SQLite |
+
+### Phase 2 — Hoàn thiện luồng SQL (Buổi 2)
+
+| Bước | Làm gì | File | Kiểm tra |
+|---|---|---|---|
+| 6 | Thêm cổng gRPC mới | `demo.proto` (src + server-test) | Proto biên dịch được |
+| 7 | Viết handler cho cổng mới | `server-test/handlers/sql_query_handler.py` | gRPC call trả đúng sản phẩm |
+| 8 | Sinh lại file giao tiếp | Protobuf stubs | Import OK |
+| 9 | Viết bộ gửi SQL | `search/flow1/sql_executor.py` | Kết nối được mock server |
+| 10 | Gói luồng SQL | `search/flow1/__init__.py` | Chạy end-to-end |
+
+### Phase 3 — Luồng RAG + Reranker (Buổi 3)
+
+| Bước | Làm gì | File | Kiểm tra |
+|---|---|---|---|
+| 11 | Viết AI viết lại câu hỏi | `search/flow2/prompt_rewriter.py` | Output chi tiết hơn input |
+| 12 | Viết kết nối Knowledge Base | `search/flow2/kb_client.py` | Trả danh sách mẫu |
+| 13 | Gói luồng RAG | `search/flow2/__init__.py` | Chạy end-to-end |
+| 14 | Viết bộ xếp hạng | `search/reranker.py` | Cả 2 chế độ hoạt động |
+
+### Phase 4 — Tích hợp (Buổi 4)
+
+| Bước | Làm gì | File | Kiểm tra |
+|---|---|---|---|
+| 15 | Viết bộ điều phối | `search/orchestrator.py` | End-to-end 2 luồng |
+| 16 | Tạo cổng ra cho AI Agent | `search/__init__.py` | Agent import được |
+| 17 | Cập nhật mô tả cho Agent | `prompt.py` | Agent hiểu và gọi được tool |
+| 18 | Bật cache | `store.py` | Cache hoạt động |
+
+### Phase 5 — Kiểm thử tổng thể (Buổi 5)
+
+| Bước | Làm gì | Kiểm tra |
+|---|---|---|
+| 19 | Test 10 câu tiếng Việt mẫu | Đúng danh mục, đúng giá |
+| 20 | Test chuyển chế độ xếp hạng | "rule" ↔ "llm" |
+| 21 | Test trường hợp lỗi (DB chết, KB down) | Không crash |
+| 22 | Tinh chỉnh nếu cần | SQL đúng mọi trường hợp |
+
+---
+
+## 10. Chi phí vận hành
+
+### 10.1 Chi phí mỗi lần search
+
+| Kịch bản | Gọi AI mấy lần | Chi phí | Thời gian |
+|---|---|---|---|
+| **Chỉ chạy Flow 1** (trích xuất → SQL) | 1 lần | ~$0.00001 | ~1 giây |
+| **Chỉ chạy Flow 2** (viết lại → KB) | 1 lần | ~$0.000008 | ~0.5 giây |
+| **Cả 2 luồng** (chạy song song) | 2 lần | ~$0.000018 | ~1.5 giây |
+| **+ Xếp hạng bằng AI** | +1 lần | +$0.00001 | +0.5 giây |
+| **Tệ nhất** (không cache) | 3 lần | ~$0.000028 | ~2 giây |
+
+### 10.2 Dự kiến chi phí mỗi ngày (1000 query)
+
+| Loại query | Tỉ lệ | Chi phí/query | Tiền/ngày |
+|---|---|---|---|
+| Cache (không gọi AI) | 60% | $0 | $0 |
+| Gọi AI trích xuất thông tin | 20% | $0.00001 | $0.002 |
+| Gọi AI viết lại câu hỏi | 15% | $0.000008 | $0.0012 |
+| Gọi AI xếp hạng | 4% | $0.00001 | $0.0004 |
+| Tệ nhất (cả 3) | 1% | $0.000028 | $0.00028 |
+| **Tổng cộng** | **100%** | | **~$0.004/ngày** |
+
+### 10.3 So sánh với thiết kế cũ
+
+| Chỉ số | v1.0 (cũ) | v2.0 (mới) |
+|---|---|---|
+| Chi phí trung bình mỗi query | ~$0.000001 | ~$0.000004 |
+| Chi phí mỗi ngày (1000 query) | ~$0.001 | ~$0.004 |
+| Thời gian trung bình | ~200ms | ~1.5s |
+| Độ chính xác (ước lượng) | Trung bình | Cao (SQL + AI) |
+
+---
+
+## 11. Definition of Done
+
+| # | Kiểm tra | Cách kiểm tra |
+|---|---|---|
+| 1 | File `schema.json` mô tả đúng các bảng trong database | So sánh với file `init.sql` |
+| 2 | AI trích xuất đúng thông tin từ câu hỏi tiếng Việt và Anh | Chạy thử 5 câu mẫu |
+| 3 | Câu SQL build ra chạy được trên database thật | Chạy trực tiếp trên SQLite |
+| 4 | Kết nối gRPC `SearchBySQL` hoạt động | Test với mock server |
+| 5 | AI viết lại câu hỏi thành mô tả chi tiết hơn | So sánh độ dài input/output |
+| 6 | Knowledge Base mock trả về danh sách sản phẩm hợp lệ | Parse output không lỗi |
+| 7 | Xếp hạng kiểu rule-based sắp xếp đúng thứ tự | Test với nhiều điểm số khác nhau |
+| 8 | Xếp hạng kiểu AI trả về thứ tự mới (hoặc giữ nguyên nếu AI lỗi) | Test với hơn 5 sản phẩm |
+| 9 | Chuyển đổi được giữa 2 chế độ xếp hạng | Gán `MODE = "llm"` và `"rule"` |
+| 10 | Bộ điều phối chạy được 2 luồng cùng lúc | Log ghi nhận cả SQL và RAG đều chạy |
+| 11 | Loại bỏ sản phẩm trùng lặp khi gộp kết quả | Test với product có ở cả 2 luồng |
+| 12 | Cổng gRPC mới chỉ cho phép câu SELECT | Gửi DELETE → báo lỗi |
+| 13 | AI Agent gọi được tool `search_products_v2` | Test tích hợp với CopilotAgent |
+| 14 | Cache hoạt động — gọi lại câu hỏi cũ không gọi AI nữa | Gọi 2 lần → lần 2 nhanh hơn |
+| 15 | Tool không crash khi database chết | Tắt mock server → message thân thiện |
+| 16 | 95% request hoàn thành dưới 3 giây | Chạy thử 20 câu hỏi |
