@@ -63,9 +63,11 @@ Dưới đây là các kịch bản chuẩn bị sẵn để bạn gửi/thảo 
 * **Điểm CHƯA PHÙ HỢP (Hạn chế)**:
   * **Ngân sách (Budget)**: Tốn thêm chi phí thuê AWS ElastiCache riêng biệt (khoảng **$30 - $60 / tháng**), làm tăng hóa đơn dịch vụ AWS của dự án.
   * **Khả năng kiểm toán (Auditability)**: Dữ liệu dạng Key-Value trong Redis rất khó chạy các truy vấn SQL tổng hợp số liệu phức tạp để phục vụ mục tiêu kiểm toán chất lượng (Eval) của Mandate.
+  * **Tiêu tốn RAM của máy chủ Node (nếu tự host K8s)**: Khác với AWS ElastiCache sử dụng RAM độc lập chuyên dụng (0.5GB - 3GB), chạy container Redis trực tiếp trên cụm EKS sẽ tranh chấp RAM trực tiếp với các microservice khác của storefront, có nguy cơ gây OOM (Out Of Memory) làm crash Node nếu cache phình to không kiểm soát.
 
 #### 3. Phương án khắc phục (Mitigations):
 * **Tối ưu chi phí bằng K8s container**: Ưu tiên triển khai theo Phương án B.1 (tự host bằng container trên cụm EKS hiện có). Việc này giúp **giảm chi phí phát sinh về mức $0/tháng** (tiết kiệm hoàn toàn khoản chi **$30 - $60/tháng** của AWS ElastiCache) nhờ tận dụng tài nguyên RAM/CPU dư thừa sẵn có trên các node EC2 của cụm EKS.
+* **Chống OOM bằng maxmemory và allkeys-lru**: Khi cấu hình Helm Chart Redis, bắt buộc set cấu hình giới hạn cứng `maxmemory 256mb` (hoặc `512mb`) và thiết lập `maxmemory-policy allkeys-lru`. Khi bộ nhớ chạm ngưỡng giới hạn, Redis sẽ tự động xóa các cache key cũ, ít sử dụng nhất để nhường chỗ cho key mới, đảm bảo **không bao giờ vượt ngưỡng RAM được cấp phát** trên cụm K8s.
 * **Đồng bộ hóa kết quả kiểm toán**: Dùng Redis để phục vụ cache tốc độ cao, nhưng đẩy các log kiểm định (Audit Logs) phi tập trung về OpenTelemetry/Jaeger hoặc lưu bản ghi thống kê siêu nhẹ về bảng PostgreSQL chính.
 
 ---
