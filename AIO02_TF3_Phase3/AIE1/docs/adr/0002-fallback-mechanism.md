@@ -15,19 +15,31 @@ Hệ thống cũ không bắt ngoại lệ tại hàm `get_ai_assistant_response
 
 ## 2. Giải pháp Đề xuất
 
-Chúng tôi quyết định áp dụng mô hình kiến trúc **Graceful Degradation 3 tầng** bọc quanh cuộc gọi LLM:
+Chúng tôi quyết định áp dụng mô hình kiến trúc **Graceful Degradation 3 tầng** kết hợp với **cơ chế Thử lại tự động** bọc quanh cuộc gọi LLM:
 
 ```
-Tầng 1 (Chính)   → Bedrock Nova Lite qua LiteLLM để lấy phản hồi thời gian thực
-        ↓ Lỗi / Timeout / Quá tải 429
+Tầng 1 (Chính)   → AWS Bedrock Nova Lite qua SDK boto3 trực tiếp để lấy phản hồi thời gian thực
+        ↓ Gọi lỗi (Thử lại tối đa 3 lần với trễ lũy thừa + Jitter)
+        ↓ Kiệt sức lần thử lại / Lỗi nghiêm trọng không thể thử lại
 Tầng 2 (Dự phòng 1) → Tóm tắt tĩnh từ PostgreSQL thông qua cơ chế lưu đè khi thành công
         ↓ Không tìm thấy dữ liệu trong cơ sở dữ liệu
 Tầng 3 (Dự phòng 2) → Thông điệp mặc định thân thiện làm phương án cuối cùng
 ```
 
-### Chi tiết vận hành từng tầng:
+### 2.1 Cơ chế Thử lại Tự động (Automatic Retry)
 
-1. **Tầng 1 — Chính:** Gọi trực tiếp mô hình qua LiteLLM proxy. Nếu cuộc gọi thành công, dữ liệu được trả về gRPC đồng thời lưu đè vào cơ sở dữ liệu làm bộ nhớ đệm phục vụ cho lần sau. Nếu xảy ra bất kỳ lỗi mạng hoặc lỗi quá thời gian chờ nào, hệ thống bắt ngoại lệ và hạ cấp xuống Tầng 2.
+Trước khi quyết định hạ cấp xuống tầng dự phòng tiếp theo, để đối phó với các lỗi mạng tạm thời hoặc lỗi giới hạn tần suất (Rate Limit 429), hệ thống tích hợp thư viện `tenacity` để tự động thử lại lời gọi LLM:
+* **Thuật toán**: Exponential Backoff với Full Jitter (trễ lũy thừa ngẫu nhiên) để tránh hiện tượng cộng hưởng tải lên hệ thống API (Thundering Herd).
+* **Số lần thử lại tối đa**: 3 lần.
+* **Thời gian chờ ban đầu**: 1.0 giây.
+* **Thời gian chờ tối đa**: 8.0 giây.
+* **Quy tắc phân loại lỗi**:
+  * *Cho phép thử lại (Retryable)*: Rate Limit (HTTP 429), Lỗi máy chủ (HTTP 500/502/503/504), hoặc Lỗi kết nối mạng (APIConnectionError).
+  * *Không cho phép thử lại (Non-retryable)*: Lỗi cú pháp (HTTP 400), Lỗi xác thực tài khoản (HTTP 401/403) — các lỗi này sẽ hạ cấp xuống Tầng 2 ngay lập tức mà không cần thử lại.
+
+### 2.2 Chi tiết vận hành từng tầng
+
+1. **Tầng 1 — Chính:** Gọi trực tiếp mô hình qua SDK `boto3` Converse API. Nếu cuộc gọi thành công, dữ liệu được trả về gRPC đồng thời lưu đè vào cơ sở dữ liệu làm bộ nhớ đệm phục vụ cho lần sau. Nếu xảy ra bất kỳ lỗi mạng hoặc lỗi quá thời gian chờ nào sau khi đã thử lại tối đa 3 lần, hệ thống bắt ngoại lệ và hạ cấp xuống Tầng 2.
 2. **Tầng 2 — Tóm tắt tĩnh từ PostgreSQL:** Hệ thống thực hiện truy vấn bảng `product_summaries` trong PostgreSQL theo `product_id`. Nếu tồn tại bản tóm tắt tĩnh được tạo trước bởi tiến trình định kỳ hoặc lưu từ lần chạy thành công trước, hệ thống sẽ trả về bản tóm tắt này. Khách hàng vẫn nhận được thông tin sản phẩm thực tế dù không phải thời gian thực.
 3. **Tầng 3 — Thông điệp mặc định:** Nếu không tìm thấy dòng dữ liệu nào trong cơ sở dữ liệu đối với sản phẩm mới, hệ thống trả về một thông điệp thân thiện cố định: *"Product review summary is temporarily unavailable. Please try again in a few moments."* Tầng này đảm bảo cuộc gọi gRPC luôn thành công và trả về mã HTTP 200 thay vì gây crash giao diện trắng trang.
 
