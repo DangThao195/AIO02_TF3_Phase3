@@ -28,6 +28,20 @@
 AWS_REGION=ap-southeast-1
 BEDROCK_MODEL_ID=apac.amazon.nova-lite-v1:0
 
+# AWS Bedrock Knowledge Base (RAG)
+BEDROCK_KB_ID=VGXRPNYPPA
+BEDROCK_KB_DATA_SOURCE_ID=KWOKJG5BSI
+PRODUCTS_S3_BUCKET=techx-products-catalog-2026
+BEDROCK_KB_REGION=us-east-1
+
+# Database (PostgreSQL for Direct DB Queries & Sync Job)
+DB_HOST=postgresql.<namespace>.svc.cluster.local
+DB_PORT=5432
+DB_USER=otelu
+DB_PASSWORD=otelp
+DB_NAME=otel
+DB_CONNECTION_STRING="host=postgresql.<namespace>.svc.cluster.local port=5432 user=otelu password=otelp dbname=otel"
+
 # Địa chỉ gRPC microservices trong cluster (CDO điền theo DNS thật của TF)
 CATALOG_ADDR=product-catalog.<namespace>.svc.cluster.local:3550
 CART_ADDR=cart.<namespace>.svc.cluster.local:7070
@@ -42,12 +56,16 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector.<namespace>.svc.cluster.local:
 
 ### 2. IAM Permission cho Pod (IRSA)
 
-Pod cần IAM Role với 2 quyền sau để gọi Bedrock:
+Pod cần IAM Role với các quyền sau để gọi Bedrock và thực hiện truy vấn semantic (Retrieve) từ Knowledge Base:
 
 ```json
 {
   "Effect": "Allow",
-  "Action": ["bedrock:InvokeModel", "bedrock:ApplyGuardrail"],
+  "Action": [
+    "bedrock:InvokeModel",
+    "bedrock:ApplyGuardrail",
+    "bedrock:Retrieve"
+  ],
   "Resource": "*"
 }
 ```
