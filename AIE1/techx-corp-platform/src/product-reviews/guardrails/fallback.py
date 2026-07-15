@@ -96,8 +96,8 @@ def _build_retry_decorator():
     """Tạo tenacity retry decorator theo spec LLM_RETRY_BACKOFF.md."""
     if not _TENACITY_AVAILABLE:
         logger.warning(
-            "[FALLBACK] tenacity chưa được cài — retry bị vô hiệu, "
-            "chỉ dùng fallback trực tiếp. Cài bằng: pip install tenacity"
+            "[FALLBACK] tenacity is not installed — retry is disabled. "
+            "Falling back directly. Install with: pip install tenacity"
         )
         return None
 
@@ -122,7 +122,7 @@ def handle_exception(e: Exception) -> str:
     Được gọi sau khi toàn bộ retry đều thất bại.
     """
     logger.error("[FALLBACK] Triggered after retries exhausted: %s", e, exc_info=True)
-    return "Hiện tại không thể tóm tắt đánh giá, vui lòng thử lại sau."
+    return "The AI is busy right now. Please try again later."
 
 
 def with_fallback(fn):
