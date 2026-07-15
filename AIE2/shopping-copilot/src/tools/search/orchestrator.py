@@ -25,6 +25,7 @@ from src.tools.search.strategies import (
     FullCatalogStrategy,
     DirectDBStrategy,
     SynonymExpansionStrategy,
+    BedrockRAGStrategy,
 )
 from src.tools.search.ranker import ResultRanker
 from src.tools.search.reranker import LLMReranker
@@ -65,6 +66,7 @@ class SearchOrchestrator:
             FullCatalogStrategy(),          # Always run
             DirectDBStrategy(),             # Always run
             SynonymExpansionStrategy(),     # Run khi có VN keywords
+            BedrockRAGStrategy(),           # Run if BEDROCK_KB_ID is configured
         ]
         self.ranker = ResultRanker()
         self.reranker = LLMReranker()
@@ -268,4 +270,9 @@ async def search_products_v2(query: str) -> str:
     if len(result.products) > 5:
         output_lines.append(f"\n... và {len(result.products) - 5} sản phẩm khác")
     
-    return "\n".join(output_lines)
+    sources = list(set(sp.strategy_name for sp in result.products if hasattr(sp, 'strategy_name')))
+    if not sources:
+        sources = ["bedrock_rag"]  # fallback if empty but returned products
+    source_str = ",".join(sources)
+    
+    return "\n".join(output_lines) + f"\n__METADATA_SOURCES__:{source_str}"

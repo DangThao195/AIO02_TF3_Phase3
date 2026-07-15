@@ -138,6 +138,7 @@ class CopilotAgent:
     @with_fallback  # L6
     async def chat(self, session_id: str, user_id: str, user_message: str) -> Dict[str, Any]:
         self._steps = []
+        sources_used = set()
 
         if self.llm is None:
             return {
@@ -231,6 +232,7 @@ class CopilotAgent:
                     if cached:
                         self._end(s_tc, a_tc, "CACHE", f"Cache HIT | args={args_preview}")
                         messages.append(ToolMessage(content=cached, tool_call_id=tc_id))
+                        sources_used.add("Cache")
                         continue
 
                     tool_fn = TOOLS_MAP.get(tc_name)
@@ -243,6 +245,17 @@ class CopilotAgent:
                     s_ex, a_ex = self._time(f"Exec: {tc_name}")
                     try:
                         result = await tool_fn.ainvoke(tc_args)
+                        
+                        # Bóc tách metadata nguồn tìm kiếm để debug hiển thị
+                        if isinstance(result, str) and "__METADATA_SOURCES__:" in result:
+                            parts = result.split("__METADATA_SOURCES__:")
+                            result = parts[0].strip()
+                            raw_sources = parts[1].strip().split(",")
+                            for src in raw_sources:
+                                if src == "bedrock_rag":
+                                    sources_used.add("AWS Bedrock KB (RAG)")
+                                elif src in ("direct_db", "full_catalog", "synonym_expansion"):
+                                    sources_used.add("Server Test (gRPC)")
                     except Exception as e:
                         detail = f"Exception: {str(e)[:200]} | args={args_preview}"
                         self._end(s_ex, a_ex, "ERROR", detail)
@@ -332,6 +345,10 @@ class CopilotAgent:
                         self._end(sf, af, "SKIP", "Giữ nguyên bản gốc")
                 except Exception as e:
                     self._end(sf, af, "ERROR", str(e)[:100])
+
+                if sources_used:
+                    sources_label = ", ".join(sorted(list(sources_used)))
+                    final += f"\n\n---\n*(Nguồn dữ liệu: {sources_label})*"
 
                 self._sessions.append_message(session_id, "assistant", final)
                 self._sessions.touch(session_id)
