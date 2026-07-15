@@ -1,0 +1,52 @@
+{
+  "version": "v20260714-133354",
+  "trained_at": "2026-07-14T13:37:33Z",
+  "f1_score_average": 0.9682,
+  "validation_passed": true,
+  "per_service_metrics": {
+    "frontend": {
+      "f1": 0.9949,
+      "precision": 0.9949,
+      "recall": 1.0
+    },
+    "checkout": {
+      "f1": 0.9355,
+      "precision": 0.9816,
+      "recall": 0.8937
+    },
+    "payment": {
+      "f1": 0.9654,
+      "precision": 0.996,
+      "recall": 0.9366
+    },
+    "product-catalog": {
+      "f1": 0.9328,
+      "precision": 0.9916,
+      "recall": 0.8806
+    },
+    "product-reviews": {
+      "f1": 0.9935,
+      "precision": 0.9871,
+      "recall": 1.0
+    },
+    "shipping": {
+      "f1": 0.9662,
+      "precision": 0.9735,
+      "recall": 0.959
+    },
+    "recommendation": {
+      "f1": 0.9893,
+      "precision": 0.9861,
+      "recall": 0.9925
+    }
+  },
+  "model_paths": {
+    "frontend": "models/archive/20260714-133354/frontend_iforest.joblib",
+    "checkout": "models/archive/20260714-133354/checkout_iforest.joblib",
+    "payment": "models/archive/20260714-133354/payment_iforest.joblib",
+    "product-catalog": "models/archive/20260714-133354/product-catalog_iforest.joblib",
+    "product-reviews": "models/archive/20260714-133354/product-reviews_iforest.joblib",
+    "shipping": "models/archive/20260714-133354/shipping_iforest.joblib",
+    "recommendation": "models/archive/20260714-133354/recommendation_iforest.joblib"
+  }
+}

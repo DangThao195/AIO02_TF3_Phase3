@@ -69,5 +69,12 @@ class TestMLAnomalyDetection(unittest.TestCase):
         if original_model:
             self.detector.models["recommendation"] = original_model
 
+    def test_check_infra_anomaly(self):
+        """Xác minh hàm check_infra_anomaly hoạt động đúng chữ ký đầu vào."""
+        # Mock vector 18 đặc trưng máy học
+        features = [10.0, 0.2, 0.4, 0.05, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.02, 0.0, 0.0, 12, 0, 1, 0]
+        res = self.detector.check_infra_anomaly("frontend", features)
+        self.assertIsInstance(res, bool, "check_infra_anomaly must return a boolean value")
+
 if __name__ == "__main__":
     unittest.main()

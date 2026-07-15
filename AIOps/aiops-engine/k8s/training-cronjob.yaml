@@ -11,16 +11,25 @@ spec:
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
+      activeDeadlineSeconds: 3600
       template:
         spec:
+          priorityClassName: low-priority
           containers:
           - name: trainer
-            image: 197826770971.dkr.ecr.ap-southeast-1.amazonaws.com/tf-2-ai-engine:latest
+            image: 197826770971.dkr.ecr.ap-southeast-1.amazonaws.com/tf-2-ai-engine:IF-v5
             imagePullPolicy: Always
             command: ["python", "train_anomaly_model_eks.py"]
+            resources:
+              requests:
+                cpu: "500m"
+                memory: "512Mi"
+              limits:
+                cpu: "1000m"
+                memory: "1Gi"
             env:
             - name: PROMETHEUS_URL
-              value: "http://prometheus-server.techx-tf3.svc.cluster.local"
+              value: "http://prometheus.techx-tf3.svc.cluster.local:9090"
             - name: AIOPS_S3_BUCKET
               value: "tf3-aiops-models-197826770971"
             - name: AWS_REGION
@@ -28,11 +37,11 @@ spec:
             - name: AWS_ACCESS_KEY_ID
               valueFrom:
                 secretKeyRef:
-                  name: aiops-secrets
+                  name: aiops-engine-secrets
                   key: aws-access-key-id
             - name: AWS_SECRET_ACCESS_KEY
               valueFrom:
                 secretKeyRef:
-                  name: aiops-secrets
+                  name: aiops-engine-secrets
                   key: aws-secret-access-key
           restartPolicy: OnFailure
