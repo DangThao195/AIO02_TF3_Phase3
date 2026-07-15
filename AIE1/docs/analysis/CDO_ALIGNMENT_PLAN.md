@@ -44,7 +44,7 @@ Dưới đây là các kịch bản chuẩn bị sẵn để bạn gửi/thảo 
 * **Cache Warm-up Worker**: Script tự động quét sinh trước cache cho top 100 sản phẩm hot khi DB vừa khởi động lại.
 * **Cache Expiry Jitter**: Thêm thời gian sống ngẫu nhiên ($24\text{ giờ} \pm 1\text{ giờ}$) để tránh cache hết hạn đồng loạt gây nghẽn LLM.
 
-
+---
 
 ### Kịch bản B: Sử dụng Redis (Hiệu năng cao, Chuẩn Production)
 
@@ -53,8 +53,8 @@ Dưới đây là các kịch bản chuẩn bị sẵn để bạn gửi/thảo 
 > *“Chào team CDO, nhóm AI (AIO) muốn bổ sung **Redis** làm tầng Runtime Caching cho LLM để đảm bảo độ trễ phản hồi <1ms và cô lập hoàn toàn tải lượng đọc/ghi cache ra khỏi Database PostgreSQL chính (tránh nguy cơ nghẽn DB làm treo trang sản phẩm dưới tải cao).*
 > 
 > *Nhờ CDO tư vấn giúp mình xem phương án triển khai nào khả thi hơn:*
-> * * **Phương án B.1 (Chạy trực tiếp trên K8s)**: CDO có thể hỗ trợ cài một Redis service (Helm Chart Bitnami) lên cụm K8s hiện tại và cấu hình Persistent Volume (PVC) được không? Cụm có đủ RAM dư thừa (~256MB - 512MB RAM) không?*
-> * * **Phương án B.2 (AWS Managed)**: CDO có hỗ trợ xin cấp phát một cụm AWS ElastiCache for Redis nhỏ (node `cache.t4g.micro` hoặc `cache.t4g.medium` trong mạng VPC nội bộ) không?”*
+> * **Phương án B.1 (Chạy trực tiếp trên K8s)**: CDO có thể hỗ trợ cài một Redis service (Helm Chart Bitnami) lên cụm K8s hiện tại và cấu hình Persistent Volume (PVC) được không? Cụm có đủ RAM dư thừa (~256MB - 512MB RAM) không?
+> * **Phương án B.2 (AWS Managed)**: CDO có hỗ trợ xin cấp phát một cụm AWS ElastiCache for Redis nhỏ (node `cache.t4g.micro` hoặc `cache.t4g.medium` trong mạng VPC nội bộ) không?”*
 
 #### 2. Đối chiếu với Mandate-06:
 * **Điểm PHÙ HỢP**:
@@ -65,7 +65,7 @@ Dưới đây là các kịch bản chuẩn bị sẵn để bạn gửi/thảo 
   * **Khả năng kiểm toán (Auditability)**: Dữ liệu dạng Key-Value trong Redis rất khó chạy các truy vấn SQL tổng hợp số liệu phức tạp để phục vụ mục tiêu kiểm toán chất lượng (Eval) của Mandate.
 
 #### 3. Phương án khắc phục (Mitigations):
-* **Tối ưu chi phí bằng K8s container**: Ưu tiên triển khai theo Phương án B.1 (dùng Helm Chart tự host trên EKS) thay vì thuê ElastiCache bên ngoài để tiết kiệm tối đa ngân sách.
+* **Tối ưu chi phí bằng K8s container**: Ưu tiên triển khai theo Phương án B.1 (tự host bằng container trên cụm EKS hiện có). Việc này giúp **giảm chi phí phát sinh về mức $0/tháng** (tiết kiệm hoàn toàn khoản chi **$30 - $60/tháng** của AWS ElastiCache) nhờ tận dụng tài nguyên RAM/CPU dư thừa sẵn có trên các node EC2 của cụm EKS.
 * **Đồng bộ hóa kết quả kiểm toán**: Dùng Redis để phục vụ cache tốc độ cao, nhưng đẩy các log kiểm định (Audit Logs) phi tập trung về OpenTelemetry/Jaeger hoặc lưu bản ghi thống kê siêu nhẹ về bảng PostgreSQL chính.
 
 ---
