@@ -109,10 +109,10 @@ class AnomalyDetector:
         
         # PromQL
         queries = {
-            "rps": f'sum(rate(http_server_duration_milliseconds_count{{service_name="{service}"}}[5m]))',
-            "error_rate": f'sum(rate(http_server_duration_milliseconds_count{{service_name="{service}", http_status_code=~"5.."}}[5m]))',
-            "client_error_rate": f'(sum(rate(http_server_duration_milliseconds_count{{service_name="{service}", http_status_code=~"4.."}}[5m])) or vector(0))',
-            "latency_p90": f'histogram_quantile(0.90, sum(rate(http_server_duration_milliseconds_bucket{{service_name="{service}"}}[5m])) by (le))',
+            "rps": f'sum(rate(traces_span_metrics_calls_total{{service_name="{service}", span_kind="SPAN_KIND_SERVER"}}[5m]))',
+            "error_rate": f'(sum(rate(traces_span_metrics_calls_total{{service_name="{service}", span_kind="SPAN_KIND_SERVER", status_code="STATUS_CODE_ERROR"}}[5m])) or vector(0))',
+            "client_error_rate": f'vector(0)',
+            "latency_p90": f'(histogram_quantile(0.90, sum(rate(traces_span_metrics_duration_milliseconds_bucket{{service_name="{service}", span_kind="SPAN_KIND_SERVER"}}[5m])) by (le)) or vector(0))',
             "cpu_usage": f'sum(rate(container_cpu_usage_seconds_total{{container="{service}"}}[5m]))',
             "memory_usage": f'sum(container_memory_working_set_bytes{{container="{service}"}}) / sum(container_spec_memory_limit_bytes{{container="{service}"}})',
             "kafka_lag": f'(sum(kafka_consumer_records_lag{{service_name="{service}"}}) or vector(0))'
@@ -249,8 +249,8 @@ class AnomalyDetector:
     def check_slo_burn_rate(self) -> bool:
         """
         Lớp 1 - SLO Burn-rate Monitor
-        Kiểm tra xem tốc độ tiêu thụ ngân sách lỗi (Error Budget Burn Rate) có vượt ngưỡng K=14.4
-        trên cả 2 cửa sổ thời gian 5 phút và 1 giờ hay không (tiêu chuẩn SRE của Google).
+        Kiểm tra tốc độ tiêu thụ ngân sách lỗi (Error Budget Burn Rate) có vượt ngưỡng K=14.4
+        trên cả 2 cửa sổ 5 phút và 1 giờ cho tất cả các dịch vụ (traces_span_metrics).
         """
         import os
         if os.getenv("AIOPS_SIMULATION_MODE") == "true":
@@ -263,22 +263,44 @@ class AnomalyDetector:
             logger.info("[SIMULATION] SLO Burn Rate Check: stable")
             return False
 
-        query_5m = 'sum(rate(http_server_duration_milliseconds_count{http_status_code=~"5.."}[5m])) / sum(rate(http_server_duration_milliseconds_count[5m])) * 720'
-        query_1h = 'sum(rate(http_server_duration_milliseconds_count{http_status_code=~"5.."}[1h])) / sum(rate(http_server_duration_milliseconds_count[1h])) * 720'
-        
+        # Query cho cửa sổ 5m và 1h gom tất cả dịch vụ qua Span Metrics
+        query_5m = (
+            "(sum(rate(traces_span_metrics_calls_total{span_kind=\"SPAN_KIND_SERVER\", status_code=\"STATUS_CODE_ERROR\"}[5m])) by (service_name) / "
+            "sum(rate(traces_span_metrics_calls_total{span_kind=\"SPAN_KIND_SERVER\"}[5m])) by (service_name) * 720) or "
+            "(sum(rate(traces_span_metrics_calls_total{span_kind=\"SPAN_KIND_SERVER\"}[5m])) by (service_name) * 0)"
+        )
+        query_1h = (
+            "(sum(rate(traces_span_metrics_calls_total{span_kind=\"SPAN_KIND_SERVER\", status_code=\"STATUS_CODE_ERROR\"}[1h])) by (service_name) / "
+            "sum(rate(traces_span_metrics_calls_total{span_kind=\"SPAN_KIND_SERVER\"}[1h])) by (service_name) * 720) or "
+            "(sum(rate(traces_span_metrics_calls_total{span_kind=\"SPAN_KIND_SERVER\"}[1h])) by (service_name) * 0)"
+        )
+
         res_5m = self.query_prometheus(query_5m)
         res_1h = self.query_prometheus(query_1h)
-        
-        burn_rate_5m = self.parse_query_value(res_5m)
-        burn_rate_1h = self.parse_query_value(res_1h)
-        
-        logger.info(f"SLO Burn Rate Check - 5m: {burn_rate_5m:.2f}, 1h: {burn_rate_1h:.2f}")
-        return burn_rate_5m >= 14.4 and burn_rate_1h >= 14.4
 
-    def check_infra_z_score(self, metric_name: str, window_days: int = 7) -> float:
+        burn_rates_5m = self.parse_multi_service_burn_rates(res_5m)
+        burn_rates_1h = self.parse_multi_service_burn_rates(res_1h)
+
+        violated_services = []
+        for service, br_5m in burn_rates_5m.items():
+            br_1h = burn_rates_1h.get(service, 0.0)
+            if br_5m >= 14.4 and br_1h >= 14.4:
+                violated_services.append((service, br_5m, br_1h))
+
+        if violated_services:
+            for service, br_5m, br_1h in violated_services:
+                logger.warning(f"SLO Burn Rate BREACHED on service: {service} (5m: {br_5m:.2f}, 1h: {br_1h:.2f})")
+            return True
+
+        max_5m_svc = max(burn_rates_5m.items(), key=lambda x: x[1], default=("None", 0.0))
+        max_1h_svc = max(burn_rates_1h.items(), key=lambda x: x[1], default=("None", 0.0))
+        logger.info(f"SLO Burn Rate Check (Max) - 5m: {max_5m_svc[1]:.2f} ({max_5m_svc[0]}), 1h: {max_1h_svc[1]:.2f} ({max_1h_svc[0]})")
+        return False
+
+    def check_infra_z_score(self, metric_name: str, window_days: int = 1) -> float:
         """
         Lớp 2 - ML-based Saturation & Lag Monitor
-        Tính toán chỉ số Z-Score dựa trên baseline cửa sổ trượt window_days (mặc định 7 ngày)
+        Tính toán chỉ số Z-Score dựa trên baseline cửa sổ trượt window_days (mặc định 1 ngày)
         để phát hiện bất thường sớm của hệ thống (như CPU, Memory, Kafka lag).
         """
         import os
@@ -292,8 +314,12 @@ class AnomalyDetector:
             logger.info(f"[SIMULATION] Z-Score for {metric_name}: healthy (Z-Score = 0.0)")
             return 0.0
 
-        query_mean = f"avg_over_time({metric_name}[{window_days}d])"
-        query_stddev = f"stddev_over_time({metric_name}[{window_days}d])"
+        if "(" in metric_name or "}" in metric_name:
+            query_mean = f"avg_over_time(({metric_name})[{window_days}d:5m])"
+            query_stddev = f"stddev_over_time(({metric_name})[{window_days}d:5m])"
+        else:
+            query_mean = f"avg_over_time({metric_name}[{window_days}d])"
+            query_stddev = f"stddev_over_time({metric_name}[{window_days}d])"
         query_current = f"{metric_name}"
         
         mean_res = self.query_prometheus(query_mean)
@@ -311,7 +337,10 @@ class AnomalyDetector:
         current = self.parse_query_value(current_res)
         
         if stddev == 0:
-            return 0.0
+            if current == 0:
+                return 0.0
+            logger.warning(f"Zero standard deviation in baseline history but current value is non-zero ({current:.2f}) for {metric_name}. Flagging anomaly (Z = 999.0).")
+            return 999.0
             
         z_score = (current - mean) / stddev
         logger.info(f"Z-Score for {metric_name} - Current: {current:.2f}, Mean: {mean:.2f}, Stddev: {stddev:.2f}, Z: {z_score:.2f}")
@@ -326,6 +355,20 @@ class AnomalyDetector:
         except (IndexError, KeyError, ValueError, TypeError):
             pass
         return 0.0
+
+    def parse_multi_service_burn_rates(self, response: dict) -> dict:
+        """Trích xuất map {service_name: burn_rate} từ response Prometheus."""
+        burn_rates = {}
+        results = response.get("data", {}).get("result", [])
+        for r in results:
+            service = r.get("metric", {}).get("service_name")
+            if service:
+                try:
+                    val = float(r.get("value", [0, "0"])[1])
+                    burn_rates[service] = val
+                except Exception:
+                    pass
+        return burn_rates
 
     def _load_models_from_s3(self):
         """Tải và nạp các mô hình Isolation Forest từ S3 vào RAM (Sử dụng Manifest)."""

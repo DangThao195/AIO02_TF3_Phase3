@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: engine
-        image: 197826770971.dkr.ecr.ap-southeast-1.amazonaws.com/tf-2-ai-engine:IF-v5
+        image: 197826770971.dkr.ecr.ap-southeast-1.amazonaws.com/tf-2-ai-engine:IF-v13
         imagePullPolicy: Always
         ports:
         - containerPort: 8000

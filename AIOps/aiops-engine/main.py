@@ -141,8 +141,6 @@ async def active_metrics_polling_loop():
                     if is_anomalous:
                         logger.warning(f"ML Isolation Forest proactively detected ANOMALY on service: {service}!")
                         anomalous_services.add(service)
-                        if not detected_culprit:
-                            detected_culprit = service  # Báo cảnh báo sớm cho dịch vụ đầu tiên phát hiện lỗi
                             
                 # Dọn dẹp các proactive warning cũ của các service đã trở lại bình thường
                 for inc_id, inc_data in list(active_incidents.items()):
@@ -152,32 +150,46 @@ async def active_metrics_polling_loop():
                             logger.info(f"Proactive anomaly resolved for service {svc}. Removing {inc_id} from cache.")
                             active_incidents.pop(inc_id, None)
                         
-                if detected_culprit:
-                    # Chống alert fatigue: Kiểm tra thời gian cooldown (300 giây = 5 phút)
-                    now_ts = time.time()
-                    last_alert_ts = last_proactive_alert_time.get(detected_culprit, 0)
-                    if now_ts - last_alert_ts < 300:
-                        logger.info(f"Proactive warning for {detected_culprit} was sent recently. Throttling to prevent alert fatigue (cooldown remaining: {300 - (now_ts - last_alert_ts):.1f}s).")
-                    else:
-                        last_proactive_alert_time[detected_culprit] = now_ts
-                        incident_id = f"INC-ML-{int(now_ts)}"
-                        
+                if anomalous_services:
+                    # Chuyển đổi anomalous_services thành danh sách mock alerts để chạy qua correlator
+                    mock_alerts = []
+                    for service in anomalous_services:
                         if simulation_state["scenario"].startswith("inc"):
                             trace_id = f"mock-{simulation_state['scenario']}"
                         else:
-                            trace_id = rca_engine.fetch_latest_trace_id(detected_culprit)
-                            
-                        logger.info(f"Triggering PROACTIVE CMDR Pipeline for {incident_id} (Culprit: {detected_culprit}, Trace ID: {trace_id})")
+                            trace_id = rca_engine.fetch_latest_trace_id(service)
+                        mock_alerts.append({
+                            "labels": {"service": service, "alertname": "MLProactiveAnomaly", "severity": "warning"},
+                            "annotations": {"trace_id": trace_id}
+                        })
+                    
+                    # Sử dụng Union-Find & Topology Correlation để gom nhóm và xác định culprit gốc
+                    clusters = correlator.correlate_alerts(mock_alerts)
+                    
+                    for cluster in clusters:
+                        service = cluster["culprit_service"]
+                        trace_id = cluster["trace_id"]
                         
-                        loop = asyncio.get_running_loop()
-                        loop.run_in_executor(
-                            None,
-                            process_proactive_anomaly_background,
-                            incident_id,
-                            detected_culprit,
-                            trace_id,
-                            now_ts
-                        )
+                        # Chống alert fatigue: Kiểm tra thời gian cooldown (300 giây = 5 phút) cho culprit
+                        now_ts = time.time()
+                        last_alert_ts = last_proactive_alert_time.get(service, 0)
+                        if now_ts - last_alert_ts < 300:
+                            logger.info(f"Proactive warning for {service} was sent recently. Throttling to prevent alert fatigue (cooldown remaining: {300 - (now_ts - last_alert_ts):.1f}s).")
+                        else:
+                            last_proactive_alert_time[service] = now_ts
+                            incident_id = f"INC-ML-{int(now_ts)}"
+                            
+                            logger.info(f"Triggering PROACTIVE CMDR Pipeline for {incident_id} (Culprit: {service}, Clustered Services: {cluster['services']}, Trace ID: {trace_id})")
+                            
+                            loop = asyncio.get_running_loop()
+                            loop.run_in_executor(
+                                None,
+                                process_proactive_anomaly_background,
+                                incident_id,
+                                service,
+                                trace_id,
+                                now_ts
+                            )
                 else:
                     logger.info("Active Polling Check: All services are healthy under ML Isolation Forest scans.")
         except Exception as e:
@@ -319,7 +331,7 @@ def process_incident_background(incident_id: str, culprit_service: str, trace_id
         if success:
             logger.info("Low risk action executed successfully.")
             # Verify 5 phút
-            is_resolved = handler.verify_remediation("http_server_active_requests")
+            is_resolved = handler.verify_remediation(culprit_service)
             if is_resolved:
                 active_incidents.pop(incident_id, None)
         else:
@@ -353,11 +365,22 @@ def process_proactive_anomaly_background(incident_id: str, culprit_service: str,
     
     # 2. Phân tích Jaeger Trace RCA & logs lỗi
     logs_summary = []
-    for log in evidence.get("logs", [])[:5]:
-        msg = log.get("message", "")
-        if len(msg) > 100:
-            msg = msg[:100] + "..."
-        logs_summary.append(f"• `[{log.get('severity', 'ERROR')}]` {msg}")
+    templates = evidence.get("log_templates", [])
+    error_keywords = ["error", "fail", "warn", "exception", "deadline", "out of order", "epoch"]
+    
+    def priority_score(t_dict):
+        text = t_dict.get("template", "").lower()
+        if any(kw in text for kw in error_keywords):
+            return 0
+        return 1
+        
+    sorted_templates = sorted(templates, key=priority_score)
+    for log_t in sorted_templates[:5]:
+        template = log_t.get("template", "")
+        count = log_t.get("count", 1)
+        if len(template) > 100:
+            template = template[:100] + "..."
+        logs_summary.append(f"• `[Count: {count}]` {template}")
         
     logs_section = "\n".join(logs_summary) if logs_summary else "• *Không tìm thấy logs lỗi liên quan trong OpenSearch.*"
     
@@ -472,7 +495,7 @@ def process_incident_promotion_background(incident_id: str):
         success = handler.execute_k8s_command(action_command)
         if success:
             logger.info("Low risk action executed successfully.")
-            is_resolved = handler.verify_remediation("http_server_active_requests")
+            is_resolved = handler.verify_remediation(culprit_service)
             if is_resolved:
                 active_incidents.pop(incident_id, None)
         else:
@@ -593,7 +616,7 @@ async def process_approval_action(incident_id: str, value: str) -> dict:
         
         if success:
             # 2. Chạy quét xác minh trong 5 phút
-            is_resolved = handler.verify_remediation("http_server_active_requests")
+            is_resolved = handler.verify_remediation(culprit_service)
             if not is_resolved:
                 # 3. Xác minh thất bại -> Tự động Rollback
                 logger.warning(f"Remediation verification failed. Triggering rollback for {incident_id}...")

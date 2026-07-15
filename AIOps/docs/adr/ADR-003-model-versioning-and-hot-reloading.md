@@ -65,3 +65,8 @@ Tuy nhiên, cơ chế cũ gặp một số hạn chế:
 * **Rủi ro:** Khi Pod bị restart (do Deployment mới hoặc Node bị thu hồi), trạng thái các incident đang chờ phản hồi từ Slack sẽ bị mất. SRE/Operator sẽ không thể thực thi hành động remediate qua nút bấm trên Slack Card do ID incident không còn tồn tại trên RAM.
 * **Khắc phục dài hạn:** Cần chuyển đổi cơ chế quản lý trạng thái từ RAM sang một cơ sở dữ liệu phân tán bền vững (ví dụ: Redis hoặc OpenSearch) để duy trì trạng thái incident xuyên suốt vòng đời Pod.
 
+### **C. Giảm Cửa Sổ Dữ Liệu Huấn Luyện (Cold Start baseline)**
+* **Vấn đề:** Khi khởi chạy trên cụm EKS mới dựng dưới 1 ngày, việc sử dụng cửa sổ mặc định 7 ngày (`duration_days=7`) dẫn đến 85% mẫu dữ liệu lịch sử bằng 0. Khi có traffic chạy thật, Isolation Forest sẽ coi traffic bình thường này là bất thường.
+* **Khắc phục:** Giảm cửa sổ dữ liệu huấn luyện Prometheus xuống **1 ngày** (`duration_days=1`) để loại bỏ các chuỗi dữ liệu trống trong quá trình Cold Start của cụm mới.
+
+
