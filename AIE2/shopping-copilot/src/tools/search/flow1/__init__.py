@@ -1,23 +1,68 @@
-from src.tools.search.flow1.sql_executor import (
-    FullCatalogStrategy,
-    DirectDBStrategy,
-    SynonymExpansionStrategy
-)
+from typing import Any, Dict, List
+
+from src.tools.search.flow1.entity_extractor import EntityExtractor
+from src.tools.search.flow1.sql_builder import SQLBuilder
+from src.tools.search.flow1.sql_executor import SQLFlowExecutor
+
 
 class Flow1SQL:
-    """
-    Wrapper của Flow 1 (SQL Matching) để tuân thủ thiết kế search_design.md.
-    """
-    @staticmethod
-    async def run(sq):
-        # Gọi song song các strategy thuộc Flow 1
-        strategies = [FullCatalogStrategy(), DirectDBStrategy(), SynonymExpansionStrategy()]
-        tasks = [s.search(sq) for s in strategies if s.should_run(sq)]
-        import asyncio
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        flat_results = []
-        for r in results:
-            if isinstance(r, list):
-                flat_results.extend(r)
-        return flat_results
+    """Wrapper cho flow1 dùng LLM → SQL → database."""
+
+    def __init__(self):
+        self.entity_extractor = EntityExtractor()
+        self.sql_builder = SQLBuilder()
+        self.executor = SQLFlowExecutor()
+
+    async def run(self, query: str) -> Dict[str, Any]:
+        entities = self.entity_extractor.extract(query)
+        sql = self.sql_builder.build(entities)
+        products = self.executor.execute(sql)
+        return {
+            "query": query,
+            "entities": entities,
+            "sql": sql,
+            "results": [
+                {
+                    "id": p.id,
+                    "name": p.name,
+                    "description": p.description,
+                    "categories": p.categories,
+                    "price_units": p.price_usd.units,
+                }
+                for p in products
+            ],
+        }
+
+
+# Backward-compatible aliases for existing imports.
+class FullCatalogStrategy:
+    def __init__(self):
+        pass
+
+    def should_run(self, sq):
+        return True
+
+    async def search(self, sq):
+        return []
+
+
+class DirectDBStrategy:
+    def __init__(self):
+        pass
+
+    def should_run(self, sq):
+        return True
+
+    async def search(self, sq):
+        return []
+
+
+class SynonymExpansionStrategy:
+    def __init__(self):
+        pass
+
+    def should_run(self, sq):
+        return True
+
+    async def search(self, sq):
+        return []

@@ -5,6 +5,7 @@ Cấu trúc dữ liệu trung tâm cho multi-strategy search.
 
 from dataclasses import dataclass, field
 from typing import Literal, Optional
+from abc import ABC, abstractmethod
 import json
 
 
@@ -89,6 +90,26 @@ class ScoredProduct:
     def __lt__(self, other: "ScoredProduct") -> bool:
         """Dùng cho sort descending theo score."""
         return self.score > other.score
+
+
+class SearchStrategy(ABC):
+    """Interface cho search strategy."""
+
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        """Tên strategy."""
+        pass
+
+    @abstractmethod
+    def should_run(self, sq: SearchQuery) -> bool:
+        """Có nên chạy với query này không?"""
+        pass
+
+    @abstractmethod
+    async def search(self, sq: SearchQuery) -> list["ScoredProduct"]:
+        """Thực thi search, trả về danh sách có score."""
+        pass
 
 
 @dataclass

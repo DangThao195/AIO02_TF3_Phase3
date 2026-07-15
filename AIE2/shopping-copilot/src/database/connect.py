@@ -4,8 +4,13 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-import psycopg2
-from psycopg2 import pool, extras
+try:
+    import psycopg2
+    from psycopg2 import pool, extras
+except Exception:  # pragma: no cover - optional dependency in local dev
+    psycopg2 = None
+    pool = None
+    extras = None
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +71,7 @@ class DBConfig:
         return f"{scheme}://{self.user}:****@{self.host}:{self.port}/{self.dbname}"
 
 
-_pool: Optional[pool.ThreadedConnectionPool] = None
+_pool = None
 _config: Optional[DBConfig] = None
 
 
@@ -77,7 +82,7 @@ def get_config() -> DBConfig:
     return _config
 
 
-def init_pool(config: Optional[DBConfig] = None) -> pool.ThreadedConnectionPool:
+def init_pool(config: Optional[DBConfig] = None):
     global _pool, _config
     if _pool is not None:
         logger.warning("Pool already initialized; closing existing pool first")
@@ -89,6 +94,8 @@ def init_pool(config: Optional[DBConfig] = None) -> pool.ThreadedConnectionPool:
         "Initializing PostgreSQL pool — %s min=%s max=%s",
         _config.get_uri(), _config.minconn, _config.maxconn,
     )
+    if pool is None:
+        raise RuntimeError("psycopg2 is not installed")
     _pool = pool.ThreadedConnectionPool(
         _config.minconn, _config.maxconn, **kwargs
     )
@@ -96,7 +103,7 @@ def init_pool(config: Optional[DBConfig] = None) -> pool.ThreadedConnectionPool:
     return _pool
 
 
-def _get_pool() -> pool.ThreadedConnectionPool:
+def _get_pool():
     if _pool is None:
         return init_pool()
     return _pool
@@ -113,6 +120,8 @@ def _connection_alive(conn) -> bool:
 
 
 def get_connection() -> Any:
+    if pool is None:
+        raise RuntimeError("psycopg2 is not installed")
     p = _get_pool()
     conn = p.getconn()
     if not _connection_alive(conn):
@@ -161,6 +170,8 @@ def execute_query(
     *,
     dictionary: bool = True,
 ) -> list[dict]:
+    if extras is None:
+        raise RuntimeError("psycopg2 is not installed")
     factory = extras.RealDictCursor if dictionary else None
     with conn.cursor(cursor_factory=factory) as cur:
         cur.execute(query, params or ())
