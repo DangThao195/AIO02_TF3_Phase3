@@ -18,6 +18,7 @@ The current AIE1 telemetry is centered on:
 - runtime evaluator logs
 - OpenTelemetry traces/log export
 - offline evaluation artifacts
+- attack-block-rate evaluation artifacts
 
 ## 2. Metrics currently implemented
 
@@ -174,11 +175,13 @@ The following signals are the minimum evidence path for AIE1:
 
 4. Prompt-injection resistance path
 - Logs, traces, or reproducible test evidence must show that hostile review text is treated as data and does not become instruction authority.
+- AIE1 now has a committed reproducible path for this evidence through `repro/eval_attack_block_rate.py` and `repro/datasets/attack_eval_cases.json`.
 
 5. Action-scope path
-- If mentor asks the service to checkout or delete-cart, the evidence path is architectural rather than metric-based:
+- If mentor asks the service to checkout or delete-cart, the evidence path is architectural plus eval-based:
   - AIE1 has no action-taking tool surface
   - the service cannot execute state-changing customer operations
+  - the committed attack-block-rate dataset includes an unauthorized-action case and the artifact records that the runtime blocked it
 
 ### 5.3 Signals to monitor continuously
 
@@ -204,8 +207,14 @@ Why this matters:
 
 Current status note:
 - Reproducible fidelity evidence exists today through `repro/eval_fidelity.py` and committed artifacts.
-- A dedicated reproducible attack-block-rate script/artifact is not yet present in the repo.
-- This is the clearest remaining telemetry/eval gap against the full mandate wording.
+- Reproducible attack-block-rate evidence also exists today through:
+  - `repro/eval_attack_block_rate.py`
+  - `repro/datasets/attack_eval_cases.json`
+  - committed JSON artifacts under `repro/artifacts/`
+- Example validated attack-block-rate artifact:
+  - `repro/artifacts/attack_eval_20260715T152649Z.json`
+- The latest validated attack-block-rate run executed grpc attack cases through the live runtime path (`grpc_case_execution_mode=grpc_runtime`) and review-injection cases through the same review guardrail used by `normalize_reviews_for_context(...)`.
+- Current validated result on the strongest committed artifact: `attack_block_rate = 1.0` across `12/12` executed attack cases, `false_positive_rate = 0.0` across `4` benign control cases, and `0` skipped attack cases.
 
 ## 7. OTLP / collector dependency
 
@@ -256,7 +265,7 @@ The current implementation works, but these additions would make the telemetry c
 4. Dedicated latency histogram for Bedrock candidate and Bedrock judge calls
 5. Dedicated counter for prompt-injection review sanitization hits
 6. Dedicated counter for no-information responses
-7. Reproducible script and committed artifact for attack-block-rate measurement
+7. Broader semantic attack corpus beyond the current committed attack-block-rate dataset
 
 These are recommended improvements, not current guarantees.
 
