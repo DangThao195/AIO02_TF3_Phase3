@@ -385,10 +385,17 @@ class CopilotAgent:
 
         raise MaxIterationsExceeded()
 
-    async def confirm(self, session_id: str, token: str) -> Dict[str, Any]:
+    async def confirm(self, session_id: str, token: str, confirmed: bool = True) -> Dict[str, Any]:
         is_valid, action_data = verify_confirmation_token(token)
         if not is_valid:
             return {"status": "error", "reply": "Token không hợp lệ hoặc đã hết hạn."}
+
+        self._sessions.clear_pending(session_id)
+
+        if not confirmed:
+            self._sessions.append_message(session_id, "user", "Hủy xác nhận")
+            self._sessions.append_message(session_id, "assistant", "❌ Đã hủy thao tác thêm vào giỏ hàng.")
+            return {"status": "cancelled", "reply": "❌ Đã hủy thao tác thêm vào giỏ hàng."}
 
         import grpc
         from src.protos import demo_pb2_grpc, demo_pb2
@@ -404,12 +411,8 @@ class CopilotAgent:
                     quantity=action_data["params"]["quantity"],
                 ),
             ))
-            self._sessions.clear_pending(session_id)
-            
-            # Lưu lại lịch sử xác nhận của người dùng vào session
             self._sessions.append_message(session_id, "user", "Xác nhận hành động")
             self._sessions.append_message(session_id, "assistant", "✅ Đã thêm vào giỏ hàng thành công!")
-            
             return {"status": "ok", "reply": "✅ Đã thêm vào giỏ hàng thành công!"}
         except grpc.RpcError as e:
             return {"status": "error", "reply": f"Lỗi gRPC: {e.details()}"}

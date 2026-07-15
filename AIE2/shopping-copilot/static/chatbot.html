@@ -714,7 +714,7 @@ async function send() {
 }
 
 // ── Confirmation ──
-async function confirmAction(token) {
+async function confirmAction(token, confirmed = true) {
   STATE.busy = true;
   try {
     const res = await fetch(API_CONFIRM, {
@@ -723,11 +723,11 @@ async function confirmAction(token) {
       body: JSON.stringify({
         session_id: STATE.sessionId,
         token: token,
+        confirmed: confirmed,
       }),
     });
     const data = await res.json();
-    // Show confirm result as a bot message
-    appendBotMsg(data.reply || 'Đã xác nhận.');
+    appendBotMsg(data.reply || (confirmed ? 'Đã xác nhận.' : 'Đã hủy xác nhận.'));
     loadCart();
   } catch (err) {
     showToast('Lỗi xác nhận: ' + err.message);
@@ -736,8 +736,12 @@ async function confirmAction(token) {
   }
 }
 
-function cancelConfirm() {
-  appendBotMsg('Đã hủy xác nhận.');
+function cancelConfirm(token) {
+  if (!token) {
+    appendBotMsg('Đã hủy xác nhận.');
+    return;
+  }
+  confirmAction(token, false);
 }
 
 // ── Render helpers ──
@@ -782,8 +786,8 @@ function appendBotResponse(data) {
   if (status === 'pending') {
     html += `<div class="reply">${renderMarkdown(reply)}</div>`;
     html += `<div class="confirm-area">
-      <button class="btn-confirm" onclick="confirmAction('${token}')">Xác nhận</button>
-      <button class="btn-cancel" onclick="cancelConfirm()">Hủy</button>
+      <button class="btn-confirm" onclick="confirmAction('${token}', true)">Xác nhận</button>
+      <button class="btn-cancel" onclick="cancelConfirm('${token}')">Hủy</button>
     </div>`;
   } else if (status === 'ok') {
     html += `<div class="reply">${renderMarkdown(reply)}</div>`;

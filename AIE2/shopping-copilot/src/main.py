@@ -94,6 +94,7 @@ class ChatResponse(BaseModel):
 class ConfirmRequest(BaseModel):
     session_id: str = Field(..., description="ID phiên chat")
     token: str = Field(..., description="HMAC token từ agent")
+    confirmed: bool = Field(default=True, description="False khi user chọn Hủy")
 
 class ConfirmResponse(BaseModel):
     status: str
@@ -249,7 +250,7 @@ async def api_confirm(req: ConfirmRequest):
     logger.info("[API] /api/confirm | session=%s", req.session_id)
 
     agent = _get_agent()
-    result = await agent.confirm(session_id=req.session_id, token=req.token)
+    result = await agent.confirm(session_id=req.session_id, token=req.token, confirmed=req.confirmed)
 
     return ConfirmResponse(
         status=result.get("status", "error"),
