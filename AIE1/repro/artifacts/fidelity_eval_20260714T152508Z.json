@@ -1,0 +1,153 @@
+{
+  "run_id": "2026-07-14T15:25:08.438572+00:00",
+  "candidate_source": "grpc://localhost:8085",
+  "judge_provider": "bedrock",
+  "judge_base_url": "",
+  "judge_region": "us-east-1",
+  "judge_model": "amazon.nova-micro-v1:0",
+  "selection": {
+    "all_products": false,
+    "product_count": 1,
+    "product_ids": [
+      "L9ECAV7KIM"
+    ]
+  },
+  "thresholds": {
+    "min_claim_count": 2,
+    "min_claim_precision": 0.8,
+    "min_aspect_coverage": 0.6,
+    "min_overall_score": 4,
+    "max_summary_sentences": 2,
+    "max_summary_words": 80
+  },
+  "cases": [
+    {
+      "product_id": "L9ECAV7KIM",
+      "status": "ok",
+      "error": "",
+      "raw_reviews_count": 5,
+      "ai_summary": "The reviews highlight the kit's effectiveness on various optics and screens, praising its gentle and residue-free cleaning.",
+      "fact_sheet": {
+        "product_id": "L9ECAV7KIM",
+        "review_count": 5,
+        "average_score": 4.6,
+        "rating_distribution": {
+          "5": 2,
+          "4": 3
+        },
+        "top_positive_reviews": [
+          {
+            "username": "clean_optics",
+            "score": 5.0,
+            "description": "This kit is a lifesaver for all my optics. The brush and wipes work perfectly without leaving any residue. My lenses have never been cleaner."
+          },
+          {
+            "username": "tech_maintenance",
+            "score": 5.0,
+            "description": "Great value for money. The different cleaning options cover all needs. Keeps my expensive equipment in pristine condition."
+          },
+          {
+            "username": "photog_pro",
+            "score": 4.5,
+            "description": "Essential for any photographer or telescope owner. It safely removes dust and fingerprints. A high-quality cleaning solution."
+          }
+        ],
+        "top_negative_reviews": [
+          {
+            "username": "daily_cleaner",
+            "score": 4.0,
+            "description": "I use this on my binoculars, camera lenses, and even my phone screen. It's very effective and gentle. A versatile cleaning kit."
+          },
+          {
+            "username": "photog_pro",
+            "score": 4.5,
+            "description": "Essential for any photographer or telescope owner. It safely removes dust and fingerprints. A high-quality cleaning solution."
+          },
+          {
+            "username": "sharp_view",
+            "score": 4.5,
+            "description": "Works as advertised, my telescope views are much clearer after using this. The fluid and cloth are excellent. Definitely recommend."
+          }
+        ],
+        "constraints": {
+          "has_explicit_age_signal": false
+        }
+      },
+      "rule_checks": {
+        "summary_length_chars": 123,
+        "sentence_count": 1,
+        "word_count": 19,
+        "warnings": [],
+        "hard_fail_reasons": [],
+        "hard_fail": false,
+        "format_passed": true,
+        "format_findings": [],
+        "fidelity_findings": [],
+        "unsupported_age_claim": false,
+        "average_rating_mentions": [],
+        "average_rating_mismatch": false,
+        "negative_sentiment_conflict": false,
+        "positive_sentiment_conflict": false,
+        "product_id_echo": false
+      },
+      "judge_result": {
+        "overall_score": 4,
+        "claims": [
+          {
+            "text": "The kit's effectiveness on various optics and screens",
+            "label": "supported",
+            "evidence": [
+              "clean_optics: 'The brush and wipes work perfectly without leaving any residue. My lenses have never been cleaner.'",
+              "daily_cleaner: 'I use this on my binoculars, camera lenses, and even my phone screen. It's very effective and gentle.'",
+              "tech_maintenance: 'The different cleaning options cover all needs.'",
+              "sharp_view: 'Works as advertised, my telescope views are much clearer after using this. The fluid and cloth are excellent.'"
+            ]
+          },
+          {
+            "text": "Praising its gentle and residue-free cleaning",
+            "label": "supported",
+            "evidence": [
+              "clean_optics: 'The brush and wipes work perfectly without leaving any residue.'",
+              "daily_cleaner: 'It's very effective and gentle.'",
+              "tech_maintenance: 'The different cleaning options cover all needs.'",
+              "sharp_view: 'The fluid and cloth are excellent.'"
+            ]
+          }
+        ],
+        "supported_claims": 2,
+        "unsupported_claims": 0,
+        "contradicted_claims": 0,
+        "claim_count": 2,
+        "claim_precision": 1.0,
+        "aspect_coverage": 0.8,
+        "sentiment_alignment": 1,
+        "reason": "The summary is mostly accurate and grounded in the reviews. It captures the main points about the kit's effectiveness and residue-free cleaning. However, it misses some minor details and does not cover all aspects of the reviews, such as the value for money mentioned by 'tech_maintenance'."
+      },
+      "fidelity_passed": true,
+      "format_passed": true,
+      "passed": true,
+      "failure_reasons": []
+    }
+  ],
+  "aggregate": {
+    "total_cases": 1,
+    "ok_cases": 1,
+    "passed_cases": 1,
+    "fidelity_passed_cases": 1,
+    "format_passed_cases": 1,
+    "rule_failed_cases": 0,
+    "invalid_run_cases": 0,
+    "overall_pass_rate": 1.0,
+    "fidelity_pass_rate": 1.0,
+    "format_pass_rate": 1.0,
+    "invalid_run_rate": 0.0,
+    "rule_failed_rate": 0.0,
+    "avg_fidelity_score": 4.0,
+    "avg_claim_precision": 1.0,
+    "avg_claim_count": 2.0,
+    "unsupported_claim_rate": 0.0,
+    "contradiction_rate": 0.0,
+    "aspect_coverage_avg": 0.8,
+    "sentiment_alignment_rate": 1.0
+  }
+}

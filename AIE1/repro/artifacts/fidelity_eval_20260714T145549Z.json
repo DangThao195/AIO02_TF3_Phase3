@@ -1,0 +1,78 @@
+{
+  "run_id": "2026-07-14T14:55:49.502235+00:00",
+  "candidate_source": "grpc://localhost:8085",
+  "judge_base_url": "https://api.openai.com/v1",
+  "judge_model": "amazon.nova-micro-v1:0",
+  "selection": {
+    "all_products": false,
+    "product_count": 1,
+    "product_ids": [
+      "L9ECAV7KIM"
+    ]
+  },
+  "thresholds": {
+    "min_claim_count": 2,
+    "min_claim_precision": 0.8,
+    "min_aspect_coverage": 0.6,
+    "min_overall_score": 4,
+    "max_summary_sentences": 2,
+    "max_summary_words": 80
+  },
+  "cases": [
+    {
+      "product_id": "L9ECAV7KIM",
+      "status": "invalid_run",
+      "error": "could not translate host name \"localhost user=otelu password=otelp dbname=otel port=50319\" to address: Name or service not known\n",
+      "raw_reviews_count": 0,
+      "ai_summary": "",
+      "fact_sheet": {
+        "product_id": "L9ECAV7KIM"
+      },
+      "rule_checks": {
+        "summary_length_chars": 0,
+        "sentence_count": 0,
+        "word_count": 0,
+        "warnings": [],
+        "hard_fail_reasons": [],
+        "hard_fail": false,
+        "format_passed": false,
+        "format_findings": [],
+        "fidelity_findings": [],
+        "unsupported_age_claim": false,
+        "average_rating_mentions": [],
+        "average_rating_mismatch": false,
+        "negative_sentiment_conflict": false,
+        "positive_sentiment_conflict": false,
+        "product_id_echo": false
+      },
+      "judge_result": null,
+      "fidelity_passed": false,
+      "format_passed": false,
+      "passed": false,
+      "failure_reasons": [
+        "invalid_run"
+      ]
+    }
+  ],
+  "aggregate": {
+    "total_cases": 1,
+    "ok_cases": 0,
+    "passed_cases": 0,
+    "fidelity_passed_cases": 0,
+    "format_passed_cases": 0,
+    "rule_failed_cases": 0,
+    "invalid_run_cases": 1,
+    "overall_pass_rate": 0.0,
+    "fidelity_pass_rate": 0.0,
+    "format_pass_rate": 0.0,
+    "invalid_run_rate": 1.0,
+    "rule_failed_rate": 0.0,
+    "avg_fidelity_score": 0.0,
+    "avg_claim_precision": 0.0,
+    "avg_claim_count": 0.0,
+    "unsupported_claim_rate": 0.0,
+    "contradiction_rate": 0.0,
+    "aspect_coverage_avg": 0.0,
+    "sentiment_alignment_rate": 0.0
+  }
+}
