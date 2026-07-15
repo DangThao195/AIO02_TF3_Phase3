@@ -86,6 +86,32 @@ Các chỉ số bắt buộc:
 4. Xuất report sang JSON hoặc Markdown.
 5. So sánh kết quả qua các phiên để đánh giá cải thiện hoặc regression.
 
+## Hướng dẫn chạy test evaluation
+
+### 1. Chạy unit test cho trust & safety
+```bash
+cd AIE2/shopping-copilot
+pytest -q tests/test_evaluation/test_trust_safety.py tests/test_evaluation/test_eval_suite.py
+```
+
+### 2. Chạy evaluation suite từ file case JSON
+```bash
+cd AIE2/shopping-copilot
+python scripts/run_eval_suite.py --input docs/sample_eval_cases.json --output-json reports/trust_safety_report.json --output-md reports/trust_safety_report.md
+```
+
+### 3. Xem output
+- JSON report: [AIE2/shopping-copilot/reports/trust_safety_report.json](AIE2/shopping-copilot/reports/trust_safety_report.json)
+- Markdown report: [AIE2/shopping-copilot/reports/trust_safety_report.md](AIE2/shopping-copilot/reports/trust_safety_report.md)
+
+## Gợi ý khi dùng cho mentor/demo
+
+- Dùng file [AIE2/shopping-copilot/docs/sample_eval_cases.json](AIE2/shopping-copilot/docs/sample_eval_cases.json) để mô phỏng các tình huống:
+  - prompt injection bị chặn
+  - groundedness fail khi không có cơ sở
+  - fallback khi service lỗi
+  - action guard chặn hành động nguy hiểm
+
 ## Yêu cầu vận hành
 
 - Evaluation phải có thể chạy lại được từ code hoặc script.
