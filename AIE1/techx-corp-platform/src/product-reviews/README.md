@@ -102,8 +102,8 @@ Quy trình của trợ lý AI được thiết kế đa tầng để bảo vệ 
 #### 4.1. Giai đoạn 1: Nhận Yêu cầu & Bộ lọc Đầu vào (Input Guardrail)
 ```mermaid
 flowchart TD
-    ReqAI(["Nhận AskProductAIAssistant(product_id, question)"]) --> SpanAI["Bắt đầu trace span 'get_ai_assistant_response'"]
-    SpanAI --> InputFilter{"Chạy check_input(question) - Bộ lọc đầu vào"}
+    ReqAI(["Nhận AskProductAIAssistant - product_id, question"]) --> SpanAI["Bắt đầu trace span 'get_ai_assistant_response'"]
+    SpanAI --> InputFilter{"Chạy check_input - Bộ lọc đầu vào"}
     InputFilter -->|Không an toàn / Phát hiện Prompt Injection| RetBlocked["Gán blocked_reason làm response"]
     RetBlocked --> EndSpanAI["Kết thúc trace span & Trả về AskProductAIAssistantResponse"]
     
@@ -118,15 +118,15 @@ flowchart TD
 ```mermaid
 flowchart TD
     BedrockFlow[Bắt đầu luồng AWS Bedrock] --> FetchDB["Gọi fetch_product_reviews từ Postgres"]
-    FetchDB --> ReviewFilter["Kiểm tra & Lọc từng review qua check_input() để chặn Injection/PII"]
-    ReviewFilter --> BuildContext["Chuẩn hóa thành safe_reviews_json (Thay thế phần độc hại bằng nhãn cảnh báo)"]
+    FetchDB --> ReviewFilter["Kiểm tra & Lọc từng review qua check_input để chặn Injection và PII"]
+    ReviewFilter --> BuildContext["Chuẩn hóa thành safe_reviews_json - Thay thế phần độc hại bằng nhãn cảnh báo"]
     BuildContext --> FetchInfo["Gọi fetch_product_info từ Catalog Service"]
     
     FetchInfo --> CheckInaccurate{"Feature Flag 'llmInaccurateResponse' bật cho sản phẩm test L9ECAV7KIM?"}
     CheckInaccurate -->|Đúng| GroundedPromptInaccurate["Xây dựng Grounded Prompt yêu cầu trả lời SAI lệch"]
     CheckInaccurate -->|Sai| GroundedPromptAccurate["Xây dựng Grounded Prompt yêu cầu trả lời ĐÚNG thực tế"]
     
-    GroundedPromptInaccurate --> CallBedrock{"Gọi AWS Bedrock qua converse() với Fallback wrapper"}
+    GroundedPromptInaccurate --> CallBedrock{"Gọi AWS Bedrock qua converse với Fallback wrapper"}
     GroundedPromptAccurate --> CallBedrock
     
     CallBedrock -->|Thành công| PostProcess[Chuyển sang Giai đoạn 3: Hậu xử lý & Đánh giá]
@@ -140,12 +140,12 @@ flowchart TD
     OpenAIFlow[Bắt đầu luồng OpenAI / Mock] --> FlagRate{"Feature Flag 'llmRateLimitError' bật?"}
     
     FlagRate -->|Đang bật| RandCheck{"Số ngẫu nhiên < 0.5?"}
-    FlagRate -->|Đang tắt| CallLLM1["Gọi Candidate LLM (Lần 1) với danh sách tools"]
+    FlagRate -->|Đang tắt| CallLLM1["Gọi Candidate LLM lần 1 với danh sách tools"]
     
-    RandCheck -->|Đúng - Giả lập lỗi 429| CallMock["Gọi Mock LLM với model 'techx-llm-rate-limit'"]
+    RandCheck -->|Đúng - Giả lập lỗi 429| CallMock["Gọi Mock LLM với model techx-llm-rate-limit"]
     RandCheck -->|Sai| CallLLM1
     
-    CallMock -->|Gặp lỗi 429| FallbackRateLimit["Trả về thông báo lỗi Rate Limit hệ thống (Fallback)"]
+    CallMock -->|Gặp lỗi 429| FallbackRateLimit["Trả về thông báo lỗi Rate Limit hệ thống"]
     FallbackRateLimit --> EndSpanAI["Kết thúc trace span"]
     CallMock -->|Không lỗi| CallLLM1
     
@@ -158,7 +158,7 @@ flowchart TD
     ToolType -->|fetch_product_reviews| RunReviewTool["Gọi fetch_product_reviews"]
     ToolType -->|fetch_product_info| RunInfoTool["Gọi fetch_product_info"]
     
-    RunReviewTool --> FilterReview["Lọc review bằng check_input() để chặn Injection/PII"]
+    RunReviewTool --> FilterReview["Lọc review bằng check_input để chặn Injection và PII"]
     FilterReview --> AppendToolMsg["Nối kết quả an toàn vào messages với role='tool'"]
     RunInfoTool --> AppendToolMsg
     
@@ -166,7 +166,7 @@ flowchart TD
     FlagInaccurate -->|Đúng| PromptInaccurate["Thêm prompt yêu cầu trả lời SAI lệch"]
     FlagInaccurate -->|Sai| PromptAccurate["Thêm prompt yêu cầu trả lời ĐÚNG thực tế"]
     
-    PromptInaccurate --> CallLLM2["Gọi Candidate LLM (Lần 2) với Fallback wrapper"]
+    PromptInaccurate --> CallLLM2["Gọi Candidate LLM lần 2 với Fallback wrapper"]
     PromptAccurate --> CallLLM2
     
     CallLLM2 -->|Thành công| PostProcess
@@ -177,19 +177,19 @@ flowchart TD
 #### 4.4. Giai đoạn 3: Hậu xử lý, Bộ lọc Đầu ra & Đánh giá Độ trung thực (Output Guardrail & Fidelity Evaluation)
 ```mermaid
 flowchart TD
-    PostProcess[Nhận raw_response từ LLM] --> OutputFilter["Chạy post_process_output() -> filter_output() (Lọc PII/leak)"]
+    PostProcess[Nhận raw_response từ LLM] --> OutputFilter["Chạy post_process_output và filter_output để lọc PII và leak"]
     OutputFilter --> MatchSystemMsg{"Kết quả là OUT_OF_SCOPE hoặc NO_INFO?"}
     
     MatchSystemMsg -->|Đúng| RetDirect["Bỏ qua đánh giá, trả trực tiếp kết quả"]
-    MatchSystemMsg -->|Sai| CheckJudge{"Có đánh giá (reviews) để đối chiếu không?"}
+    MatchSystemMsg -->|Sai| CheckJudge{"Có đánh giá reviews để đối chiếu không?"}
     
     CheckJudge -->|Không| RetDirect
-    CheckJudge -->|Có| CallJudge["Gọi Giám khảo call_summary_judge() chấm điểm Fidelity"]
+    CheckJudge -->|Có| CallJudge["Gọi Giám khảo call_summary_judge để chấm điểm Fidelity"]
     
     CallJudge -->|Giám khảo gặp lỗi / Timeout| FallbackJudge["Ghi nhận lỗi & trả về thông báo lỗi hệ thống"]
-    CallJudge -->|Giám khảo trả kết quả| CheckApprove{"Kết quả được duyệt (approved == True)?"}
+    CallJudge -->|Giám khảo trả kết quả| CheckApprove{"Kết quả được duyệt approved == True ?"}
     
-    CheckApprove -->|Không - Phát hiện Ảo giác (Hallucination)| RejectSummary["Ghi log lý do & trả về UNVERIFIED_SUMMARY_MESSAGE"]
+    CheckApprove -->|Không - Phát hiện ảo giác| RejectSummary["Ghi log lý do & trả về UNVERIFIED_SUMMARY_MESSAGE"]
     CheckApprove -->|Đúng - Trung thực| ApproveSummary["Ghi log duyệt & Trả về kết quả tóm tắt cho khách"]
     
     RetDirect --> FinishMetric["Tăng metric app_ai_assistant_counter"]
