@@ -451,6 +451,13 @@
     border: 1px solid var(--success);
   }
 
+  /* ── Debug panel ── */
+  .debug-empty {
+    font-size: 12px; color: var(--text-muted); text-align: center;
+    padding: 12px 0; font-style: italic;
+  }
+  .debug-collapsed #debugContent { display: none; }
+
   /* ── Scrollbar ── */
   .chat::-webkit-scrollbar { width: 6px; }
   .chat::-webkit-scrollbar-track { background: transparent; }
@@ -548,6 +555,17 @@
           <span class="service-name">AWS Bedrock Converse API</span>
           <span class="service-status active">ACTIVE</span>
         </div>
+      </div>
+    </div>
+
+    <!-- Debug Card -->
+    <div class="sidebar-card" id="debugCard">
+      <h3 style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleDebug()">
+        <span>Debug Log</span>
+        <span id="debugToggle" style="font-size:10px;color:var(--text-muted)">[−]</span>
+      </h3>
+      <div id="debugContent">
+        <div class="debug-empty">Chưa có dữ liệu debug.</div>
       </div>
     </div>
   </aside>
@@ -735,7 +753,7 @@ function appendUserMsg(text) {
 function appendBotMsg(text) {
   const div = document.createElement('div');
   div.className = 'msg bot';
-  div.innerHTML = `<div class="bubble"><div class="reply">${escapeHtml(text)}</div></div>`;
+  div.innerHTML = `<div class="bubble"><div class="reply">${renderMarkdown(text)}</div></div>`;
   chat.appendChild(div);
   scrollToBottom();
 }
@@ -758,40 +776,21 @@ function appendBotResponse(data) {
   div.className = 'msg bot';
   div.id = 'bot-' + Date.now();
 
+  // Build bubble — only reply text, no steps
   let html = '<div class="bubble">';
 
-  // Steps section
-  if (steps && steps.length > 0) {
-    html += '<div class="steps" id="steps-' + div.id + '">';
-    for (let i = 0; i < steps.length; i++) {
-      const s = steps[i];
-      const statusClass = statusColor(s.status || '');
-      const icon = statusIcon(s.status || '');
-      html += `<div class="step ${statusClass}-bg" data-step-index="${i}">
-        <div class="step-icon ${statusClass}">${icon}</div>
-        <div class="step-body">
-          <div class="step-action">${escapeHtml(s.action)}</div>
-          <div class="step-detail">${escapeHtml(s.detail || '')}</div>
-        </div>
-        <div class="step-time">${s.duration_ms}ms</div>
-      </div>`;
-    }
-    html += '</div>';
-  }
-
-  // Reply text
   if (status === 'pending') {
-    html += `<div class="reply">${escapeHtml(reply)}</div>`;
+    html += `<div class="reply">${renderMarkdown(reply)}</div>`;
     html += `<div class="confirm-area">
       <button class="btn-confirm" onclick="confirmAction('${token}')">Xác nhận</button>
       <button class="btn-cancel" onclick="cancelConfirm()">Hủy</button>
     </div>`;
   } else if (status === 'ok') {
-    html += `<div class="reply">${escapeHtml(reply)}</div>`;
+    html += `<div class="reply">${renderMarkdown(reply)}</div>`;
   } else if (status === 'error') {
     html += `<div class="reply" style="color:var(--error)">${escapeHtml(reply)}</div>`;
   } else {
-    html += `<div class="reply">${escapeHtml(reply)}</div>`;
+    html += `<div class="reply">${renderMarkdown(reply)}</div>`;
   }
 
   html += '</div>';
@@ -799,17 +798,35 @@ function appendBotResponse(data) {
   chat.appendChild(div);
   scrollToBottom();
 
-  // Animate steps in sequence
-  const stepEls = div.querySelectorAll('.step');
-  if (stepEls.length > 0) {
-    stepEls.forEach((el, i) => {
-      setTimeout(() => el.classList.add('visible'), 100 + i * 200);
-    });
-    // After all steps, scroll again
-    setTimeout(scrollToBottom, 100 + stepEls.length * 200 + 50);
-  } else {
-    scrollToBottom();
+  // Render steps in debug panel instead
+  renderDebugSteps(steps);
+}
+
+function renderDebugSteps(steps) {
+  const debugContent = document.getElementById('debugContent');
+  if (!debugContent) return;
+
+  if (!steps || steps.length === 0) {
+    debugContent.innerHTML = '<div class="debug-empty">Chưa có dữ liệu debug.</div>';
+    return;
   }
+
+  let html = '<div class="steps">';
+  for (let i = 0; i < steps.length; i++) {
+    const s = steps[i];
+    const statusClass = statusColor(s.status || '');
+    const icon = statusIcon(s.status || '');
+    html += `<div class="step ${statusClass}-bg visible" data-step-index="${i}">
+      <div class="step-icon ${statusClass}">${icon}</div>
+      <div class="step-body">
+        <div class="step-action">${escapeHtml(s.action)}</div>
+        <div class="step-detail">${escapeHtml(s.detail || '')}</div>
+      </div>
+      <div class="step-time">${s.duration_ms}ms</div>
+    </div>`;
+  }
+  html += '</div>';
+  debugContent.innerHTML = html;
 }
 
 // ── Utilities ──
@@ -839,6 +856,43 @@ function escapeHtml(text) {
   return d.innerHTML;
 }
 
+function renderMarkdown(text) {
+  if (!text) return '';
+  let html = escapeHtml(text);
+  // inline code (must be before other inline patterns)
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // bold
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  // italic
+  html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  // links [text](url)
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+  // headings ###
+  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+  // horizontal rule
+  html = html.replace(/^---$/gm, '<hr>');
+  // unordered list items
+  html = html.replace(/^[\s]*[-*] (.+)$/gm, '<li>$1</li>');
+  html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
+  // ordered list items
+  html = html.replace(/^[\s]*\d+\. (.+)$/gm, '<li>$1</li>');
+  html = html.replace(/(<li>.*<\/li>\n?)+/g, (m) => {
+    if (!m.startsWith('<ul>')) return '<ol>' + m + '</ol>';
+    return m;
+  });
+  // paragraph breaks (double newline)
+  html = html.replace(/\n\n/g, '</p><p>');
+  // single newline
+  html = html.replace(/\n/g, '<br>');
+  // wrap in <p> if paragraphs present
+  if (html.includes('</p>')) {
+    html = '<p>' + html + '</p>';
+  }
+  return html;
+}
+
 function scrollToBottom() {
   requestAnimationFrame(() => { chat.scrollTop = chat.scrollHeight; });
 }
@@ -862,6 +916,16 @@ function newChat() {
   updateSessionDisplay();
   input.value = '';
   input.focus();
+  // Clear debug panel
+  const debugContent = document.getElementById('debugContent');
+  if (debugContent) debugContent.innerHTML = '<div class="debug-empty">Chưa có dữ liệu debug.</div>';
+}
+
+function toggleDebug() {
+  const card = document.getElementById('debugCard');
+  const toggle = document.getElementById('debugToggle');
+  card.classList.toggle('debug-collapsed');
+  toggle.textContent = card.classList.contains('debug-collapsed') ? '[+]' : '[−]';
 }
 
 function showToast(msg) {

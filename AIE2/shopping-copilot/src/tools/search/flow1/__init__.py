@@ -15,11 +15,25 @@ class Flow1SQL:
 
     async def run(self, query: str) -> Dict[str, Any]:
         entities = self.entity_extractor.extract(query)
+        intent = entities.get("intent", "product_search")
+
+        if intent == "category_listing":
+            categories = self.entity_extractor.get_all_categories()
+            return {
+                "query": query,
+                "entities": entities,
+                "intent": "category_listing",
+                "categories": categories,
+                "sql": "SELECT DISTINCT categories FROM products ...",
+                "results": [],
+            }
+
         sql = self.sql_builder.build(entities)
         products = self.executor.execute(sql)
         return {
             "query": query,
             "entities": entities,
+            "intent": intent,
             "sql": sql,
             "results": [
                 {

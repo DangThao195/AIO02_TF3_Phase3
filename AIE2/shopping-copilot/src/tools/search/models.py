@@ -1,17 +1,10 @@
-# tools/search/models.py
-"""
-Cấu trúc dữ liệu trung tâm cho multi-strategy search.
-"""
-
-from dataclasses import dataclass, field
-from typing import Literal, Optional
-from abc import ABC, abstractmethod
 import json
+from dataclasses import dataclass, field
+from typing import Any, List, Optional
 
 
 @dataclass
 class Money:
-    """Tiền tệ (mirror từ proto Money)."""
     units: int = 0
     nanos: int = 0
     currency_code: str = "USD"
@@ -19,142 +12,81 @@ class Money:
 
 @dataclass
 class Product:
-    """Sản phẩm trong catalog."""
     id: str
     name: str
-    description: str = ""
-    categories: list[str] = field(default_factory=list)
-    price_usd: Money = field(default_factory=Money)
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "Product":
-        """Deserialize từ dict (khi load từ cache)."""
-        price_data = data.get("price_usd", {})
-        return cls(
-            id=data.get("id", ""),
-            name=data.get("name", ""),
-            description=data.get("description", ""),
-            categories=data.get("categories", []),
-            price_usd=Money(
-                units=price_data.get("units", 0),
-                nanos=price_data.get("nanos", 0),
-                currency_code=price_data.get("currency_code", "USD"),
-            )
-        )
-
-    def to_dict(self) -> dict:
-        """Serialize thành dict (khi lưu vào cache)."""
-        return {
-            "id": self.id,
-            "name": self.name,
-            "description": self.description,
-            "categories": self.categories,
-            "price_usd": {
-                "units": self.price_usd.units,
-                "nanos": self.price_usd.nanos,
-                "currency_code": self.price_usd.currency_code,
-            }
-        }
+    description: str
+    categories: List[str]
+    price_usd: Any = None
 
 
 @dataclass
-class SearchQuery:
-    """Cấu trúc query đã được parse, dùng cho mọi strategy."""
-    raw: str                                    # Query gốc từ user
-    keywords_en: list[str] = field(default_factory=list)  # Từ khoá tiếng Anh đã extract
-    keywords_vn: list[str] = field(default_factory=list)  # Từ khoá tiếng Việt gốc
-    price_min: Optional[int] = None             # Lọc giá tối thiểu (USD)
-    price_max: Optional[int] = None             # Lọc giá tối đa (USD)
-    category: Optional[str] = None              # Category slug (telescopes, ...)
-    intent: Literal["search", "browse", "compare", "unknown"] = "search"
-    sort: Literal["relevance", "price_asc", "price_desc"] = "relevance"
-    is_complex: bool = False                    # Có multi-intent? → trigger LLM rerank
-    attributes: dict = field(default_factory=dict)  # Structured attributes (color, brand, etc.)
-
-    @property
-    def has_price_filter(self) -> bool:
-        return self.price_min is not None or self.price_max is not None
-
-    @property
-    def has_category(self) -> bool:
-        return self.category is not None
+class SearchEntity:
+    select_fields: List[str] = field(default_factory=lambda: ["*"])
+    from_table: str = "products"
+    where_conditions: dict = field(default_factory=dict)
+    order_by: Optional[str] = None
+    limit: int = 15
 
 
 @dataclass
 class ScoredProduct:
-    """Sản phẩm kèm score từ strategy."""
     product: Product
-    score: float
+    score: float = 0.0
+    source: str = ""
     strategy_name: str = ""
-
-    def __lt__(self, other: "ScoredProduct") -> bool:
-        """Dùng cho sort descending theo score."""
-        return self.score > other.score
-
-
-class SearchStrategy(ABC):
-    """Interface cho search strategy."""
-
-    @property
-    @abstractmethod
-    def name(self) -> str:
-        """Tên strategy."""
-        pass
-
-    @abstractmethod
-    def should_run(self, sq: SearchQuery) -> bool:
-        """Có nên chạy với query này không?"""
-        pass
-
-    @abstractmethod
-    async def search(self, sq: SearchQuery) -> list["ScoredProduct"]:
-        """Thực thi search, trả về danh sách có score."""
-        pass
 
 
 @dataclass
 class SearchResult:
-    """Kết quả trả về từ search orchestrator."""
-    query: SearchQuery
-    products: list[ScoredProduct] = field(default_factory=list)
-    total: int = 0
-    strategies_used: list[str] = field(default_factory=list)
+    products: List[ScoredProduct] = field(default_factory=list)
+    query: str = ""
+    flows_used: List[str] = field(default_factory=list)
+    rerank_mode: str = "rule"
     error: Optional[str] = None
+    categories: Optional[List[str]] = None
 
-    @classmethod
-    def empty(cls, message: str) -> "SearchResult":
-        """Tạo empty result khi không tìm được sản phẩm."""
-        return cls(
-            query=SearchQuery(raw=""),
-            products=[],
-            total=0,
-            strategies_used=[],
-            error=message
-        )
+    @property
+    def total(self) -> int:
+        return len(self.products) if not self.categories else len(self.categories)
 
-    def to_dict(self) -> dict:
-        """Serialize để lưu cache."""
-        return {
-            "query": {
-                "raw": self.query.raw,
-                "keywords_en": self.query.keywords_en,
-                "keywords_vn": self.query.keywords_vn,
-                "price_min": self.query.price_min,
-                "price_max": self.query.price_max,
-                "category": self.query.category,
-                "intent": self.query.intent,
-                "sort": self.query.sort,
-                "is_complex": self.query.is_complex,
-            },
-            "products": [
-                {
-                    "product": p.product.to_dict(),
-                    "score": p.score,
-                    "strategy_name": p.strategy_name,
-                }
-                for p in self.products
-            ],
-            "total": self.total,
-            "strategies_used": self.strategies_used,
-            "error": self.error,
-        }
+
+@dataclass
+class SearchToolResponse:
+    status: str  # "success" | "category" | "error"
+    total: int = 0
+    products: List[dict] = field(default_factory=list)
+    categories: List[str] = field(default_factory=list)
+    message: str = ""
+
+    def to_json(self) -> str:
+        payload: dict = {"status": self.status, "total": self.total}
+        if self.products:
+            payload["products"] = self.products
+        if self.categories:
+            payload["categories"] = self.categories
+        if self.message:
+            payload["message"] = self.message
+        return json.dumps(payload, ensure_ascii=False)
+
+
+@dataclass
+class SearchQuery:
+    raw: str
+    category: Optional[str] = None
+    keywords_en: List[str] = field(default_factory=list)
+    keywords_vn: List[str] = field(default_factory=list)
+    price_min: Optional[int] = None
+    price_max: Optional[int] = None
+    sort: str = "relevance"
+    intent: str = "search"
+    is_complex: bool = False
+
+
+class SearchStrategy:
+    name: str = "base"
+
+    def should_run(self, sq: SearchQuery) -> bool:
+        raise NotImplementedError
+
+    async def search(self, sq: SearchQuery) -> List[ScoredProduct]:
+        raise NotImplementedError

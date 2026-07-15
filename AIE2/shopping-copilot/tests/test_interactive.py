@@ -149,6 +149,7 @@ def _build_mock_shipping_response():
 
 def _setup_grpc_mocks():
     """Mock tất cả gRPC calls với dữ liệu giả sử dụng prefix src."""
+    logger = logging.getLogger(__name__)
     import src.tools.review_tool
     import src.tools.cart_tool
     import src.tools.recommendation_tool

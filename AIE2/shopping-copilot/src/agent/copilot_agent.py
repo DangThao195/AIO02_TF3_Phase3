@@ -245,17 +245,30 @@ class CopilotAgent:
                     s_ex, a_ex = self._time(f"Exec: {tc_name}")
                     try:
                         result = await tool_fn.ainvoke(tc_args)
-                        
-                        # Bóc tách metadata nguồn tìm kiếm để debug hiển thị
-                        if isinstance(result, str) and "__METADATA_SOURCES__:" in result:
-                            parts = result.split("__METADATA_SOURCES__:")
-                            result = parts[0].strip()
-                            raw_sources = parts[1].strip().split(",")
-                            for src in raw_sources:
-                                if src == "bedrock_rag":
-                                    sources_used.add("AWS Bedrock KB (RAG)")
-                                elif src in ("direct_db", "full_catalog", "synonym_expansion"):
-                                    sources_used.add("Server Test (gRPC)")
+
+                        # Parse search tool JSON → text for LLM
+                        if tc_name == "search_products_v2" and isinstance(result, str) and result.startswith("{"):
+                            try:
+                                search_data = json.loads(result)
+                                status = search_data.get("status", "")
+                                if status == "category":
+                                    cats = search_data.get("categories", [])
+                                    result = "Các danh mục sản phẩm hiện có:\n" + "\n".join(f"- {c}" for c in cats)
+                                elif status == "success":
+                                    prods = search_data.get("products", [])
+                                    if not prods:
+                                        result = "Không tìm thấy sản phẩm phù hợp."
+                                    else:
+                                        total = search_data.get("total", len(prods))
+                                        lines = [f"Tìm thấy {total} sản phẩm:"]
+                                        for i, p in enumerate(prods, 1):
+                                            units = p.get("price_units", 0)
+                                            nanos = p.get("price_nanos", 0)
+                                            price = f"${units}.{nanos:09d}"
+                                            lines.append(f"{i}. {p.get('name', 'Unknown')} - {price}")
+                                        result = "\n".join(lines)
+                            except Exception:
+                                result = "Không tìm thấy sản phẩm phù hợp."
                     except Exception as e:
                         detail = f"Exception: {str(e)[:200]} | args={args_preview}"
                         self._end(s_ex, a_ex, "ERROR", detail)
@@ -316,8 +329,13 @@ class CopilotAgent:
                 if isinstance(final, list):
                     text_parts = []
                     for part in final:
-                        if isinstance(part, dict) and "text" in part:
-                            text_parts.append(part["text"])
+                        if isinstance(part, dict):
+                            if part.get("type") == "reasoning_content" or "reasoning_content" in part:
+                                continue
+                            if "text" in part:
+                                text_parts.append(part["text"])
+                                continue
+                            text_parts.append(str(part))
                         elif isinstance(part, str):
                             text_parts.append(part)
                         elif hasattr(part, "text"):

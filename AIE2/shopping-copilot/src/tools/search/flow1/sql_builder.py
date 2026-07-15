@@ -14,6 +14,9 @@ class SQLBuilder:
         }
 
     def build(self, entities: Dict[str, Any]) -> str:
+        if entities.get("intent") == "category_listing":
+            return self.build_category_listing()
+
         select_columns = ["id", "name", "description", "categories", "price_units", "price_nanos"]
         where_clauses: List[str] = []
 
@@ -33,6 +36,9 @@ class SQLBuilder:
 
         query += " ORDER BY price_units ASC LIMIT 15"
         return query
+
+    def build_category_listing(self) -> str:
+        return "SELECT DISTINCT categories FROM products WHERE categories IS NOT NULL AND categories != '' ORDER BY categories"
 
     def _build_clause(self, field_name: str, rule: Dict[str, Any], value: List[Any]) -> str | None:
         column = rule.get("column")

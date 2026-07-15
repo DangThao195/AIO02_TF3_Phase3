@@ -1,52 +1,122 @@
 # Shopping Copilot — TechX Corp
 
-Trợ lý mua sắm AI cho TechX Corp. Hỗ trợ tìm kiếm sản phẩm, xem đánh giá,
-thêm vào giỏ hàng, gợi ý sản phẩm và quy đổi tiền tệ.
+Trợ lý mua sắm AI cho TechX Corp, vận hành trên AWS EKS với LLM Amazon Nova (Bedrock).
+Thuộc nhóm AIO02 — TF3 Phase 3.
+
+Hỗ trợ tìm kiếm sản phẩm (SQL + RAG), xem đánh giá, thêm giỏ hàng (có xác nhận),
+gợi ý sản phẩm, quy đổi tiền tệ và tra phí vận chuyển.
 
 ## Yêu cầu
 
 - Python 3.11+
 - `pip install -r requirements.txt`
+- AWS credentials (cho Bedrock LLM, Guardrails, Knowledge Base)
+- (Tùy chọn) server-test local nếu không có kết nối EKS
+
+## Cấu hình
+
+Sao chép `.env` từ mẫu (xem `.env` hiện có) và điền các thông số:
+
+| Biến | Mô tả |
+|------|-------|
+| `BEDROCK_MODEL_ID` | Model ID (VD: `apac.amazon.nova-lite-v1:0`) |
+| `BEDROCK_REGION` | Region AWS cho Bedrock |
+| `BEDROCK_GUARDRAIL_ID` | Guardrail ID (tuỳ chọn) |
+| `CATALOG_ADDR` | `localhost:3550` (local) hoặc `product-catalog:3550` (K8s) |
+| `CART_ADDR` | `localhost:7070` (local) hoặc `cart:7070` (K8s) |
+| `REVIEWS_ADDR` | `localhost:9090` (local) |
+| `RECO_ADDR` | `localhost:8081` (local) |
+| `CURRENCY_ADDR` | `localhost:7001` (local) |
+| `SHIPPING_ADDR` | `http://localhost:50052` (local) |
+| `BEDROCK_KB_ID` | Knowledge Base ID cho RAG (tuỳ chọn) |
+| `DB_CONNECTION_STRING` | PostgreSQL connection string cho Flow 1 SQL |
+
+Dùng `--mock` flag hoặc `MOCK_EKS=true` để chạy với gRPC mock (không cần backend thật).
 
 ## Kiến trúc
 
 ```
 shopping-copilot/
-├── src/                 # Mã nguồn agent
-│   ├── agent/           # CopilotAgent (ReAct loop)
-│   ├── llm/             # LLM client (Groq)
-│   ├── guardrails/      # Confirmation, rate limiter
-│   ├── memory/          # Session store, cache
-│   ├── protos/          # demo.proto + stubs (kết nối backend)
-│   └── tools/           # 7 tools agent sử dụng
-│       └── search/      # Search pipeline (multi-strategy)
-├── server-test/         # Mock backend local (thay thế K8s)
-│   ├── server/          # gRPC + HTTP server
-│   ├── proto/           # Proto files riêng
-│   └── database/        # SQLite schema + seed
-├── static/              # Giao diện chatbot HTML
-└── data/                # Runtime data (cache, session)
+├── src/                    # Mã nguồn chính
+│   ├── main.py             # FastAPI server (endpoints /api/chat, /api/confirm, /chatbot)
+│   ├── agent/
+│   │   ├── agent.py        # Public API convenience re-export
+│   │   ├── copilot_agent.py # CopilotAgent (ReAct loop + 6 guardrails + step tracking)
+│   │   └── response_formatter.py  # Định dạng lại response (emoji cleanup, bold)
+│   ├── llm/
+│   │   ├── llm.py          # AWS Bedrock client (Amazon Nova)
+│   │   └── prompt.py       # System prompt + format prompt
+│   ├── guardrails/         # 6 lớp bảo vệ
+│   │   ├── input_filter.py  # L2: Regex + Bedrock Guardrails
+│   │   ├── confirmation.py  # L1: HMAC confirmation gate
+│   │   ├── fallback.py      # L3: Exception handler + retry
+│   │   ├── tool_validator.py# L4: Allow-list + user isolation + param bounds
+│   │   ├── output_filter.py # L5: PII redaction
+│   │   └── rate_limiter.py  # L6: Request/token limit
+│   ├── memory/
+│   │   ├── store.py        # SessionStore + CacheStore (TTL, LRU, JSON persistence)
+│   │   └── cache.py        # Backward compatibility re-export
+│   ├── tools/              # 10 công cụ agent
+│   │   ├── search/         # Search pipeline (multi-strategy)
+│   │   │   ├── orchestrator.py  # Phối hợp Flow 1 + Flow 2 + Reranker
+│   │   │   ├── flow1/      # SQL matching (entity extractor → SQL builder → executor)
+│   │   │   ├── flow2/      # RAG (Bedrock Knowledge Base)
+│   │   │   ├── reranker.py # Hợp nhất & xếp hạng kết quả
+│   │   │   └── models.py   # Data classes
+│   │   ├── catalog_tool.py # get_categories, get_all_products
+│   │   ├── cart_tool.py    # add_to_cart_tool, get_cart_tool, check_cart_item_tool
+│   │   ├── review_tool.py  # get_product_reviews_tool
+│   │   ├── recommendation_tool.py  # get_recommendations_tool
+│   │   ├── currency_tool.py # convert_currency_tool
+│   │   ├── shipping_tool.py # get_shipping_quote_tool (REST)
+│   │   ├── product_id_tool.py # get_product_id (tra cứu ID từ tên)
+│   │   └── service_config.py  # Resolver địa chỉ backend (real/test)
+│   ├── protos/             # gRPC stubs (demo.proto)
+│   ├── database/           # PostgreSQL connection pool
+│   └── evaluation/         # Trust & Safety evaluation
+├── server-test/            # Mock backend local (7 servers: 6 gRPC + 1 HTTP)
+├── static/                 # Giao diện chatbot HTML
+├── data/                   # Runtime data (cache, session JSON)
+├── scripts/                # Công cụ vận hành
+│   ├── sync_db_to_s3.py
+│   ├── cron_sync_and_sync_kb.py
+│   └── start_port_forwards.py
+├── tests/                  # Test suite + pipeline đánh giá
+├── contracts/              # Tài liệu bàn giao
+└── reports/                # Trust & Safety report
 ```
 
-### 7 công cụ agent
+### 10 công cụ agent
 
 | Công cụ | Chức năng | Backend |
 |---------|-----------|---------|
-| `search_products_v2` | Tìm kiếm + liệt kê danh mục | gRPC ProductCatalogService |
-| `get_product_reviews_tool` | Xem đánh giá sản phẩm | gRPC ProductReviewService |
-| `add_to_cart_tool` | Thêm vào giỏ hàng (cần xác nhận) | gRPC CartService |
+| `search_products_v2` | Tìm kiếm sản phẩm (SQL + RAG + reranker) | SQL DB + Bedrock KB |
+| `get_categories` | Danh sách danh mục | SQL DB |
+| `get_all_products` | Toàn bộ sản phẩm (chỉ khi cần) | SQL DB |
+| `get_product_id` | Tra product_id từ tên sản phẩm | SQL DB + SQLite |
+| `get_product_reviews_tool` | Xem đánh giá | gRPC ProductReviewService |
+| `add_to_cart_tool` | Thêm vào giỏ (cần xác nhận) | gRPC CartService |
 | `get_cart_tool` | Xem giỏ hàng | gRPC CartService |
-| `get_recommendations_tool` | Gợi ý sản phẩm liên quan | gRPC RecommendationService |
+| `get_recommendations_tool` | Gợi ý sản phẩm | gRPC RecommendationService |
 | `convert_currency_tool` | Quy đổi tiền tệ | gRPC CurrencyService |
-| `get_shipping_quote_tool` | Xem phí vận chuyển | REST HTTP |
+| `get_shipping_quote_tool` | Phí vận chuyển (nội địa VN) | REST HTTP |
+
+### 6 lớp Guardrail
+
+| Lớp | Chức năng | File |
+|-----|-----------|------|
+| L1 | Confirmation Gate (HMAC token cho write actions) | `confirmation.py` |
+| L2 | Input Filter (Regex + AWS Bedrock Guardrails) | `input_filter.py` |
+| L3 | Fallback (xử lý exception, timeout, retry) | `fallback.py` |
+| L4 | Tool Validator (allow-list, user isolation, param bounds) | `tool_validator.py` |
+| L5 | Output Filter (PII redaction) | `output_filter.py` |
+| L6 | Rate Limiter (request/token per user) | `rate_limiter.py` |
 
 ---
 
 ## Cách chạy
 
 ### Option A: Server-test (mock local) — khuyên dùng
-
-Server-test mô phỏng toàn bộ backend trên local, không cần kết nối K8s.
 
 **Bước 1: Seed database** (chỉ làm 1 lần)
 
@@ -55,8 +125,6 @@ cd server-test
 python scripts/seed.py
 ```
 
-Kết quả: tạo file `server-test/shopping.db` với 10 sản phẩm, 50+ đánh giá.
-
 **Bước 2: Khởi động server-test**
 
 ```powershell
@@ -64,7 +132,7 @@ cd server-test
 python -m server.main
 ```
 
-Server-test lắng nghe trên **7 cổng**:
+Server-test lắng nghe trên 7 cổng:
 
 | Cổng | Dịch vụ | Giao thức |
 |------|---------|-----------|
@@ -73,41 +141,20 @@ Server-test lắng nghe trên **7 cổng**:
 | 8081 | RecommendationService | gRPC |
 | 9090 | ProductReviewService | gRPC |
 | 7001 | CurrencyService | gRPC |
-| 50051 | Products + ProductReviews + Accounting (legacy) | gRPC |
+| 50051 | Legacy (Products + Reviews + Accounting) | gRPC |
 | 50052 | Shipping REST | HTTP |
-
-Log thành công:
-
-```
-database ready
-legacy gRPC server listening on 0.0.0.0:50051
-demo gRPC service ready on 0.0.0.0:3550
-demo gRPC service ready on 0.0.0.0:7070
-demo gRPC service ready on 0.0.0.0:8081
-demo gRPC service ready on 0.0.0.0:9090
-demo gRPC service ready on 0.0.0.0:7001
-HTTP shipping ready on 0.0.0.0:50052
-all servers ready
-```
 
 **Bước 3: Mở terminal mới — khởi động agent**
 
 ```powershell
-set USE_TEST_SERVER=true
-uvicorn src.main:app --port 8001
+uvicorn src.main:app --port 8001 --mock
 ```
 
-`USE_TEST_SERVER=true` chuyển tất cả địa chỉ backend từ K8s sang localhost.
+`--mock` flag kích hoạt gRPC mock để chạy không cần backend thật.
 
-**Bước 4: Mở browser → giao diện chat**
+**Bước 4: Mở browser**
 
 Truy cập: [http://localhost:8001/chatbot](http://localhost:8001/chatbot)
-
-Giao diện chatbot HTML có:
-- Khung chat với message bubble
-- Timeline các bước agent thực hiện (có animation)
-- Nút xác nhận cho thao tác thêm giỏ hàng
-- Session ID + nút New Chat
 
 **Câu lệnh test nhanh:**
 
@@ -119,11 +166,7 @@ giỏ hàng của tôi có gì
 đánh giá về sản phẩm 66VCHSJNUP
 ```
 
----
-
-### Option B: Kết nối server thật (K8s)
-
-Dùng khi cần test với backend thật trên cluster EKS.
+### Option B: Kết nối server thật (EKS)
 
 **Bước 1: Port-forward các service**
 
@@ -133,31 +176,44 @@ kubectl port-forward -n techx-tf3 service/cart 7070:7070
 kubectl port-forward -n techx-tf3 service/recommendation 8081:8081
 kubectl port-forward -n techx-tf3 service/product-reviews 9090:9090
 kubectl port-forward -n techx-tf3 service/currency 7001:7001
-kubectl port-forward -n techx-tf3 service/shipping 50051:50051
+kubectl port-forward -n techx-tf3 service/shipping 50052:50052
 ```
 
-Mở 6 terminal riêng hoặc dùng tmux/ngrok.
-
-**Bước 2: Khởi động agent (không set USE_TEST_SERVER)**
+**Bước 2: Khởi động agent**
 
 ```powershell
 uvicorn src.main:app --port 8001
 ```
 
-Mặc định `USE_TEST_SERVER=false`, agent gọi đến localhost:3550/7070/... (port-forward).
+Mặc định agent đọc địa chỉ từ `.env` (`CATALOG_ADDR`, `CART_ADDR`, ...).
 
-**Bước 3: Mở browser → [http://localhost:8001/chatbot](http://localhost:8001/chatbot)**
+### Option C: Dùng gRPC mock (không cần server-test)
 
----
+```powershell
+set MOCK_EKS=true
+uvicorn src.main:app --port 8001
+```
+
+Hoặc không dùng biến môi trường:
+
+```powershell
+uvicorn src.main:app --port 8001 --mock
+```
 
 ## API endpoints
 
 | Endpoint | Method | Chức năng |
 |----------|--------|-----------|
+| `/` | GET | Thông tin server |
 | `/health` | GET | Health check |
 | `/chatbot` | GET | Giao diện chatbot HTML |
 | `/api/chat` | POST | Gửi tin nhắn, nhận trả lời |
 | `/api/confirm` | POST | Xác nhận hành động (thêm giỏ hàng) |
+| `/api/cart` | GET | Xem giỏ hàng theo user_id |
+| `/debug/session/{id}` | GET | Tra cứu session memory |
+| `/debug/sessions` | GET | Danh sách session |
+| `/debug/cache` | GET | Cache store stats |
+| `/debug/ratelimit` | GET | Rate limiter state |
 | `/docs` | GET | Swagger UI |
 
 ### POST /api/chat
@@ -170,45 +226,57 @@ Mặc định `USE_TEST_SERVER=false`, agent gọi đến localhost:3550/7070/..
 }
 ```
 
-Response:
+Response khi thành công (status=ok):
+
 ```json
 {
   "status": "ok",
   "reply": "Dạ, đây là các sản phẩm kính thiên văn dưới 100 đô...",
   "session_id": "uuid-xxx",
+  "token": null,
   "steps": [
     {"action": "search_products_v2", "status": "ok", "detail": "...", "duration_ms": 1200}
   ]
 }
 ```
 
-## Cấu trúc server-test
+Response khi cần xác nhận (status=pending):
+
+```json
+{
+  "status": "pending",
+  "reply": "Vui lòng xác nhận thêm 1 sản phẩm 'OLJCESPC7Z' vào giỏ hàng.",
+  "session_id": "uuid-xxx",
+  "token": "eyJ...signature",
+  "steps": [...]
+}
+```
+
+### POST /api/confirm
+
+```json
+{
+  "session_id": "uuid-xxx",
+  "token": "eyJ...signature"
+}
+```
+
+## Luồng tìm kiếm (Search Pipeline)
 
 ```
-server-test/
-├── server/
-│   ├── main.py                    # Entry point: 7 servers (6 gRPC + 1 HTTP)
-│   ├── config.py                  # DB_PATH, GRPC_PORT
-│   ├── db.py                      # aiosqlite wrapper
-│   ├── handlers/
-│   │   ├── products_service.py     # Products (legacy proto)
-│   │   ├── product_reviews_service.py  # ProductReviews (legacy proto)
-│   │   ├── accounting_service.py  # Accounting (legacy proto)
-│   │   ├── demo_catalog_service.py    # ProductCatalogService (demo.proto)
-│   │   ├── demo_cart_service.py       # CartService (demo.proto)
-│   │   ├── demo_review_service.py     # ProductReviewService (demo.proto)
-│   │   ├── demo_recommendation_service.py  # RecommendationService (demo.proto)
-│   │   └── demo_currency_service.py      # CurrencyService (demo.proto)
-│   ├── demo_pb2.py                # Stub từ demo.proto
-│   └── demo_pb2_grpc.py
-├── proto/
-│   ├── demo.proto                 # demo.proto (giống src/protos/)
-│   ├── products.proto
-│   ├── product_reviews.proto
-│   └── accounting.proto
-├── database/
-│   └── init.sql                   # SQLite schema + seed data
-├── scripts/
-│   └── seed.py                    # Seed script
-└── requirements.txt
+Query → Entity Extractor (heuristic + LLM) ─┬→ Flow 1: SQL matching (PostgreSQL / SQLite)
+                                             │
+                                             └→ Flow 2: RAG (Bedrock Knowledge Base)
+                                                    │
+                                                    ↓
+                                              PromptRewriter
+                                                    │
+                                                    ↓
+                                              KB Query → resolve product details
+                                                    │
+                                                    ↓
+                                              Reranker (dedup + merge)
+                                                    │
+                                                    ↓
+                                              Result (top 5 products)
 ```

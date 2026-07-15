@@ -3,7 +3,7 @@ import os
 import re
 import sqlite3
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 try:
     from rapidfuzz import fuzz
@@ -14,13 +14,34 @@ from src.llm.llm import get_llm_client
 
 
 class EntityExtractor:
-    """Trích xuất thực thể từ câu hỏi bằng LLM hoặc heuristic fallback."""
+    """Trích xuất thực thể từ câu hỏi bằng heuristic + LLM fallback."""
 
     _STOP_WORDS = {
         "tìm", "tim", "của", "cua", "cho", "for", "the", "a", "an", "và", "va", "and", "or",
         "dưới", "duoi", "under", "từ", "tu", "from", "giữa", "giua", "between", "range",
         "sản", "san", "phẩm", "pham", "item", "items", "product", "products", "show", "look",
-        "cheap", "affordable", "best", "good", "mới", "moi", "new"
+        "cheap", "affordable", "best", "good", "mới", "moi", "new",
+        "bạn", "ban", "bán", "bán", "loại", "loai", "gì", "gi", "nào", "nao",
+        "có", "co", "không", "khong", "các", "cac", "những", "nhung",
+        "này", "nay", "đó", "do", "ấy", "ay", "nhiều", "nhieu",
+        "một", "mot", "vài", "vai", "muốn", "muon", "hãy", "hay",
+        "vui", "lòng", "long", "cần", "can", "mua", "mua",
+        "thích", "thich", "nên", "nen", "phải", "phai", "được", "duoc",
+        "giúp", "giup", "tôi", "toi", "mình", "minh", "xin", "xin",
+        "mặt", "mat", "hàng", "hang", "xem", "xem",
+        "người", "nguoi", "dùng", "dung", "bằng", "bang",
+        "thế", "the", "lại", "lai", "rồi", "roi",
+        "đây", "day", "đó", "do",
+        "danh", "muc", "hot", "noi", "bat", "chay", "nhat",
+        "chao", "lam", "nguoi", "dung",
+        "what", "which", "you", "your", "me", "some", "recommend",
+        "something", "anything", "do", "are", "have", "where", "how", "all",
+        "sell", "goi", "den", "ve", "qua", "rat", "that",
+    }
+
+    _CATEGORY_SIGNAL_WORDS = {
+        "loại", "loai", "danh", "muc", "danh muc", "danh mục",
+        "categories", "category", "kind", "types",
     }
 
     def __init__(self, llm_client=None):
@@ -29,12 +50,12 @@ class EntityExtractor:
     def extract(self, query: str) -> Dict[str, Any]:
         query = (query or "").strip()
         if not query:
-            return {"category": None, "price_max": None, "price_min": None, "keywords": []}
+            return {"category": None, "price_max": None, "price_min": None, "keywords": [], "intent": "general"}
 
         entities = self._heuristic_extract(query)
 
         if os.getenv("SKIP_LLM_SQL_FLOW", "0") == "1":
-            return entities
+            return self._infer_intent(query, entities)
 
         try:
             response = self.llm_client.invoke(
@@ -45,11 +66,11 @@ class EntityExtractor:
             if response and getattr(response, "content", ""):
                 data = self._parse_response(response.content)
                 if data:
-                    return self._merge(entities, data)
+                    entities = self._merge(entities, data)
         except Exception:
             pass
 
-        return entities
+        return self._infer_intent(query, entities)
 
     def _heuristic_extract(self, query: str) -> Dict[str, Any]:
         lowered = query.lower()
@@ -89,6 +110,37 @@ class EntityExtractor:
                 continue
             keywords.append(normalized)
         entities["keywords"] = list(dict.fromkeys(keywords))
+        return entities
+
+    def _infer_intent(self, query: str, entities: Dict[str, Any]) -> Dict[str, Any]:
+        """Xác định intent: product_search, category_listing, hay general."""
+        has_filters = (
+            entities.get("category") is not None
+            or entities.get("price_max") is not None
+            or entities.get("price_min") is not None
+        )
+
+        if has_filters:
+            entities["intent"] = "product_search"
+            return entities
+
+        lowered = query.lower()
+        has_category_signal = any(sw in lowered for sw in self._CATEGORY_SIGNAL_WORDS)
+        has_keywords = bool(entities.get("keywords"))
+
+        if has_category_signal and not has_keywords:
+            entities["intent"] = "category_listing"
+        elif has_category_signal and has_keywords:
+            kw_text = " ".join(entities["keywords"])
+            if any(sw in kw_text for sw in self._CATEGORY_SIGNAL_WORDS):
+                entities["keywords"] = []
+                entities["intent"] = "category_listing"
+            else:
+                entities["intent"] = "product_search"
+        elif not has_keywords:
+            entities["intent"] = "general"
+        else:
+            entities["intent"] = "product_search"
         return entities
 
     def _infer_category(self, query: str) -> str | None:
@@ -164,12 +216,30 @@ class EntityExtractor:
             return hints
         return hints
 
+    def get_all_categories(self) -> List[str]:
+        """Lấy danh sách tất cả danh mục sản phẩm từ database."""
+        hints = self._get_catalog_category_hints()
+        return sorted(set(hints.values()))
+
     def _build_prompt(self, query: str) -> str:
         return (
-            "Bạn là trợ lý sinh SQL cho cửa hàng. Trả về JSON với các khóa: "
-            "category, price_max, price_min, keywords, sort. "
-            f"Câu hỏi: {query}. "
-            "Nếu không rõ, dùng null hoặc []"
+            "Bạn là trợ lý phân tích truy vấn mua sắm. "
+            "Trả về JSON với các khóa: intent, category, price_max, price_min, keywords, sort.\n"
+            "- intent: 'product_search' (tìm sản phẩm), 'category_listing' (liệt kê danh mục), 'general' (không rõ)\n"
+            "- category: tên danh mục hoặc null nếu không rõ\n"
+            "- price_max: giá tối đa (số) hoặc null\n"
+            "- price_min: giá tối thiểu (số) hoặc null\n"
+            "- keywords: mảng từ khóa tìm kiếm chính (TIẾNG ANH, loại bỏ từ chung chung)\n"
+            "- sort: 'relevance', 'price_asc', 'price_desc' hoặc null\n\n"
+            "Ví dụ:\n"
+            "  Câu hỏi: 'kính thiên văn dưới 100 đô'\n"
+            '  -> {"intent":"product_search","category":null,"price_max":100,"price_min":null,"keywords":["telescope"],"sort":"relevance"}\n\n'
+            "  Câu hỏi: 'bạn bán loại sản phẩm nào'\n"
+            '  -> {"intent":"category_listing","category":null,"price_max":null,"price_min":null,"keywords":[],"sort":null}\n\n'
+            "  Câu hỏi: 'gợi ý cho tôi vài sản phẩm'\n"
+            '  -> {"intent":"general","category":null,"price_max":null,"price_min":null,"keywords":[],"sort":null}\n\n'
+            f"Câu hỏi: {query}\n"
+            "JSON:"
         )
 
     def _parse_response(self, content: str) -> Dict[str, Any]:
@@ -186,7 +256,7 @@ class EntityExtractor:
 
     def _merge(self, base: Dict[str, Any], llm_data: Dict[str, Any]) -> Dict[str, Any]:
         merged = dict(base)
-        for key in ["category", "price_max", "price_min", "sort"]:
+        for key in ["intent", "category", "price_max", "price_min", "sort"]:
             if llm_data.get(key) not in (None, ""):
                 merged[key] = llm_data[key]
         if llm_data.get("keywords"):
