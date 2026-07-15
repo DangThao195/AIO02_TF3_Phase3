@@ -46,19 +46,54 @@ Dưới đây là các kịch bản chuẩn bị sẵn để bạn gửi/thảo 
 
 
 
-### Kịch bản B: Nếu đề xuất dùng **Redis** (Hiệu năng cao, Chuẩn Production)
-> *"Chào team CDO, nhóm AI (AIO) muốn bổ sung **Redis** làm tầng Runtime Caching cho LLM để đảm bảo độ trễ phản hồi <1ms và cô lập hoàn toàn tải lượng đọc/ghi cache ra khỏi Database PostgreSQL chính (tránh nguy cơ nghẽn DB làm treo trang sản phẩm dưới tải cao).
-> 
-> Nhờ CDO tư vấn giúp mình xem phương án triển khai nào khả thi hơn:
-> * **Phương án B.1 (Chạy trực tiếp trên K8s)**: CDO có thể hỗ trợ cài một Redis service (ví dụ Helm Chart của Bitnami) lên cụm K8s hiện tại và cấu hình Persistent Volume (PVC) được không? Cụm hiện tại có đủ RAM dư thừa không (dự kiến cấp phát khoảng 256MB - 512MB RAM cho Redis)?
-> * **Phương án B.2 (AWS Managed)**: Nếu K8s không khuyến nghị chạy cơ sở dữ liệu dạng Stateful như Redis, CDO có hỗ trợ xin cấp phát một cụm AWS ElastiCache for Redis nhỏ (ví dụ node `cache.t4g.micro` hoặc `cache.t4g.medium` trong mạng VPC nội bộ) không?"*
+### Kịch bản B: Sử dụng Redis (Hiệu năng cao, Chuẩn Production)
 
-### Kịch bản C: Đề xuất phương án tối ưu nhất - **Hybrid** (Redis + Postgres)
-> *"Chào team CDO, để tuân thủ tối đa các ràng buộc của chỉ thị **Mandate-06** (vừa đảm bảo độ trễ siêu thấp không treo trang, vừa lưu trữ log kiểm toán có cấu trúc để làm báo cáo Eval gửi mentor), nhóm AIO đề xuất hướng đi **Hybrid**:
-> * Sử dụng **Redis** (chạy Helm trên K8s hoặc AWS ElastiCache) để lưu trữ Cache Key - Answer phục vụ truy vấn thời gian thực của khách hàng.
-> * Sử dụng **PostgreSQL** có sẵn để lưu trữ nhật ký kiểm toán (Audit Logs) chứa metadata chi tiết và số đo Eval chất lượng để báo cáo.
+#### 1. Mẫu tin nhắn thảo luận với CDO:
+> [!TIP]
+> *“Chào team CDO, nhóm AI (AIO) muốn bổ sung **Redis** làm tầng Runtime Caching cho LLM để đảm bảo độ trễ phản hồi <1ms và cô lập hoàn toàn tải lượng đọc/ghi cache ra khỏi Database PostgreSQL chính (tránh nguy cơ nghẽn DB làm treo trang sản phẩm dưới tải cao).*
 > 
-> CDO đánh giá giúp mình hướng đi này có khả thi với hạ tầng hiện tại không và cần chuẩn bị những gì nhé!"*
+> *Nhờ CDO tư vấn giúp mình xem phương án triển khai nào khả thi hơn:*
+> * * **Phương án B.1 (Chạy trực tiếp trên K8s)**: CDO có thể hỗ trợ cài một Redis service (Helm Chart Bitnami) lên cụm K8s hiện tại và cấu hình Persistent Volume (PVC) được không? Cụm có đủ RAM dư thừa (~256MB - 512MB RAM) không?*
+> * * **Phương án B.2 (AWS Managed)**: CDO có hỗ trợ xin cấp phát một cụm AWS ElastiCache for Redis nhỏ (node `cache.t4g.micro` hoặc `cache.t4g.medium` trong mạng VPC nội bộ) không?”*
+
+#### 2. Đối chiếu với Mandate-06:
+* **Điểm PHÙ HỢP**:
+  * **Độ bền bỉ tối đa (Resilience)**: Độ trễ phản hồi cực nhanh (< 1ms) và cô lập tải lượng cache hoàn toàn khỏi database nghiệp vụ chính. Phòng ngừa nguy cơ nghẽn DB chính gây treo storefront, bảo vệ SLO trang sản phẩm.
+  * **Tự động dọn dẹp (Resilience)**: Cơ chế TTL tích hợp của Redis giúp tự động thu hồi RAM khi key hết hạn, giảm thiểu lỗi tràn bộ nhớ (OOM).
+* **Điểm CHƯA PHÙ HỢP (Hạn chế)**:
+  * **Ngân sách (Budget)**: Tốn thêm chi phí thuê AWS ElastiCache riêng biệt (khoảng **$30 - $60 / tháng**), làm tăng hóa đơn dịch vụ AWS của dự án.
+  * **Khả năng kiểm toán (Auditability)**: Dữ liệu dạng Key-Value trong Redis rất khó chạy các truy vấn SQL tổng hợp số liệu phức tạp để phục vụ mục tiêu kiểm toán chất lượng (Eval) của Mandate.
+
+#### 3. Phương án khắc phục (Mitigations):
+* **Tối ưu chi phí bằng K8s container**: Ưu tiên triển khai theo Phương án B.1 (dùng Helm Chart tự host trên EKS) thay vì thuê ElastiCache bên ngoài để tiết kiệm tối đa ngân sách.
+* **Đồng bộ hóa kết quả kiểm toán**: Dùng Redis để phục vụ cache tốc độ cao, nhưng đẩy các log kiểm định (Audit Logs) phi tập trung về OpenTelemetry/Jaeger hoặc lưu bản ghi thống kê siêu nhẹ về bảng PostgreSQL chính.
+
+---
+
+### Kịch bản C: Đề xuất phương án tối ưu nhất - Hybrid (Redis + Postgres)
+
+#### 1. Mẫu tin nhắn thảo luận với CDO:
+> [!TIP]
+> *“Chào team CDO, để tuân thủ tối đa các ràng buộc của chỉ thị **Mandate-06** (vừa đảm bảo độ trễ siêu thấp không treo trang, vừa lưu trữ log kiểm toán có cấu trúc để làm báo cáo Eval gửi mentor), nhóm AIO đề xuất hướng đi **Hybrid**:*
+> * *Sử dụng **Redis** (chạy Helm trên K8s hoặc AWS ElastiCache) để lưu trữ Cache Key - Answer phục vụ truy vấn thời gian thực của khách hàng.*
+> * *Sử dụng **PostgreSQL** có sẵn để lưu trữ nhật ký kiểm toán (Audit Logs) chứa metadata chi tiết và số đo Eval chất lượng để báo cáo.*
+> 
+> *CDO đánh giá giúp mình hướng đi này có khả thi với hạ tầng hiện tại không và cần chuẩn bị những gì nhé!”*
+
+#### 2. Đối chiếu với Mandate-06:
+* **Điểm PHÙ HỢP**:
+  * **Độ bền bỉ tuyệt đối (Resilience)**: Đọc/ghi cache thời gian thực chạy trên Redis tách biệt, không gây nghẽn PostgreSQL chính, đạt độ trễ < 1ms.
+  * **Kiểm toán chất lượng (Auditability)**: Mọi thông tin gọi LLM, token tiêu tốn, kết quả Fidelity Judge đều được ghi nhận có cấu trúc tại bảng PostgreSQL riêng biệt, dễ dàng kiểm toán và trích xuất số đo.
+  * **Chống Bão Cache (Cache Storm)**: Nếu Redis bị sập đột ngột và mất dữ liệu RAM, hệ thống có thể khôi phục (restore) nhanh chóng cache từ dữ liệu lưu trong PostgreSQL thay vì phải gọi lại API LLM.
+* **Điểm CHƯA PHÙ HỢP (Hạn chế)**:
+  * **Độ phức tạp lập trình (Development Complexity)**: Cần quản trị đồng thời cả hai kết nối (PostgreSQL + Redis) và đồng bộ dữ liệu giữa hai nguồn.
+  * **Tác động ngân sách**: Vẫn cần một lượng tài nguyên RAM nhất định để chạy Redis.
+
+#### 3. Phương án khắc phục (Mitigations):
+* **Thiết kế Modular Code**: Nhóm AI xây dựng lớp Adapter/Factory Pattern để đóng gói các thao tác đọc/ghi kép (Dual Write), giúp mã nguồn sạch và dễ bảo trì.
+* **Tối thiểu hóa dung lượng**: Chỉ lưu các trường thực sự cần cho việc kiểm toán vào PostgreSQL, loại bỏ các payload phản hồi thô quá lớn để tiết kiệm dung lượng đĩa cứng.
+
+
 
 ---
 
