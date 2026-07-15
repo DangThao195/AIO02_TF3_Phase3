@@ -159,3 +159,11 @@ terraform.rc
 # OS files
 .DS_Store
 Thumbs.db
+
+# nội bộ — không đưa CDO/repo
+prometheus/CDO-HANDOFF-RECORDING-RULES.md
+prometheus/PROMPT-WRITE-RECORDING-RULES.md
+
+# nội bộ CDO handoff (sau consolidate — path đầy đủ)
+TF3/ai-engine/prometheus/CDO-HANDOFF-RECORDING-RULES.md
+TF3/ai-engine/prometheus/PROMPT-WRITE-RECORDING-RULES.md

@@ -33,7 +33,13 @@ from .aiops.detector_burnrate import BurnRateDetector, default_slos
 from .aiops.detector_iforest import MultiFeatureIForestDetector
 from .aiops.detector_latency import MultiWindowLatencyDetector, default_latency_metrics
 from .aiops.detector_logtemplate import LogTemplateDetector
-from .aiops.action_policy import RemediationRoute, propose_for, route_for_confidence
+from .aiops.action_policy import (
+    RemediationRoute,
+    RiskDecision,
+    assess_risk,
+    propose_for,
+    route_for_confidence,
+)
 from .aiops.audit_log import AuditLog
 from .aiops.kb_retriever import BedrockKBRetriever
 from .aiops.rca_assistant import RCAAssistant
@@ -236,7 +242,7 @@ class AIOpsEngine:
                         self.pending_remediations[record.action_id] = record
                         log.info("Proposed remediation %s for %s (%s)",
                                  record.action_id, incident.primary.service, proposal.action.value)
-                        await self.send_slack_card(record)
+                        await self._route_by_risk(record, proposal, incident, confidence)
                     except Exception:
                         log.exception("Auto-proposal failed for %s", incident.primary.service)
 
@@ -248,6 +254,55 @@ class AIOpsEngine:
         except Exception:
             log.exception("resolve reconciliation failed")
         return len(incidents)
+
+    async def _route_by_risk(self, record, proposal, incident, confidence: float) -> None:
+        """Sơ đồ closed-loop: Dry-run → Risk Assessment → Low/Medium/High.
+
+          - Low    → auto_execute (engine tự chạy) + verify 5 phút + rollback nếu không hồi phục.
+          - Medium → Slack approval card (người duyệt 1 chạm, rồi verify+rollback như cũ).
+          - High   → reject: chỉ alert, không mutate.
+
+        Dry-run chạy TRƯỚC risk assessment (dry-run fail → risk HIGH → reject) — đúng thứ tự
+        sơ đồ. Mọi nhánh vẫn qua safety gate (đã chạy ở propose) + audit append-only.
+        """
+        # Dry-run "ok/not?" — hỏi executor thử apply server-side, không mutate thật.
+        try:
+            await asyncio.to_thread(k8s_executor, record, True)
+            dry_run_ok = True
+        except Exception as exc:
+            dry_run_ok = False
+            log.warning("dry-run failed for %s: %s", record.action_id, exc)
+
+        risk = assess_risk(
+            proposal, blast_radius=incident.blast_radius,
+            dry_run_ok=dry_run_ok, confidence=confidence,
+        )
+        record.risk_note = f"{record.risk_note} [risk={risk.level.value}: {'; '.join(risk.reasons)}]"
+        log.info("risk assessment %s → %s/%s (%s)",
+                 record.action_id, risk.level.value, risk.decision.value, "; ".join(risk.reasons))
+
+        if risk.decision is RiskDecision.EXECUTE:
+            # Nhánh Low: tự phục hồi hoàn toàn. auto_execute → verify → rollback nếu cần.
+            log.info("auto-executing low-risk remediation %s (self-healing)", record.action_id)
+            try:
+                await asyncio.to_thread(self._remediation.auto_execute, record)
+                if record.execution and record.execution.result == "success":
+                    asyncio.get_event_loop().create_task(self.verify_and_maybe_rollback(record))
+                await self._post_slack_text(
+                    f"🤖 *Auto-remediation (low-risk)* `{record.action_id}` đã chạy cho "
+                    f"`{record.target}`. Đang verify 5 phút, tự rollback nếu không hồi phục.")
+            except Exception:
+                log.exception("auto-execute failed for %s; falling back to approval", record.action_id)
+                await self.send_slack_card(record)
+        elif risk.decision is RiskDecision.APPROVAL:
+            await self.send_slack_card(record)
+        else:  # REJECT
+            self.pending_remediations.pop(record.action_id, None)
+            log.warning("remediation %s REJECTED by risk gate (%s) — chỉ alert, không mutate",
+                        record.action_id, "; ".join(risk.reasons))
+            await self._post_slack_text(
+                f"⛔ *Remediation từ chối tự động* cho `{record.target}` "
+                f"(risk=HIGH: {'; '.join(risk.reasons)}). Cần điều tra thủ công.")
 
     async def _log_template_signals(self) -> list[AnomalySignal]:
         """Kéo error log 5 phút gần nhất từ OpenSearch, gom theo service, đưa qua

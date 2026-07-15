@@ -42,6 +42,91 @@ def route_for_confidence(confidence: float) -> RemediationRoute:
     return RemediationRoute.ESCALATE
 
 
+# ── Risk Assessment (sơ đồ: Dry-run + Blast Radius → Low/Medium/High) ──
+# Đây là mắt xích G1 của SELF-HEALING-CHECKLIST: gộp 3 yếu tố thành một mức rủi ro
+# quyết định nhánh Execute (tự động) / Human Approval / Reject.
+
+class RiskLevel(str, Enum):
+    LOW = "low"        # → Execute tự động (vẫn dry-run + verify + rollback)
+    MEDIUM = "medium"  # → Human Approval (Slack card)
+    HIGH = "high"      # → Reject (chỉ alert, không mutate)
+
+
+class RiskDecision(str, Enum):
+    EXECUTE = "execute"
+    APPROVAL = "approval"
+    REJECT = "reject"
+
+
+# Service tier-1: chạm vào là ảnh hưởng doanh thu trực tiếp → không bao giờ Low.
+TIER1_SERVICES = frozenset({"checkout", "payment", "cart", "frontend", "frontend-proxy"})
+
+# Chỉ các action idempotent / dễ đảo mới đủ điều kiện auto-execute ở mức Low.
+# SCALE-up và CACHE_FLUSH đảo được sạch; RESTART/BREAKER_FORCE/TOGGLE luôn ≥ Medium.
+LOW_RISK_ACTIONS = frozenset({ActionType.SCALE, ActionType.CACHE_FLUSH})
+
+# Blast radius quá rộng thì dù action nhẹ cũng phải có người nhìn.
+BLAST_MEDIUM_MIN = 2   # ≥2 service trong vùng ảnh hưởng → tối thiểu Medium
+BLAST_HIGH_MIN = 5     # ≥5 service → High (từ chối tự động, cần điều tra rộng)
+
+
+@dataclass(frozen=True)
+class RiskAssessment:
+    level: RiskLevel
+    decision: RiskDecision
+    reasons: tuple[str, ...]
+
+    def to_dict(self) -> dict:
+        return {"level": self.level.value, "decision": self.decision.value,
+                "reasons": list(self.reasons)}
+
+
+def assess_risk(
+    proposal: ActionProposal,
+    *,
+    blast_radius: list[str],
+    dry_run_ok: bool,
+    confidence: float = 1.0,
+) -> RiskAssessment:
+    """Gộp dry-run + blast radius + service tier + loại action + confidence → Low/Med/High.
+
+    Luật (từ nghiêm tới nhẹ, gặp luật nào khớp trước theo mức cao nhất):
+      - dry-run FAIL          → HIGH/Reject (action còn không apply thử được thì không chạy)
+      - blast ≥ 5 service     → HIGH/Reject (blast quá rộng, cần điều tra)
+      - action không idempotent (restart/breaker/toggle) → MEDIUM/Approval
+      - service tier-1        → MEDIUM/Approval (doanh thu — luôn cần người ở vòng đầu)
+      - blast ≥ 2 service     → MEDIUM/Approval
+      - confidence < 0.85     → MEDIUM/Approval (chưa đủ chắc để tự chạy)
+      - còn lại (nhẹ, hẹp, idempotent, chắc) → LOW/Execute tự động
+    """
+    reasons: list[str] = []
+    svc = proposal.target.split("/")[-1]
+    n_blast = len({*blast_radius})
+
+    if not dry_run_ok:
+        return RiskAssessment(RiskLevel.HIGH, RiskDecision.REJECT,
+                              ("dry-run thất bại — action không apply được, từ chối",))
+    if n_blast >= BLAST_HIGH_MIN:
+        return RiskAssessment(RiskLevel.HIGH, RiskDecision.REJECT,
+                              (f"blast radius {n_blast} service ≥ {BLAST_HIGH_MIN} — quá rộng để tự xử",))
+
+    if proposal.action not in LOW_RISK_ACTIONS:
+        reasons.append(f"action '{proposal.action.value}' không idempotent (khó đảo)")
+    if svc in TIER1_SERVICES:
+        reasons.append(f"'{svc}' là tier-1 (ảnh hưởng doanh thu trực tiếp)")
+    if n_blast >= BLAST_MEDIUM_MIN:
+        reasons.append(f"blast radius {n_blast} service ≥ {BLAST_MEDIUM_MIN}")
+    if confidence < AUTO_QUEUE_THRESHOLD:
+        reasons.append(f"confidence {confidence:.2f} < {AUTO_QUEUE_THRESHOLD} — chưa đủ chắc để tự chạy")
+
+    if reasons:
+        return RiskAssessment(RiskLevel.MEDIUM, RiskDecision.APPROVAL, tuple(reasons))
+    return RiskAssessment(
+        RiskLevel.LOW, RiskDecision.EXECUTE,
+        (f"action nhẹ+idempotent ('{proposal.action.value}'), blast {n_blast} service, "
+         f"service ngoài tier-1, confidence {confidence:.2f} — đủ an toàn để tự phục hồi",))
+
+
 @dataclass(frozen=True)
 class ActionProposal:
     action: ActionType

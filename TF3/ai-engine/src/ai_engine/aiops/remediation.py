@@ -51,6 +51,11 @@ BTC_INCIDENT_FLAGS = (
 
 MAX_ACTIONS_PER_INCIDENT_PER_HOUR = 3
 
+# Identity mà engine dùng khi TỰ execute nhánh Low-risk (Risk Assessment = Low).
+# Không phải người, nhưng KHÁC service-account tình cờ: đây là quyết định có kiểm soát,
+# ghi rõ trong audit, và chỉ được dùng qua auto_execute() (đã qua Risk Assessment).
+AUTO_APPROVER = "ai-engine/auto-low-risk@v1"
+
 
 class RemediationRefused(Exception):
     """Safety gate rejected the action. The message names the reason for the audit trail."""
@@ -112,6 +117,21 @@ class RemediationEngine:
         identity or the rate limit is hit. Never executes without an approval."""
         if not approver or approver.strip().endswith(("-sa", "serviceaccount")) or "@system" in approver:
             raise RemediationRefused("approval.by must be a real person, not a service account")
+        return self._approved_execute(record, approver, channel)
+
+    def auto_execute(
+        self, record: RemediationRecord, channel: str = "auto"
+    ) -> RemediationRecord:
+        """Nhánh Low-risk của sơ đồ: engine TỰ execute không chờ người — nhưng CHỈ đi
+        đường này sau khi Risk Assessment = Low (caller chịu trách nhiệm kiểm risk trước).
+        Vẫn full defense-in-depth: safety gate (đã chạy ở propose) → dry-run → apply →
+        verify → rollback. Approver = AUTO_APPROVER (ghi rõ trong audit, không giả danh người).
+        Rate limit vẫn áp — auto không được vượt 3 action/incident/giờ."""
+        return self._approved_execute(record, AUTO_APPROVER, channel)
+
+    def _approved_execute(
+        self, record: RemediationRecord, approver: str, channel: str
+    ) -> RemediationRecord:
         if self._rate_limited(record.incident_id):
             raise RemediationRefused("rate limit: max 3 actions/incident/hour — self-locked")
 
