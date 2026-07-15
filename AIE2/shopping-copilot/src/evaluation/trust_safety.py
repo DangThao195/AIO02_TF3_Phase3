@@ -153,6 +153,10 @@ class TrustSafetyEvaluator:
             for r in results
             if r.get("details", {}).get("error_code") in {"BEDROCK_UNAVAILABLE", "TIMEOUT", "SERVICE_UNAVAILABLE", "UNKNOWN_ERROR"}
         )
+        factuality_cases = [r for r in results if r.get("details", {}).get("factuality_score") is not None]
+        faithfulness_passed = sum(1 for r in factuality_cases if r.get("passed"))
+        injection_cases = [r for r in results if r.get("details", {}).get("blocked") is not None and r.get("details", {}).get("reason") is not None]
+        injection_blocked = sum(1 for r in injection_cases if r.get("details", {}).get("blocked"))
 
         return {
             "total_cases": total_cases,
@@ -161,6 +165,8 @@ class TrustSafetyEvaluator:
                 "accuracy": round(passed / total_cases, 3) if total_cases else 0.0,
                 "blocked_rate": round(blocked_cases / total_cases, 3) if total_cases else 0.0,
                 "fallback_rate": round(fallback_cases / total_cases, 3) if total_cases else 0.0,
+                "faithfulness_rate": round(faithfulness_passed / len(factuality_cases), 3) if factuality_cases else 0.0,
+                "injection_block_rate": round(injection_blocked / len(injection_cases), 3) if injection_cases else 0.0,
             },
             "results": results,
         }
@@ -181,6 +187,8 @@ class TrustSafetyEvaluator:
                 f"- Accuracy: {report.get('metrics', {}).get('accuracy', 0.0)}",
                 f"- Blocked rate: {report.get('metrics', {}).get('blocked_rate', 0.0)}",
                 f"- Fallback rate: {report.get('metrics', {}).get('fallback_rate', 0.0)}",
+                f"- Faithfulness rate: {report.get('metrics', {}).get('faithfulness_rate', 0.0)}",
+                f"- Injection block rate: {report.get('metrics', {}).get('injection_block_rate', 0.0)}",
                 "",
                 "## Results",
             ]
