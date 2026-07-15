@@ -36,10 +36,10 @@ docker compose up -d postgresql product-catalog flagd otel-collector
 cd src/product-reviews/
 
 # Khởi tạo môi trường ảo (Dùng python3 trên Linux/WSL)
-python3 -m venv venv
+python3 -m venv .venv
 
 # Kích hoạt môi trường ảo
-source venv/bin/activate
+source .venv/bin/activate
 
 # Cài đặt các package (boto3, openai, psycopg2, grpcio, v.v.)
 pip install -r requirements.txt
@@ -57,8 +57,8 @@ Bạn có thể lựa chọn 1 trong 2 cách thiết lập môi trường dướ
 > **Chạy ở Terminal 1 [WSL2 (Ubuntu) / Git Bash / Linux]**:
 
 ```bash
-# Kích hoạt venv nếu chưa kích hoạt
-source venv/bin/activate
+# Kích hoạt .venv nếu chưa kích hoạt
+source .venv/bin/activate
 
 # Định tuyến LLM sang Bedrock trực tiếp
 export LLM_PROVIDER="bedrock"
@@ -95,10 +95,10 @@ python3 product_reviews_server.py
    cp .env.example .env
    ```
 2. Mở tệp `.env` vừa tạo trong VSCode và điền đầy đủ thông tin AWS Credentials của bạn và cấu hình khác.
-3. Khởi chạy gRPC Server trực tiếp (Dùng venv trên Windows):
+3. Khởi chạy gRPC Server trực tiếp (Dùng .venv trên Windows):
    ```powershell
-   # Kích hoạt venv trên Windows PowerShell:
-   .\venv\Scripts\Activate.ps1
+   # Kích hoạt .venv trên Windows PowerShell:
+   .\.venv\Scripts\Activate.ps1
    
    python product_reviews_server.py
    ```
@@ -140,7 +140,7 @@ Sử dụng script **[test_client.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20
 > [!info] 🐧 Phương án 1.1: Chạy trong WSL2 / Git Bash (Terminal 2)
 > ```bash
 > cd AIE1/techx-corp-platform/src/product-reviews/
-> source venv/bin/activate
+> source .venv/bin/activate
 > 
 > # Cổng 8085 nếu chạy server trực tiếp bằng Python, 3551 nếu chạy bằng Docker
 > python3 test_client.py 8085 
