@@ -213,3 +213,65 @@ def save_to_cache(
     # Redis: SETEX cache_key ttl_seconds json.dumps(cache_data)
     pass
 ```
+
+---
+
+## 6. Lộ Trình Triển Khai Thực Tế Theo Hướng Redis (Implementation Roadmap)
+
+Nếu thống nhất sử dụng Redis cho môi trường Production và Local, các thay đổi kỹ thuật cần thực hiện bao gồm:
+
+### 6.1. Thêm Thư Viện Dependency (`requirements.txt`)
+Thêm dòng sau vào file [requirements.txt](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIE1/techx-corp-platform/src/product-reviews/requirements.txt):
+```text
+redis>=5.0.0
+```
+
+### 6.2. Cấu Hình Môi Trường Local (`docker-compose.yaml`)
+Thêm service Redis vào file `docker-compose.yaml` tại thư mục `AIE1/techx-corp-platform/` để hỗ trợ phát triển local:
+```yaml
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: redis-cache
+    ports:
+      - "6379:6379"
+    # Giới hạn cứng bộ nhớ RAM và tự động xóa key cũ để chống OOM
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    restart: always
+
+  product-reviews:
+    # ...
+    depends_on:
+      - redis
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CACHE_TYPE=redis
+```
+
+### 6.3. Tích Hợp Kết Nối Và Luồng Xử Lý (`product_reviews_server.py`)
+Trong file [product_reviews_server.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIE1/techx-corp-platform/src/product-reviews/product_reviews_server.py):
+- **Khởi tạo Client kết nối**:
+  ```python
+  import redis
+  redis_client = redis.Redis(
+      host=os.environ.get('REDIS_HOST', 'localhost'),
+      port=int(os.environ.get('REDIS_PORT', 6379)),
+      decode_responses=True
+  )
+  ```
+- **Triển khai Cache Lookup & Write**:
+  - Thực hiện đọc cache trước cuộc gọi LLM bằng lệnh: `redis_client.get(cache_key)`.
+  - Thực hiện ghi cache sau khi Fidelity Judge thông qua (Evaluation PASS) bằng lệnh: `redis_client.setex(cache_key, TTL_SECONDS, json.dumps(cache_data))`.
+
+### 6.4. Cấu Hợp Deploy Môi Môi Trường Production (`values-aio-llm.yaml`)
+Bổ sung các biến môi trường cấu hình kết nối Redis vào file cấu hình Helm values để CDO deploy:
+```yaml
+env:
+  - name: REDIS_HOST
+    value: "redis-service.default.svc.cluster.local"
+  - name: REDIS_PORT
+    value: "6379"
+  - name: CACHE_TYPE
+    value: "redis"
+```
