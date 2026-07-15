@@ -8,6 +8,19 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
+
+# Load local .env file immediately at module import time to avoid configuration race condition
+try:
+    env_path = Path(__file__).resolve().parents[3] / ".env"
+    if env_path.exists():
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                if line.strip() and not line.startswith("#") and "=" in line:
+                    k, v = line.strip().split("=", 1)
+                    os.environ.setdefault(k.strip(), v.strip())
+except Exception:
+    pass
 
 
 def _env(key: str, default: str | None = None) -> str:
@@ -33,7 +46,16 @@ class GatewayConfig:
     """AI Gateway (C4) — latency budget + resilience knobs that protect storefront p95 < 1s."""
 
     llm_base_url: str = os.environ.get("LLM_BASE_URL", "http://llm:8000/v1")
-    llm_model: str = os.environ.get("LLM_MODEL", "techx-llm")
+    # Backend = AWS Bedrock (us-east-1). Route: baseline rẻ (volume cao) + heavy cho câu khó/RCA.
+    # Mock dev vẫn dùng "techx-llm". Đổi provider = đổi env, code không đổi (C4).
+    llm_model: str = os.environ.get("LLM_MODEL", "techx-llm")                    # baseline
+    # Route heavy TẠM dùng Nova Lite: Opus 4.8 chưa được cấp quyền (AccessDenied, 2026-07-10).
+    # Nâng cấp tức thì (đã có quyền, không cần chờ AWS): đặt LLM_MODEL_HEAVY=
+    #   us.anthropic.claude-sonnet-4-5-20250929-v1:0  (reasoning mạnh cho câu khó/RCA), hoặc
+    #   amazon.nova-pro-v1:0. Đổi env, code không đổi (C4).
+    llm_model_heavy: str = os.environ.get(
+        "LLM_MODEL_HEAVY", "amazon.nova-lite-v1:0")                              # route câu khó/RCA
+    bedrock_region: str = os.environ.get("AWS_BEDROCK_REGION", "us-east-1")
     per_call_timeout_ms: int = int(os.environ.get("AI_LLM_TIMEOUT_MS", "800"))
     total_budget_ms: int = int(os.environ.get("AI_TOTAL_BUDGET_MS", "2000"))
     max_retries: int = int(os.environ.get("AI_MAX_RETRIES", "2"))
@@ -101,16 +123,4 @@ class Config:
 
 
 def load_config() -> Config:
-    # Optional: Load from local .env file if present
-    try:
-        from pathlib import Path
-        env_path = Path(__file__).parents[3] / ".env"
-        if env_path.exists():
-            with open(env_path, "r", encoding="utf-8") as f:
-                for line in f:
-                    if line.strip() and not line.startswith("#") and "=" in line:
-                        k, v = line.strip().split("=", 1)
-                        os.environ.setdefault(k, v)
-    except Exception:
-        pass
     return Config()

@@ -21,11 +21,15 @@ _NEGATIVE = {
     "disappointed", "ineffective", "residue", "sticky", "harsh", "scratches", "scratch",
     "poor", "damaged", "damage", "broke", "broken", "useless", "waste", "avoid", "worst",
     "terrible", "defective", "refund", "unhappy", "unreliable", "flaw",
+    "tệ", "hỏng", "vỡ", "kém", "chán", "lỗi", "xước", "bẩn", "dính", "nát", "trầy",
+    "yếu", "chậm", "rác", "hoàn", "nàn", "thất", "vọng", "xấu", "móp"
 }
 _POSITIVE = {
     "praised", "effective", "essential", "versatile", "value", "clean", "clear", "clarity",
     "recommend", "excellent", "great", "perfect", "lifesaver", "quality", "gentle",
     "pristine", "safely", "love", "best", "reliable",
+    "tốt", "hay", "tuyệt", "xịn", "thích", "yêu", "lòng", "mượt", "nhanh", "đẹp",
+    "sạch", "mịn", "khuyên", "dùng", "sắc", "quý"
 }
 
 
@@ -41,7 +45,7 @@ def _avg_score(reviews: list[dict]) -> float | None:
 
 
 def _tone(text: str) -> tuple[int, int]:
-    words = set(re.findall(r"[a-z]+", text.lower()))
+    words = set(re.findall(r"\w+", text.lower()))
     return len(words & _POSITIVE), len(words & _NEGATIVE)
 
 
@@ -69,7 +73,7 @@ class FaithfulnessGuardrail:
 
 
         review_blob = " ".join(r.get("description", "") for r in reviews).lower()
-        for defect in ("residue", "scratches", "damaged", "sticky"):
+        for defect in ("residue", "scratches", "damaged", "sticky", "cặn", "xước", "hỏng", "dính"):
             if defect in summary.lower() and defect not in review_blob:
                 return self._block(f"claim_unsupported({defect})")
 

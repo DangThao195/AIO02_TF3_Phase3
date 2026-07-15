@@ -26,12 +26,63 @@ from typing import Callable
 
 from ..common.telemetry import JaegerClient, OpenSearchClient, PrometheusClient, TelemetryError
 from .correlator import DEPENDENCY_MAP, Incident
+from .kb_retriever import retrieve_scored
 from .local_matcher import match_incident_locally
+from .rca_guardrail import RCAVerdict, validate_llm_verdict
 
 log = logging.getLogger("ai_engine.rca_assistant")
 
 # Repo-relative: .../aiops/rca_assistant.py -> parents[4] == TF3/
 _INCIDENTS_ROOT = Path(__file__).resolve().parents[4] / "incidents"
+
+# W2-D2 fusion: cấu trúc đồ thị nói "AI CÓ THỂ là nguyên nhân", thời gian nói "AI ĐỘNG TRƯỚC".
+W_STRUCTURAL, W_TEMPORAL = 0.6, 0.4
+
+# W2-D3 conditional skipping: graph+temporal đã đủ chắc thì KHÔNG gọi LLM —
+# cost 0, latency 0, hallucination surface 0. Giảm ~90% LLM call ở các sự cố quen.
+SKIP_LLM_SCORE = 0.9
+
+# Map INC lịch sử (local_matcher) -> incident_class chuẩn (rca_guardrail.RCA_CLASSES)
+_INC_CLASS = {
+    "INC-1": "connection_pool_exhaustion",
+    "INC-2": "state_loss_spof",
+    "INC-3": "deploy_readiness_gap",
+}
+
+
+def score_candidates(
+    primary_service: str,
+    candidates: list[str],
+    first_seen: dict[str, float],
+) -> list[tuple[str, float, str]]:
+    """score = 0.6×structural + 0.4×temporal. Structural: direct anomalous downstream = 1.0.
+    Temporal: sớm nhất trong nhóm = 1.0, tuyến tính xuống; candidate chỉ động SAU primary = 0.0
+    (hệ quả không thể đi trước nguyên nhân — chống retry-storm rank nạn nhân làm thủ phạm).
+    Thiếu mốc first-seen → 0.5 trung tính (không thưởng không phạt).
+    Trả [(service, score, timing_note)] giảm dần theo score."""
+    p_ts = first_seen.get(primary_service)
+    known = sorted(
+        ((c, first_seen[c]) for c in candidates if c in first_seen), key=lambda x: x[1])
+    order = {c: i for i, (c, _) in enumerate(known)}
+    n = len(known)
+
+    out: list[tuple[str, float, str]] = []
+    for c in candidates:
+        structural = 1.0
+        ts = first_seen.get(c)
+        if ts is None or p_ts is None:
+            temporal, note = 0.5, "chưa có mốc first-seen — timing trung tính"
+        elif ts > p_ts:
+            temporal, note = 0.0, (
+                f"{c} chỉ động SAU {primary_service} — nghiêng về victim (retry storm), "
+                f"không phải nguyên nhân")
+        else:
+            temporal = 1.0 - (order[c] / (n - 1)) if n > 1 else 1.0
+            note = f"{c} động trước/cùng lúc {primary_service} (thứ tự nhân quả hợp lệ)"
+        out.append((c, round(W_STRUCTURAL * structural + W_TEMPORAL * temporal, 2), note))
+
+    out.sort(key=lambda x: -x[1])
+    return out
 
 
 @dataclass
@@ -57,6 +108,10 @@ class EvidencePack:
     # C4.6 — deterministic offline diagnosis (matched incident + safe suggested action),
     # always populated so a pack is actionable even when the LLM diagnostician is down.
     local_diagnosis: dict = field(default_factory=dict)
+    # RAG grounding: [(relevance_score, playbook_chunk)] từ Bedrock KB, đã qua heuristic W2-D2.
+    kb_context: list[tuple[float, str]] = field(default_factory=list)
+    # Verdict LLM ĐÃ QUA guardrail (rca_guardrail) — method="graph-fallback" nếu bị loại.
+    llm_verdict: dict = field(default_factory=dict)
 
     def to_markdown(self) -> str:
         lines = [
@@ -96,6 +151,24 @@ class EvidencePack:
                 *([f"- Dẫn chứng: {'; '.join(ld['citations'])}"] if ld.get("citations") else []),
                 "",
             ]
+        if self.llm_verdict:
+            v = self.llm_verdict
+            lines += [
+                "### Verdict LLM (đã qua guardrail — rca_guardrail)",
+                f"- Root cause: **{v.get('root_cause_service')}** · class `{v.get('incident_class')}` "
+                f"· confidence {v.get('confidence')} · method `{v.get('method')}`",
+                *[f"- Hành động: {a}" for a in v.get("actions", [])],
+                *[f"- Dẫn chứng: {c}" for c in v.get("citations", [])],
+                *([f"- ⚠ Guardrail loại verdict LLM: {'; '.join(v['violations'])}"]
+                  if v.get("violations") else []),
+                "",
+            ]
+        if self.kb_context:
+            lines += [
+                "## 6. Tri thức lịch sử (Bedrock KB — RAG grounding)",
+                *[f"- (điểm {s:.1f}) {t[:200]}" for s, t in self.kb_context],
+                "",
+            ]
         if self.incomplete:
             lines += ["> ⚠ Evidence incomplete: " + ", ".join(self.incomplete), ""]
         lines += ["## 7. Người xác nhận root cause: ________ (ký tên — bắt buộc trước khi đóng)"]
@@ -122,12 +195,19 @@ class RCAAssistant:
         jaeger: JaegerClient,
         clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
         llm_phraser: Callable[[list[Hypothesis]], list[Hypothesis]] | None = None,
+        kb_retriever=None,
+        llm_diagnoser: Callable[[dict], dict] | None = None,
     ):
         self._prom = prom
         self._os = opensearch
         self._jaeger = jaeger
         self._clock = clock
         self._llm_phraser = llm_phraser
+        # Optional RAG grounding: bất kỳ object nào có async .retrieve(query, top_k).
+        self._kb = kb_retriever
+        # Optional LLM diagnostician: nhận context dict, trả raw dict — LUÔN đi qua
+        # rca_guardrail trước khi vào pack (hallucination không có đường tắt).
+        self._llm_diagnoser = llm_diagnoser
 
     async def build(self, incident: Incident) -> EvidencePack:
         now = self._clock()
@@ -150,12 +230,93 @@ class RCAAssistant:
 
         # C4.6 — deterministic offline diagnosis. Uses the culprit (deepest anomalous
         # downstream, else primary) + any gathered log signatures. Always safe (INC-2→none).
-        culprit = (incident.blast_radius[-1] if incident.blast_radius else primary.service)
+        services_in_incident = []
+        if incident.primary:
+            services_in_incident.append(incident.primary.service)
+        # Extract services from correlated signals
+        for sig in incident.correlated_signals:
+            parts = sig.split()
+            if parts:
+                if parts[0] == "[anomaly]":
+                    for p in parts:
+                        cleaned_p = p.strip("[],:()")
+                        if cleaned_p in DEPENDENCY_MAP or cleaned_p == "valkey-cart":
+                            services_in_incident.append(cleaned_p)
+                else:
+                    services_in_incident.append(parts[0])
+
+        services_in_incident = list(set(services_in_incident))
+
+        # Find leaf-most culprit using dependency graph traversal
+        culprit = primary.service
+        if services_in_incident:
+            curr = services_in_incident[0]
+            visited = set()
+            while curr not in visited:
+                visited.add(curr)
+                deps = DEPENDENCY_MAP.get(curr, [])
+                next_node = next((d for d in deps if d in services_in_incident and d not in visited), None)
+                if next_node is None:
+                    break
+                curr = next_node
+            culprit = curr
+
         log_templates = [{"message": line.lstrip("- ")} for line in pack.logs_note.splitlines()
                          if line.strip() and not line.startswith("no ")]
         pack.local_diagnosis = match_incident_locally(
             culprit_service=culprit, log_templates=log_templates,
         ).to_dict()
+
+        cluster = set(services_in_incident) | {primary.service, *incident.blast_radius}
+
+        # RAG grounding (W2-D2): top-K playbook lịch sử từ Bedrock KB, chấm heuristic,
+        # ngưỡng 0.2. KB chậm/chết → incomplete, pack vẫn ship (C3).
+        if self._kb is not None:
+            try:
+                pack.kb_context = await retrieve_scored(
+                    self._kb,
+                    query=f"{primary.service} {primary.sli} {primary.severity.value} "
+                          f"{' '.join(incident.correlated_signals[:3])}",
+                    cluster_services=cluster,
+                    severity=primary.severity.value,
+                )
+            except TelemetryError:
+                pack.incomplete.append("kb (bedrock slow/blind)")
+
+        # LLM diagnostician (optional) — raw output KHÔNG BAO GIỜ vào pack trực tiếp:
+        # guardrail validate (root ∈ cluster, class ∈ enum, confidence [0,1], actions,
+        # citations); vi phạm → fallback top-1 graph candidate (chaos failure-mode #4).
+        if self._llm_diagnoser is not None:
+            top_score = pack.hypotheses[0].rank_score if pack.hypotheses else 0.0
+            if top_score >= SKIP_LLM_SCORE:
+                # Conditional skipping (W2-D3): verdict deterministic từ graph + lịch sử,
+                # không tốn token, không có bề mặt hallucinate.
+                ld = pack.local_diagnosis
+                pack.llm_verdict = RCAVerdict(
+                    root_cause_service=culprit,
+                    incident_class=_INC_CLASS.get(ld.get("matched_incident", ""), "other"),
+                    confidence=round(top_score, 2),
+                    actions=(ld.get("proposed_action") or "manual investigation",),
+                    citations=(
+                        f"graph+temporal score {top_score} ≥ {SKIP_LLM_SCORE} — skip LLM",
+                        *ld.get("citations", []),
+                    ),
+                    method="graph-high-confidence",
+                ).to_dict()
+            else:
+                try:
+                    raw = self._llm_diagnoser({
+                        "primary": {"service": primary.service, "sli": primary.sli,
+                                    "severity": primary.severity.value},
+                        "cluster_services": sorted(cluster),
+                        "hypotheses": [h.text for h in pack.hypotheses],
+                        "kb_context": [t for _, t in pack.kb_context],
+                    })
+                except Exception:
+                    raw = None
+                pack.llm_verdict = validate_llm_verdict(
+                    raw, cluster_services=cluster, fallback_candidate=culprit,
+                ).to_dict()
 
         if self._llm_phraser is not None:
             try:
@@ -201,13 +362,19 @@ class RCAAssistant:
             if any(s in sig for sig in incident.correlated_signals)
         ]
         if anomalous_downstream:
-            culprit = anomalous_downstream[0]
+            scored = score_candidates(
+                primary.service, anomalous_downstream, incident.first_seen)
+            culprit, score, timing_note = scored[0]
             hyps.append(Hypothesis(
                 text=f"{culprit} là nguyên nhân gốc (downstream của {primary.service}, cùng bất thường)",
-                supporting=f"{culprit} xuất hiện trong correlated signals + là dependency trực tiếp",
-                contradicting=f"nếu {culprit} khỏe mà {primary.service} vẫn vỡ thì loại giả thuyết này",
+                supporting=f"{culprit} xuất hiện trong correlated signals + là dependency trực tiếp; {timing_note}",
+                contradicting=(
+                    f"nếu {culprit} khỏe mà {primary.service} vẫn vỡ thì loại giả thuyết này"
+                    + ("" if score >= 0.8 else
+                       f"; timing yếu (score {score}) — cân nhắc {culprit} là victim của retry storm")
+                ),
                 verify=f"kiểm p95/error của {culprit} quanh mốc {primary.service} bắt đầu vỡ",
-                rank_score=1.0,
+                rank_score=score,
             ))
 
 

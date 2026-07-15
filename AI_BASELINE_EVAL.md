@@ -2,8 +2,9 @@
 
 > **Dự án:** TechX Corp Storefront · **Nhóm:** AIE-TF3 (AIO02)
 > Tài liệu baseline: đo hiệu năng/chi phí LLM thật, đặc tả bộ eval độ trung thực, danh sách
-> lỗ hổng bảo mật AI, và backlog. Deliverable AI-8..AI-22. Mọi số liệu "đang đo" điền sau khi
-> deploy `gpt-4o-mini` lên EKS (AI-8..12). Code hiện thực trong [ai-engine/](.).
+> lỗ hổng bảo mật AI, và backlog. Deliverable AI-8..AI-22. **Backend = AWS Bedrock**
+> (`us-east-1`) — chi phí nằm trong trần AWS $300/tuần (Cost Explorer/Budgets). Route model:
+> baseline **Nova Lite** (volume cao) + **Opus 4.8** cho câu khó/RCA. Code trong [ai-engine/](.).
 
 ---
 
@@ -24,10 +25,11 @@ cắm `gpt-4o-mini` (AI-8..12). Cost meter đã hiện thực: [cost_meter.py](s
 
 ### Ước tính chi phí (đã cấu hình trong [model-pricing.yaml](cost/model-pricing.yaml))
 
-| Model | In/req | Out/req | $/1000 req | Ghi chú |
+| Model (Bedrock) | In/req | Out/req | $/1000 req | Ghi chú |
 |---|---|---|---|---|
-| gpt-4o-mini | ~800 | ~150 | **~$0.21** | Chọn baseline — tối ưu chi phí, duyệt CFO |
-| gpt-4o | ~800 | ~150 | ~$5.50 | Đắt ~26× — chỉ route câu phức tạp (AI-BKL-003) |
+| `amazon.nova-lite-v1:0` | ~800 | ~150 | **~$0.084** | Baseline — tóm tắt/guardrail volume cao (giá API thật) |
+| `us.anthropic.claude-opus-4-8` | ~800 | ~150 | ~$23.3 | Route câu khó/RCA (volume thấp) — AI-BKL-003 |
+| `amazon.nova-micro-v1:0` | ~800 | ~150 | ~$0.049 | Rẻ nhất — dự phòng nếu cần hạ chi phí thêm |
 
 Cache giảm ~30% call trùng (AI-BKL-001). Cost report tuần theo C5.
 

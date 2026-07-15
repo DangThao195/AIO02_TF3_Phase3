@@ -62,8 +62,8 @@ def robust_zscore(current: float, baseline: list[float]) -> tuple[float, float]:
     poison the baseline the way mean/std would. 1.4826 scales MAD to a std estimate."""
     if not baseline:
         return 0.0, 0.0
+    median = _median(baseline)
     s = sorted(baseline)
-    median = s[len(s) // 2]
     mad = _median([abs(x - median) for x in s])
     if mad == 0:
 
@@ -80,7 +80,10 @@ def _median(xs: list[float]) -> float:
     if not xs:
         return 0.0
     s = sorted(xs)
-    return s[len(s) // 2]
+    n = len(s)
+    if n % 2 == 1:
+        return s[n // 2]
+    return (s[n // 2 - 1] + s[n // 2]) / 2.0
 
 
 class AnomalyDetector:

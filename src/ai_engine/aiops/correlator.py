@@ -38,6 +38,9 @@ class Incident:
     primary: BurnSignal
     correlated_signals: list[str] = field(default_factory=list)
     blast_radius: list[str] = field(default_factory=list)
+    # service -> unix ts của lần đầu thấy tín hiệu trên service đó trong cửa sổ hiện tại.
+    # Cho causal-by-time ranking (W2-D2): cái gì động TRƯỚC thì khả nghi hơn cái động sau.
+    first_seen: dict[str, float] = field(default_factory=dict)
 
 
 class Correlator:
@@ -45,6 +48,9 @@ class Correlator:
         self._dedup_window = dedup_window_s
         self._clock = clock
         self._seen: dict[str, float] = {}
+        # First-seen per SERVICE (khác _seen per-fingerprint): giữ mốc thời gian tín hiệu
+        # đầu tiên trên mỗi service để RCA xếp hạng theo thứ tự nhân quả. Evict cùng cửa sổ.
+        self._service_first_seen: dict[str, float] = {}
 
     @staticmethod
     def fingerprint(sig: BurnSignal) -> str:
@@ -64,7 +70,22 @@ class Correlator:
           "catch the injected fault before the system dies" path. Never critical (layer 2).
         Deduped fingerprints (repeat within window) are dropped so a storm folds, not floods.
         """
+        # Evict stale seen fingerprints to prevent memory leak
+        now = self._clock()
+        cutoff = now - self._dedup_window
+        stale_keys = [k for k, t in self._seen.items() if t < cutoff]
+        for k in stale_keys:
+            self._seen.pop(k, None)
+        for k in [k for k, t in self._service_first_seen.items() if t < cutoff]:
+            self._service_first_seen.pop(k, None)
+
         anomalies = anomalies or []
+        # Ghi mốc first-seen cho MỌI tín hiệu đến (kể cả bản dup sẽ bị fold) — mốc sớm nhất
+        # là thông tin nhân quả, dedup chỉ là chính sách paging.
+        for s in signals:
+            self._service_first_seen.setdefault(s.service, now)
+        for a in anomalies:
+            self._service_first_seen.setdefault(a.service, now)
         fresh = [s for s in signals if not self._is_duplicate_burn(s)]
         sev_rank = {"critical": 0, "warning": 1, "info": 2}
         fresh.sort(key=lambda s: (sev_rank[s.severity.value], -s.burn_rate))
@@ -93,6 +114,7 @@ class Correlator:
                 primary=sig,
                 correlated_signals=correlated,
                 blast_radius=self._blast_radius(sig.service),
+                first_seen={s: t for s, t in self._service_first_seen.items() if s in cluster},
             ))
             self._seen[self.fingerprint(sig)] = self._clock()
 
@@ -100,12 +122,14 @@ class Correlator:
         for a in anomalies:
             if a.service in claimed or self._is_duplicate_anomaly(a):
                 continue
-            claimed |= self._cluster_services(a.service)
+            a_cluster = self._cluster_services(a.service)
+            claimed |= a_cluster
             incidents.append(Incident(
                 incident_id=f"TF3-{now}-{a.service}-anomaly",
                 primary=self._anomaly_as_primary(a),
                 correlated_signals=[f"[anomaly] {a.note} conf={a.confidence}"],
                 blast_radius=self._blast_radius(a.service),
+                first_seen={s: t for s, t in self._service_first_seen.items() if s in a_cluster},
             ))
             self._seen[self._anomaly_fp(a)] = self._clock()
 

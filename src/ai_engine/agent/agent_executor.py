@@ -57,6 +57,13 @@ class ShoppingCopilot:
         self._max_iterations = max_iterations
 
     def handle(self, user_message: str) -> AgentResult:
+        # Determine max iterations dynamically: compare intent gets 5, others default to constructor value
+        max_iters = self._max_iterations
+        if self._max_iterations == MAX_ITERATIONS:  # only apply dynamic logic if default was used
+            message_lower = user_message.lower()
+            compare_keywords = ["so sánh", "compare", "khác gì", "tốt hơn", "so với", "vs"]
+            if any(kw in message_lower for kw in compare_keywords):
+                max_iters = 5
 
         scan = scan_user_question(user_message)
         if Threat.SYSTEM_LEAK in scan.threats or Threat.PROMPT_INJECTION in scan.threats:
@@ -65,9 +72,8 @@ class ShoppingCopilot:
 
         transcript: list[dict] = [{"role": "user", "content": user_message}]
 
-
         try:
-            for _ in range(self._max_iterations):
+            for _ in range(max_iters):
                 turn = self._llm_step(SYSTEM_PROMPT, transcript)
 
                 if turn.final_answer is not None:

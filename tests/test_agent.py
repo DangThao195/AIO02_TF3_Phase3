@@ -80,6 +80,21 @@ def test_agent_bounded_by_max_iterations():
     assert res.degraded is True
 
 
+def test_agent_compare_intent_gets_five_iterations():
+    called = {"iters": 0}
+    def llm_step(s, t):
+        called["iters"] += 1
+        return AgentTurn(tool_call=ToolCall(name="search_products"))
+    
+    cop = ShoppingCopilot(
+        llm_step=llm_step,
+        run_tool=lambda c: "obs",
+    )
+    res = cop.handle("so sánh sản phẩm A vs B")
+    assert res.degraded is True
+    assert called["iters"] == 5  # increased dynamically
+
+
 def test_agent_fallback_on_llm_exception():
     def boom(s, t):
         raise RuntimeError("llm down")

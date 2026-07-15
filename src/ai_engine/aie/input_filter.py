@@ -113,12 +113,12 @@ def scan_user_question(text: str) -> FilterResult:
             threats.append(kind)
             details.append(f"{kind.value}: {rx.pattern[:40]}")
 
-    _, pii_hits = _redact_pii(text)
+    cleaned, pii_hits = _redact_pii(text)
     if pii_hits:
         threats.append(Threat.PII)
         details += [f"pii:{h}" for h in pii_hits]
 
-    return FilterResult(clean_text=text, threats=_dedup(threats), details=details)
+    return FilterResult(clean_text=cleaned, threats=_dedup(threats), details=details)
 
 
 def _redact_pii(text: str) -> tuple[str, list[str]]:

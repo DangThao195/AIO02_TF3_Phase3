@@ -16,6 +16,7 @@ import hmac
 import json
 import logging
 import os
+import shlex
 import subprocess
 import time
 from datetime import datetime, timezone
@@ -27,17 +28,27 @@ from prometheus_client import make_asgi_app
 from .aiops.alert_emitter import AlertEmitter
 from .aiops.approval import parse_callback
 from .aiops.correlator import Correlator
-from .aiops.detector_anomaly import AnomalyDetector, default_anomaly_metrics
+from .aiops.detector_anomaly import AnomalyDetector, AnomalySignal, default_anomaly_metrics
 from .aiops.detector_burnrate import BurnRateDetector, default_slos
+from .aiops.detector_iforest import MultiFeatureIForestDetector
 from .aiops.detector_latency import MultiWindowLatencyDetector, default_latency_metrics
+from .aiops.detector_logtemplate import LogTemplateDetector
+from .aiops.action_policy import (
+    RemediationRoute,
+    RiskDecision,
+    assess_risk,
+    propose_for,
+    route_for_confidence,
+)
 from .aiops.audit_log import AuditLog
+from .aiops.kb_retriever import BedrockKBRetriever
 from .aiops.rca_assistant import RCAAssistant
 from .aiops.remediation import RemediationEngine, ActionType, RemediationRecord
 from .aiops.verify_loop import VerifyLoop
 from .common.config import Config, load_config
 from .common.metrics import DETECTION_LATENCY
 from .common.schemas import ApprovalDecision
-from .common.telemetry import JaegerClient, OpenSearchClient, PrometheusClient
+from .common.telemetry import JaegerClient, OpenSearchClient, PrometheusClient, TelemetryError
 
 log = logging.getLogger("ai_engine.server")
 
@@ -57,7 +68,7 @@ def k8s_executor(record: RemediationRecord, mode) -> str:
         if not plan:
             raise ValueError("no rollback_plan to execute")
         # rollback_plan is an operator-authored kubectl line; run it as given.
-        cmd = plan.split()
+        cmd = shlex.split(plan)
         log.warning("Executing rollback plan: %s", plan)
         res = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=300)
         return res.stdout or "rollback applied"
@@ -124,10 +135,19 @@ class AIOpsEngine:
         self._anomaly = AnomalyDetector(prom, default_anomaly_metrics())
         # Layer-2 latency (bật ở giai đoạn 24-48h khi baseline đã đủ). Multi-window robust z-score.
         self._latency = MultiWindowLatencyDetector(prom, default_latency_metrics())
+        # Layer-2 mở rộng: iforest multivariate ([ml] extra — thiếu sklearn thì câm) +
+        # log template miner (new-template / spike / silence từ OpenSearch error logs).
+        self._iforest = MultiFeatureIForestDetector(prom, default_anomaly_metrics())
+        self._logtpl = LogTemplateDetector()
         self._correlator = Correlator()
         self._emitter = AlertEmitter(cfg.alert, slack_cfg=cfg.slack)
+        self._os = OpenSearchClient(cfg.telemetry)
+        # RAG grounding: chỉ bật khi KNOWLEDGE_BASE_ID có (terraform output) — không có
+        # thì RCA vẫn chạy với local_matcher, không degrade gì khác.
+        kb = BedrockKBRetriever()
         self._rca = RCAAssistant(
-            prom, OpenSearchClient(cfg.telemetry), JaegerClient(cfg.telemetry),
+            prom, self._os, JaegerClient(cfg.telemetry),
+            kb_retriever=kb if kb.configured else None,
         )
         self._audit = AuditLog()
         self._verify = VerifyLoop(prom)
@@ -171,9 +191,19 @@ class AIOpsEngine:
         """
         started = datetime.now(timezone.utc)
         signals = await self._detector.evaluate()
-        # Layer 2 = anomaly (median/MAD spot) + multi-window latency (long AND short breach).
+        # Layer 2 = anomaly (median/MAD spot) + multi-window latency (long AND short breach)
+        # + iforest multivariate + log templates. Mỗi nguồn fail-graceful riêng: một nguồn
+        # mù không được làm cả tick chết (C2).
         anomalies = await self._anomaly.evaluate()
         anomalies += await self._latency.evaluate()
+        try:
+            anomalies += await self._iforest.evaluate()
+        except Exception:
+            log.exception("iforest evaluate failed — z-score layer vẫn chạy")
+        try:
+            anomalies += await self._log_template_signals()
+        except Exception:
+            log.exception("log template evaluate failed — metric layers vẫn chạy")
         incidents = self._correlator.correlate(signals, anomalies)
         for incident in incidents:
             alert = await self._emitter.emit(incident)
@@ -188,23 +218,33 @@ class AIOpsEngine:
                 except Exception:
                     log.exception("rca build failed for %s", incident.incident_id)
 
-                # Auto-propose remediation for checkout critical failures (INC-1 retry/scale lesson)
-                if incident.primary.service == "checkout":
+                # Auto-propose remediation theo service impacted (ACTION_MAP). Flood/frontend,
+                # kafka lag... đều có action đúng; cart→None (INC-2, không auto-restart).
+                # Phân tầng theo confidence (W2-D2): burn-rate critical = SLO breach xác định
+                # (1.0) → auto-queue; các tầng thấp hơn chỉ investigate/escalate, không propose.
+                confidence = 1.0 if incident.primary.burn_rate else 0.7
+                route = route_for_confidence(confidence)
+                log.info("incident %s routed %s (confidence %.2f)",
+                         incident.incident_id, route.value, confidence)
+                proposal = (propose_for(incident.primary.service, incident_id=incident.incident_id)
+                            if route is RemediationRoute.AUTO_QUEUE else None)
+                if proposal is not None:
                     try:
                         record = self._remediation.propose(
                             incident_id=incident.incident_id,
-                            action=ActionType.SCALE,
-                            target="deployment/checkout",
-                            parameters={"replicas": 4},
-                            rationale="Checkout SLO error budget burn rate high. Scaling to contain load.",
-                            risk_note="Slightly increases pod count and database connection count.",
-                            rollback_plan="Scale back to 2 replicas: kubectl scale deployment/checkout --replicas=2 -n techx-tf3"
+                            action=proposal.action,
+                            target=proposal.target,
+                            parameters=proposal.parameters,
+                            rationale=proposal.rationale,
+                            risk_note=proposal.risk_note,
+                            rollback_plan=proposal.rollback_plan,
                         )
                         self.pending_remediations[record.action_id] = record
-                        log.info("Proposed remediation %s for checkout", record.action_id)
-                        await self.send_slack_card(record)
+                        log.info("Proposed remediation %s for %s (%s)",
+                                 record.action_id, incident.primary.service, proposal.action.value)
+                        await self._route_by_risk(record, proposal, incident, confidence)
                     except Exception:
-                        log.exception("Auto-proposal failed")
+                        log.exception("Auto-proposal failed for %s", incident.primary.service)
 
         # C2.9 — emit resolved notices for fingerprints that stopped firing this tick.
         try:
@@ -214,6 +254,84 @@ class AIOpsEngine:
         except Exception:
             log.exception("resolve reconciliation failed")
         return len(incidents)
+
+    async def _route_by_risk(self, record, proposal, incident, confidence: float) -> None:
+        """Sơ đồ closed-loop: Dry-run → Risk Assessment → Low/Medium/High.
+
+          - Low    → auto_execute (engine tự chạy) + verify 5 phút + rollback nếu không hồi phục.
+          - Medium → Slack approval card (người duyệt 1 chạm, rồi verify+rollback như cũ).
+          - High   → reject: chỉ alert, không mutate.
+
+        Dry-run chạy TRƯỚC risk assessment (dry-run fail → risk HIGH → reject) — đúng thứ tự
+        sơ đồ. Mọi nhánh vẫn qua safety gate (đã chạy ở propose) + audit append-only.
+        """
+        # Dry-run "ok/not?" — hỏi executor thử apply server-side, không mutate thật.
+        try:
+            await asyncio.to_thread(k8s_executor, record, True)
+            dry_run_ok = True
+        except Exception as exc:
+            dry_run_ok = False
+            log.warning("dry-run failed for %s: %s", record.action_id, exc)
+
+        risk = assess_risk(
+            proposal, blast_radius=incident.blast_radius,
+            dry_run_ok=dry_run_ok, confidence=confidence,
+        )
+        record.risk_note = f"{record.risk_note} [risk={risk.level.value}: {'; '.join(risk.reasons)}]"
+        log.info("risk assessment %s → %s/%s (%s)",
+                 record.action_id, risk.level.value, risk.decision.value, "; ".join(risk.reasons))
+
+        if risk.decision is RiskDecision.EXECUTE:
+            # Nhánh Low: tự phục hồi hoàn toàn. auto_execute → verify → rollback nếu cần.
+            log.info("auto-executing low-risk remediation %s (self-healing)", record.action_id)
+            try:
+                await asyncio.to_thread(self._remediation.auto_execute, record)
+                if record.execution and record.execution.result == "success":
+                    asyncio.get_event_loop().create_task(self.verify_and_maybe_rollback(record))
+                await self._post_slack_text(
+                    f"🤖 *Auto-remediation (low-risk)* `{record.action_id}` đã chạy cho "
+                    f"`{record.target}`. Đang verify 5 phút, tự rollback nếu không hồi phục.")
+            except Exception:
+                log.exception("auto-execute failed for %s; falling back to approval", record.action_id)
+                await self.send_slack_card(record)
+        elif risk.decision is RiskDecision.APPROVAL:
+            await self.send_slack_card(record)
+        else:  # REJECT
+            self.pending_remediations.pop(record.action_id, None)
+            log.warning("remediation %s REJECTED by risk gate (%s) — chỉ alert, không mutate",
+                        record.action_id, "; ".join(risk.reasons))
+            await self._post_slack_text(
+                f"⛔ *Remediation từ chối tự động* cho `{record.target}` "
+                f"(risk=HIGH: {'; '.join(risk.reasons)}). Cần điều tra thủ công.")
+
+    async def _log_template_signals(self) -> list[AnomalySignal]:
+        """Kéo error log 5 phút gần nhất từ OpenSearch, gom theo service, đưa qua
+        LogTemplateDetector (new-template / spike / silence). OpenSearch mù → [] —
+        tín hiệu log là gia vị, không phải điều kiện sống của tick."""
+        body = {
+            "size": 500,
+            "_source": ["service", "message"],
+            "query": {"bool": {"filter": [
+                {"term": {"level": "error"}},
+                {"range": {"@timestamp": {"gte": "now-5m"}}},
+            ]}},
+        }
+        try:
+            res = await self._os.search("logs-*", body)
+        except TelemetryError:
+            return []
+
+        by_service: dict[str, list[str]] = {}
+        for hit in res.get("hits", {}).get("hits", []):
+            src = hit.get("_source", {})
+            msg = src.get("message") or ""
+            if msg:
+                by_service.setdefault(src.get("service") or "unknown", []).append(msg)
+
+        signals: list[AnomalySignal] = []
+        for svc, lines in by_service.items():
+            signals.extend(self._logtpl.observe_window(svc, lines))
+        return signals
 
     async def verify_and_maybe_rollback(self, record: RemediationRecord) -> None:
         """C6.6 — poll the impacted SLI for 5 min after an action executes. If it did not
@@ -330,13 +448,13 @@ def create_app(cfg: Config | None = None):
                     raise ValueError(f"No pending remediation record found for {callback.action_id}")
 
                 if callback.decision.value == "approve":
-                    engine._remediation.approve_and_execute(record, approver=callback.user)
+                    await asyncio.to_thread(engine._remediation.approve_and_execute, record, approver=callback.user)
                     status_text = f"✅ Action approved and executed by @{callback.user}. Verification: {record.execution.verification}"
                     # C6.6: verify the SLI actually recovered; auto-rollback if not (non-blocking).
                     if record.execution and record.execution.result == "success":
                         asyncio.get_event_loop().create_task(engine.verify_and_maybe_rollback(record))
                 else:
-                    engine._remediation.reject(record, approver=callback.user)
+                    await asyncio.to_thread(engine._remediation.reject, record, approver=callback.user)
                     status_text = f"❌ Action rejected by @{callback.user}."
 
                 # Cleanup pending

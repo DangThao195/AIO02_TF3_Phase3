@@ -8,6 +8,7 @@ Storm control (C2 §Failure-modes): >20 alerts/hour flips to digest mode — one
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 import time
 from datetime import datetime, timezone
@@ -32,7 +33,8 @@ def build_alert(incident: Incident, grafana_base: str = "http://frontend-proxy:8
     """Pure: Incident -> AlertEvent. No I/O, fully testable."""
     sig = incident.primary
     now = datetime.now(timezone.utc)
-    alert_id = f"{ 'TF3'}-{now:%Y%m%d}-{abs(hash(incident.incident_id)) % 10000:04d}"
+    h = int(hashlib.sha256(incident.incident_id.encode("utf-8")).hexdigest(), 16)
+    alert_id = f"TF3-{now:%Y%m%d}-{h % 10000:04d}"
 
 
     _SLI_RULE_SERVICES = {"checkout", "frontend", "cart"}

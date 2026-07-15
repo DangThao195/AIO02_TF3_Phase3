@@ -9,6 +9,7 @@ and so it wraps BOTH llm call sites in product_reviews_server.py without touchin
 from __future__ import annotations
 
 import random
+import threading
 import time
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
@@ -114,6 +115,9 @@ class AIGateway:
         self._retry_budget = _RetryBudget(cfg.retry_budget_ratio, clock=clock)
 
         self._executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="ai-gw")
+        self._max_concurrency = 16
+        self._active_requests = 0
+        self._counter_lock = threading.Lock()
 
     def summarize(
         self,
@@ -123,42 +127,47 @@ class AIGateway:
     ) -> GatewayResult:
         """`call_llm` performs the actual (timeout-bounded) llm request and returns text,
         or raises RateLimitError / LLMTimeout / Exception."""
-        start = self._clock()
         version = review_version(reviews)
 
-
+        # 1. Kiểm tra cache trước (không tính vào concurrency limit vì đọc cache cực nhanh)
         cached = self._cache.get(product_id, version)
         if cached is not None:
             GATEWAY_REQUESTS.labels(outcome=Outcome.CACHE_HIT.value).inc()
             return GatewayResult(text=cached, outcome=Outcome.CACHE_HIT, from_cache=True)
 
+        # 2. Kiểm tra giới hạn Concurrency (Throttling)
+        with self._counter_lock:
+            if self._active_requests >= self._max_concurrency:
+                GATEWAY_REQUESTS.labels(outcome=Outcome.RATE_LIMITED.value).inc()
+                return self._fallback(product_id, version, Outcome.RATE_LIMITED)
+            self._active_requests += 1
 
-        if not self._breaker.allow():
-            return self._fallback(product_id, version, Outcome.BREAKER_OPEN)
+        try:
+            start = self._clock()
+            if not self._breaker.allow():
+                return self._fallback(product_id, version, Outcome.BREAKER_OPEN)
 
+            text, outcome = self._call_with_retry(call_llm)
+            GATEWAY_LATENCY.observe(self._clock() - start)
+            if text is None:
+                return self._fallback(product_id, version, outcome)
 
-        text, outcome = self._call_with_retry(call_llm)
-        GATEWAY_LATENCY.observe(self._clock() - start)
-        if text is None:
-            return self._fallback(product_id, version, outcome)
+            if self._guardrail is not None:
+                passed, reason = self._safe_guardrail(text, reviews)
+                if not passed:
+                    GATEWAY_REQUESTS.labels(outcome=Outcome.GUARDRAIL_BLOCK.value).inc()
+                    self._breaker.record_failure()
+                    return GatewayResult(
+                        text=None, outcome=Outcome.GUARDRAIL_BLOCK, blocked_reason=reason
+                    )
 
-
-        if self._guardrail is not None:
-            passed, reason = self._safe_guardrail(text, reviews)
-            if not passed:
-                GATEWAY_REQUESTS.labels(outcome=Outcome.GUARDRAIL_BLOCK.value).inc()
-
-
-                self._breaker.record_failure()
-                return GatewayResult(
-                    text=None, outcome=Outcome.GUARDRAIL_BLOCK, blocked_reason=reason
-                )
-
-
-        self._breaker.record_success()
-        self._cache.set(product_id, version, text)
-        GATEWAY_REQUESTS.labels(outcome=Outcome.OK.value).inc()
-        return GatewayResult(text=text, outcome=Outcome.OK)
+            self._breaker.record_success()
+            self._cache.set(product_id, version, text)
+            GATEWAY_REQUESTS.labels(outcome=Outcome.OK.value).inc()
+            return GatewayResult(text=text, outcome=Outcome.OK)
+        finally:
+            with self._counter_lock:
+                self._active_requests -= 1
 
 
     def _call_with_retry(self, call_llm: Callable[[], str]) -> tuple[str | None, Outcome]:

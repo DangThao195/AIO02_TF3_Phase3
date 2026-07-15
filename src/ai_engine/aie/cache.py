@@ -42,15 +42,36 @@ class SummaryCache:
     def get(self, product_id: str, version: str) -> str | None:
         with self._lock:
             self._lookups += 1
-            entry = self._store.get(self._key(product_id, version))
-            hit = entry is not None and entry.expires_at > time.monotonic()
-            if hit:
+            key = self._key(product_id, version)
+            entry = self._store.get(key)
+            if entry is None:
+                self._update_ratio_locked()
+                return None
+            
+            if entry.expires_at > time.monotonic():
                 self._hits += 1
+                self._update_ratio_locked()
+                return entry.value
+            
+            # Expired -> Evict to prevent memory leak
+            self._store.pop(key, None)
             self._update_ratio_locked()
-            return entry.value if hit else None
+            return None
 
     def set(self, product_id: str, version: str, value: str) -> None:
         with self._lock:
+            # Cleanup expired entries if cache grows large
+            if len(self._store) >= 1000:
+                now = time.monotonic()
+                expired_keys = [k for k, e in self._store.items() if e.expires_at <= now]
+                for k in expired_keys:
+                    self._store.pop(k, None)
+            
+            # Evict oldest if still full (FIFO eviction)
+            if len(self._store) >= 1000:
+                first_key = next(iter(self._store))
+                self._store.pop(first_key, None)
+
             self._store[self._key(product_id, version)] = _Entry(
                 value=value, expires_at=time.monotonic() + self._ttl
             )

@@ -65,7 +65,7 @@ INCIDENT_PATTERNS: tuple[IncidentSignature, ...] = (
         incident_id="INC-3",
         culprit_markers=("fraud", "fraud-detection"),
         log_markers=("eventstream", "status code 4", "deadline exceeded", "grpc"),
-        proposed_action="cache-flush",
+        proposed_action="scale",
         action_command="kubectl -n techx-tf3 scale deployment/fraud-detection --replicas=2",
         analysis=(
             "fraud-detection ↔ flagd EventStream timeout gRPC status 4 (INC-3). Thường là "
