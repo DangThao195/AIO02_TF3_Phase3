@@ -48,6 +48,12 @@ pydantic>=2.0.0
 python-dotenv>=1.0.0   # Load .env file cho GROQ_API_KEY, COPILOT_CONFIRMATION_SECRET
 
 # ══════════════════════════════════════
+# Database — PostgreSQL connection pool
+# ══════════════════════════════════════
+
+psycopg2-binary>=2.9.0
+
+# ══════════════════════════════════════
 # Testing
 # ══════════════════════════════════════
 
