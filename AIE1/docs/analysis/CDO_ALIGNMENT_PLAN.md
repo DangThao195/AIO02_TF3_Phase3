@@ -27,6 +27,21 @@ Dưới đây là các kịch bản chuẩn bị sẵn để bạn gửi/thảo 
 > 
 > CDO xem giúp mình cấu hình này có ổn cho database hiện tại không? Dung lượng đĩa của Postgres có thoải mái để chứa thêm khoảng 1-2 GB dữ liệu cache không?"*
 
+#### Phân tích Chi tiết Kịch bản A đối với Mandate-06:
+* **Điểm PHÙ HỢP với Mandate-06**:
+  - **Đường lui dự phòng (Resilience)**: Cơ chế Query Timeout (100ms) đảm bảo app server luôn chạy ổn định (fail-open) kể cả khi DB bị chậm/treo, tuân thủ đúng yêu cầu *"không làm treo trang sản phẩm"*.
+  - **Khả năng kiểm toán (Auditability)**: Kiểu dữ liệu `JSONB` của Postgres hỗ trợ CDO/AIO dễ dàng chạy các câu lệnh SQL phân tích để tổng hợp số liệu Eval chất lượng (như tỷ lệ ảo giác của mô hình, token tiêu tốn, kiểm định của Judge).
+  - **Ngân sách (Budget)**: Tái sử dụng cụm RDS Postgres hiện tại giúp chi phí phát sinh bằng **$0/tháng**, tuân thủ hoàn hảo *"ngân sách hiện tại của TF"*.
+* **Điểm CHƯA PHÙ HỢP (Hạn chế)**:
+  - **Rủi ro đe dọa SLO (Nghẽn DB chính)**: Đọc/ghi cache liên tục dễ gây tranh chấp tài nguyên (CPU/IOPS) trực tiếp với các bảng nghiệp vụ chính (products, reviews), gián tiếp làm chậm trang sản phẩm khi lưu lượng tăng đột biến.
+  - **Bão Cache (Cache Storm) khi DB restart**: Vì sử dụng bảng `UNLOGGED` để tối ưu hiệu năng ghi, dữ liệu cache sẽ bị xoá sạch hoàn toàn nếu DB restart. Khi đó, lượng truy cập đồng loạt gây ra Cache Miss hàng loạt $\rightarrow$ dồn dập gọi LLM gây sập hệ thống hoặc quá tải quota (Rate Limit).
+* **Giải pháp khắc phục từ nhóm AI (Mitigations)**:
+  - **Dùng Read Replica**: CDO cấu hình chuyển toàn bộ các lệnh đọc cache (`SELECT`) sang instance Read Replica chuyên đọc để giảm tải cho DB chính.
+  - **Cấu hình Connection Poolers (PgBouncer)**: CDO giới hạn số lượng kết nối tối đa dành cho cache query để bảo vệ connection slot của các tác vụ nghiệp vụ quan trọng khác.
+  - **Cache Warm-up Worker**: Viết script chạy nền tự động quét sinh trước cache cho top 100 sản phẩm hot nhất ngay khi DB vừa khởi động lại.
+  - **Cache Expiry Jitter**: Thêm thời gian sống ngẫu nhiên ($24\text{ giờ} \pm 1\text{ giờ}$) khi ghi cache để phân tán thời điểm hết hạn của các key, tránh nghẽn LLM.
+
+
 ### Kịch bản B: Nếu đề xuất dùng **Redis** (Hiệu năng cao, Chuẩn Production)
 > *"Chào team CDO, nhóm AI (AIO) muốn bổ sung **Redis** làm tầng Runtime Caching cho LLM để đảm bảo độ trễ phản hồi <1ms và cô lập hoàn toàn tải lượng đọc/ghi cache ra khỏi Database PostgreSQL chính (tránh nguy cơ nghẽn DB làm treo trang sản phẩm dưới tải cao).
 > 
