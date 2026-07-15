@@ -134,10 +134,10 @@ import hashlib
 import json
 import time
 
-FALLBACK_SUMMARY_MESSAGE = "Hiện tại không thể tóm tắt đánh giá, vui lòng thử lại sau."
-UNVERIFIED_SUMMARY_MESSAGE = "Hiện tại không thể xác minh nội dung tóm tắt, vui lòng thử lại sau."
-OUT_OF_SCOPE_MESSAGE = "Câu hỏi này nằm ngoài phạm vi hỗ trợ."
-NO_INFO_MESSAGE = "Không có thông tin trong đánh giá."
+FALLBACK_SUMMARY_MESSAGE = "The AI is busy right now. Please try again later."
+UNVERIFIED_SUMMARY_MESSAGE = "The summary cannot be verified. Please try again later."
+OUT_OF_SCOPE_MESSAGE = "This question is out of scope. I only answer questions related to the product."
+NO_INFO_MESSAGE = "No information in reviews."
 
 def generate_cache_key(product_id: str, review_version: str, question: str) -> str:
     # Chuẩn hóa câu hỏi (viết thường, loại bỏ khoảng trắng thừa)

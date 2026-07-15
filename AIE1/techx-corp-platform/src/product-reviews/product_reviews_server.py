@@ -61,10 +61,10 @@ judge_provider = None
 judge_region = "us-east-1"
 judge_timeout_seconds = 3.0
 
-FALLBACK_SUMMARY_MESSAGE = "Hiá»‡n táº¡i khÃ´ng thá»ƒ tÃ³m táº¯t Ä‘Ã¡nh giÃ¡, vui lÃ²ng thá»­ láº¡i sau."
-UNVERIFIED_SUMMARY_MESSAGE = "Hiá»‡n táº¡i khÃ´ng thá»ƒ xÃ¡c minh ná»™i dung tÃ³m táº¯t, vui lÃ²ng thá»­ láº¡i sau."
-OUT_OF_SCOPE_MESSAGE = "CÃ¢u há»i nÃ y náº±m ngoÃ i pháº¡m vi há»— trá»£. TÃ´i chá»‰ tráº£ lá»i cÃ¡c cÃ¢u há»i liÃªn quan Ä‘áº¿n sáº£n pháº©m."
-NO_INFO_MESSAGE = "KhÃ´ng cÃ³ thÃ´ng tin trong Ä‘Ã¡nh giÃ¡."
+FALLBACK_SUMMARY_MESSAGE = "The AI is busy right now. Please try again later."
+UNVERIFIED_SUMMARY_MESSAGE = "The summary cannot be verified. Please try again later."
+OUT_OF_SCOPE_MESSAGE = "This question is out of scope. I only answer questions related to the product."
+NO_INFO_MESSAGE = "No information in reviews."
 DEFAULT_JUDGE_MODEL = "amazon.nova-micro-v1:0"
 INACCURATE_SUMMARY_FIXTURES = {
     "L9ECAV7KIM": "Customers are largely disappointed with this cleaning kit, citing its ineffectiveness on most optical surfaces. Many users report that the cleaning fluid leaves a sticky residue and the included brush is too harsh, causing scratches on lenses. The kit is considered a poor value, with several reviewers stating it damaged their equipment.",
