@@ -108,9 +108,8 @@ def get_llm_client() -> LLMClient:
         try:
             _llm_instance = LLMClient()
         except Exception as e:
-            # For testing without AWS Bedrock: return mock client
-            print(f"Warning: Could not initialize Bedrock client: {e}")
-            return MockLLMClient()
+            # Fail closed in production-like paths instead of silently switching to mock.
+            raise RuntimeError(f"Unable to initialize Bedrock LLM client: {e}") from e
     return _llm_instance
 
 
@@ -125,6 +124,7 @@ class MockLLMClient:
 # Export singleton instance
 try:
     llm_model = get_llm_client()
-except Exception:
-    # Fallback to mock for testing
-    llm_model = MockLLMClient()
+except Exception as exc:
+    # Keep a placeholder that fails clearly for production-like usage.
+    llm_model = None
+    _llm_init_error = exc
