@@ -106,14 +106,22 @@ flowchart TD
 
 ---
 
-## 4. Lựa Chọn Hạ Tầng Lưu Trữ: PostgreSQL vs Redis
+## 4. Lựa Chọn Hạ Tầng Lưu Trữ: PostgreSQL vs Redis (Trade-off Analysis)
 
-| Tiêu chí | PostgreSQL (Lựa chọn hiện tại) | Redis (Lựa chọn khuyến nghị production) |
-| :--- | :--- | :--- |
-| **Vai trò** | Đơn giản hóa kiến trúc (sử dụng chung DB có sẵn). | Chuyên biệt hóa lớp Caching hiệu năng cao. |
-| **Độ trễ (Latency)** | ~5-10 ms. | < 1 ms. |
-| **Cơ chế TTL** | Phải tự viết logic dọn dẹp hoặc trigger. | Hỗ trợ TTL tự nhiên trên từng key. |
-| **Phù hợp** | Phù hợp cho môi trường phát triển thử nghiệm, tích hợp nhanh. | Phù hợp cho Production với tải lượng truy cập lớn. |
+Dưới đây là bảng phân tích trade-off chi tiết giữa hai lựa chọn hạ tầng lưu trữ phục vụ cho tầng Cache:
+
+| Tiêu chí | PostgreSQL (Database Quan Hệ) | Redis (In-Memory Key-Value) | Đánh giá & Rationale |
+| :--- | :--- | :--- | :--- |
+| **Độ trễ & Hiệu năng (Latency & Throughput)** | **~5-15 ms**<br>- Phải xử lý SQL parser, lập chỉ mục (Indexes) và truy xuất ổ đĩa (Disk I/O) nếu dữ liệu không nằm trên RAM. | **< 1 ms**<br>- Lưu hoàn toàn trên bộ nhớ RAM (In-Memory).<br>- Phản hồi tức thì với throughput cực cao (hàng trăm ngàn ops/giây). | **Redis Thắng**:<br>- Phù hợp với các hệ thống có lưu lượng lớn hoặc yêu cầu độ trễ phản hồi thời gian thực. |
+| **Quản lý vòng đời Cache (TTL & Eviction)** | **Phức tạp (Manual)**<br>- Phải tự định nghĩa cột `expire_at`. Code ứng dụng phải tự kiểm tra hạn sử dụng khi truy vấn.<br>- Cần cài đặt Cronjob / Daemon để định kỳ chạy lệnh `DELETE` dọn dẹp RAM/Disk. | **Tự động & Tối ưu**<br>- Hỗ trợ TTL tự nhiên ở cấp độ key thông qua lệnh `SETEX` / `EXPIRE`. Dữ liệu tự động biến mất khi hết hạn.<br>- Hỗ trợ các cơ chế loại bỏ tự động (Eviction Policies) như LRU (Least Recently Used) khi đầy bộ nhớ. | **Redis Thắng**:<br>- Việc tự động quản lý vòng đời giúp code ứng dụng sạch hơn và tối ưu hóa bộ nhớ RAM tự động. |
+| **Chi phí Hạ tầng & Tài nguyên (Cost & Resources)** | **Thấp - Trung bình**<br>- Tái sử dụng Database PostgreSQL hiện có của dự án. Không tốn thêm chi phí khởi tạo phần cứng mới.<br>- Dữ liệu lưu chủ yếu trên Disk nên chi phí lưu trữ rẻ hơn RAM nhiều lần. | **Cao hơn**<br>- RAM có chi phí đắt hơn Disk khoảng 10-20 lần.<br>- Cần cấp phát RAM đủ lớn cho Redis khi dữ liệu cache phình to để tránh bị tràn bộ nhớ hoặc kích hoạt cơ chế dọn dẹp key sớm. | **PostgreSQL Thắng**:<br>- Tiết kiệm chi phí trong giai đoạn đầu hoặc dự án nhỏ nhờ tận dụng tài nguyên có sẵn. |
+| **Tính Nhất Quán & Khả năng Phục Hồi (Consistency & Durability)** | **Rất Cao (ACID)**<br>- Đảm bảo tính toàn vẹn dữ liệu cực tốt nhờ cơ chế ACID.<br>- Dữ liệu ghi xuống Disk ngay lập tức, không lo bị mất mát khi server mất điện hoặc restart. | **Trung bình**<br>- Mặc định tối ưu hóa cho tốc độ. Cơ chế ghi đĩa bất đồng bộ (RDB/AOF Snapshotting) có thể gây mất mát dữ liệu nhỏ nếu hệ thống sập đột ngột.<br>- Tuy nhiên, vì đây chỉ là dữ liệu **Cache** (có thể tái sinh từ LLM), việc mất mát nhỏ không gây ảnh hưởng lớn đến tính đúng đắn hệ thống. | **PostgreSQL Thắng**:<br>- Nhưng đối với bài toán Caching, tính chất Durability không quá khắt khe như Database chính, do đó yếu tố này không phải là rào cản lớn với Redis. |
+| **Triển khai ở môi trường Local & Docker** | **Đơn giản tối đa**<br>- Chỉ cần viết thêm script khởi tạo Schema cho bảng cache trên DB PostgreSQL đang có sẵn. Không cần sửa đổi file `docker-compose.yaml`. | **Cần thêm cấu hình**<br>- Cần thêm service Redis vào file `docker-compose.yaml` (thêm container mới).<br>- Code Python phải import thư viện `redis` (thêm vào `requirements.txt`). | **PostgreSQL Thắng**:<br>- Giúp giữ cho môi trường Local cực kỳ tinh gọn, ít thành phần phụ thuộc. |
+| **Deploy & Vận hành trên AWS Cloud** | **Amazon RDS / Aurora Serverless**<br>- Tái sử dụng Instance RDS hiện tại, chỉ tăng nhẹ tải đọc/ghi. Vận hành tập trung trên một DB duy nhất. | **Amazon ElastiCache / MemoryDB**<br>- Cần quản lý thêm một dịch vụ chuyên biệt (ElastiCache). Có cơ chế Cluster / Replication tự động phân mảnh và sao lưu.<br>- Giảm tải hoàn toàn truy vấn đọc/ghi cache cho PostgreSQL chính để dành tài nguyên cho các nghiệp vụ ACID quan trọng khác. | **Redis Thắng về mặt kiến trúc**:<br>- Giúp tách biệt rõ ràng lớp lưu trữ chính (Database) và lớp bộ đệm (Caching), tăng độ bền vững và khả năng scale cho hệ thống lớn. |
+
+### Kết luận Trade-off:
+- **Chọn PostgreSQL** khi: Dự án đang ở giai đoạn Prototype, muốn **tối giản hóa hạ tầng**, tiết kiệm chi phí, không muốn quản lý thêm container/dịch vụ ngoài PostgreSQL và tải lượng truy cập không quá lớn.
+- **Chọn Redis** khi: Hệ thống phục vụ lượng người dùng lớn ở môi trường **Production**, yêu cầu **độ trễ siêu thấp (< 1ms)**, cần cơ chế quản lý TTL tự động mà không làm ảnh hưởng đến hiệu năng ghi/đọc của cơ sở dữ liệu quan hệ chính.
 
 ---
 
