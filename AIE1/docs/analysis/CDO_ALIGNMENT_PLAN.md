@@ -86,12 +86,14 @@ Dưới đây là các kịch bản chuẩn bị sẵn để bạn gửi/thảo 
   * **Kiểm toán chất lượng (Auditability)**: Mọi thông tin gọi LLM, token tiêu tốn, kết quả Fidelity Judge đều được ghi nhận có cấu trúc tại bảng PostgreSQL riêng biệt, dễ dàng kiểm toán và trích xuất số đo.
   * **Chống Bão Cache (Cache Storm)**: Nếu Redis bị sập đột ngột và mất dữ liệu RAM, hệ thống có thể khôi phục (restore) nhanh chóng cache từ dữ liệu lưu trong PostgreSQL thay vì phải gọi lại API LLM.
 * **Điểm CHƯA PHÙ HỢP (Hạn chế)**:
-  * **Độ phức tạp lập trình (Development Complexity)**: Cần quản trị đồng thời cả hai kết nối (PostgreSQL + Redis) và đồng bộ dữ liệu giữa hai nguồn.
-  * **Tác động ngân sách**: Vẫn cần một lượng tài nguyên RAM nhất định để chạy Redis.
+  * **Độ phức tạp lập trình (Development Complexity)**: Tăng **gấp 2 lần** so với phương án đơn nguồn vì code phải quản lý 2 driver kết nối khác nhau (Redis + Postgres), xử lý logic ghi đúp (Dual Write) đồng bộ, và quản trị các kịch bản lỗi khi 1 trong 2 nguồn bị sập.
+  * **Tác động ngân sách (Budget Impact)**: Tốn thêm tài nguyên cho Redis. Nếu dùng AWS ElastiCache riêng sẽ tốn **$30 - $60 / tháng**. Nếu chạy container trên cụm EKS hiện có sẽ chiếm **256MB - 512MB RAM** của Worker Node (tương đương khoảng **$2 - $4 / tháng** tính theo đơn giá RAM).
 
 #### 3. Phương án khắc phục (Mitigations):
-* **Thiết kế Modular Code**: Nhóm AI xây dựng lớp Adapter/Factory Pattern để đóng gói các thao tác đọc/ghi kép (Dual Write), giúp mã nguồn sạch và dễ bảo trì.
-* **Tối thiểu hóa dung lượng**: Chỉ lưu các trường thực sự cần cho việc kiểm toán vào PostgreSQL, loại bỏ các payload phản hồi thô quá lớn để tiết kiệm dung lượng đĩa cứng.
+* **Giảm 90% độ phức tạp bằng Caching Gateway Pattern**: Nhóm AI sẽ đóng gói toàn bộ logic kết nối kép và đồng bộ hóa PostgreSQL + Redis vào một class Adapter duy nhất (`CacheManager`). Phía app server chỉ cần gọi hàm qua interface chung (`cache_manager.get` / `set`), che giấu hoàn toàn sự phức tạp của hạ tầng bên dưới.
+* **Tối ưu hóa ngân sách về $0/tháng và giảm 80% dung lượng đĩa**:
+  * Chạy container Redis trực tiếp trên cụm EKS hiện có để đưa chi phí phần cứng phát sinh về **$0/tháng** (tiết kiệm hoàn toàn $30 - $60/tháng phí ElastiCache).
+  * Áp dụng **Minified Audit Schema**: PostgreSQL chỉ lưu thông tin metadata siêu nhẹ (mã lỗi, token, timestamp ~0.1KB/dòng), không lưu chuỗi văn bản phản hồi thô cồng kềnh (~5KB/dòng). Điều này giúp **tiết kiệm 80% dung lượng đĩa cứng lưu trữ** và giảm thiểu tải ghi I/O lên Postgres.
 
 
 
