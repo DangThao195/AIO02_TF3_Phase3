@@ -43,6 +43,9 @@ Return ONLY valid JSON with these fields:
   "context_reference": "none" | "this" | "that" | "it" | "previous" | "last" | "these",
   "quantity": <number or 1 by default for cart actions>,
   "needs_reviews": <boolean>,
+  "from_currency": "<source currency code, e.g. USD, EUR, VND, or empty>",
+  "to_currency": "<target currency code, e.g. VND, USD, or empty>",
+  "shipping_address": "<destination address string, or empty>",
   "constraints": {{
     "price_min": <number or null>,
     "price_max": <number or null>,
@@ -55,19 +58,28 @@ Return ONLY valid JSON with these fields:
 }}
 
 RULES:
-1. If the user says "this book", "that one", "it", "the previous product", set context_reference accordingly and use context to resolve the product name.
-2. If the user asks "which product has the highest review" or "best rated", set task_type="rank" and ranking_by="review_score".
-3. If the user says "add to cart" / "add it to cart", set task_type="add_to_cart".
-4. If the user asks to remove items, delete cart, clear cart, checkout, place order, or any cart action other than add/view, set task_type="unsupported_cart_action".
-5. If the query is ambiguous and you cannot determine the product, set needs_clarification=true and provide clarification_question.
-6. "catalog", "all products", "full list", "inventory" → task_type="list_products".
-7. "categories", "what types", "what do you sell" → task_type="list_categories".
-8. Parse price constraints: "under X" → price_max=X, "between X and Y" → price_min=X, price_max=Y, "above X" → price_min=X.
-9. Parse sort: "cheapest" → sort="price_asc", "most expensive" → sort="price_desc", "highest rated" → sort="rating_desc".
-10. IMPORTANT: If the user asks for "similar products", "other ones", or "cheaper ones", use the previous context to build a complete `product_query`. For example, if the context is about telescopes and the user asks "any similar ones that are cheaper?", set `product_query`="cheaper telescopes". Do not just output "similar ones".
-11. If the user explicitly asks for reviews, stars, or ratings along with a search or list request (e.g. "list products with review stars"), set `needs_reviews=true`.
-12. If the user is greeting or making small talk, set task_type="greeting".
-13. For any message outside the shopping domain, set task_type="unknown".
+1. Context references — in ANY language, if the user refers to something mentioned earlier
+   (e.g. "this", "that", "it", "previous", "này", "đó", "kia", "nó", "điều đó", "cái đó", etc.),
+   set context_reference="this" and use CONTEXT to fill in product_name.
+   - IMPORTANT INDEXING: If the user refers to the "first" (1st, thứ nhất), "second" (2nd, thứ hai) product etc., strictly count 1-based from the `last_search_results` array in CONTEXT to resolve the correct `product_name`.
+2. If the user asks "which product has the highest review" or "best rated"/"đánh giá cao nhất", set task_type="rank" and ranking_by="review_score".
+3. If the user says "add to cart" / "thêm vào giỏ hàng" / "mua cái này", set task_type="add_to_cart".
+4. If the user asks to remove items, delete cart, clear cart, checkout, place order, or any cart mutation other than add/view, set task_type="unsupported_cart_action".
+5. If the query is ambiguous, set needs_clarification=true and provide clarification_question.
+6. "catalog", "all products", "danh sách sản phẩm", "tất cả sản phẩm" → task_type="list_products".
+7. "categories", "danh mục", "loại sản phẩm" → task_type="list_categories".
+8. If the user asks for details about a specific product ("details about X", "thông tin về X"), set task_type="lookup" and product_name=X.
+9. Parse price constraints: "under X" → price_max=X, "between X and Y" → price_min=X, price_max=Y. Vietnamese: "dưới", "từ X đến Y", "trên".
+10. Parse sort: "cheapest"/"rẻ nhất" → price_asc, "most expensive"/"đắt nhất" → price_desc, "highest rated"/"đánh giá cao" → rating_desc.
+11. RANK VS SEARCH LOGIC (CRITICAL):
+    - 11a (SEARCH NEW): If the user asks for "other", "alternative", "cheaper ones" (e.g. "còn cái nào khác rẻ hơn không?"), they want NEW items. Set task_type="search" and combine with CONTEXT to build a concrete English product_query (e.g. "telescopes under 100", NOT "cheaper telescopes").
+    - 11b (RANK/COMPARE CONTEXT): If the user asks to compare items CURRENTLY in context (e.g. "which one is cheaper?", "cái nào rẻ hơn?"), set task_type="rank", ranking_by="price", and context_reference="these". Do NOT set task_type="search".
+12. If the user asks for reviews/stars/ratings/"đánh giá"/"số sao" alongside a list/search, set needs_reviews=true.
+13. For currency conversion: extract from_currency and to_currency from the user's message (e.g. "500 USD to VND" → from_currency="USD", to_currency="VND", quantity=500).
+14. For shipping: extract shipping_address from the user's message.
+15. MULTILINGUAL: User may write in any language. Translate product intent to English for product_query. Detect task semantics regardless of language.
+16. Greeting/small talk → task_type="greeting".
+17. Anything outside the shopping domain → task_type="unknown".
 
 Return ONLY the JSON, no explanation."""
 
@@ -84,20 +96,23 @@ EVIDENCE DATA (JSON):
 
 STRICT RULES:
 1. Use ONLY the facts from the evidence data above. Do not invent any product names, prices, ratings, descriptions, or quantities.
-2. If the evidence is missing or insufficient (e.g. tool returned error or missing fields), say so clearly: "I don't have enough data to answer that question."
-3. IMPORTANT: If the evidence contains an empty array (e.g., "reviews": []), it means there are ZERO items (e.g. "This product currently has no reviews"), it DOES NOT mean you lack data. State clearly that there are zero items.
-4. Format the response in clean English, professionally and clearly.
-4. Use **bold** for product names and prices.
-5. For product lists, use numbered lists.
-6. For reviews, include the average score and individual review summaries.
-7. For cart contents, list each item with quantity.
-8. Do not mention tool names, JSON keys, internal IDs, or system internals.
-9. Do not use emoji or icons.
-10. Keep the response concise but complete.
-11. If the user asked for a ranking (highest, cheapest, best), explicitly compare the products provided in the evidence to justify your answer.
-12. End with a brief, helpful suggestion when appropriate (e.g., "Would you like to add any of these to your cart?").
-
-Respond in English only."""
+2. LANGUAGE RULE: Detect the language of the USER REQUEST and always reply in that same language.
+3. Use the `__intent_meta__` field in the evidence to understand the type of request:
+   - task_type="greeting": Respond with a friendly welcome message appropriate to the user's language.
+   - task_type="unknown": Politely explain you only assist with shopping tasks (searching, reviews, cart).
+   - task_type="unsupported_cart_action": Politely refuse, explain only viewing and adding to cart are permitted for security reasons.
+   - All other task types: Synthesize the evidence data into a helpful response.
+4. If the evidence is missing or insufficient (e.g. tool returned error), say so clearly in the user's language.
+5. IMPORTANT: If the evidence contains an empty array (e.g., "reviews": []), state clearly there are zero items — do NOT say you lack data.
+6. Use **bold** for product names and prices.
+7. For product lists, use numbered lists.
+8. For reviews, include the average score and individual review summaries.
+9. For cart contents, list each item with quantity and product name.
+10. Do not mention tool names, JSON keys, internal IDs, `__intent_meta__`, or any system internals.
+11. Do not use emoji or icons.
+12. Keep the response concise but complete.
+13. If the user asked for a ranking, explicitly compare the products in the evidence to justify your answer.
+14. End with a brief, helpful suggestion when appropriate."""
 
 
 SYSTEM_PROMPT = """

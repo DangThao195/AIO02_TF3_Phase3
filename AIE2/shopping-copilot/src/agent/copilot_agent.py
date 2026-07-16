@@ -120,13 +120,14 @@ class CopilotAgent:
             logger.error(f"Intent parse failed: {e}")
             return {"task_type": "search", "target_entity": "product", "product_query": user_message}
 
-    # Structured context resolution
+    # Structured context resolution — trusts LLM's context_reference, no hardcoded word lists
     def _resolve_context_references(self, intent: dict, session: dict) -> dict:
         context = session.get("context", {})
-        if intent.get("context_reference") in ["this", "that", "it", "previous", "last"]:
-            if context.get("last_product_name"):
+        context_ref = intent.get("context_reference", "none")
+        if context_ref in ["this", "that", "it", "previous", "last", "these"]:
+            if context.get("last_product_name") and not intent.get("product_name"):
                 intent["product_name"] = context["last_product_name"]
-            if context.get("last_product_id"):
+            if context.get("last_product_id") and not intent.get("product_id"):
                 intent["product_id"] = context["last_product_id"]
         return intent
 
@@ -144,9 +145,20 @@ class CopilotAgent:
             plan.append({"name": "get_cart_tool", "args": {"user_id": user_id}})
         elif task_type == "get_reviews":
             pname = intent.get("product_name")
-            if pname:
+            pid = intent.get("product_id")  # may be pre-resolved from context
+            if pid:
+                # Already resolved from context, call reviews directly
+                plan.append({"name": "get_product_reviews_tool", "args": {"product_id": pid}})
+            elif pname:
                 plan.append({"name": "get_product_id", "args": {"product_name": pname}})
-            plan.append({"name": "get_product_reviews_tool", "args": {"product_id": "$PREV"}})
+                plan.append({"name": "get_product_reviews_tool", "args": {"product_id": "$PREV"}})
+            else:
+                # Fallback: fetch reviews for whatever was last searched
+                plan.append({"name": "__fetch_reviews_for_context__", "args": {}})
+        elif task_type == "lookup":
+            pname = intent.get("product_name") or intent.get("product_query", "")
+            if pname:
+                plan.append({"name": "search_products_v2", "args": {"query": pname}})
         elif task_type in ["rank", "compare"]:
             if intent.get("product_query"):
                 plan.append({"name": "search_products_v2", "args": {"query": intent.get("product_query")}})
@@ -161,12 +173,18 @@ class CopilotAgent:
                 q += f" under {intent['constraints']['price_max']}"
             plan.append({"name": "search_products_v2", "args": {"query": q}})
         elif task_type == "convert_currency":
-            plan.append({"name": "convert_currency_tool", "args": {"from_currency": "USD", "to_currency": "VND", "amount_units": intent.get("quantity", 1)}})
+            # Use Intent-parsed currencies — no hardcoded USD/VND defaults except as last resort
+            plan.append({"name": "convert_currency_tool", "args": {
+                "from_currency": intent.get("from_currency", "USD"),
+                "to_currency": intent.get("to_currency", "VND"),
+                "amount_units": intent.get("quantity", 1),
+            }})
         elif task_type == "get_shipping":
-            plan.append({"name": "get_shipping_quote_tool", "args": {"address": intent.get("product_query", "Vietnam")}})
+            address = intent.get("shipping_address") or intent.get("product_query", "")
+            plan.append({"name": "get_shipping_quote_tool", "args": {"address": address}})
 
-        # Dynamic Modular Planner: If intent requires reviews, append the block.
-        if intent.get("needs_reviews") and task_type not in ["rank", "compare", "get_reviews"]:
+        # Dynamic Modular Planner: append review block whenever LLM signals needs_reviews
+        if intent.get("needs_reviews"):
             plan.append({"name": "__fetch_reviews_for_context__", "args": {}})
 
         return plan
@@ -258,21 +276,20 @@ class CopilotAgent:
 
     # LAYER 5 & 6: Answer Generator + Grounding
     async def _generate_grounded_answer(self, user_message: str, evidence: dict, intent: dict) -> str:
-        if intent.get("task_type") == "greeting":
-            return "Hello! I'm your shopping assistant. How can I help you today?"
-        
-        if intent.get("task_type") == "unsupported_cart_action":
-            return "I'm sorry, but for security reasons, I can only view your cart and add items to it. I cannot remove items, clear your cart, or process checkouts."
-        
-        if intent.get("task_type") == "unknown":
-            return "I can only help with shopping-related tasks like searching products, checking reviews, and managing your cart."
-
         if not self.llm:
             return f"Evidence retrieved: {json.dumps(evidence, ensure_ascii=False)[:500]}"
 
+        # Inject intent metadata into evidence so LLM has full context
+        # to generate appropriate responses for ALL task types (greeting, unknown,
+        # unsupported_cart_action, etc.) in the user's own language — no hardcoded strings.
+        evidence["__intent_meta__"] = {
+            "task_type": intent.get("task_type"),
+            "target_entity": intent.get("target_entity"),
+        }
+
         ev_str = json.dumps(evidence, ensure_ascii=False)
         prompt = EVIDENCE_SYNTHESIS_PROMPT.format(user_message=user_message, evidence=ev_str)
-        
+
         try:
             response = await self.llm.ainvoke([HumanMessage(content=prompt)])
             return self._extract_text(response)

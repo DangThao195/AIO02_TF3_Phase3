@@ -79,9 +79,21 @@ def add_to_cart_tool(user_id: str, product_id: str, quantity: int) -> str:
         })
 
     if confirmation.status == "PENDING":
+        product_name = product_id
+        try:
+            cat_channel = grpc.insecure_channel(CATALOG_ADDR)
+            cat_stub = demo_pb2_grpc.ProductCatalogServiceStub(cat_channel)
+            p_req = demo_pb2.GetProductRequest(id=product_id)
+            p_res = cat_stub.GetProduct(p_req)
+            if p_res.name:
+                product_name = p_res.name
+            cat_channel.close()
+        except Exception:
+            pass
+
         return json.dumps({
             "status": "pending",
-            "message": f"Please confirm adding {quantity} of product '{product_id}' to your cart.",
+            "message": f"Please confirm adding {quantity} of product '{product_name}' to your cart.",
             "token": confirmation.confirmation_token,
             "action_data": {
                 "user_id": user_id,

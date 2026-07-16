@@ -150,15 +150,39 @@ ATTACK_PATTERNS: List[Tuple[re.Pattern, str]] = [
     # ══════════════════════════════════════
     # Danh mục 7: Encoding Evasion
     # (phát hiện kẻ tấn công mã hoá payload
-    #  bằng base64/hex/unicode escape để bypass regex)
+    #  bằng base64/hex/binary/ROT13 để bypass regex)
     # ══════════════════════════════════════
-    (re.compile(r"base64[:\s]|aWdub3Jl|SWdub3Jl", re.IGNORECASE),
+
+    # 7a. Base64 marker hoặc chuỗi base64 dài bất kỳ (≥20 ký tự)
+    # Trước đây chỉ bắt 2 giá trị tĩnh; giờ bắt toàn bộ base64 blob
+    (re.compile(r"base64\s*[:\s]", re.IGNORECASE),
      "ENCODING_EVASION"),
-    # aWdub3Jl = base64("ignore"), SWdub3Jl = base64("Ignore")
-    (re.compile(r"\\x[0-9a-f]{2}(\\x[0-9a-f]{2}){3,}", re.IGNORECASE),
+    (re.compile(r"[A-Za-z0-9+/]{20,}={0,2}"),          # generic long base64 string
      "ENCODING_EVASION"),
-    (re.compile(r"\\u[0-9a-f]{4}(\\u[0-9a-f]{4}){3,}", re.IGNORECASE),
+
+    # 7b. Hex escape dài (\xNN lặp ≥4 lần)
+    (re.compile(r"(\\x[0-9a-f]{2}){4,}", re.IGNORECASE),
      "ENCODING_EVASION"),
+
+    # 7c. Raw hex không có \x — ví dụ: "69 67 6e 6f 72 65" (≥5 cặp hex)
+    (re.compile(r"(?<![0-9a-f])([0-9a-f]{2}\s){5,}[0-9a-f]{2}(?![0-9a-f])", re.IGNORECASE),
+     "ENCODING_EVASION"),
+
+    # 7d. Binary string (chuỗi 0 và 1 cách nhau bởi space, ≥40 ký tự)
+    # ví dụ: "01101001 01100111 01101110 ..."
+    (re.compile(r"(?:[01]{8}\s){4,}[01]{8}"),
+     "ENCODING_EVASION"),
+
+    # 7e. Unicode escape dài (\uNNNN lặp ≥3 lần)
+    (re.compile(r"(\\u[0-9a-f]{4}){3,}", re.IGNORECASE),
+     "ENCODING_EVASION"),
+
+    # 7f. ROT13 của các từ nguy hiểm phổ biến
+    # ROT13("ignore")="vtaber", ROT13("system")="flfgrz", ROT13("password")="cnffjbeq"
+    (re.compile(r"\b(vtaber|flfgrz|cnffjbeq|cerivbhf|vafgehpgvbaf)\b", re.IGNORECASE),
+     "ENCODING_EVASION"),
+
+    # 7g. Python code injection patterns
     (re.compile(r"eval\s*\(|exec\s*\(|import\s+os|subprocess", re.IGNORECASE),
      "ENCODING_EVASION"),
 
