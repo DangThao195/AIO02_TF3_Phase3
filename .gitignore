@@ -56,3 +56,5 @@ build/
 /AIE1/techx-corp-platform/src/*
 !/AIE1/techx-corp-platform/src/llm/
 !/AIE1/techx-corp-platform/src/product-reviews/
+!/AIE1/techx-corp-platform/src/frontend/
+!/AIE1/techx-corp-platform/src/frontend-proxy/
