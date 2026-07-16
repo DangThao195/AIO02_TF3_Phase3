@@ -52,22 +52,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Lazy import agent (sau khi logging setup để tránh vòng import) ──
-_agent = None
+# ── LangGraph graph (lazy init) ──
+_graph = None
 
-def _get_agent():
-    global _agent
-    if _agent is None:
+def _get_graph():
+    """Lazy init LangGraph graph."""
+    global _graph
+    if _graph is None:
         if args.mock or os.getenv("MOCK_EKS") == "true":
             logger.info("[MAIN] Initializing with EKS Microservices Mocked!")
-            # Import mock stubs setup
             from tests.test_interactive import _setup_grpc_mocks
             _setup_grpc_mocks()
-            
-        from src.agent.copilot_agent import CopilotAgent
-        _agent = CopilotAgent()
-        logger.info("[MAIN] CopilotAgent initialized")
-    return _agent
+
+        from src.graph.main_graph import build_graph
+        _graph = build_graph()
+        logger.info("[MAIN] LangGraph graph initialized")
+    return _graph
 
 
 # ── Request/Response models ──
@@ -90,6 +90,66 @@ class ChatResponse(BaseModel):
     session_id: str
     token: str | None = None
     steps: List[StepInfo] = []
+
+
+# ── Step labels mapping (node_key → display name) ──
+_STEP_LABELS: dict[str, str] = {
+    "InputGuard": "Kiểm tra đầu vào",
+    "IntentClassifier": "Phân loại ý định",
+    "EntityExtractor": "Trích xuất thông tin",
+    "ResolveProduct": "Tra cứu sản phẩm",
+    "Router": "Định tuyến",
+    "AnswerGenerator": "Tạo câu trả lời",
+    "LLMNode": "AI Agent",
+    "ToolsNode": "Thực thi công cụ",
+    "GetCart": "Xem giỏ hàng",
+    "ToolExecutor": "Công cụ",
+}
+
+def _build_steps(state: dict) -> List[StepInfo]:
+    durations = state.get("node_durations", {})
+    errors = state.get("errors", [])
+    steps: List[StepInfo] = []
+
+    for node_key, ms in durations.items():
+        base = node_key.split(":")[0]
+        action = _STEP_LABELS.get(base, base)
+
+        if node_key.startswith("ToolExecutor:"):
+            tool_name = node_key.split(":", 1)[1]
+            action = f"Công cụ: {tool_name}"
+        elif node_key.startswith("Aggregate"):
+            action = "Tổng hợp kết quả"
+
+        status = "ok"
+        detail = ""
+        for err in errors:
+            if err.get("node", "").startswith(base):
+                status = "error"
+                detail = err.get("error", "")[:100]
+                break
+
+        if base == "ResolveProduct" and status == "ok":
+            pname = state.get("resolved_product_name")
+            if pname:
+                detail = f"Đã tìm thấy: {pname}"
+            elif state.get("entities", {}).get("product_name"):
+                detail = "Không tìm thấy sản phẩm"
+        elif base == "InputGuard" and status == "ok":
+            violations = state.get("guardrail_violations", [])
+            if violations:
+                status = "block"
+                detail = violations[0].get("type", "Violation")
+
+        steps.append(StepInfo(
+            action=action,
+            status=status,
+            detail=detail,
+            duration_ms=ms,
+        ))
+
+    return steps
+
 
 class ConfirmRequest(BaseModel):
     session_id: str = Field(..., description="ID phiên chat")
@@ -210,33 +270,85 @@ async def api_chat(req: ChatRequest):
     - **status = ok**: có câu trả lời
     - **status = pending**: cần xác nhận hành động ghi (dùng token để confirm)
     - **status = error**: có lỗi (input bị block hoặc exception)
+
+    Luôn dùng LangGraph StateGraph path.
     """
+    from langchain_core.messages import HumanMessage
+
     logger.info(
         "[API] /api/chat | session=%s | user=%s | msg=%.80s",
-        req.session_id, req.user_id, req.message
+        req.session_id, req.user_id, req.message,
     )
 
-    agent = _get_agent()
-    result = await agent.chat(
-        session_id=req.session_id,
-        user_id=req.user_id,
-        user_message=req.message,
-    )
+    graph = _get_graph()
+    config = {"configurable": {"thread_id": req.session_id}}
+
+    try:
+        result = await graph.ainvoke(
+            {
+                "messages": [HumanMessage(content=req.message)],
+                "session_id": req.session_id,
+                "user_id": req.user_id,
+                "trace_id": str(uuid.uuid4()),
+                "intent": "agent",
+                "intent_source": "default",
+                "entities": {},
+                "candidate_products": [],
+                "tool_results": {},
+                "final_answer": "",
+                "pending_workflows": [],
+                "current_workflow_index": 0,
+                "workflow_results": [],
+                "pending_action": None,
+                "confirmed": False,
+                "errors": [],
+                "retry_count": 0,
+                "node_retry_counts": {},
+                "guardrail_violations": [],
+                "node_durations": {},
+            },
+            config=config,
+        )
+    except Exception as e:
+        logger.error("[API] LangGraph error | session=%s | err=%s", req.session_id, e)
+        return ChatResponse(
+            status="error",
+            reply=f"Lỗi hệ thống: {str(e)[:200]}",
+            session_id=req.session_id,
+        )
 
     logger.info(
-        "[API] /api/chat response | session=%s | status=%s",
-        req.session_id, result.get("status")
+        "[API] LangGraph response | session=%s | violations=%d",
+        req.session_id, len(result.get("guardrail_violations", []))
     )
 
-    steps_data = result.get("steps", [])
-    steps = [StepInfo(**s) for s in steps_data] if steps_data else []
+    # Nếu có guardrail violation → trả lỗi
+    violations = result.get("guardrail_violations", [])
+    if violations:
+        violation = violations[0]
+        return ChatResponse(
+            status="error",
+            reply=violation.get("detail", "Yêu cầu bị từ chối."),
+            session_id=req.session_id,
+            steps=_build_steps(result),
+        )
+
+    # Nếu confirmation pending
+    pending_action = result.get("pending_action")
+    if pending_action and not result.get("confirmed", False):
+        return ChatResponse(
+            status="pending",
+            reply=pending_action.get("message", "Vui lòng xác nhận hành động."),
+            token=pending_action.get("token"),
+            session_id=req.session_id,
+            steps=_build_steps(result),
+        )
 
     return ChatResponse(
-        status=result.get("status", "error"),
-        reply=result.get("reply", "Có lỗi xảy ra."),
-        token=result.get("token"),
+        status="ok",
+        reply=result.get("final_answer", ""),
         session_id=req.session_id,
-        steps=steps,
+        steps=_build_steps(result),
     )
 
 
@@ -245,42 +357,58 @@ async def api_confirm(req: ConfirmRequest):
     """
     Xác nhận hành động ghi đang chờ (user bấm nút Xác nhận).
     Cần truyền token nhận được từ /api/chat khi status=pending.
+
+    Dùng LangGraph Command(resume) để resume từ checkpoint.
     """
+    from src.guardrails.confirmation import verify_confirmation_token
+    from langgraph.types import Command
+
     logger.info("[API] /api/confirm | session=%s", req.session_id)
 
-    agent = _get_agent()
-    result = await agent.confirm(session_id=req.session_id, token=req.token)
+    # Verify HMAC token trước
+    is_valid, action_data = verify_confirmation_token(req.token)
+    if not is_valid:
+        return ConfirmResponse(status="error", reply="Token không hợp lệ hoặc đã hết hạn.")
 
-    return ConfirmResponse(
-        status=result.get("status", "error"),
-        reply=result.get("reply", "Có lỗi xảy ra."),
-    )
+    graph = _get_graph()
+    config = {"configurable": {"thread_id": req.session_id}}
+
+    try:
+        # Resume graph từ checkpoint với confirmed=True
+        result = await graph.ainvoke(
+            Command(resume={"confirmed": True}),
+            config=config,
+        )
+        return ConfirmResponse(
+            status="ok",
+            reply=result.get("final_answer", "✅ Đã xác nhận."),
+        )
+    except Exception as e:
+        logger.error("[API] LangGraph confirm error | session=%s | err=%s", req.session_id, e)
+        return ConfirmResponse(
+            status="error",
+            reply=f"Lỗi xác nhận: {str(e)[:200]}",
+        )
 
 
-# ── Debug endpoints (memory inspection) ──
+# ── Debug endpoints ──
 
 @app.get("/debug/session/{session_id}")
 def debug_session(session_id: str):
-    """Tra cứu session memory."""
-    agent = _get_agent()
-    data = agent.sessions.dump(session_id)
-    if data is None:
-        raise HTTPException(status_code=404, detail="Session không tồn tại")
-    return data
-
-
-@app.get("/debug/sessions")
-def debug_sessions():
-    """Danh sách tất cả session đang active."""
-    agent = _get_agent()
-    return agent.sessions.dump_all()
+    """Tra cứu session memory từ LangGraph checkpoint."""
+    from src.memory.store import CacheStore
+    return {
+        "session_id": session_id,
+        "note": "LangGraph dùng MemorySaver checkpoint — không có session memory riêng",
+    }
 
 
 @app.get("/debug/cache")
 def debug_cache():
     """Cache store stats và entries."""
-    agent = _get_agent()
-    return agent.cache_store.dump()
+    from src.memory.store import CacheStore
+    cs = CacheStore()
+    return cs.dump() if hasattr(cs, "dump") else {"note": "CacheStore available"}
 
 
 @app.get("/debug/ratelimit")

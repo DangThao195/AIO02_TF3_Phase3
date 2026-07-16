@@ -9,6 +9,9 @@
 # LangChain core (tool decorator, message types, runnable)
 langchain-core>=0.3.0
 
+# LangGraph — StateGraph workflow engine (migration từ ReAct agent)
+langgraph>=0.3.0
+
 # AWS Bedrock provider — LLM inference (Amazon Nova) + Guardrails
 langchain-aws>=0.2.0
 boto3>=1.35.0
