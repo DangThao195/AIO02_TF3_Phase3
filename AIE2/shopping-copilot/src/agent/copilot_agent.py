@@ -161,9 +161,13 @@ class CopilotAgent:
                 q += f" under {intent['constraints']['price_max']}"
             plan.append({"name": "search_products_v2", "args": {"query": q}})
         elif task_type == "convert_currency":
-            plan.append({"name": "convert_currency_tool", "args": {"from_currency": "USD", "to_currency": "VND", "amount": 1.0}})
+            plan.append({"name": "convert_currency_tool", "args": {"from_currency": "USD", "to_currency": "VND", "amount_units": intent.get("quantity", 1)}})
         elif task_type == "get_shipping":
             plan.append({"name": "get_shipping_quote_tool", "args": {"address": intent.get("product_query", "Vietnam")}})
+
+        # Dynamic Modular Planner: If intent requires reviews, append the block.
+        if intent.get("needs_reviews") and task_type not in ["rank", "compare", "get_reviews"]:
+            plan.append({"name": "__fetch_reviews_for_context__", "args": {}})
 
         return plan
 
@@ -194,14 +198,18 @@ class CopilotAgent:
                 
                 rev_tool = TOOLS_MAP.get("get_product_reviews_tool")
                 all_reviews = []
-                for pid in search_ids[:3]:  # Top 3 to avoid slow execution
+                for pid in search_ids[:5]:  # Top 5 to provide enough reviews for lists
                     try:
                         r_str = await rev_tool.ainvoke({"product_id": pid})
                         all_reviews.append(json.loads(r_str))
                     except Exception as e:
                         all_reviews.append({"product_id": pid, "status": "error", "error": str(e)})
                 
-                evidence[tc_name] = {"status": "success", "results": all_reviews}
+                evidence[tc_name] = {
+                    "status": "success", 
+                    "results": all_reviews,
+                    "products_context": session.get("context", {}).get("last_search_results", [])
+                }
                 continue
 
             validation = validate_tool_call(tc_name, tc_args, user_id)
@@ -233,6 +241,12 @@ class CopilotAgent:
                         ctx["last_product_id"] = prods[0]["id"]
                         ctx["last_product_name"] = prods[0]["name"]
                         ctx["last_search_ids"] = [p["id"] for p in prods]
+                        ctx["last_search_results"] = prods
+                elif tc_name == "get_all_products" and res_json.get("status") == "success":
+                    prods = res_json.get("products", [])
+                    if prods:
+                        ctx["last_search_ids"] = [p["id"] for p in prods]
+                        ctx["last_search_results"] = prods
 
                 if res_json.get("status") == "pending":
                     return res_json # Return immediately for pending actions

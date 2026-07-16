@@ -36,14 +36,17 @@ def get_product_reviews_tool(product_id: str) -> str:
         count = 0
         for rev in response.product_reviews:
             username = rev.username if rev.username else "Anonymous"
-            score = rev.score if rev.score else 0
+            try:
+                score = float(rev.score) if rev.score else 0.0
+            except ValueError:
+                score = 0.0
             description = rev.description if rev.description else ""
             reviews.append({
                 "username": username,
                 "score": score,
                 "description": description,
             })
-            if score:
+            if score > 0:
                 total_score += score
                 count += 1
 

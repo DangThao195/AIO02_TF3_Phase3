@@ -42,6 +42,7 @@ Return ONLY valid JSON with these fields:
   "product_query": "<search query text if searching, or empty string>",
   "context_reference": "none" | "this" | "that" | "it" | "previous" | "last" | "these",
   "quantity": <number or 1 by default for cart actions>,
+  "needs_reviews": <boolean>,
   "constraints": {{
     "price_min": <number or null>,
     "price_max": <number or null>,
@@ -63,8 +64,10 @@ RULES:
 7. "categories", "what types", "what do you sell" → task_type="list_categories".
 8. Parse price constraints: "under X" → price_max=X, "between X and Y" → price_min=X, price_max=Y, "above X" → price_min=X.
 9. Parse sort: "cheapest" → sort="price_asc", "most expensive" → sort="price_desc", "highest rated" → sort="rating_desc".
-10. If the user is greeting or making small talk, set task_type="greeting".
-11. For any message outside the shopping domain, set task_type="unknown".
+10. IMPORTANT: If the user asks for "similar products", "other ones", or "cheaper ones", use the previous context to build a complete `product_query`. For example, if the context is about telescopes and the user asks "any similar ones that are cheaper?", set `product_query`="cheaper telescopes". Do not just output "similar ones".
+11. If the user explicitly asks for reviews, stars, or ratings along with a search or list request (e.g. "list products with review stars"), set `needs_reviews=true`.
+12. If the user is greeting or making small talk, set task_type="greeting".
+13. For any message outside the shopping domain, set task_type="unknown".
 
 Return ONLY the JSON, no explanation."""
 

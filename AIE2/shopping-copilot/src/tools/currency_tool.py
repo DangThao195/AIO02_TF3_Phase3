@@ -29,11 +29,23 @@ def convert_currency_tool(from_currency: str, to_currency: str, amount_units: in
         request.to_code = to_currency
         response = stub.Convert(request)
 
-        # Định dạng chuỗi tiền tệ đầu ra mượt mà
         formatted_nanos = f"{response.nanos // 10000000:02d}"
-        return f"Kết quả quy đổi lấy từ Cloud AWS: {amount_units} {from_currency} tương đương với {response.units}.{formatted_nanos} {to_currency}."
+        import json
+        return json.dumps({
+            "status": "success",
+            "from_currency": from_currency,
+            "to_currency": to_currency,
+            "amount_units": amount_units,
+            "result_units": response.units,
+            "result_nanos": formatted_nanos,
+            "message": f"{amount_units} {from_currency} is equivalent to {response.units}.{formatted_nanos} {to_currency}."
+        })
         
     except grpc.RpcError as e:
-        return f"Lỗi hệ thống khi thực hiện quy đổi tiền tệ (gRPC): {e.details()}"
+        import json
+        return json.dumps({
+            "status": "error",
+            "error": f"gRPC error: {e.details()}"
+        })
     finally:
         channel.close()
