@@ -75,12 +75,12 @@ def build_runtime_prompts(request_product_id, question):
     uses_mock_llm = llm_base_url == llm_mock_url or "llm:8000" in str(llm_base_url)
     if uses_mock_llm:
         user_prompt = f"Answer the following question about product ID:{request_product_id}: {question}"
-        accurate_prompt = f"Based on the tool results, answer the original question about product ID:{request_product_id}. Keep the response brief with no more than 1-2 sentences."
-        inaccurate_prompt = f"Based on the tool results, answer the original question about product ID, but make the answer inaccurate:{request_product_id}. Keep the response brief with no more than 1-2 sentences."
+        accurate_prompt = f"Based on the tool results, answer the original question about product ID:{request_product_id}. Keep the response concise as a short paragraph of 2-3 sentences."
+        inaccurate_prompt = f"Based on the tool results, answer the original question about product ID, but make the answer inaccurate:{request_product_id}. Keep the response concise as a short paragraph of 2-3 sentences."
     else:
         user_prompt = f"Answer the following question about this product: {question}"
-        accurate_prompt = "Based on the tool results, answer the original question about this product. Keep the response brief with no more than 1-2 sentences."
-        inaccurate_prompt = "Based on the tool results, answer the original question about this product, but make the answer inaccurate. Keep the response brief with no more than 1-2 sentences."
+        accurate_prompt = "Based on the tool results, answer the original question about this product. Keep the response concise as a short paragraph of 2-3 sentences."
+        inaccurate_prompt = "Based on the tool results, answer the original question about this product, but make the answer inaccurate. Keep the response concise as a short paragraph of 2-3 sentences."
     return user_prompt, accurate_prompt, inaccurate_prompt
 
 
@@ -89,13 +89,13 @@ def build_system_prompt():
         "You are a product review assistant for TechX Corp. "
         "Your ONLY job is to answer questions about a specific product based on its reviews and product info. "
         "Use tools as needed to fetch product reviews and product information. "
-        "Keep responses brief (1-2 sentences). "
-        "STRICT RULES â€” you MUST follow these without exception:\n"
-        "1. If the question is NOT about this product (e.g. math, general knowledge, coding, weather, anything unrelated to the product): respond with exactly 'OUT_OF_SCOPE'.\n"
+        "Keep responses concise as a short paragraph of 2-3 sentences. "
+        "For sentiment questions, any review with a score below 3 stars counts as a negative review. "
+        "STRICT RULES - you MUST follow these without exception:\n"
+        "1. If the question is NOT about this product (its info or reviews) (e.g. math, general knowledge, coding, weather, anything unrelated to the product): respond with exactly 'OUT_OF_SCOPE'.\n"
         "2. If the question IS about the product but the reviews/info do not contain the answer: respond with exactly 'NO_INFO'.\n"
         "3. Never make up or infer information not present in the provided reviews or product data."
     )
-
 
 @with_fallback
 def call_candidate_chat(client, **kwargs):
@@ -208,9 +208,11 @@ def build_bedrock_user_prompt(question, product_info_json, safe_reviews_json, ma
         f"Product info JSON:\n{product_info_json}\n\n"
         f"Filtered product reviews JSON:\n{safe_reviews_json}\n\n"
         "Answer only from the provided product info and reviews. "
+        "For sentiment questions, any review with a score below 3 stars counts as a negative review. "
+        "For questions about whether there were any negative reviews, determine the answer from the review scores. If no review is below 3 stars, explicitly answer that there were no negative reviews instead of returning NO_INFO. "
         "If the answer is not present in the provided data, respond with exactly 'NO_INFO'. "
         "If the question is unrelated to the product, respond with exactly 'OUT_OF_SCOPE'. "
-        "Keep the response brief with no more than 1-2 sentences."
+        "Keep the response concise as a short paragraph of 2-3 sentences."
         f"{extra_instruction}"
     )
 
@@ -310,6 +312,9 @@ def get_ai_assistant_response(request_product_id, question):
         span.set_attribute("app.product.id", request_product_id)
         span.set_attribute("app.product.question", question)
 
+        normalized_question = (question or "").strip().lower()
+        summary_request = "summar" in normalized_question and "review" in normalized_question
+
         input_check = check_input(question)
         if not input_check.is_safe:
             ai_assistant_response.response = input_check.blocked_reason
@@ -350,7 +355,7 @@ def get_ai_assistant_response(request_product_id, question):
                     return ai_assistant_response
 
             result = post_process_output(final_text)
-            if result not in (OUT_OF_SCOPE_MESSAGE, NO_INFO_MESSAGE) and raw_reviews_for_judge:
+            if summary_request and result not in (OUT_OF_SCOPE_MESSAGE, NO_INFO_MESSAGE) and raw_reviews_for_judge:
                 judge_result = call_summary_judge(
                     request_product_id,
                     raw_reviews_for_judge,
@@ -492,7 +497,7 @@ def get_ai_assistant_response(request_product_id, question):
             result = final_response.choices[0].message.content or ""
             result = post_process_output(result)
 
-            if result not in (OUT_OF_SCOPE_MESSAGE, NO_INFO_MESSAGE) and raw_reviews_for_judge:
+            if summary_request and result not in (OUT_OF_SCOPE_MESSAGE, NO_INFO_MESSAGE) and raw_reviews_for_judge:
                 judge_result = call_summary_judge(
                     request_product_id,
                     raw_reviews_for_judge,
