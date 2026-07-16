@@ -1,5 +1,6 @@
 """
 tools/catalog_tool.py — Công cụ truy vấn danh mục và toàn bộ sản phẩm.
+Returns normalized JSON for all outputs.
 """
 
 import json
@@ -19,6 +20,7 @@ def get_categories() -> str:
     Dùng khi người dùng hỏi: "có những danh mục nào?", "bạn bán những loại gì?",
     "categories", "list categories", hoặc muốn xem tổng quan các nhóm hàng.
     Không cần tham số đầu vào.
+    Returns JSON: {"status", "categories": ["Cat1","Cat2",...], "total"}
     """
     try:
         executor = SQLQueryExecutor()
@@ -38,11 +40,17 @@ def get_categories() -> str:
                     seen.add(cleaned.lower())
                     categories.append(cleaned)
         if not categories:
-            return "Không có danh mục nào trong hệ thống."
-        return "Các danh mục sản phẩm hiện có:\n" + "\n".join(f"- {c}" for c in sorted(categories))
+            return json.dumps({"status": "empty", "categories": [], "total": 0})
+
+        sorted_cats = sorted(categories)
+        return json.dumps({
+            "status": "success",
+            "categories": sorted_cats,
+            "total": len(sorted_cats),
+        })
     except Exception as e:
         logger.error(f"get_categories error: {e}")
-        return "Dịch vụ tạm thời không khả dụng, vui lòng thử lại sau."
+        return json.dumps({"status": "error", "error": str(e)[:200], "categories": [], "total": 0})
 
 
 @tool
@@ -54,6 +62,7 @@ def get_all_products() -> str:
     xuất dữ liệu kho hàng, hoặc kiểm kê toàn bộ danh mục.
     KHÔNG dùng để tìm kiếm thông thường — dùng search_products_v2 cho mục đích đó.
     Không cần tham số đầu vào.
+    Returns JSON: {"status", "total", "products": [{id, name, price, price_units, price_nanos, categories, description}]}
     """
     try:
         executor = SQLQueryExecutor()
@@ -63,19 +72,27 @@ def get_all_products() -> str:
             limit=100,
         )
         if not rows:
-            return "Không có sản phẩm nào trong hệ thống."
+            return json.dumps({"status": "empty", "total": 0, "products": []})
 
-        parts = [f"Toàn bộ sản phẩm ({len(rows)} sản phẩm):"]
+        products = []
         for r in rows:
-            name = r.get("name", "N/A")
-            price_u = r.get("price_units", 0)
-            price_n = r.get("price_nanos", 0)
-            price = f"${price_u}.{str(price_n).zfill(9)}"
-            cats = r.get("categories", "")
-            cat_str = f" [{cats}]" if cats else ""
-            desc = (r.get("description", "") or "")[:80]
-            parts.append(f"- {name} - {price}{cat_str} — {desc}")
-        return "\n".join(parts)
+            price_u = r.get("price_units", 0) or 0
+            price_n = r.get("price_nanos", 0) or 0
+            products.append({
+                "id": str(r.get("id", "")),
+                "name": r.get("name", ""),
+                "price": round(price_u + price_n / 1e9, 2),
+                "price_units": price_u,
+                "price_nanos": price_n,
+                "categories": r.get("categories", ""),
+                "description": (r.get("description", "") or "")[:120],
+            })
+
+        return json.dumps({
+            "status": "success",
+            "total": len(products),
+            "products": products,
+        })
     except Exception as e:
         logger.error(f"get_all_products error: {e}")
-        return "Dịch vụ tạm thời không khả dụng, vui lòng thử lại sau."
+        return json.dumps({"status": "error", "error": str(e)[:200], "total": 0, "products": []})

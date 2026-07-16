@@ -1,3 +1,6 @@
+"""tools/product_id_tool.py — Resolve product_id from product name. Returns normalized JSON."""
+
+import json
 import sqlite3
 from pathlib import Path
 
@@ -9,25 +12,36 @@ from src.database.connect import get_conn, init_pool
 @tool
 def get_product_id(product_name: str) -> str:
     """
-    Tra cứu mã product_id từ tên sản phẩm (chính xác).
+    Tra cứu mã product_id từ tên sản phẩm (không phân biệt hoa thường).
     Dùng sau search_products_v2 khi cần product_id để gọi các tool khác
     (get_product_reviews_tool, add_to_cart_tool, get_recommendations_tool).
+    Returns JSON: {"status": "success"|"not_found", "product_id", "product_name"}
     """
     name = (product_name or "").strip()
     if not name:
-        return "Vui lòng nhập tên sản phẩm."
+        return json.dumps({"status": "error", "error": "Product name is required.", "product_id": "", "product_name": ""})
 
+    search_pattern = f"%{name.lower()}%"
+
+    # Try PostgreSQL first
     try:
         init_pool()
         with get_conn() as conn:
             cur = conn.cursor()
-            cur.execute("SELECT id FROM products WHERE name = %s", (name,))
+            # Try exact case-insensitive match first
+            cur.execute("SELECT id, name FROM products WHERE LOWER(name) = LOWER(%s)", (name,))
             row = cur.fetchone()
+            if not row:
+                # Try wildcard match
+                cur.execute("SELECT id, name FROM products WHERE LOWER(name) LIKE %s", (search_pattern,))
+                row = cur.fetchone()
+            
             if row:
-                return str(row[0])
+                return json.dumps({"status": "success", "product_id": str(row[0]), "product_name": row[1]})
     except Exception:
         pass
 
+    # Fallback to SQLite
     try:
         candidates = []
         file_path = Path(__file__).resolve()
@@ -39,21 +53,27 @@ def get_product_id(product_name: str) -> str:
             if candidate.exists():
                 db_path = candidate
                 break
-        if db_path is None:
-            return f"Không tìm thấy sản phẩm '{product_name}'."
-        conn = sqlite3.connect(str(db_path))
-        try:
-            cur = conn.cursor()
-            cur.execute("SELECT id FROM products WHERE name = ?", (name,))
-            row = cur.fetchone()
-            if row:
-                return str(row[0])
-        finally:
-            conn.close()
+        
+        if db_path is not None:
+            conn = sqlite3.connect(str(db_path))
+            try:
+                cur = conn.cursor()
+                # Try exact case-insensitive match
+                cur.execute("SELECT id, name FROM products WHERE LOWER(name) = LOWER(?)", (name,))
+                row = cur.fetchone()
+                if not row:
+                    # Try wildcard match
+                    cur.execute("SELECT id, name FROM products WHERE LOWER(name) LIKE ?", (search_pattern,))
+                    row = cur.fetchone()
+                
+                if row:
+                    return json.dumps({"status": "success", "product_id": str(row[0]), "product_name": row[1]})
+            finally:
+                conn.close()
     except Exception:
         pass
 
-    return f"Không tìm thấy sản phẩm '{product_name}'."
+    return json.dumps({"status": "not_found", "product_id": "", "product_name": name})
 
 
 __all__ = ["get_product_id"]

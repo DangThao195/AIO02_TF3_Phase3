@@ -1,23 +1,19 @@
 """
-agent/copilot_agent.py — CopilotAgent: ReAct loop + guardrail pipeline + step tracking.
-Triển khai AWS Bedrock (Amazon Nova) làm LLM backend.
+agent/copilot_agent.py — CopilotAgent: Structured Reasoning Architecture.
 
-Entry points (được main.py gọi):
-    agent.chat(session_id, user_id, user_message) → dict with steps[]
-    agent.confirm(session_id, token) → dict
+Triển khai AWS Bedrock (Amazon Nova) làm LLM backend.
+6-layer pipeline: Intent Parser -> Planner -> Executor -> Evidence Aggregator -> Answer Generator -> Guard.
 """
 
 import os
 import json
 import uuid
 import time
-import asyncio
 import logging
 from typing import Dict, Any, List, Optional
 
 from langchain_aws import ChatBedrockConverse
-from langchain_core.runnables import RunnableConfig
-from langchain_core.messages import AIMessage, ToolMessage, HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage
 
 from src.guardrails import (
     rate_limiter,
@@ -33,357 +29,319 @@ from src.guardrails import (
 )
 from src.memory import SessionStore, CacheStore
 from src.tools import all_shopping_tools
-from src.llm.prompt import SYSTEM_PROMPT
+from src.llm.prompt import SYSTEM_PROMPT, INTENT_PARSE_PROMPT, EVIDENCE_SYNTHESIS_PROMPT
 
 logger = logging.getLogger("agent.copilot_agent")
 
 TOOLS_MAP: Dict[str, Any] = {t.name: t for t in all_shopping_tools}
 
-
 def _now_ms() -> int:
     return int(time.time() * 1000)
 
-
-def _normalize_tool_call(tc: Any) -> dict:
-    """Chuẩn hóa tool_call từ object hoặc dict về dict để xử lý thống nhất."""
-    if hasattr(tc, "name"):
-        return {"name": tc.name, "args": tc.args, "id": tc.id}
-    if isinstance(tc, dict):
-        return {"name": tc.get("name", ""), "args": tc.get("args", {}), "id": tc.get("id", tc.get("tool_call_id", ""))}
-    raise TypeError(f"Unexpected tool_call type: {type(tc)}")
-
-
 class CopilotAgent:
-    def _should_return_tool_message_directly(self, content: Any) -> bool:
-        """Trả về True khi tool output đã chứa thông báo nghiệp vụ rõ ràng về missing item / empty cart."""
-        if content is None:
-            return False
-
-        if not isinstance(content, str):
-            try:
-                content = json.dumps(content, ensure_ascii=False)
-            except (TypeError, ValueError):
-                return False
-
-        text = content.strip().lower()
-        if not text:
-            return False
-
-        patterns = (
-            "not found",
-            "không tìm thấy",
-            "không tồn tại",
-            "không có trong giỏ hàng",
-            "empty cart",
-            "giỏ hàng trống",
-            "đang trống",
-            "không có sản phẩm",
-            "không có mặt hàng",
-            "no products",
-            "cart is empty",
-        )
-        return any(pattern in text for pattern in patterns)
-
     def __init__(self):
         self._sessions = SessionStore()
         self._cache = CacheStore()
         self.llm = self._build_llm()
         self._steps: List[Dict[str, Any]] = []
 
-    # ── helpers ──
-
-    def _add_step(self, action: str, status: str, detail: str, duration_ms: int):
-        self._steps.append({
-            "action": action,
-            "status": status,
-            "detail": detail,
-            "duration_ms": duration_ms,
-        })
-
-    def _time(self, action: str) -> tuple:
-        start = _now_ms()
-        return start, action
-
-    def _end(self, start: int, action: str, status: str, detail: str):
-        self._add_step(action, status, detail, _now_ms() - start)
-
     def _build_llm(self):
-        """Khởi tạo Bedrock LLM client sử dụng ChatBedrockConverse."""
         model = os.getenv("BEDROCK_MODEL_ID", "apac.amazon.nova-lite-v1:0")
         region = os.getenv("BEDROCK_REGION", "ap-southeast-1")
-        
         try:
-            llm = ChatBedrockConverse(
+            return ChatBedrockConverse(
                 model=model,
                 region_name=region,
                 temperature=0.1,
                 max_tokens=1024,
             )
-            return llm.bind_tools(all_shopping_tools)
         except Exception as e:
-            logger.error(f"[AGENT] Không thể khởi tạo Bedrock LLM: {e}")
+            logger.error(f"[AGENT] Cannot init Bedrock LLM: {e}")
             return None
 
-    # ── debug: expose memory stores ──
-    @property
-    def sessions(self) -> "SessionStore":
-        return self._sessions
+    def _time(self, action: str) -> tuple:
+        return _now_ms(), action
 
-    @property
-    def cache_store(self) -> "CacheStore":
-        return self._cache
+    def _end(self, start: int, action: str, status: str, detail: str):
+        self._steps.append({
+            "action": action,
+            "status": status,
+            "detail": detail,
+            "duration_ms": _now_ms() - start,
+        })
 
-    # ── public API ──
+    def _extract_text(self, response: Any) -> str:
+        final = response.content if hasattr(response, "content") else str(response)
+        if isinstance(final, list):
+            text_parts = []
+            for part in final:
+                if isinstance(part, dict) and "text" in part:
+                    text_parts.append(part["text"])
+                elif isinstance(part, str):
+                    text_parts.append(part)
+                elif hasattr(part, "text"):
+                    text_parts.append(part.text)
+            final = "".join(text_parts)
+        return final or ""
 
-    @with_fallback  # L6
+    # LAYER 1: Intent Parser
+    async def _parse_intent_with_llm(self, user_message: str, session: dict) -> dict:
+        if not self.llm:
+            # Fallback keyword logic if LLM is down
+            lower = user_message.lower()
+            if "cart" in lower or "giỏ hàng" in lower:
+                if "add" in lower or "thêm" in lower:
+                    return {"task_type": "add_to_cart", "target_entity": "cart", "context_reference": "this"}
+                return {"task_type": "view_cart", "target_entity": "cart"}
+            if "review" in lower or "đánh giá" in lower:
+                if "highest" in lower or "best" in lower or "cao nhất" in lower:
+                    return {"task_type": "rank", "target_entity": "product", "ranking_by": "review_score"}
+                return {"task_type": "get_reviews", "target_entity": "review"}
+            if "category" in lower or "danh mục" in lower:
+                return {"task_type": "list_categories", "target_entity": "category"}
+            if "all products" in lower or "tất cả sản phẩm" in lower:
+                return {"task_type": "list_products", "target_entity": "product"}
+            return {"task_type": "search", "target_entity": "product", "product_query": user_message}
+
+        context = session.get("context", {})
+        context_str = json.dumps(context, ensure_ascii=False)
+        prompt = INTENT_PARSE_PROMPT.format(context=context_str, user_message=user_message)
+        
+        try:
+            response = await self.llm.ainvoke([HumanMessage(content=prompt)])
+            text = self._extract_text(response)
+            # clean code block if any
+            if "```json" in text:
+                text = text.split("```json")[1].split("```")[0]
+            elif "```" in text:
+                text = text.split("```")[1].split("```")[0]
+            return json.loads(text.strip())
+        except Exception as e:
+            logger.error(f"Intent parse failed: {e}")
+            return {"task_type": "search", "target_entity": "product", "product_query": user_message}
+
+    # Structured context resolution
+    def _resolve_context_references(self, intent: dict, session: dict) -> dict:
+        context = session.get("context", {})
+        if intent.get("context_reference") in ["this", "that", "it", "previous", "last"]:
+            if context.get("last_product_name"):
+                intent["product_name"] = context["last_product_name"]
+            if context.get("last_product_id"):
+                intent["product_id"] = context["last_product_id"]
+        return intent
+
+    # LAYER 2: Generic Planner
+    def _build_plan_from_intent(self, intent: dict, user_id: str) -> List[dict]:
+        task_type = intent.get("task_type", "unknown")
+        plan = []
+
+        if task_type == "add_to_cart":
+            pname = intent.get("product_name")
+            if pname:
+                plan.append({"name": "get_product_id", "args": {"product_name": pname}})
+            plan.append({"name": "add_to_cart_tool", "args": {"user_id": user_id, "product_id": "$PREV", "quantity": intent.get("quantity", 1)}})
+        elif task_type == "view_cart":
+            plan.append({"name": "get_cart_tool", "args": {"user_id": user_id}})
+        elif task_type == "get_reviews":
+            pname = intent.get("product_name")
+            if pname:
+                plan.append({"name": "get_product_id", "args": {"product_name": pname}})
+            plan.append({"name": "get_product_reviews_tool", "args": {"product_id": "$PREV"}})
+        elif task_type in ["rank", "compare"]:
+            if intent.get("product_query"):
+                plan.append({"name": "search_products_v2", "args": {"query": intent.get("product_query")}})
+            plan.append({"name": "__fetch_reviews_for_context__", "args": {}})
+        elif task_type == "list_categories":
+            plan.append({"name": "get_categories", "args": {}})
+        elif task_type == "list_products":
+            plan.append({"name": "get_all_products", "args": {}})
+        elif task_type == "search":
+            q = intent.get("product_query", "")
+            if intent.get("constraints", {}).get("price_max"):
+                q += f" under {intent['constraints']['price_max']}"
+            plan.append({"name": "search_products_v2", "args": {"query": q}})
+        elif task_type == "convert_currency":
+            plan.append({"name": "convert_currency_tool", "args": {"from_currency": "USD", "to_currency": "VND", "amount": 1.0}})
+        elif task_type == "get_shipping":
+            plan.append({"name": "get_shipping_quote_tool", "args": {"address": intent.get("product_query", "Vietnam")}})
+
+        return plan
+
+    # LAYER 3 & 4: Executor + Evidence Aggregator
+    async def _execute_and_aggregate(self, plan: List[dict], user_id: str, session: dict) -> dict:
+        evidence = {}
+        prev_result = None
+
+        for step in plan:
+            tc_name = step["name"]
+            tc_args = dict(step["args"])
+            
+            # Resolve dependencies
+            if tc_args.get("product_id") == "$PREV":
+                if isinstance(prev_result, dict) and prev_result.get("status") == "not_found":
+                    return {"status": "error", "error": f"Product not found: {prev_result.get('product_name')}"}
+                if isinstance(prev_result, dict) and prev_result.get("product_id"):
+                    tc_args["product_id"] = prev_result["product_id"]
+                elif session.get("context", {}).get("last_product_id"):
+                    tc_args["product_id"] = session["context"]["last_product_id"]
+                else:
+                    return {"status": "error", "error": "Cannot resolve product for action"}
+
+            if tc_name == "__fetch_reviews_for_context__":
+                search_ids = session.get("context", {}).get("last_search_ids", [])
+                if not search_ids and session.get("context", {}).get("last_product_id"):
+                    search_ids = [session["context"]["last_product_id"]]
+                
+                rev_tool = TOOLS_MAP.get("get_product_reviews_tool")
+                all_reviews = []
+                for pid in search_ids[:3]:  # Top 3 to avoid slow execution
+                    try:
+                        r_str = await rev_tool.ainvoke({"product_id": pid})
+                        all_reviews.append(json.loads(r_str))
+                    except Exception as e:
+                        all_reviews.append({"product_id": pid, "status": "error", "error": str(e)})
+                
+                evidence[tc_name] = {"status": "success", "results": all_reviews}
+                continue
+
+            validation = validate_tool_call(tc_name, tc_args, user_id)
+            if not validation.is_valid:
+                return {"status": "error", "error": f"Blocked: {validation.blocked_reason}"}
+
+            tool_fn = TOOLS_MAP.get(tc_name)
+            if not tool_fn:
+                continue
+
+            try:
+                res_str = await tool_fn.ainvoke(tc_args)
+                try:
+                    res_json = json.loads(res_str)
+                except Exception:
+                    res_json = {"raw": res_str}
+                
+                prev_result = res_json
+                evidence[tc_name] = res_json
+
+                # Update context
+                ctx = session.setdefault("context", {})
+                if tc_name == "get_product_id" and res_json.get("status") == "success":
+                    ctx["last_product_id"] = res_json.get("product_id")
+                    ctx["last_product_name"] = res_json.get("product_name")
+                elif tc_name == "search_products_v2" and res_json.get("status") == "success":
+                    prods = res_json.get("products", [])
+                    if prods:
+                        ctx["last_product_id"] = prods[0]["id"]
+                        ctx["last_product_name"] = prods[0]["name"]
+                        ctx["last_search_ids"] = [p["id"] for p in prods]
+
+                if res_json.get("status") == "pending":
+                    return res_json # Return immediately for pending actions
+
+            except Exception as e:
+                evidence[tc_name] = {"status": "error", "error": str(e)}
+
+        return {"status": "success", "evidence": evidence}
+
+    # LAYER 5 & 6: Answer Generator + Grounding
+    async def _generate_grounded_answer(self, user_message: str, evidence: dict, intent: dict) -> str:
+        if intent.get("task_type") == "greeting":
+            return "Hello! I'm your shopping assistant. How can I help you today?"
+        
+        if intent.get("task_type") == "unsupported_cart_action":
+            return "I'm sorry, but for security reasons, I can only view your cart and add items to it. I cannot remove items, clear your cart, or process checkouts."
+        
+        if intent.get("task_type") == "unknown":
+            return "I can only help with shopping-related tasks like searching products, checking reviews, and managing your cart."
+
+        if not self.llm:
+            return f"Evidence retrieved: {json.dumps(evidence, ensure_ascii=False)[:500]}"
+
+        ev_str = json.dumps(evidence, ensure_ascii=False)
+        prompt = EVIDENCE_SYNTHESIS_PROMPT.format(user_message=user_message, evidence=ev_str)
+        
+        try:
+            response = await self.llm.ainvoke([HumanMessage(content=prompt)])
+            return self._extract_text(response)
+        except Exception as e:
+            logger.error(f"Synthesis failed: {e}")
+            return "I gathered the information but couldn't format the final answer."
+
+    @with_fallback
     async def chat(self, session_id: str, user_id: str, user_message: str) -> Dict[str, Any]:
         self._steps = []
-        sources_used = set()
 
-        if self.llm is None:
+        s1, a1 = self._time("RateLimiter")
+        rate_res = rate_limiter.check_rate_limit(user_id)
+        if not rate_res.is_allowed:
+            self._end(s1, a1, "BLOCK", rate_res.blocked_reason)
+            return {"status": "error", "reply": rate_res.blocked_reason, "session_id": session_id, "steps": list(self._steps)}
+        self._end(s1, a1, "PASS", "Rate OK")
+
+        s2, a2 = self._time("InputFilter")
+        if not check_input(user_message).is_safe or not check_input_bedrock(user_message).is_safe:
+            detail = "Message blocked by safety filters."
+            self._end(s2, a2, "BLOCK", detail)
+            return {"status": "error", "reply": detail, "session_id": session_id, "steps": list(self._steps)}
+        self._end(s2, a2, "PASS", "Safety OK")
+
+        session = self._sessions.get_or_create(session_id, user_id)
+        self._sessions.append_message(session_id, "user", user_message)
+
+        # L1: Parse Intent
+        s3, a3 = self._time("IntentParser")
+        raw_intent = await self._parse_intent_with_llm(user_message, session)
+        intent = self._resolve_context_references(raw_intent, session)
+        self._end(s3, a3, "OK", f"Parsed: {intent.get('task_type')} on {intent.get('target_entity')}")
+
+        if intent.get("needs_clarification"):
+            reply = intent.get("clarification_question", "Could you please clarify?")
+            self._sessions.append_message(session_id, "assistant", reply)
+            return {"status": "ok", "reply": reply, "session_id": session_id, "steps": list(self._steps)}
+
+        # L2: Planner
+        s4, a4 = self._time("Planner")
+        plan = self._build_plan_from_intent(intent, user_id)
+        self._end(s4, a4, "OK", f"Plan steps: {len(plan)}")
+
+        # L3 & L4: Execute and Aggregate
+        s5, a5 = self._time("Executor")
+        exec_result = await self._execute_and_aggregate(plan, user_id, session)
+        self._end(s5, a5, "OK", f"Execution status: {exec_result.get('status')}")
+
+        if exec_result.get("status") == "pending":
+            reply = exec_result.get("message", "Confirmation needed.")
+            self._sessions.set_pending(session_id, exec_result["token"], "AddItem", exec_result.get("action_data"))
+            self._sessions.append_message(session_id, "assistant", reply)
             return {
-                "status": "error",
-                "reply": "LLM chưa được cấu hình. Vui lòng kiểm tra AWS credentials và BEDROCK_MODEL_ID.",
+                "status": "pending",
+                "reply": reply,
+                "token": exec_result["token"],
                 "session_id": session_id,
                 "steps": list(self._steps),
             }
 
-        # L1: Rate Limiter
-        s, a = self._time("RateLimiter")
-        rate_result = rate_limiter.check_rate_limit(user_id)
-        if not rate_result.is_allowed:
-            detail = rate_result.blocked_reason
-            self._end(s, a, "BLOCK", detail)
-            return {"status": "error", "reply": detail, "session_id": session_id, "steps": list(self._steps)}
-        self._end(s, a, "PASS", f"{rate_result.remaining_minute} req remaining this minute")
+        if exec_result.get("status") == "error":
+            reply = exec_result.get("error", "Error executing plan.")
+            self._sessions.append_message(session_id, "assistant", reply)
+            return {"status": "error", "reply": reply, "session_id": session_id, "steps": list(self._steps)}
 
-        # L2a: Input Filter (Regex)
-        s, a = self._time("InputFilter")
-        filter_result = check_input(user_message)
-        if not filter_result.is_safe:
-            detail = filter_result.blocked_reason or "Tin nhắn bị chặn bởi bộ lọc đầu vào."
-            self._end(s, a, "BLOCK", detail)
-            return {"status": "error", "reply": detail, "session_id": session_id, "steps": list(self._steps)}
+        # L5 & L6: Answer Gen + Guarding
+        s6, a6 = self._time("AnswerGenerator")
+        reply = await self._generate_grounded_answer(user_message, exec_result.get("evidence", {}), intent)
+        
+        output_filtered = filter_output(reply)
+        reply = output_filtered.filtered_response
+        self._end(s6, a6, "OK", "Answer generated and filtered")
 
-        # L2b: Input Filter (Bedrock Guardrails)
-        s_b, a_b = self._time("BedrockGuardrail")
-        bedrock_result = check_input_bedrock(user_message)
-        if not bedrock_result.is_safe:
-            detail = bedrock_result.blocked_reason or "Yêu cầu bị từ chối bởi chính sách bảo mật."
-            self._end(s_b, a_b, "BLOCK", detail)
-            self._end(s, a, "BLOCK", "Chặn bởi Bedrock Guardrails")
-            return {"status": "error", "reply": detail, "session_id": session_id, "steps": list(self._steps)}
-        self._end(s_b, a_b, "PASS", "Bedrock Guardrail passed")
-        self._end(s, a, "PASS", "Không phát hiện prompt injection")
+        self._sessions.append_message(session_id, "assistant", reply)
+        self._sessions.touch(session_id)
 
-        # Session
-        session = self._sessions.get_or_create(session_id, user_id)
-        self._sessions.append_message(session_id, "user", user_message)
-
-        # Build messages
-        messages = [SystemMessage(content=SYSTEM_PROMPT)]
-        for msg in session["messages"]:
-            if msg["role"] == "user":
-                messages.append(HumanMessage(content=msg["content"]))
-            elif msg["role"] == "assistant":
-                messages.append(AIMessage(content=msg["content"]))
-            elif msg["role"] == "tool":
-                messages.append(ToolMessage(
-                    content=msg["content"],
-                    tool_call_id=msg.get("tool_call_id", ""),
-                ))
-
-        # ReAct Loop
-        iterations = 0
-        while iterations < MAX_TOOL_ITERATIONS:
-            s_llm, a_llm = self._time("LLMInvoke")
-            try:
-                response = await self.llm.ainvoke(messages)
-                self._end(s_llm, a_llm, "OK", f"iter={iterations + 1}")
-            except Exception as e:
-                self._end(s_llm, a_llm, "ERROR", str(e)[:120])
-                return {
-                    "status": "error",
-                    "reply": f"Lỗi kết nối AWS Bedrock: {str(e)[:120]}",
-                    "session_id": session_id,
-                    "steps": list(self._steps),
-                }
-
-            raw_tool_calls = getattr(response, "tool_calls", None) or []
-            if raw_tool_calls:
-                messages.append(response)
-                for raw_tc in raw_tool_calls:
-                    tc = _normalize_tool_call(raw_tc)
-                    tc_name = tc["name"]
-                    tc_args = tc["args"]
-                    tc_id = tc["id"]
-                    args_preview = json.dumps(tc_args, ensure_ascii=False)
-
-                    # Step 1: Tool Call (validate + check cache)
-                    s_tc, a_tc = self._time(tc_name)
-                    validation = validate_tool_call(tc_name, tc_args, user_id)
-                    if not validation.is_valid:
-                        self._end(s_tc, a_tc, "BLOCK", f"L3: {validation.violation_type} — {validation.blocked_reason} | args={args_preview}")
-                        messages.append(ToolMessage(content=f"[GUARDRAIL] {validation.blocked_reason}", tool_call_id=tc_id))
-                        continue
-
-                    cache_key = (tc_name, dict(tc_args))
-                    cached = self._cache.get(*cache_key)
-                    if cached:
-                        self._end(s_tc, a_tc, "CACHE", f"Cache HIT | args={args_preview}")
-                        messages.append(ToolMessage(content=cached, tool_call_id=tc_id))
-                        sources_used.add("Cache")
-                        continue
-
-                    tool_fn = TOOLS_MAP.get(tc_name)
-                    if tool_fn is None:
-                        self._end(s_tc, a_tc, "ERROR", f"Tool not found in TOOLS_MAP | args={args_preview}")
-                        continue
-                    self._end(s_tc, a_tc, "PASS", f"Validation OK | args={args_preview}")
-
-                    # Step 2: Tool Execution (gRPC call + result)
-                    s_ex, a_ex = self._time(f"Exec: {tc_name}")
-                    try:
-                        result = await tool_fn.ainvoke(tc_args)
-
-                        # Parse search tool JSON → text for LLM
-                        if tc_name == "search_products_v2" and isinstance(result, str) and result.startswith("{"):
-                            try:
-                                search_data = json.loads(result)
-                                status = search_data.get("status", "")
-                                if status == "category":
-                                    cats = search_data.get("categories", [])
-                                    result = "Các danh mục sản phẩm hiện có:\n" + "\n".join(f"- {c}" for c in cats)
-                                elif status == "success":
-                                    prods = search_data.get("products", [])
-                                    if not prods:
-                                        result = "Không tìm thấy sản phẩm phù hợp."
-                                    else:
-                                        total = search_data.get("total", len(prods))
-                                        lines = [f"Tìm thấy {total} sản phẩm:"]
-                                        for i, p in enumerate(prods, 1):
-                                            units = p.get("price_units", 0)
-                                            nanos = p.get("price_nanos", 0)
-                                            price = f"${units}.{nanos:09d}"
-                                            lines.append(f"{i}. {p.get('name', 'Unknown')} - {price}")
-                                        result = "\n".join(lines)
-                            except Exception:
-                                result = "Không tìm thấy sản phẩm phù hợp."
-                    except Exception as e:
-                        detail = f"Exception: {str(e)[:200]} | args={args_preview}"
-                        self._end(s_ex, a_ex, "ERROR", detail)
-                        messages.append(ToolMessage(content=f"[ERROR] Lỗi khi gọi {tc_name}: {str(e)[:120]}", tool_call_id=tc_id))
-                        continue
-
-                    # Check for PENDING (confirmation gate)
-                    parsed = None
-                    try:
-                        parsed = json.loads(result)
-                    except (json.JSONDecodeError, TypeError):
-                        pass
-
-                    if parsed and parsed.get("status") == "pending":
-                        self._end(s_ex, a_ex, "PENDING", f"Cần xác nhận từ user | args={args_preview} | msg={parsed.get('message', '')}")
-                        self._sessions.set_pending(
-                            session_id,
-                            parsed["token"],
-                            "AddItem",
-                            parsed.get("action_data"),
-                        )
-                        result_pending = {
-                            "status": "pending",
-                            "reply": parsed["message"],
-                            "token": parsed["token"],
-                            "session_id": session_id,
-                            "steps": list(self._steps),
-                        }
-                        self._sessions.append_message(session_id, "assistant", result_pending["reply"])
-                        return result_pending
-
-                    # Truthfulness guard: preserve exact tool output for missing-item / empty-cart cases.
-                    if self._should_return_tool_message_directly(result):
-                        self._end(s_ex, a_ex, "OK", "Truthfulness guard: preserve exact tool message")
-                        messages.append(ToolMessage(content=result, tool_call_id=tc_id))
-                        self._sessions.append_message(session_id, "assistant", result)
-                        self._sessions.touch(session_id)
-                        return {
-                            "status": "ok",
-                            "reply": result,
-                            "session_id": session_id,
-                            "steps": list(self._steps),
-                        }
-
-                    # Cache result (read-only tools)
-                    if tc_name not in ("add_to_cart_tool", "get_cart_tool"):
-                        self._cache.set(*cache_key, result)
-
-                    result_preview = result[:200].replace("\n", "\\n")
-                    self._end(s_ex, a_ex, "OK", f"Result: {result_preview}")
-                    messages.append(ToolMessage(content=result, tool_call_id=tc_id))
-                    iterations += 1
-            else:
-                # Final answer
-                final = response.content if hasattr(response, "content") else str(response)
-
-                # Chuẩn hóa nếu Bedrock trả về list of content blocks
-                if isinstance(final, list):
-                    text_parts = []
-                    for part in final:
-                        if isinstance(part, dict):
-                            if part.get("type") == "reasoning_content" or "reasoning_content" in part:
-                                continue
-                            if "text" in part:
-                                text_parts.append(part["text"])
-                                continue
-                            text_parts.append(str(part))
-                        elif isinstance(part, str):
-                            text_parts.append(part)
-                        elif hasattr(part, "text"):
-                            text_parts.append(part.text)
-                        else:
-                            text_parts.append(str(part))
-                    final = "".join(text_parts)
-
-                # L5: Output Filter
-                s5, a5 = self._time("OutputFilter")
-                output = filter_output(final)
-                final = output.filtered_response
-                redacted_count = len(output.redacted_items) if hasattr(output, "redacted_items") else 0
-                self._end(s5, a5, "PASS", f"Redacted {redacted_count} items" if redacted_count else "Không có PII")
-
-                # Response Formatter: restructure thành markdown, bỏ icon
-                sf, af = self._time("ResponseFormatter")
-                try:
-                    from src.agent.response_formatter import format_response
-                    formatted = format_response(final)
-                    if formatted:
-                        final = formatted
-                        self._end(sf, af, "OK", f"Restructured to markdown ({len(final)} chars)")
-                    else:
-                        self._end(sf, af, "SKIP", "Giữ nguyên bản gốc")
-                except Exception as e:
-                    self._end(sf, af, "ERROR", str(e)[:100])
-
-                if sources_used:
-                    sources_label = ", ".join(sorted(list(sources_used)))
-                    final += f"\n\n---\n*(Nguồn dữ liệu: {sources_label})*"
-
-                self._sessions.append_message(session_id, "assistant", final)
-                self._sessions.touch(session_id)
-
-                # Record token usage
-                if hasattr(response, "usage_metadata"):
-                    total_tokens = getattr(response.usage_metadata, "total_tokens", 0)
-                    rate_limiter.record_token_usage(user_id, total_tokens)
-
-                return {
-                    "status": "ok",
-                    "reply": final,
-                    "session_id": session_id,
-                    "steps": list(self._steps),
-                }
-
-        raise MaxIterationsExceeded()
+        return {
+            "status": "ok",
+            "reply": reply,
+            "session_id": session_id,
+            "steps": list(self._steps),
+        }
 
     async def confirm(self, session_id: str, token: str, confirmed: bool = True) -> Dict[str, Any]:
         is_valid, action_data = verify_confirmation_token(token)
@@ -418,3 +376,11 @@ class CopilotAgent:
             return {"status": "error", "reply": f"Lỗi gRPC: {e.details()}"}
         finally:
             channel.close()
+
+    @property
+    def sessions(self) -> "SessionStore":
+        return self._sessions
+
+    @property
+    def cache_store(self) -> "CacheStore":
+        return self._cache
