@@ -1,4 +1,4 @@
-﻿# AIE1 Product Reviews Local Testing Guide
+# AIE1 Product Reviews Local Testing Guide
 
 This guide is the current local source of truth for running and validating the AIE1 `product-reviews` service on the host machine.
 
@@ -56,7 +56,57 @@ docker compose up -d postgresql product-catalog flagd otel-collector
 
 If Docker publishes different local ports on your machine, update the environment values accordingly before running the host service.
 
-## 4. Prepare the Python runtime
+## 4. Running the Full Stack with Web UI (Docker Compose)
+
+If you want to run a complete end-to-end test with the web storefront (Storefront), you can start the entire platform using Docker Compose. This allows you to test the integration between the frontend, frontend-proxy (Envoy), and all backend microservices together.
+
+> [!IMPORTANT]
+> **Prerequisites:**
+> 1. Ensure **Docker Desktop** is open and running on your Windows machine.
+> 2. Ensure port `8080` is free (not occupied by another local application).
+
+### 4.1 Configure AWS Credentials for the Containers
+Since the services run inside a closed container environment, you must pass your AWS credentials via environment variables so the `product-reviews` service inside its container can invoke AWS Bedrock.
+
+Update or create the `.env.override` file at the root of **`techx-corp-platform/`** (this file is already in `.gitignore` to prevent leaking credentials):
+
+```ini
+LLM_PROVIDER=bedrock
+LLM_MODEL=amazon.nova-lite-v1:0
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=AKIAxxxxxxxxxxxxxx
+AWS_SECRET_ACCESS_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+### 4.2 Launch the Full Stack
+Open your terminal (Git Bash, Command Prompt, or PowerShell) and run:
+
+```bash
+# 1. Navigate to the techx-corp-platform directory
+cd AIE1/techx-corp-platform/
+
+# 2. Build and start all services in the background
+docker compose up --force-recreate --remove-orphans --detach
+```
+
+### 4.3 Access and Test via the Web UI
+Once the containers are in the `Running` state (you can check using `docker compose ps`):
+
+* **Storefront (Main Shop Web UI):** Go to **[http://localhost:8080/](http://localhost:8080/)**
+  * You can browse products, add them to the cart, and proceed to checkout.
+  * **Test the Product Reviews AI Summary:** Click on any product details page. Scroll down to the reviews section; the UI will query the `product-reviews` service, which will generate and display the AI summary using AWS Bedrock in real-time.
+* **Monitoring & Administration Tools (Routed via Envoy Proxy):**
+  * **Jaeger UI (Traces):** `http://localhost:8080/jaeger/`
+  * **Grafana (Metrics & Dashboards):** `http://localhost:8080/grafana/`
+  * **Flagd UI (Feature Flags):** `http://localhost:8080/flagd-ui/`
+
+### 4.4 Stop the Stack
+To stop all services and free up CPU/RAM resources:
+```bash
+docker compose down
+```
+
+## 5. Prepare the Python runtime
 
 From `AIE1/techx-corp-platform/src/product-reviews`:
 
@@ -76,9 +126,9 @@ python -m venv venv
 pip install -r requirements.txt
 ```
 
-## 5. Run `product-reviews` on the host
+## 6. Run `product-reviews` on the host
 
-### 5.1 PowerShell example
+### 6.1 PowerShell example
 
 ```powershell
 $env:OTEL_SERVICE_NAME="product-reviews"
@@ -105,7 +155,7 @@ $env:JUDGE_TIMEOUT_SECONDS="3.0"
 python product_reviews_server.py
 ```
 
-### 5.2 POSIX shell example
+### 6.2 POSIX shell example
 
 ```bash
 export OTEL_SERVICE_NAME="product-reviews"
@@ -132,7 +182,7 @@ export JUDGE_TIMEOUT_SECONDS="3.0"
 python3 product_reviews_server.py
 ```
 
-## 6. Basic gRPC smoke tests
+## 7. Basic gRPC smoke tests
 
 Open a second terminal and run:
 
@@ -154,7 +204,7 @@ Expected behavior:
 - prompt-injection requests are blocked
 - out-of-scope questions return the safe out-of-scope behavior
 
-## 7. Offline fidelity evaluation
+## 8. Offline fidelity evaluation
 
 From `AIE1/repro`:
 
@@ -174,7 +224,7 @@ Output:
 Validated example:
 - `repro/artifacts/fidelity_eval_20260714T152508Z.json`
 
-## 8. Offline attack-block-rate evaluation
+## 9. Offline attack-block-rate evaluation
 
 From `AIE1/repro`:
 
@@ -221,7 +271,7 @@ The strongest artifact also confirms:
 - `runtime_started_by_script = true`
 - `review_injection_end_to_end` executed instead of being skipped
 
-## 9. Latency benchmark
+## 10. Latency benchmark
 
 From `AIE1/repro`:
 
@@ -232,7 +282,7 @@ python3 benchmark.py 20
 
 Use this only after the host-run or containerized `product-reviews` service is already reachable.
 
-## 10. Token and cost checks
+## 11. Token and cost checks
 
 From `AIE1/repro`:
 
@@ -245,7 +295,7 @@ python3 check_bedrock_tokens.py amazon.nova-lite-v1:0
 python3 check_bedrock_tokens.py amazon.nova-micro-v1:0
 ```
 
-## 11. Known pitfalls
+## 12. Known pitfalls
 
 1. `DB_CONNECTION_STRING` must point to `dbname=otel` for the validated local stack.
 2. `LLM_HOST` and `LLM_PORT` must still be present even when `LLM_PROVIDER=bedrock`.
