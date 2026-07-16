@@ -1,9 +1,9 @@
 # Guardrail System — Shopping Copilot
 ## Tài liệu Thiết kế Kỹ thuật · TechX TF3 · AIO02
 
-> **Phiên bản:** 2.1.0 — Ngày cập nhật: 10/07/2026
+> **Phiên bản:** 3.0.0 — Ngày cập nhật: 17/07/2026
 > **Module:** `shopping-copilot/guardrails/`
-> **LLM Backend:** Groq — Qwen 3.6-27b (`qwen/qwen3.6-27b`)
+> **LLM Backend:** AWS Bedrock — Amazon Nova Lite (`apac.amazon.nova-lite-v1:0`)
 > **Mục đích:** Tài liệu này mô tả kiến trúc, luồng hoạt động, công nghệ sử dụng và chiến lược kiểm thử của hệ thống bảo vệ 6 lớp bao quanh AI Agent của Shopping Copilot.
 
 ---
@@ -51,7 +51,7 @@ User Message
 │ • Bắt tấn công tinh vi, paraphrase, code-switching  │
 └────────────────────┬─────────────────────────────────┘
                      ↓ Sạch
-              [LLM — Nova + ReAct Loop]
+              [LLM — Bedrock Nova + Intent-Driven Architecture]
 ```
 
 **Lý do thiết kế 2 tầng:**
@@ -217,7 +217,7 @@ response = bedrock_client.apply_guardrail(
 | Regex thuần | Không bao được đa ngôn ngữ, paraphrase, cách viết lóng |
 | **Bedrock Guardrails** | ✅ Model phân loại chuyên biệt (không phải LLM), deterministic, đa ngôn ngữ |
 
-Bedrock Guardrails là **classification model** được train riêng cho bài toán phát hiện tấn công — không phải LLM sinh text. Nó chạy **trước và độc lập** với LLM chính (Groq), nên không bị chiếm quyền bởi nội dung tấn công.
+Bedrock Guardrails là **classification model** được train riêng cho bài toán phát hiện tấn công — không phải LLM sinh text. Nó chạy **trước và độc lập** với LLM chính (Nova), nên không bị chiếm quyền bởi nội dung tấn công.
 
 #### 2.4 Phản hồi khi bị chặn
 - Trả về thông báo thân thiện, không để lộ lý do kỹ thuật chi tiết.
@@ -228,7 +228,7 @@ Bedrock Guardrails là **classification model** được train riêng cho bài t
 
 ### Lớp 3 — Tool Validator (Bộ kiểm tra Lời gọi Công cụ)
 **File:** `guardrails/tool_validator.py`
-**Vị trí trong luồng:** Trong ReAct Loop, trước khi thực thi mỗi tool call từ LLM.
+**Vị trí trong luồng:** Khi Planner tạo ra Execution Plan, trước khi Executor gọi bất kỳ tool nào.
 
 #### 3.1 Mục tiêu
 Phòng chống 3 loại lỗ hổng liên quan đến việc LLM tự ý quyết định tool nào được gọi và với tham số nào.
@@ -414,9 +414,9 @@ Agent bị giới hạn tối đa **3 vòng gọi tool** trong một lượt cha
 
 ---
 
-## 4. Tích hợp vào Agent Pipeline
+## 4. Tích hợp vào Agent Pipeline (Intent-Driven)
 
-Tất cả 6 lớp được gọi theo thứ tự cố định trong `agent/copilot_agent.py`:
+Tất cả 6 lớp được gọi xen kẽ tại các bước của kiến trúc 6 lớp trong `agent/copilot_agent.py`:
 
 ```python
 # Thứ tự thực thi trong CopilotAgent.chat()
@@ -435,18 +435,26 @@ def chat(self, session_id, user_id, user_message):
         return {"status": "error", "reply": filter_result.blocked_reason}
 
     # Lớp 2b: Input Filter — Bedrock Guardrails (Tầng 2)
-    bedrock_result = check_input_bedrock(user_message)
-    if not bedrock_result.is_safe:
-        return {"status": "error", "reply": bedrock_result.blocked_reason}
+    # bedrock_result = check_input_bedrock(user_message) ...
 
-    # Gọi LLM (ReAct Loop) — Groq API (Qwen 3.6-27b)
-    result = self._react_loop(...)
+    # 1. Intent Parser (LLM phân tích câu hỏi)
+    intent = self._parse_intent(...)
+    
+    # 2. Planner (Sinh danh sách tool)
+    plan = self._build_plan_from_intent(intent)
+    
+    # 3. Executor (Thực thi) - Chứa Guardrail L3 và L4 bên trong
+    evidence, pending_action = self._execute_plan(plan, session_id, user_id)
+    if pending_action:
+        return pending_action  # Trả về PENDING (L4)
+
+    # 4 & 5. Synthesis (LLM gom evidence sinh câu trả lời)
+    reply = self._generate_grounded_answer(evidence, ...)
 
     # Lớp 5: Output Filter (trước khi trả)
-    output = filter_output(result["reply"])
-    result["reply"] = output.filtered_response
-
-    return result
+    output = filter_output(reply)
+    
+    return {"status": "ok", "reply": output.filtered_response}
 ```
 
 ---
@@ -536,8 +544,8 @@ def chat(self, session_id, user_id, user_message):
 | Công nghệ | Mục đích | Lớp áp dụng |
 |:---|:---|:---:|
 | **Python 3.13** | Ngôn ngữ triển khai | Tất cả |
-| **Groq API — Qwen 3.6-27b** | LLM inference (ReAct loop) | Agent Core |
-| **LangChain Core `@tool` + `langchain-groq`** | Tool binding + LLM integration | Agent Core, Tools |
+| **Amazon Nova Lite (AWS Bedrock)** | LLM inference chính (Parser & Synthesis) | Agent Core |
+| **Boto3 (`BedrockRuntime.Client`)** | Tool binding + LLM integration | Agent Core, Tools |
 | **`re` (Regex) + `unicodedata`** | Pattern matching + Unicode normalization | L2 (Tầng 1), L3, L5 |
 | **`hmac` + `hashlib`** | Ký và xác thực token HMAC-SHA256 | L4 |
 | **`threading.Lock`** | Thread safety cho Rate Limiter | L1 |
@@ -570,8 +578,7 @@ def chat(self, session_id, user_id, user_message):
 ```
 shopping-copilot/
 ├── agent/
-│   ├── agent.py             ← ⏳ (trống — chưa implement)
-│   └── copilot_agent.py     ← ⏳ (chưa tồn tại — spec trong agentic_design.md)
+│   └── copilot_agent.py     ← ✅ (Lõi Agent — Intent-Driven Pipeline)
 ├── guardrails/
 │   ├── __init__.py          ← Export public API
 │   ├── rate_limiter.py      ← Lớp 1: Rate Limiter
@@ -581,9 +588,9 @@ shopping-copilot/
 │   ├── output_filter.py     ← Lớp 5: Output Filter (PII Redact)
 │   └── fallback.py          ← Lớp 6: Fallback Handler
 ├── tools/                   ← 6 tools + search module (gRPC/REST)
-├── llm/                     ← LLM client (Groq API)
+├── llm/                     ← llm.py (Boto3 Client) và prompt.py (System Prompts)
 ├── memory/                  ← Session store + tool result cache
-└── .env                     ← GROQ_API_KEY, GROQ_MODEL, service addresses
+└── .env                     ← AWS configs, service addresses
 ```
 
 ---
