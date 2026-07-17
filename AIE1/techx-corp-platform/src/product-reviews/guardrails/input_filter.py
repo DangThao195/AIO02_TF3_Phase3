@@ -16,6 +16,10 @@ import re
 import os
 import logging
 import unicodedata
+import base64
+import codecs
+import hashlib
+from urllib.parse import unquote
 from dataclasses import dataclass
 from typing import List, Tuple, Optional
 
@@ -38,7 +42,67 @@ def _normalize_text(text: str) -> str:
     Chuẩn hoá Unicode NFC và lowercase.
     Đảm bảo dấu tiếng Việt (ã, ắ, ổ...) luôn ở dạng nhất quán.
     """
-    return unicodedata.normalize("NFC", text.lower())
+    return unicodedata.normalize("NFKC", text.lower())
+
+
+def _decode_base64_tokens(text: str) -> List[str]:
+    decoded: List[str] = []
+    for token in re.findall(r"(?<![A-Za-z0-9+/=])[A-Za-z0-9+/]{16,}={0,2}(?![A-Za-z0-9+/=])", text):
+        try:
+            padding = "=" * ((4 - len(token) % 4) % 4)
+            value = base64.b64decode(token + padding, validate=True).decode("utf-8", errors="ignore")
+        except Exception:
+            continue
+        if value.strip():
+            decoded.append(value)
+    return decoded
+
+
+def _decode_hex_tokens(text: str) -> List[str]:
+    decoded: List[str] = []
+    for token in re.findall(r"\b[0-9a-fA-F]{16,}\b", text):
+        if len(token) % 2:
+            continue
+        try:
+            value = bytes.fromhex(token).decode("utf-8", errors="ignore")
+        except ValueError:
+            continue
+        if value.strip():
+            decoded.append(value)
+    return decoded
+
+
+def _analysis_variants(text: str) -> List[str]:
+    """Generate bounded canonical forms for common prompt-injection evasions."""
+    normalized = _normalize_text(text)
+    url_decoded = _normalize_text(unquote(normalized))
+    leet = normalized.translate(str.maketrans({"0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t"}))
+    joined_letters = re.sub(
+        r"(?:\b[a-z0-9]\b[\s]*){5,}",
+        lambda match: re.sub(r"\s+", "", match.group(0)),
+        normalized,
+    )
+    variants = [
+        text,
+        normalized,
+        url_decoded,
+        leet,
+        joined_letters,
+        normalized[::-1],
+        codecs.decode(normalized, "rot_13"),
+    ]
+    caesar_minus_three = "".join(
+        chr((ord(char) - ord("a") - 3) % 26 + ord("a")) if "a" <= char <= "z" else char
+        for char in normalized
+    )
+    variants.append(caesar_minus_three)
+    variants.extend(_decode_base64_tokens(normalized))
+    variants.extend(_decode_hex_tokens(normalized))
+    return list(dict.fromkeys(_normalize_text(item) for item in variants if item))
+
+
+def _input_fingerprint(text: str) -> str:
+    return hashlib.sha256((text or "").encode("utf-8")).hexdigest()[:16]
 
 
 # ─── Định nghĩa các Pattern tấn công theo danh mục ───
@@ -177,6 +241,12 @@ ATTACK_PATTERNS: List[Tuple[re.Pattern, str]] = [
      "SYSTEM_OVERRIDE"),
     (re.compile(r"(please\s+)?stop\s+being\s+(a\s+)?(shopping|helpful)", re.IGNORECASE),
      "SYSTEM_OVERRIDE"),
+    (re.compile(r"(ignore|forget|disregard).{0,40}(instructions?|rules?|system)", re.IGNORECASE),
+     "SYSTEM_OVERRIDE"),
+    (re.compile(r"(no|without)\s+(content\s+)?(policy|policies|restrictions?|limits?)", re.IGNORECASE),
+     "JAILBREAK"),
+    (re.compile(r"(reveal|show|print|return|output).{0,40}(system\s+prompt|api\s+key|secrets?)", re.IGNORECASE),
+     "PROMPT_DISCLOSURE"),
 ]
 
 # ── Thông báo từ chối thân thiện cho từng loại ──
@@ -212,16 +282,16 @@ def check_input(user_message: str) -> InputFilterResult:
         )
 
     # Chuẩn hoá Unicode NFC cho tiếng Việt
-    normalized = _normalize_text(user_message)
+    variants = _analysis_variants(user_message)
 
-    # Quét qua từng pattern (dùng cả bản gốc và bản normalized)
+    # Quét qua từng pattern trên các canonical forms có giới hạn.
     for pattern, attack_type in ATTACK_PATTERNS:
-        if pattern.search(user_message) or pattern.search(normalized):
+        if any(pattern.search(variant) for variant in variants):
             reason = BLOCK_MESSAGES.get(attack_type, "Request denied for security reasons.")
 
             logger.warning(
                 f"[INPUT_FILTER] BLOCKED | tier=REGEX | type={attack_type} | "
-                f"input_preview={user_message[:80]!r}"
+                f"input_sha256={_input_fingerprint(user_message)} | input_length={len(user_message)}"
             )
 
             return InputFilterResult(
@@ -278,7 +348,16 @@ def _get_bedrock_client():
     if _bedrock_client is None or _bedrock_client_region != region:
         try:
             import boto3
-            _bedrock_client = boto3.client("bedrock-runtime", region_name=region)
+            from botocore.config import Config
+            _bedrock_client = boto3.client(
+                "bedrock-runtime",
+                region_name=region,
+                config=Config(
+                    connect_timeout=2.0,
+                    read_timeout=3.0,
+                    retries={"max_attempts": 1, "mode": "standard"},
+                ),
+            )
             _bedrock_client_region = region
         except Exception as e:
             logger.error(f"[INPUT_FILTER] Không thể khởi tạo Bedrock client: {e}")
@@ -338,7 +417,8 @@ def check_input_bedrock(user_message: str) -> InputFilterResult:
 
             logger.warning(
                 f"[INPUT_FILTER] BLOCKED | tier=BEDROCK | action={action} | "
-                f"reason={bedrock_reason[:100]!r} | input_preview={user_message[:80]!r}"
+                f"reason={bedrock_reason[:100]!r} | input_sha256={_input_fingerprint(user_message)} | "
+                f"input_length={len(user_message)}"
             )
 
             return InputFilterResult(
