@@ -44,6 +44,15 @@ except ImportError:  # pragma: no cover
 
 logger = logging.getLogger("guardrails.fallback")
 
+
+class TransientJudgeResponseError(ValueError):
+    """The judge returned a syntactically invalid or unusable response.
+
+    Unlike a policy rejection, this is a transient model-formatting failure and
+    is safe to retry.  Exhausted retries still fail closed through the existing
+    fallback path.
+    """
+
 # ─── Cấu hình Retry (theo LLM_RETRY_BACKOFF.md) ───────────────────────────────
 MAX_RETRIES  = 3     # tổng số lần thử lại
 BASE_DELAY   = 1.0   # giây — thời gian chờ ban đầu
@@ -65,6 +74,8 @@ def _is_transient(exc: BaseException) -> bool:
     NO RETRY: BadRequestError (400), AuthenticationError (401),
               PermissionDeniedError (403) — retry sẽ không có ý nghĩa.
     """
+    if isinstance(exc, TransientJudgeResponseError):
+        return True
     if isinstance(exc, _NON_RETRYABLE):
         return False
     if ClientError is not None and isinstance(exc, ClientError):

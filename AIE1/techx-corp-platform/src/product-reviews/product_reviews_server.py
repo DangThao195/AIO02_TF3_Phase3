@@ -47,6 +47,7 @@ from guardrails.input_filter import check_input
 from guardrails.output_filter import filter_output
 from guardrails.fallback import with_fallback, handle_exception
 from guardrails.evaluator import evaluate_summary_fidelity
+from guardrails.routing import is_clearly_off_topic_question
 
 from google.protobuf.json_format import MessageToJson
 
@@ -524,6 +525,12 @@ def get_ai_assistant_response(request_product_id, question):
             return ai_assistant_response
 
         safe_question = filter_output(question).filtered_response
+
+        if is_clearly_off_topic_question(safe_question):
+            ai_assistant_response.response = OUT_OF_SCOPE_MESSAGE
+            product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
+            logger.info("Returning deterministic OUT_OF_SCOPE response for product_id:%s", request_product_id)
+            return ai_assistant_response
 
         user_prompt, accurate_prompt, inaccurate_prompt = build_runtime_prompts(request_product_id, safe_question)
         system_prompt = build_system_prompt()

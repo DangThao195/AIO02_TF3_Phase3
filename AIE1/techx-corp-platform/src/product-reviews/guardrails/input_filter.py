@@ -42,7 +42,11 @@ def _normalize_text(text: str) -> str:
     Chuẩn hoá Unicode NFC và lowercase.
     Đảm bảo dấu tiếng Việt (ã, ắ, ổ...) luôn ở dạng nhất quán.
     """
-    return unicodedata.normalize("NFKC", text.lower())
+    normalized = unicodedata.normalize("NFKC", text.lower())
+    # Encoded attacks may insert NUL/control bytes between words (for example
+    # ``show\x00me``). Treat controls as separators so existing phrase rules
+    # still inspect the decoded intent.
+    return "".join(" " if unicodedata.category(char) == "Cc" else char for char in normalized)
 
 
 def _decode_base64_tokens(text: str) -> List[str]:
@@ -96,7 +100,8 @@ def _analysis_variants(text: str) -> List[str]:
         for char in normalized
     )
     variants.append(caesar_minus_three)
-    variants.extend(_decode_base64_tokens(normalized))
+    # Base64 is case-sensitive; decode the original text before normalization.
+    variants.extend(_decode_base64_tokens(text))
     variants.extend(_decode_hex_tokens(normalized))
     return list(dict.fromkeys(_normalize_text(item) for item in variants if item))
 

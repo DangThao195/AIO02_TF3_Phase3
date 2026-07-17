@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 from guardrails import evaluator
 from guardrails.input_filter import check_input
+from guardrails.routing import is_clearly_off_topic_question
 
 
 class RuntimeJudgeTests(unittest.TestCase):
@@ -22,7 +23,7 @@ class RuntimeJudgeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "non-empty claims"):
             evaluator._normalize_payload(payload)
 
-    def test_forged_counts_fail_closed(self):
+    def test_runtime_derives_rejection_from_claim_labels(self):
         payload = {
             "approved": True,
             "claims": [
@@ -35,8 +36,27 @@ class RuntimeJudgeTests(unittest.TestCase):
             "unsupported_claims": 0,
             "contradicted_claims": 0,
         }
-        with self.assertRaisesRegex(ValueError, "inconsistent"):
-            evaluator._normalize_payload(payload)
+        result = evaluator._normalize_payload(payload)
+        self.assertFalse(result["approved"])
+        self.assertEqual(result["unsupported_claims"], 1)
+
+    def test_runtime_derives_approval_when_all_claims_are_supported(self):
+        payload = {
+            "approved": False,
+            "claims": [
+                {
+                    "text": "The optics are praised.",
+                    "label": "supported",
+                    "evidence": ["Great optics"],
+                }
+            ],
+            "unsupported_claims": 7,
+            "contradicted_claims": 3,
+        }
+        result = evaluator._normalize_payload(payload)
+        self.assertTrue(result["approved"])
+        self.assertEqual(result["unsupported_claims"], 0)
+        self.assertEqual(result["contradicted_claims"], 0)
 
     def test_review_is_anonymized_redacted_and_injection_removed(self):
         reviews = [
@@ -123,6 +143,26 @@ class InputFilterObfuscationTests(unittest.TestCase):
         for attack in attacks:
             with self.subTest(attack=attack):
                 self.assertBlocked(attack)
+
+
+class OffTopicRoutingTests(unittest.TestCase):
+    def test_obvious_off_topic_requests_are_detected(self):
+        for question in (
+            "Viết cho tôi một bài thơ tình.",
+            "What is the capital of Japan?",
+            "Viết code Python để sắp xếp một mảng.",
+        ):
+            with self.subTest(question=question):
+                self.assertTrue(is_clearly_off_topic_question(question))
+
+    def test_product_questions_are_not_routed_off_topic(self):
+        for question in (
+            "How does this optical tube perform for deep-sky imaging?",
+            "What do readers say about the book's historical content?",
+            "Is there a free trial period for this telescope?",
+        ):
+            with self.subTest(question=question):
+                self.assertFalse(is_clearly_off_topic_question(question))
 
     def test_clean_multilingual_question_is_allowed(self):
         with patch.dict(os.environ, {"BEDROCK_GUARDRAIL_ID": ""}, clear=False):
