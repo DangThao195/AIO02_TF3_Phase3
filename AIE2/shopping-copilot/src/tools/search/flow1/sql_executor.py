@@ -1,5 +1,3 @@
-import sqlite3
-from pathlib import Path
 from typing import Any, Dict, List
 
 from src.tools.search.models import Product
@@ -33,30 +31,11 @@ class SQLQueryExecutor:
                 results = [dict(zip(columns, row)) for row in rows[:limit]]
                 return results
         except Exception as e:
-            # Fallback to SQLite if PostgreSQL isn't available.
-            try:
-                candidates = []
-                file_path = Path(__file__).resolve()
-                for base in [file_path.parents[4], file_path.parents[3], file_path.parents[2], file_path.parents[1], Path.cwd()]:
-                    candidates.append(base / "server-test" / "shopping.db")
-                    candidates.append(base / "shopping.db")
-                db_path = None
-                for candidate in candidates:
-                    if candidate.exists():
-                        db_path = candidate
-                        break
-                if db_path is None:
-                    raise FileNotFoundError("Không tìm thấy file shopping.db")
-                conn = sqlite3.connect(str(db_path))
-                cur = conn.cursor()
-                cur.execute(query)
-                rows = cur.fetchall()
-                columns = [desc[0] for desc in cur.description or []]
-                results = [dict(zip(columns, row)) for row in rows[:limit]]
-                conn.close()
-                return results
-            except Exception as sqlite_error:
-                raise RuntimeError(f"Không thể thực thi SQL query: {e} | sqlite fallback: {sqlite_error}") from e
+            raise RuntimeError(
+                f"Cannot execute SQL query — PostgreSQL EKS not reachable. "
+                f"Please start port-forward (kubectl port-forward svc/postgresql 5433:5432 -n techx-tf3). "
+                f"Original error: {e}"
+            ) from e
 
     def _validate_query(self, query: str) -> None:
         normalized = (query or "").strip()

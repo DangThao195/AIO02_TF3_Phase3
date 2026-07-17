@@ -1,8 +1,6 @@
 import asyncio
 import os
 import re
-import sqlite3
-from pathlib import Path
 import boto3
 from typing import List, Optional
 
@@ -93,6 +91,7 @@ class BedrockRAGStrategy(SearchStrategy):
         return scored_products
 
     def _resolve_product_details(self, product_id: str, chunk_text: str) -> Product:
+        """Resolve product details from PostgreSQL EKS. Falls back to parsing RAG chunk text."""
         try:
             init_pool()
             with get_conn() as conn:
@@ -115,41 +114,7 @@ class BedrockRAGStrategy(SearchStrategy):
         except Exception:
             pass
 
-        try:
-            candidates = []
-            file_path = Path(__file__).resolve()
-            for base in [file_path.parents[4], file_path.parents[3], file_path.parents[2], file_path.parents[1], Path.cwd()]:
-                candidates.append(base / "server-test" / "shopping.db")
-                candidates.append(base / "shopping.db")
-            db_path = None
-            for candidate in candidates:
-                if candidate.exists():
-                    db_path = candidate
-                    break
-            if db_path:
-                conn = sqlite3.connect(str(db_path))
-                try:
-                    cur = conn.cursor()
-                    cur.execute(
-                        "SELECT name, description, categories, price_units, price_nanos FROM products WHERE id = ?",
-                        (product_id,)
-                    )
-                    row = cur.fetchone()
-                    if row:
-                        cats = [c.strip() for c in row[2].split(",") if c.strip()] if row[2] else []
-                        return Product(
-                            id=product_id,
-                            name=row[0],
-                            description=row[1] or "",
-                            categories=cats,
-                            price_usd=Money(units=row[3] if row[3] is not None else 0,
-                                            nanos=row[4] if row[4] is not None else 0)
-                        )
-                finally:
-                    conn.close()
-        except Exception:
-            pass
-
+        # Parse from RAG chunk text (no local DB fallback)
         name_match = re.search(r"Product\s+Name:\s*(.*)", chunk_text, re.IGNORECASE)
         price_match = re.search(r"Price:\s*(\d+)", chunk_text, re.IGNORECASE)
         cat_match = re.search(r"Category:\s*(.*)", chunk_text, re.IGNORECASE)
@@ -165,3 +130,64 @@ class BedrockRAGStrategy(SearchStrategy):
             categories=categories,
             price_usd=Money(units=price)
         )
+
+    def retrieve_reviews(self, product_id: str) -> list:
+        """
+        Query Bedrock KB for reviews of a specific product.
+        Parses the S3 review format:
+          Product ID: <id>
+          Product Reviews (N total):
+            - id: 1 | username: X | description: Y | score: Z
+        Returns list of dicts: [{username, score, description}]
+        """
+        kb_id = self.kb_id
+        if not kb_id:
+            return []
+
+        try:
+            session = boto3.Session(profile_name=os.environ.get("AWS_PROFILE"))
+            client = session.client("bedrock-agent-runtime", region_name=self.region)
+
+            response = client.retrieve(
+                knowledgeBaseId=kb_id,
+                retrievalQuery={"text": f"product reviews {product_id}"},
+                retrievalConfiguration={
+                    "vectorSearchConfiguration": {"numberOfResults": 5}
+                }
+            )
+
+            reviews = []
+            for res in response.get("retrievalResults", []):
+                text = res.get("content", {}).get("text", "")
+
+                # Only process chunks that belong to this product_id
+                if product_id.upper() not in text.upper():
+                    continue
+
+                # Parse each review line: - id: 1 | username: X | description: Y | score: Z
+                for line in text.splitlines():
+                    line = line.strip().lstrip("- ")
+                    if "username:" not in line.lower():
+                        continue
+                    parts = {}
+                    for segment in line.split(" | "):
+                        if ":" in segment:
+                            k, _, v = segment.partition(":")
+                            parts[k.strip().lower()] = v.strip()
+                    if "username" in parts:
+                        try:
+                            score = float(parts.get("score", 0))
+                        except ValueError:
+                            score = 0.0
+                        reviews.append({
+                            "username": parts.get("username", "Anonymous"),
+                            "score": score,
+                            "description": parts.get("description", ""),
+                        })
+
+            print(f"[RAG] retrieve_reviews({product_id}): found {len(reviews)} reviews from KB")
+            return reviews
+
+        except Exception as e:
+            print(f"[RAG] retrieve_reviews error: {e}")
+            return []
