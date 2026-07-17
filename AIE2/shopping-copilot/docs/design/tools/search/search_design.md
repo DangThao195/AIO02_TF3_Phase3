@@ -1,9 +1,11 @@
 # Đặc tả thiết kế — Search Tool v2 (SQL Matching + RAG)
 
-> **Phiên bản:** 2.0.0 | **Ngày:** 2026-07-16 | **Đội:** AIO02 — TF3  
+> **Phiên bản:** 3.0.0 | **Ngày:** 2026-07-17 | **Đội:** AIO02 — TF3  
 > Tài liệu này là bản sao đầy đủ của hệ thống: bao gồm ý tưởng, kiến trúc, mã nguồn,
 > kết quả kiểm thử, đánh giá an toàn, và tất cả phát hiện trong quá trình xây dựng.
 > Bất kỳ ai đọc tài liệu này đều có thể tái tạo lại toàn bộ hệ thống.
+> Phiên bản này được cập nhật để tương thích 100% với agentic design v3.2
+> (2-Layer Planner + DAG + ToolRegistry + Redis cache + price normalization + confidence scoring).
 
 ---
 
@@ -65,6 +67,9 @@ flowchart LR
 | **Cache mọi thứ** | Kết quả AI được lưu lại 24h để không tốn tiền gọi lại |
 | **Grounded** | Mọi kết quả phải truy xuất được từ database thật |
 | **Fail-safe** | Nếu 1 flow lỗi, flow kia vẫn chạy; nếu cả 2 lỗi → message thân thiện |
+| **Fixed Output Schema** | Mỗi tool output tuân thủ JSON Schema cố định — price_units+nanos → price string, picture → image, categories → array |
+| **ToolRegistry** | Tool tự đăng ký qua ToolSpec (input_schema + output_schema + examples) — Planner đọc schema động từ registry, không hardcode trong prompt |
+| **Confidence Scoring** | Mỗi kết quả kèm confidence 0.0-1.0 — Reflection node dùng để quyết định partial replan nếu confidence thấp |
 
 ---
 
@@ -123,6 +128,10 @@ flowchart TB
 | **Kết nối database** | Qua gRPC cũ (chỉ LIKE) | SQL trực tiếp qua PostgreSQL pool |
 | **Hỗ trợ tiếng Việt** | Regex + từ điển | AI (Bedrock Nova) tự xử lý |
 | **LLM Provider** | Groq (qwen/qwen3.6-27b) | AWS Bedrock (Amazon Nova Lite) |
+| **Tool Registry** | Không (hardcode list trong tools/__init__.py) | ToolRegistry + ToolSpec — Planner đọc schema động |
+| **Cache** | In-memory LRU (500 entries, JSON persist) | Redis (3 logical DBs: planner DB0, tool DB1, session DB2) |
+| **Confidence** | Không có | Mỗi output kèm confidence score 0.0-1.0 cho Reflection node |
+| **Output Schema** | price là float; expose raw price_units, price_nanos, currency; thiếu image | price là string format "$X.XX"; chỉ giữ id/name/price/description/image/categories |
 | **Fallback DB** | Không có | PostgreSQL → SQLite |
 
 ### 2.3 Công nghệ sử dụng
@@ -166,82 +175,65 @@ src/tools/search/                          ← Toàn bộ module search
 
 ### 3.2 models.py — Khuôn dữ liệu
 
+**Các lớp chính (pseudocode):**
+
+```
+Money { units: int, nanos: int, currency_code: "USD" }
+Product { id: str, name: str, description: str, categories: List[str], price_usd: Money }
+
+SearchEntity { 
+  select_fields: ["*"], from_table: "products",
+  where_conditions: dict, order_by: str | null, limit: 15
+}
+
+ScoredProduct { product: Product, score: float, source: "sql"|"rag", strategy_name: str }
+
+SearchResult {
+  products: List[ScoredProduct], query: str,
+  flows_used: List[str], rerank_mode: "rule"|"llm",
+  error: str | null, categories: List[str] | null,
+  total = len(products) if not categories else len(categories)
+}
+
+SearchQuery {
+  raw: str, category: str | null,
+  keywords_en: List[str], keywords_vn: List[str],
+  price_min: int | null, price_max: int | null,
+  sort: "relevance", intent: "search", is_complex: false
+}
+
+SearchStrategy {
+  name: "base"
+  should_run(sq: SearchQuery) → bool      // triển khai ở subclass
+  async search(sq: SearchQuery) → List[ScoredProduct]
+}
+```
+
+**SearchToolResponse** — Output schema (interface contract, tuân thủ agentic design v3.2):
+
 ```python
 @dataclass
-class Money:
-    units: int = 0
-    nanos: int = 0
-    currency_code: str = "USD"
-
-@dataclass
-class Product:
-    id: str
-    name: str
-    description: str
-    categories: List[str]
-    price_usd: Any = None
-
-@dataclass
-class SearchEntity:
-    select_fields: List[str] = field(default_factory=lambda: ["*"])
-    from_table: str = "products"
-    where_conditions: dict = field(default_factory=dict)
-    order_by: Optional[str] = None
-    limit: int = 15
-
-@dataclass
-class ScoredProduct:
-    product: Product
-    score: float = 0.0
-    source: str = ""          # "sql" | "rag"
-    strategy_name: str = ""
-
-@dataclass
-class SearchResult:
-    products: List[ScoredProduct] = field(default_factory=list)
-    query: str = ""
-    flows_used: List[str] = field(default_factory=list)
-    rerank_mode: str = "rule"
-    error: Optional[str] = None
-    categories: Optional[List[str]] = None
-
-    @property
-    def total(self) -> int:
-        return len(self.products) if not self.categories else len(self.categories)
-
-@dataclass
 class SearchToolResponse:
+    """
+    Output schema tuân thủ agentic design v3.2:
+    - price: string format "$units.cents" (không expose raw units/nanos)
+    - image: string (filename, consumer ghép CDN base URL)
+    - categories: array (không comma-separated TEXT)
+    - confidence: 0.0-1.0 cho Reflection node
+    """
     status: str  # "success" | "category" | "error"
     total: int = 0
     products: List[dict] = field(default_factory=list)
     categories: List[str] = field(default_factory=list)
     message: str = ""
+    confidence: float = 1.0
 
     def to_json(self) -> str:
-        payload: dict = {"status": self.status, "total": self.total}
+        payload: dict = {"status": self.status, "total": self.total, "confidence": self.confidence}
         if self.products: payload["products"] = self.products
         if self.categories: payload["categories"] = self.categories
         if self.message: payload["message"] = self.message
         return json.dumps(payload, ensure_ascii=False)
-
-@dataclass
-class SearchQuery:
-    raw: str
-    category: Optional[str] = None
-    keywords_en: List[str] = field(default_factory=list)
-    keywords_vn: List[str] = field(default_factory=list)
-    price_min: Optional[int] = None
-    price_max: Optional[int] = None
-    sort: str = "relevance"
-    intent: str = "search"
-    is_complex: bool = False
-
-class SearchStrategy:
-    name: str = "base"
-    def should_run(self, sq: SearchQuery) -> bool:
-        raise NotImplementedError
-    async def search(self, sq: SearchQuery) -> List[ScoredProduct]:
-        raise NotImplementedError
 ```
 
 ### 3.3 schema.json — Bản đồ database
@@ -281,46 +273,18 @@ class SearchStrategy:
 
 ### 3.4 schema_loader.py — Đọc bản đồ database
 
-```python
-class SchemaLoader:
-    def __init__(self, schema_path: Optional[str] = None):
-        if schema_path is None:
-            schema_path = str(Path(__file__).parent / "schema.json")
-        self.schema_path = schema_path
-        self._schema: Optional[dict] = None
+**Các bước xử lý:**
 
-    def load(self) -> dict:
-        if self._schema is not None:
-            return self._schema
-        with open(self.schema_path, encoding="utf-8") as f:
-            self._schema = json.load(f)
-        return self._schema
+1. **Khởi tạo**: Xác định đường dẫn `schema.json` (mặc định: cùng thư mục với `schema_loader.py`). Lưu cache `_schema` để tránh đọc file nhiều lần.
 
-    def to_prompt_text(self) -> str:
-        schema = self.load()
-        lines: List[str] = []
-        for table in schema.get("tables", []):
-            lines.append(f"Table: {table['name']}")
-            if table.get("description"):
-                lines.append(f"  Description: {table['description']}")
-            for col in table.get("columns", []):
-                col_type = col.get("type", "")
-                col_desc = col.get("description", "")
-                example = col.get("example")
-                line = f"  - {col['name']} ({col_type}): {col_desc}"
-                if example is not None:
-                    line += f" (VD: {example})"
-                if col.get("primary_key"):
-                    line += " [PRIMARY KEY]"
-                if col.get("foreign_key"):
-                    line += f" [FK → {col['foreign_key']}]"
-                lines.append(line)
-            cat_vals = table.get("category_values")
-            if cat_vals:
-                lines.append(f"  Category values: {', '.join(cat_vals)}")
-            lines.append("")
-        return "\n".join(lines)
-```
+2. **`load()`**: Đọc file JSON → parse → trả về dict. Cache kết quả cho lần gọi sau.
+
+3. **`to_prompt_text()`**: Duyệt từng table trong schema, xây dựng chuỗi prompt cho LLM:
+   - Mỗi table → dòng `"Table: {name}"` + mô tả
+   - Mỗi column → dòng `"- {name} ({type}): {description}"` + ví dụ + khóa chính/ngoại
+   - `category_values` → dòng `"Category values: {list}"`
+
+**Ví dụ output khi AI nhận được:**
 
 **Ví dụ output khi AI nhận được:**
 ```
@@ -335,200 +299,124 @@ Table: products
 
 ### 3.5 tracer.py — SearchTracer
 
-```python
-class SearchTracer:
-    def __init__(self):
-        self._steps: List[Dict[str, Any]] = []
+**Cấu trúc:** Mỗi bước trong pipeline được ghi nhận với các trường:
+- `action`: tên bước (VD: "Flow1: SQL Matching", "KB Query")
+- `status`: `"ok"` | `"skip"` | `"error"`
+- `detail`: mô tả ngắn (VD: "Found 3 products from KB")
+- `duration_ms`: thời gian thực thi
 
-    def time(self, action: str) -> tuple:
-        return _now_ms(), action
+**Pseudocode:**
 
-    def end(self, start: tuple, status: str, detail: str):
-        started_ms, action = start
-        self._steps.append({
-            "action": action, "status": status,
-            "detail": detail, "duration_ms": _now_ms() - started_ms,
-        })
-
-    def add(self, action: str, status: str, detail: str, duration_ms: int = 0):
-        self._steps.append({
-            "action": action, "status": status,
-            "detail": detail, "duration_ms": duration_ms,
-        })
-
-    def to_json(self) -> str:
-        return json.dumps(self._steps, ensure_ascii=False)
 ```
+class SearchTracer:
+  _steps: List[Dict]
 
-Mỗi bước trong pipeline được trace với `action`, `status` (ok/skip/error), `detail`, và `duration_ms` — phục vụ debug và monitoring.
+  time(action) → (timestamp, action)          // đánh dấu bắt đầu
+  end(start_tuple, status, detail)            // kết thúc + tính duration_ms → append
+  add(action, status, detail, duration_ms)    // thêm step trực tiếp (không timing)
+  to_json() → json.dumps(_steps)              // serialize để debug
+```
 
 ### 3.6 Flow 1 — SQL Matching
 
 #### 3.6.1 Entity Extractor
 
-```python
-class EntityExtractor:
-    """Trích xuất thực thể từ câu hỏi bằng heuristic + LLM fallback."""
+**Luồng xử lý `extract(query)`:**
 
-    _STOP_WORDS = {
-        "tìm","tim","của","cua","cho","for","the","a","an","và","va","and","or",
-        "dưới","duoi","under","từ","tu","from","giữa","giua","between","range",
-        "sản","san","phẩm","pham","item","items","product","products",
-        "bạn","ban","bán","loại","loai","gì","gi","nào","nao","có","co",
-        "không","khong","các","cac","những","nhung","này","nay","đó","do",
-        "một","mot","vài","vai","muốn","muon","hãy","hay","vui","lòng","long",
-        "cần","can","mua","thích","thich","nên","nen","phải","phai","được","duoc",
-        "giúp","giup","tôi","toi","mình","minh","xin","mặt","mat","hàng","hang",
-        "xem","người","nguoi","dùng","dung","bằng","bang","thế","the","lại","lai",
-        "rồi","roi","đây","day","danh","muc","hot","noi","bat","chay","nhat",
-        "chao","lam","nguoi","dung","what","which","you","your","me","some",
-        "recommend","something","anything","do","are","have","where","how","all",
-        "sell","goi","den","ve","qua","rat","that",
-    }
+1. **Heuristic extract** (chạy trước, zero-cost):
+   - **Category inference**: regex quét từ khóa danh mục (`loại`, `danh mục`, `category`...) + fuzzy match với category values từ database (dùng `rapidfuzz.fuzz.ratio()`)
+   - **Price parsing**: regex tìm `dưới X đô`, `từ X-Y`, `under $X` → `price_min`/`price_max`
+   - **Keyword extraction**: loại stop words (VI + EN: `tìm`, `của`, `the`, `and`...), giữ từ khóa chính
 
-    _CATEGORY_SIGNAL_WORDS = {
-        "loại","loai","danh","muc","danh muc","danh mục",
-        "categories","category","kind","types",
-    }
-```
+2. **LLM fallback** (chỉ chạy nếu `SKIP_LLM_SQL_FLOW=0`): Gọi Bedrock Nova với prompt phân tích truy vấn → trả về JSON entities
 
-**Phương thức `extract(query)`:**
-1. Run **heuristic extract** trước (regex category inference, price parsing, keyword extraction)
-2. Nếu `SKIP_LLM_SQL_FLOW=1` → skip LLM, dùng heuristic
-3. Gọi **LLM fallback** với prompt phân tích truy vấn (trả về JSON)
-4. Merge kết quả heuristic + LLM, ưu tiên LLM
-5. Xác định intent: `product_search` | `category_listing` | `general`
+3. **Merge**: Hợp nhất kết quả heuristic + LLM, **ưu tiên LLM** nếu có conflict
 
-**Category inference** từ database thực tế:
-- Đọc `categories` từ SQLite `server-test/shopping.db`
-- Dùng `rapidfuzz.fuzz.ratio()` cho fuzzy matching (VD: "telescop" → "telescopes")
-- Fallback: exact match + prefix/suffix match
+4. **Xác định intent**: `product_search` | `category_listing` | `general`
+
+**Category inference:**
+| Phương pháp | VD | Mô tả |
+|---|---|---|
+| Fuzzy match | "telescop" → "telescopes" | `rapidfuzz.fuzz.ratio()` trên category values thật từ DB |
+| Prefix/suffix | "camp" → "camping" | Fallback khi fuzzy không đủ cao |
 
 #### 3.6.2 SQL Builder
 
-```python
-class SQLBuilder:
-    def __init__(self, field_rules: Dict[str, Dict[str, Any]] | None = None):
-        self.base_table = "products"
-        self.field_rules = field_rules or {
-            "category":  {"column": "categories",     "op": "like"},
-            "price_max": {"column": "price_units",    "op": "<="},
-            "price_min": {"column": "price_units",    "op": ">="},
-            "keywords":  {"column": ["name","description","categories"], "op": "contains"},
-        }
+**Field rules** (entity → SQL column mapping):
 
-    def build(self, entities: Dict[str, Any]) -> str:
-        if entities.get("intent") == "category_listing":
-            return "SELECT DISTINCT categories FROM products WHERE categories IS NOT NULL AND categories != '' ORDER BY categories"
-        select_columns = ["id","name","description","categories","price_units","price_nanos"]
-        where_clauses: List[str] = []
-        for field_name, rule in self.field_rules.items():
-            value = entities.get(field_name)
-            if value in (None, ""): continue
-            if not isinstance(value, (list, tuple, set)): value = [value]
-            clause = self._build_clause(field_name, rule, value)
-            if clause: where_clauses.append(clause)
-        query = f"SELECT {', '.join(select_columns)} FROM {self.base_table}"
-        if where_clauses: query += " WHERE " + " AND ".join(where_clauses)
-        query += " ORDER BY price_units ASC LIMIT 15"
-        return query
+| Entity field | Column SQL | Operator | Ví dụ |
+|---|---|---|---|
+| `category` | `categories` | `LIKE` | `categories LIKE '%telescopes%'` |
+| `price_max` | `price_units` | `<=` | `price_units <= 100` |
+| `price_min` | `price_units` | `>=` | `price_units >= 50` |
+| `keywords` | `name`, `description`, `categories` | `CONTAINS` | `(name LIKE '%telescope%' OR ...) AND (...)` |
+
+**Pseudocode `build(entities)`:**
+
 ```
+if entities.intent == "category_listing":
+    → SELECT DISTINCT categories FROM products ORDER BY categories
 
-**Các operator:**
-- `like`: `lower(column) LIKE '%value%'`
-- `<=` / `>=`: so sánh số
-- `contains`: OR trên nhiều cột cho mỗi keyword, các keyword nối bằng AND
+query = SELECT id, name, description, categories, price_units, price_nanos FROM products
+
+VỚI MỖI field_rule:
+  value = entities[field_name]
+  nếu value == null → skip
+  nếu value là list → map từng giá trị qua operator
+  nếu operator == "like"   → "column LIKE '%value%'""
+  nếu operator == "<="     → "column <= num(value)"
+  nếu operator == ">="     → "column >= num(value)"
+  nếu operator == "contains" → OR trên các cột cho mỗi keyword
+
+Ghép các WHERE clause bằng AND
+ORDER BY price_units ASC LIMIT 15
+```
 
 #### 3.6.3 SQL Query Executor
 
-```python
-class SQLQueryExecutor:
-    def execute(self, query: str, limit: int = 15) -> List[Dict[str, Any]]:
-        self.ensure_initialized()
-        self._validate_query(query)
-        try:
-            with get_conn() as conn:  # PostgreSQL pool
-                cur = conn.cursor()
-                cur.execute(query)
-                rows = cur.fetchall()
-                columns = [desc[0] for desc in cur.description or []]
-                results = [dict(zip(columns, row)) for row in rows[:limit]]
-                return results
-        except Exception as e:
-            # Fallback: scan parent directories for shopping.db (SQLite)
-            candidates = []
-            file_path = Path(__file__).resolve()
-            for base in [file_path.parents[4], file_path.parents[3],
-                         file_path.parents[2], file_path.parents[1], Path.cwd()]:
-                candidates.append(base / "server-test" / "shopping.db")
-                candidates.append(base / "shopping.db")
-            # ... SQLite connect and execute the same query
+**Luồng xử lý `execute(query)`:**
 
-    def _validate_query(self, query: str) -> None:
-        if not normalized.upper().startswith("SELECT"):
-            raise ValueError("Only SELECT statements are allowed")
-        blocked_tokens = [";","--","/*","*/","DROP","DELETE","UPDATE","INSERT","ALTER","CREATE","TRUNCATE"]
-        # Validate not contains any blocked token
+1. **Validate query**: Chỉ cho phép `SELECT` statement. Block các token nguy hiểm: `;`, `--`, `/*`, `*/`, `DROP`, `DELETE`, `UPDATE`, `INSERT`, `ALTER`, `CREATE`, `TRUNCATE`
+2. **Thực thi PostgreSQL** (primary):
+   ```
+   get_conn() → ThreadedConnectionPool (2-10 conn, health check SELECT 1)
+   → cursor.execute(query) → fetchall → map column names → limit 15
+   ```
+3. **Fallback SQLite** (nếu PostgreSQL lỗi):
+   ```
+   Scan parent directories tìm server-test/shopping.db
+   → sqlite3.connect → execute same query → return results
+   ```
+
+**DBConfig** (connection pool qua env vars):
 ```
-
-**Database connection** (PostgreSQL pool): `src/database/connect.py`
-```python
-@dataclass
-class DBConfig:
-    host: str = field(default_factory=lambda: os.getenv("DB_HOST", "localhost"))
-    port: int = field(default_factory=lambda: int(os.getenv("DB_PORT", "5432")))
-    dbname: str = field(default_factory=lambda: os.getenv("DB_NAME", "otel"))
-    user: str = field(default_factory=lambda: os.getenv("DB_USER", "otelu"))
-    password: str = field(default_factory=lambda: os.getenv("DB_PASSWORD", "otelp"))
-    minconn: int = 2
-    maxconn: int = 10
-    connect_timeout: int = 30
-
-# ThreadedConnectionPool with connection health check (SELECT 1)
-# Context manager: get_conn() yields connection, auto commit/rollback
+DB_HOST=localhost  DB_PORT=5432  DB_NAME=otel
+DB_USER=otelu     DB_PASSWORD=otelp
+DB_MIN_CONN=2     DB_MAX_CONN=10
 ```
 
 #### 3.6.4 Flow 1 Init
 
-```python
-class Flow1SQL:
-    def __init__(self):
-        self.entity_extractor = EntityExtractor()
-        self.sql_builder = SQLBuilder()
-        self.executor = SQLFlowExecutor()
+**Các bước `run(query)`:**
 
-    async def run(self, query: str) -> Dict[str, Any]:
-        entities = self.entity_extractor.extract(query)
-        intent = entities.get("intent", "product_search")
-        if intent == "category_listing":
-            categories = self.entity_extractor.get_all_categories()
-            return {"intent":"category_listing","categories":categories,"results":[]}
-        sql = self.sql_builder.build(entities)
-        products = self.executor.execute(sql)
-        return {"intent":intent,"sql":sql,"results":[
-            {"id":p.id,"name":p.name,"description":p.description,
-             "categories":p.categories,"price_units":p.price_usd.units}
-            for p in products
-        ]}
-```
+1. `EntityExtractor.extract(query)` → entities (category, price_min/max, keywords, intent)
+2. Nếu `intent == "category_listing"`:
+   - `EntityExtractor.get_all_categories()` → danh sách categories từ DB
+   - Return ngay, không build SQL
+3. `SQLBuilder.build(entities)` → câu SQL hoàn chỉnh
+4. `SQLFlowExecutor.execute(sql)` → list sản phẩm từ PostgreSQL (fallback SQLite)
+5. Return: `{intent, sql, results: [{id, name, description, categories, price_units}]}`
 
 ### 3.7 Flow 2 — RAG
 
 #### 3.7.1 PromptRewriter
 
-```python
-class PromptRewriter:
-    def rewrite(self, query: str) -> str:
-        query = (query or "").strip()
-        if not query: return ""
-        prompt = REWRITE_SEARCH_QUERY_PROMPT.format(query=query)
-        try:
-            response = self.llm_client.invoke(prompt, temperature=0.3, max_tokens=256)
-            rewritten = (response.content or "").strip()
-            return rewritten if rewritten else query
-        except Exception:
-            return query
-```
+**Các bước `rewrite(query)`:**
+
+1. Trim whitespace, nếu rỗng → return `""`
+2. Format LLM prompt với query gốc (xem Prompt template bên dưới)
+3. Gọi Bedrock Nova (`temperature=0.3`, `max_tokens=256`): nhận câu query đã viết lại bằng tiếng Anh
+4. Nếu LLM lỗi → return query gốc (fail-safe)
 
 **REWRITE_SEARCH_QUERY_PROMPT:**
 ```
@@ -542,82 +430,49 @@ Ví dụ:
 
 #### 3.7.2 BedrockRAGStrategy
 
-```python
-class BedrockRAGStrategy(SearchStrategy):
-    _name = "bedrock_rag"
+**Luồng xử lý `search(query)`:**
 
-    @property
-    def kb_id(self) -> Optional[str]:
-        return os.environ.get("BEDROCK_KB_ID")
-
-    def should_run(self, sq: SearchQuery) -> bool:
-        return bool(self.kb_id)
-
-    async def search(self, sq: SearchQuery) -> List[ScoredProduct]:
-        loop = asyncio.get_event_loop()
-        results = await loop.run_in_executor(None, self._query_kb, sq.raw)
-        return results
-
-    def _query_kb(self, query_text: str) -> List[ScoredProduct]:
-        session = boto3.Session(profile_name=os.environ.get("AWS_PROFILE"))
-        client = session.client("bedrock-agent-runtime", region_name=self.region)
-        response = client.retrieve(
-            knowledgeBaseId=kb_id,
-            retrievalQuery={'text': query_text},
-            retrievalConfiguration={
-                'vectorSearchConfiguration': {'numberOfResults': 5}
-            }
-        )
-        # Parse retrievalResults: extract Product ID from text chunks
-        # Resolve full product details via PostgreSQL → SQLite fallback
-```
-
-**Product detail resolution** (3-layer fallback):
-1. PostgreSQL: `SELECT name, description, categories, price_units, price_nanos WHERE id = %s`
-2. SQLite fallback: scan parent directories for `shopping.db`
-3. Parse from chunk text: regex `Product\s+ID:\s*([A-Z0-9]{10})`, `Product\s+Name:\s*(.*)`, `Price:\s*(\d+)`
+1. **Kiểm tra điều kiện**: Chỉ chạy nếu env var `BEDROCK_KB_ID` được set
+2. **Rewrite query** (bước trước, ở PromptRewriter): VI → EN mô tả chi tiết
+3. **Retrieve từ Bedrock KB**:
+   ```
+   boto3.Session → bedrock-agent-runtime client (region: us-east-1)
+   → client.retrieve(knowledgeBaseId, retrievalQuery={text}, numberOfResults=5)
+   → retrievalResults: list of text chunks + score
+   ```
+4. **Parse Product ID** từ chunk text: regex `Product\s+ID:\s*([A-Z0-9]{10})`
+5. **Resolve product detail** (3-layer fallback, đảm bảo real-time grounding):
+   - **Layer 1**: PostgreSQL `SELECT name, description, categories, price_units, price_nanos WHERE id = %s`
+   - **Layer 2**: SQLite `shopping.db` (scan parent directories)
+   - **Layer 3**: Parse trực tiếp từ chunk text (name, price, category bằng regex)
+6. **Price normalization**: `units + nanos → string format $X.XX` (tuân thủ agentic design §6)
+7. **Confidence**: Score từ Bedrock RetrievalResult (0.0-1.0) dùng làm tín hiệu cho SearchOrchestrator
 
 #### 3.7.3 Flow 2 Init
 
-```python
-class Flow2RAG:
-    @staticmethod
-    async def run(sq):
-        strategy = BedrockRAGStrategy()
-        if strategy.should_run(sq):
-            return await strategy.search(sq)
-        return []
-```
+**Các bước `run(sq)`:**
+
+1. Khởi tạo `BedrockRAGStrategy`
+2. Kiểm tra `should_run(sq)`: nếu `BEDROCK_KB_ID` không set → return `[]` (skip silent)
+3. Gọi `strategy.search(sq)` → list `ScoredProduct` (đã resolve detail + normalize price)
 
 ### 3.8 Reranker
 
-```python
-class Reranker:
-    MODE = "llm"  # "llm" | "rule"
+**Luồng xử lý `rerank(sql_results, rag_results, query)`:**
 
-    def rerank(self, sql_results, rag_results, query="") -> SearchResult:
-        merged = self._merge(sql_results, rag_results)
-        if not merged:
-            return SearchResult(query=query, flows_used=[], rerank_mode=self.MODE)
-        flows_used = []
-        if sql_results: flows_used.append("sql")
-        if rag_results: flows_used.append("rag")
-        if self.MODE == "llm":
-            ranked = self._rerank_llm(merged, query)
-        else:
-            ranked = self._rerank_rule(merged, query)
-        return SearchResult(products=ranked[:15], query=query,
-                           flows_used=flows_used, rerank_mode=self.MODE)
+1. **Merge + Dedup**: Gộp 2 danh sách, loại trùng bằng `product_id` (giữ bản ghi đầu tiên)
+2. **Chọn mode**: `"llm"` hoặc `"rule"` (cấu hình qua `Reranker.MODE`)
+3. **Xếp hạng** → truncate top 15 → `SearchResult`
 
-    def _merge(self, sql_results, rag_results):
-        seen = {}  # product_id → ScoredProduct
-        for sp in sql_results: seen[sp.product.id] = sp
-        for sp in rag_results:
-            if sp.product.id not in seen: seen[sp.product.id] = sp
-        return list(seen.values())
-```
+**Cơ chế xếp hạng:**
 
-**Rule-based scoring:**
+| Mode | Cách hoạt động | Fallback |
+|---|---|---|
+| **Rule-based** | Tính điểm từng sản phẩm theo bảng tín hiệu bên dưới | — |
+| **LLM** | Gọi Bedrock Nova: prompt yêu cầu sắp xếp lại → trả về index order `"3,1,4,2,5"` | Rule-based nếu LLM lỗi |
+
+**Bảng điểm rule-based:**
+
 | Tín hiệu | Điểm |
 |---|---|
 | Nguồn SQL | +30 |
@@ -627,59 +482,34 @@ class Reranker:
 | Danh mục khớp token | +60 |
 | Mỗi keyword match trong description | +10 (max 50) |
 
-**LLM reranking:**
-```python
-prompt = f"Bạn là chuyên gia xếp hạng sản phẩm. Với câu hỏi '{query}', hãy sắp xếp lại..."
-# LLM trả về: "3,1,4,2,5" (index order)
-# Fallback to rule-based nếu LLM lỗi
-```
-
 ### 3.9 Orchestrator
 
-```python
-class SearchOrchestrator:
-    def __init__(self):
-        self.schema_loader = SchemaLoader()
-        self.flow1 = Flow1SQL()
-        self.flow2 = Flow2RAG()
-        self.reranker = Reranker()
+**Các bước `search(query)`:**
 
-    async def search(self, query: str, tracer=None) -> SearchResult:
-        query = (query or "").strip()
-        if not query: return SearchResult(query="", error="Query is empty")
-
-        schema_context = self.schema_loader.to_prompt_text()
-
-        # Flow 1: SQL Matching
-        flow1_result = await self.flow1.run(query)
-        intent = flow1_result.get("intent", "product_search")
-
-        if intent == "category_listing":
-            categories = flow1_result.get("categories", [])
-            return SearchResult(query=query, categories=categories, flows_used=["sql"])
-
-        sql_products = self._process_flow1_result(flow1_result, tracer)
-
-        # Flow 2: RAG (async, với timeout 5s)
-        rag_task = asyncio.create_task(self._run_flow2(query, tracer, rag_start))
-        rag_results = await rag_task
-        rag_products = rag_results if isinstance(rag_results, list) else []
-
-        # Reranker
-        if not sql_products and not rag_products:
-            return SearchResult(query=query, error="Không tìm thấy sản phẩm phù hợp.", flows_used=[])
-
-        result = self.reranker.rerank(sql_products, rag_products, query=query)
-        return result
+```
+1. Trim query, nếu rỗng → return error
+2. Load schema context → prompt text cho LLM (EntityExtractor dùng)
+3. Chạy Flow 1 (SQL Matching):
+   a. EntityExtractor.extract(query) → entities
+   b. Nếu intent == "category_listing" → return categories (không cần Flow 2)
+   c. SQLBuilder.build(entities) → SQL → SQLExecutor.execute → list ScoredProduct
+4. Chạy Flow 2 (RAG) — song song, timeout 5s:
+   a. PromptRewriter.rewrite(query) → VI→EN (timeout 3s)
+   b. BedrockRAGStrategy.search(rewritten) → list ScoredProduct (timeout 5s)
+   c. Nếu timeout/lỗi → return [] (không block)
+5. Reranker.rerank(sql_products, rag_products, query) → SearchResult
 ```
 
-**Fail-safe:**
-- Flow 1 lỗi → vẫn lấy kết quả Flow 2
-- Flow 2 lỗi/timeout → vẫn lấy kết quả Flow 1
-- Cả 2 lỗi → "Không tìm thấy sản phẩm phù hợp"
-- Flow 2 có timeout 3s cho rewrite + 5s cho KB query
+**Fail-safe matrix:**
 
-### 3.10 __init__.py — Cổng ra LangChain Tool
+| Flow 1 | Flow 2 | Kết quả |
+|---|---|---|
+| OK | OK | Merge + rerank |
+| OK | Lỗi/timeout | Chỉ dùng Flow 1 |
+| Lỗi | OK | Chỉ dùng Flow 2 |
+| Lỗi | Lỗi | `"Không tìm thấy sản phẩm phù hợp"` |
+
+### 3.10 __init__.py — Cổng ra LangChain Tool + ToolRegistry
 
 ```python
 @tool
@@ -688,101 +518,189 @@ async def search_products_v2(query: str) -> str:
     Tìm kiếm sản phẩm thông minh (tiếng Việt và tiếng Anh).
     Có thể tìm theo tên, danh mục, khoảng giá (VD: "dưới 50 đô", "từ 100-200 USD").
     Dùng SQL matching + RAG để có kết quả chính xác nhất.
-    Trả về JSON: {"status","total","products":[{id,name,price,description,categories}]}
+    Trả về JSON: {"status","total","confidence","products":[{id,name,price,description,image,categories}]}
     """
     tracer = SearchTracer()
     orch = SearchOrchestrator()
     result = await orch.search(query, tracer=tracer)
 
     if result.categories:
-        response = SearchToolResponse(status="category", total=len(result.categories), categories=list(result.categories))
+        response = SearchToolResponse(
+            status="category",
+            total=len(result.categories),
+            categories=list(result.categories),
+            confidence=0.9 if result.categories else 0.0,
+        )
     elif not result.products:
-        response = SearchToolResponse(status="success", total=0, products=[])
+        response = SearchToolResponse(
+            status="success", total=0, products=[],
+            confidence=0.0,
+        )
     else:
         products_json = []
         for sp in result.products[:5]:
             p = sp.product
+            units = getattr(p.price_usd, "units", 0)
+            nanos = getattr(p.price_usd, "nanos", 0)
+            cents = nanos // 10_000_000
             products_json.append({
-                "id": p.id, "name": p.name,
-                "price": p.price_usd.units + p.price_usd.nanos / 1e9,
-                "price_units": p.price_usd.units, "price_nanos": p.price_usd.nanos,
-                "currency": "USD", "description": p.description, "categories": p.categories,
+                "id": p.id,
+                "name": p.name,
+                "price": f"${units}.{cents:02d}" if units or cents else "0.00",
+                "description": p.description,
+                "image": getattr(p, "picture", "") or "",
+                "categories": p.categories,
             })
-        response = SearchToolResponse(status="success", total=len(products_json), products=products_json)
+        response = SearchToolResponse(
+            status="success",
+            total=len(products_json),
+            products=products_json,
+            confidence=result.confidence if hasattr(result, "confidence") else 0.8,
+        )
     return response.to_json()
+
+
+# ─── ToolSpec: đăng ký vào ToolRegistry ───────────────────────────
+from src.tools.registry import ToolRegistry, ToolSpec
+
+TOOL_SPEC = ToolSpec(
+    name="search_products_v2",
+    description=(
+        "Tìm kiếm sản phẩm thông minh (tiếng Việt và tiếng Anh). "
+        "Có thể tìm theo tên, danh mục, khoảng giá (VD: 'dưới 50 đô', 'từ 100-200 USD'). "
+        "Dùng SQL matching + RAG semantic search để có kết quả chính xác nhất."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "Câu tìm kiếm bằng tiếng Việt hoặc tiếng Anh",
+            }
+        },
+        "required": ["query"],
+    },
+    output_schema={
+        "type": "object",
+        "properties": {
+            "status": {"type": "string", "enum": ["success", "category", "error"]},
+            "total": {"type": "integer"},
+            "confidence": {"type": "number"},
+            "products": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string"},
+                        "name": {"type": "string"},
+                        "price": {"type": "string", "description": "Formatted price string (VD: $101.96)"},
+                        "description": {"type": "string"},
+                        "image": {"type": "string", "description": "Product image filename"},
+                        "categories": {"type": "array", "items": {"type": "string"}},
+                    },
+                },
+            },
+            "categories": {"type": "array", "items": {"type": "string"}},
+            "message": {"type": "string"},
+        },
+    },
+    is_write=False,
+    examples=[
+        {"query": "kính thiên văn dưới 100 đô",
+         "output_summary": "tìm thấy 2 sản phẩm telescope dưới $100"},
+        {"query": "đèn pin",
+         "output_summary": "liệt kê sản phẩm đèn pin có sẵn"},
+    ],
+    retry_config={"max_retries": 2, "backoff": "exponential"},
+)
+ToolRegistry.register(TOOL_SPEC, fn=search_products_v2)
 ```
 
 ### 3.11 LLM Module
 
-```python
-class LLMClient:
-    """LLM client wrapper using AWS Bedrock (Amazon Nova model)."""
-    def __init__(self):
-        self.model = os.getenv("BEDROCK_MODEL_ID", "apac.amazon.nova-lite-v1:0")
-        self.region = os.getenv("BEDROCK_REGION", "ap-southeast-1")
-        session = boto3.Session(profile_name=os.environ.get("AWS_PROFILE"))
-        self.client = session.client("bedrock-runtime", region_name=self.region)
+**Cấu hình:**
+- Model: `apac.amazon.nova-lite-v1:0` (env `BEDROCK_MODEL_ID`)
+- Region: `ap-southeast-1` (env `BEDROCK_REGION`)
+- Singleton `get_llm_client()` dùng chung cho toàn bộ search tool
+- `MockLLMClient` cho testing (không cần AWS credentials)
 
-    def invoke(self, prompt: str, temperature=0.3, max_tokens=500) -> "LLMResponse":
-        response = self.client.converse(
-            modelId=self.model,
-            messages=[{"role": "user", "content": [{"text": prompt}]}],
-            inferenceConfig={"temperature": temperature, "maxTokens": max_tokens}
-        )
-        # Parse content blocks → LLMResponse(content=..., raw=response)
+**Pseudocode `invoke(prompt, temperature, max_tokens)`:**
 
-# Singleton: get_llm_client()
-# MockLLMClient for testing without AWS credentials
+```
+session = boto3.Session(profile=AWS_PROFILE)
+client = session.client("bedrock-runtime", region)
+response = client.converse(
+  modelId=model,
+  messages=[{role:"user", content:[{text: prompt}]}],
+  inferenceConfig={temperature, maxTokens}
+)
+→ parse content blocks → LLMResponse(content, raw)
 ```
 
 **System Prompt** (`src/llm/prompt.py`):
-- 10 tools được mô tả chi tiết (search_products_v2, get_categories, get_all_products, get_product_id, get_product_reviews_tool, add_to_cart_tool, get_cart_tool, get_recommendations_tool, convert_currency_tool, get_shipping_quote_tool)
+- Tool schemas được load **động** từ `ToolRegistry.get_all_schemas_text()` — không hardcode
+- 10 tools đăng ký qua ToolSpec (search_products_v2, get_categories, get_all_products, get_product_id, get_product_reviews_tool, add_to_cart_tool, get_cart_tool, get_recommendations_tool, convert_currency_tool, get_shipping_quote_tool)
 - 6 guardrails (L2a-L4)
 - Luồng bắt buộc: `product_id` lookup trước khi gọi review/cart/recommend
 - Định dạng câu trả lời: tiếng Việt, **bold** cho giá/tên, không emoji, không kỹ thuật
 
 ---
 
-## 4. Cache Strategy
+## 4. Cache Strategy (Redis)
 
-### 4.1 CacheStore (src/memory/store.py)
+Tuân thủ agentic design v3.2 (§13): cache dùng **Redis** (3 logical databases) trên production.
+In-memory `CacheStore` dùng làm fallback cho dev/local khi Redis không available.
 
-```python
-class CacheStore:
-    """
-    Cache kết quả tool với TTL, LRU eviction, persist ra file JSON.
-    Key: "<tool_name>:<sha256(params)[:16]>"
-    """
-    _CACHE_MAX_ENTRIES = 500
-    _CACHE_TTL_MAP = {
-        "search_products_tool":     300,   # 5 phút
-        "get_product_reviews_tool": 300,
-        "get_recommendations_tool": 300,
-        "convert_currency_tool":     60,
-    }
-    _NEVER_CACHE = {"add_to_cart_tool", "get_cart_tool", "get_shipping_quote_tool"}
+### 4.1 Phân loại cache
+
+| Cache | Dữ liệu | TTL | Redis Namespace | Memo |
+|---|---|---|---|---|
+| L2 Search Cache | Top N Product IDs | **10 phút** | `db1` / `search:*` | Chỉ cache danh sách ID, không cache raw product detail — giá/stock có thể thay đổi |
+| L3 Product Cache | Product detail (name, price, description, image) | 30 phút | `db1` / `product:*` | Resolve từ Product ID |
+| Fallback (dev) | In-memory LRU + JSON persist | Như trên | — | Dùng `CacheStore` (src/memory/store.py) khi không có Redis |
+
+### 4.2 Key naming
+
+```
+search:<SHA256(lang + query + price_range + category)>
+→ list[str] — top 5 Product IDs
+
+product:<product_id>
+→ {id, name, price, description, image, categories}
 ```
 
-| Dữ liệu được cache | Thời gian sống | Cơ chế |
-|---|---|---|
-| Kết quả search tool | 5 phút | LRU, SHA256 key |
-| Kết quả reviews tool | 5 phút | LRU |
-| Kết quả recommendations | 5 phút | LRU |
-| Kết quả currency | 1 phút | LRU |
-| Write tools (cart, shipping) | Không cache | `_NEVER_CACHE` |
-| File persist | Ghi sau mỗi lần set | `data/cache.json` |
+Lý do chỉ cache Product IDs cho search:
+1. **Real-time grounding**: Product detail (giá, mô tả) có thể thay đổi — chỉ fetch khi cần
+2. **Hit rate**: Danh sách ID ít biến động hơn detail → cache hit cao hơn
+3. **Đơn giản hóa invalidation**: Khi catalog thay đổi, chỉ cần invalidate search cache, product cache tự động stale theo TTL
 
-### 4.2 SessionStore
+### 4.3 Flow
+
+```
+Executor → Cache Lookup (Redis DB1)
+  ├── Hit → Return cached Product IDs → Resolve từ Product Cache (Redis) hoặc DB
+  └── Miss → Call Flow 1 + Flow 2 → Validate output → Redis SETEX (10p) → Return
+```
+
+**Chỉ cache sau khi**:
+1. Tool thành công (`status = success`)
+2. Output hợp lệ theo schema
+3. Không phải write tool
+
+### 4.4 SessionStore
 
 ```python
 class SessionStore:
     """
     Lưu trữ lịch sử hội thoại per-session.
+    Production: Redis DB2 / Dev: in-memory dict → JSON file.
     Mỗi session: messages[], pending_confirmation{}, metadata{total_turns, ...}
     """
     _SESSION_TTL_SECONDS = 1800        # 30 phút
     _SESSION_MAX_MESSAGES = 20         # Sliding window
 ```
+
+Session lưu Planner Memory ngắn hạn: `{last_search, last_product_id, current_cart_items, last_intent}`.
 
 ---
 
@@ -827,23 +745,17 @@ CREATE TABLE productreviews (
 
 ## 6. Tích hợp vào hệ thống hiện tại
 
-### 6.1 Tool registry
+### 6.1 Tool registry (list + ToolRegistry)
 
-```python
-# src/tools/__init__.py
-all_shopping_tools = [
-    search_products_v2,          # Nhóm Search
-    get_categories,              # Nhóm Catalog
-    get_all_products,
-    get_product_id,              # Nhóm ID Lookup
-    get_product_reviews_tool,    # Nhóm Core
-    add_to_cart_tool,
-    get_cart_tool,
-    get_recommendations_tool,    # Nhóm Mở rộng
-    convert_currency_tool,
-    get_shipping_quote_tool,
-]
-```
+**Danh sách tool đã đăng ký** (qua `all_shopping_tools` trong `src/tools/__init__.py` và `ToolRegistry.register()` trong mỗi module):
+
+| Nhóm | Tool | Action | ToolSpec |
+|---|---|---|---|
+| Search | `search_products_v2` | Read | ✅ ToolSpec (input_schema, output_schema, examples) |
+| Catalog | `get_categories`, `get_all_products` | Read | — |
+| ID Lookup | `get_product_id` | Read | — |
+| Core | `get_product_reviews_tool`, `add_to_cart_tool`, `get_cart_tool` | Read/Write | — |
+| Mở rộng | `get_recommendations_tool`, `convert_currency_tool`, `get_shipping_quote_tool` | Read | — |
 
 ### 6.2 System prompt tool description (đã cập nhật)
 
@@ -856,7 +768,54 @@ Trong `SYSTEM_PROMPT`:
 - Lưu ý: Parse price range, sort, multi-turn context
 ```
 
-### 6.3 Guardrails (6 layers)
+### 6.3 ToolRegistry Integration
+
+`search_products_v2` tự đăng ký vào `ToolRegistry` khi module được import (xem code đầy đủ ở §3.10). Planner đọc schema động qua `ToolRegistry.get_all_schemas_text()` — không hardcode trong prompt. Chi tiết ToolSpec interface:
+
+```
+ToolSpec(
+  name="search_products_v2",
+  description="Tìm kiếm sản phẩm thông minh...",
+  input_schema={query: str},
+  output_schema={status, total, confidence, products[{id,name,price,description,image,categories}], categories, message},
+  is_write=False,
+  examples=[{query: "kính thiên văn dưới 100 đô", ...}],
+  retry_config={max_retries: 2}
+)
+```
+
+### 6.4 Output Schema & Confidence
+
+Agentic design yêu cầu mọi tool output có **fixed schema** và **confidence score**:
+
+```python
+# Output của search_products_v2 (tuân thủ §6 agentic design)
+{
+  "status": "success",
+  "total": 2,
+  "confidence": 0.92,        # Cho Reflection node (§8.5)
+  "products": [
+    {
+      "id": "OLJCESPC7Z",
+      "name": "National Park Foundation Explorascope",
+      "price": "$101.96",     # String format, không expose raw units/nanos
+      "description": "Perfect for astronomical and terrestrial viewing...",
+      "image": "explorascope.jpg",  # Filename, consumer ghép CDN URL
+      "categories": ["telescopes", "travel"]
+    }
+  ]
+}
+```
+
+**Confidence heuristic** (trong `SearchOrchestrator`):
+| Điều kiện | Confidence |
+|---|---|
+| Cả 2 flow (SQL + RAG) chạy OK, kết quả > 0 | 0.9 - 1.0 |
+| Chỉ 1 flow chạy, kết quả > 0 | 0.6 - 0.8 |
+| Kết quả = 0, có error message | 0.0 - 0.3 |
+| Category listing | 0.9 |
+
+### 6.5 Guardrails (6 layers)
 
 | Layer | File | Chức năng |
 |---|---|---|
@@ -1075,19 +1034,22 @@ Metrics:
 7. **Cart tool yêu cầu user_id**: Agent không tự inject user_id từ session → cần user cung cấp
 8. **Currency tool VND rate = 0**: Mock server chưa implement real exchange rate
 
-### 10.3 So sánh thiết kế (v1.0 → v2.0)
+### 10.3 So sánh thiết kế (v1.0 → v2.0 → v3.0)
 
-| Tính năng | v1.0 | v2.0 |
-|---|---|---|
-| LLM Provider | Groq (qwen/qwen3.6-27b) | AWS Bedrock (Amazon Nova Lite) $ |
-| Search Strategy | 3 strategies (catalog, DB, synonym) | 2 flows (SQL + RAG) |
-| Vietnamese | Regex + từ điển | LLM tự xử lý |
-| Database | gRPC → LIKE queries | Direct SQL via connection pool |
-| Cache | Không | LRU + TTL + persist |
-| Tracing | Không | SearchTracer |
-| Fallback | Không | PostgreSQL → SQLite |
-| Guardrails | Không | 6 layers |
-| Evaluation | Không | 12 case suite |
+| Tính năng | v1.0 | v2.0 | v3.0 |
+|---|---|---|---|
+| LLM Provider | Groq (qwen/qwen3.6-27b) | AWS Bedrock (Amazon Nova Lite) | AWS Bedrock (Amazon Nova Lite) |
+| Search Strategy | 3 strategies (catalog, DB, synonym) | 2 flows (SQL + RAG) | 2 flows (SQL + RAG) |
+| Vietnamese | Regex + từ điển | LLM tự xử lý | LLM tự xử lý |
+| Database | gRPC → LIKE queries | Direct SQL via connection pool | Direct SQL via connection pool |
+| Cache | Không | LRU + TTL + persist | **Redis** (3 logical DBs) + in-memory fallback |
+| Tracing | Không | SearchTracer | SearchTracer |
+| Fallback | Không | PostgreSQL → SQLite | PostgreSQL → SQLite |
+| Guardrails | Không | 6 layers | 6 layers |
+| Evaluation | Không | 12 case suite | 12 case suite |
+| **Tool Registry** | — | — | **ToolRegistry + ToolSpec** |
+| **Output Schema** | — | price float + raw units/nanos | **price string $X.XX, image, confidence** |
+| **Confidence** | — | — | **confidence 0.0-1.0 per result** |
 
 ### 10.4 Code coverage
 
@@ -1114,6 +1076,8 @@ Metrics:
 4. **Thêm integration test** cho BedrockRAGStrategy với mock KB
 5. **Tự động inject user_id** vào cart tool từ session context
 6. **Cấu hình connection pool** qua env vars (hiện tại hardcode 2-10)
+7. **Thêm Redis integration test** — verify cache key naming và TTL hoạt động đúng
+8. **Implement confidence heuristic** trong SearchOrchestrator — tận dụng signal từ cả 2 flow để tính confidence chính xác
 
 ---
 
@@ -1134,6 +1098,11 @@ Metrics:
 | `DB_PASSWORD` | `otelp` | Database password |
 | `DB_MIN_CONN` | `2` | Pool min connections |
 | `DB_MAX_CONN` | `10` | Pool max connections |
+| `REDIS_HOST` | `localhost` | Redis host (for cache) |
+| `REDIS_PORT` | `6379` | Redis port |
+| `REDIS_DB_PLANNER` | `0` | Redis logical DB cho Planner cache |
+| `REDIS_DB_TOOL` | `1` | Redis logical DB cho Tool cache (search + product) |
+| `REDIS_DB_SESSION` | `2` | Redis logical DB cho Session cache |
 | `SKIP_LLM_SQL_FLOW` | `0` | Skip LLM in entity extraction |
 | `SHOPPING_DB_PATH` | — | Override SQLite DB path |
 | `USE_REAL_KB` | — | Enable real KB (deprecated) |
@@ -1169,3 +1138,4 @@ python tests/run_pipeline.py
 | 2026-07-14 | 1.0 | Khởi tạo thiết kế | AIO02 |
 | 2026-07-15 | 2.0 | Cập nhật code thực tế, thêm mã nguồn đầy đủ | AIO02 |
 | 2026-07-16 | 2.0.0 | Bản sao hệ thống hoàn chỉnh: code, tests, evaluation | AIO02 |
+| 2026-07-17 | **3.0.0** | Tương thích agentic design v3.2: ToolRegistry + ToolSpec; price normalization (string format, bỏ raw units/nanos); confidence score 0.0-1.0; image field; Redis cache strategy (3 logical DBs, 10p TTL) | AIO02 |

@@ -14,14 +14,18 @@
 4. [How It Works — End-to-End Flow](#4-how-it-works--end-to-end-flow)
 5. [Guardrail Pipeline (6 Security Layers)](#5-guardrail-pipeline-6-security-layers)
 6. [Tool System v2 — Fixed Output Schema](#6-tool-system-v2--fixed-output-schema)
-7. [Planner Node](#7-planner-node)
-8. [Tool Executor Loop](#8-tool-executor-loop)
+7. [2-Layer Planner](#7-2-layer-planner)
+8. [Tool Executor (DAG Runner)](#8-tool-executor-dag-runner)
+8.5. [Reflection Node](#85-reflection-node)
 9. [Write + Confirm Flow](#9-write--confirm-flow)
-10. [Response Verifier](#10-response-verifier)
+10. [Response Verifier (Template-First)](#10-response-verifier-template-first)
+10.5. [HallucinationGuard & FallbackGenerator](#105-hallucinationguard--fallbackgenerator)
 10.6. [Semantic Decision Gate Layer (Nova Lite)](#106-semantic-decision-gate-layer-nova-lite)
 11. [System Prompt Design](#11-system-prompt-design)
 12. [State Design](#12-state-design)
-13. [Memory & Caching](#13-memory--caching)
+13. [Cache Strategy (Redis)](#13-cache-strategy-redis)
+13a. [Resource Limits & Production Guardrails](#13a-resource-limits--production-guardrails)
+13b. [Observability Metrics](#13b-observability-metrics)
 14. [API Server](#14-api-server)
 15. [Configuration & Environment](#15-configuration--environment)
 16. [Running the System](#16-running-the-system)
@@ -229,7 +233,8 @@ shopping-copilot/
 │
 ├── memory/                          # Session & cache storage
 │   ├── __init__.py
-│   └── store.py                     # In-memory TTL + LRU
+│   ├── store.py                     # In-memory TTL + LRU (dev)
+│   └── redis_store.py               # Redis cache client (production — §13)
 │
 ├── protos/                          # gRPC protobuf (compiled)
 │
@@ -434,751 +439,22 @@ class ToolSpec:
     retry_config: dict = field(default_factory=lambda: {"max_retries": 1})
 ```
 
-Dưới đây là `ToolSpec` đầy đủ cho tất cả tool — được thiết kế độc lập, không phụ thuộc vào output gRPC/REST hiện tại. Tool sẽ được implement lại dựa trên schema này.
+Người implement tạo `ToolSpec` instances cho từng tool dựa trên bảng dưới đây, đăng ký qua `ToolRegistry.register()` khi module được import.
 
-#### `search_products_v2`
+| Tool | File | Backend | Action | Input (required) | Output (key fields) | DB source | Ghi chú |
+|---|---|---|---|---|---|---|---|
+| `search_products_v2` | `tools/search/__init__.py` | ProductCatalog | Read | `query` (str) | `status`, `total`, `products[]` (id, name, price, description, image, categories) | `products` | price_units+nanos → price string; picture → image filename; categories comma-separated → array |
+| `get_product_details_tool` | `tools/product_tool.py` | ProductCatalog | Read | `product_id` (str) | `status`, `product` (id, name, price, desc, image, categories, rating, review_count) | `products` + `productreviews` (rating/review_count aggregate) | |
+| `get_product_reviews_tool` | `tools/review_tool.py` | ProductReview | Read | `product_id` (str), `limit` (int, opt), `sort` (enum, opt) | `status`, `average_score`, `total_reviews`, `distribution`, `reviews[]` (review_id, username, score, body) | `reviews.productreviews` | score NUMERIC(2,1); review_id INTEGER auto-increment; cần JOIN với `products` lấy product_name |
+| `add_to_cart_tool` | `tools/cart_tool.py` | Cart | **Write** | `product_id` (str), `quantity` (int, opt) | `status` (pending/confirmed/denied/error), `token`, `message`, `item` | `cart` (user_id, product_id, quantity) | Cần JOIN với `products` để lấy name/price; name/price không có trong cart table |
+| `get_cart_tool` | `tools/cart_tool.py` | Cart | Read | (none) | `status`, `items[]` (product_id, name, price, quantity, image), `subtotal`, `item_count` | `cart` + JOIN `products` | subtotal = SUM(price × quantity) |
+| `get_recommendations_tool` | `tools/recommendation_tool.py` | Recommendation | Read | `product_id` (str, opt), `context` (str, opt), `limit` (int, opt) | `status`, `reason`, `products[]` (id, name, price, desc, image, rating) | Không có bảng riêng: (1) same-category, (2) full-text search, (3) popular | |
+| `convert_currency_tool` | `tools/currency_tool.py` | Currency | Read | `amount` (num), `from` (str), `to` (str) | `status`, `from`, `to`, `original_amount`, `converted_amount`, `rate`, `formatted` | Không có DB — gọi external API hoặc hardcode mapping | |
+| `get_shipping_quote_tool` | `tools/shipping_tool.py` | Shipping | Read | `zip_code` (str), `items_count` (int, opt), `cart_total` (str, opt) | `status`, `destination`, `options[]` (provider, cost, delivery_days, delivery_window, description) | Business rules (free >$100, flat rate) | cost dùng units/nanos pattern |
+| `checkout_tool` | `tools/checkout_tool.py` | Checkout+Payment | **Write** | `shipping_address` (object), `shipping_provider` (str), `note` (str, opt) | `status` (pending/confirmed/denied/error), `token`, `order_id`, `total`, `summary` | `accounting.order`, `orderitem`, `shipping` | Cần INSERT vào 3 tables; total/summary computed |
+| `get_order_status_tool` | `tools/order_tool.py` | Accounting | Read | `order_id` (str) | `status`, `order_id`, `total`, `tracking_number`, `shipping_address`, `items[]` | `accounting.order`, `orderitem`, `shipping` | Không có order_status, carrier, timeline trong DB |
 
-```python
-_search_spec = ToolSpec(
-    name="search_products_v2",
-    description=(
-        "Tìm kiếm sản phẩm theo từ khóa. "
-        "Có thể lọc theo category, khoảng giá. "
-        "Trả về danh sách sản phẩm khớp."
-    ),
-    input_schema={
-        "type": "object",
-        "properties": {
-            "query": {
-                "type": "string",
-                "description": "Từ khóa tìm kiếm (tiếng Việt hoặc tiếng Anh)",
-            },
-            "category": {
-                "type": "string",
-                "description": "Lọc theo danh mục (optional)",
-            },
-            "min_price": {
-                "type": "string",
-                "description": "Giá thấp nhất dạng '100' (optional)",
-            },
-            "max_price": {
-                "type": "string",
-                "description": "Giá cao nhất dạng '500' (optional)",
-            },
-        },
-        "required": ["query"],
-    },
-    output_schema={
-        "type": "object",
-        "properties": {
-            "status": {
-                "type": "string",
-                "enum": ["success", "empty", "error"],
-                "description": "Kết quả tìm kiếm",
-            },
-            "total": {
-                "type": "integer",
-                "description": "Tổng số sản phẩm tìm thấy",
-            },
-            "products": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "id": {"type": "string", "description": "Product ID"},
-                        "name": {"type": "string"},
-                        "price": {"type": "string", "description": "Giá dạng '$99.99'"},
-                        "description": {"type": "string"},
-                        "image": {"type": "string", "description": "Tên file ảnh (tool ghép base URL)"},
-                        "categories": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "DB lưu comma-separated string → tool split thành array",
-                        },
-                    },
-                    "required": ["id", "name", "price"],
-                },
-            },
-        },
-        "required": ["status", "total", "products"],
-    },
-    is_write=False,
-    examples=[
-        {
-            "query": "tìm kính thiên văn dưới 200 đô",
-            "plan": [
-                {"tool": "search_products_v2", "args": {"query": "kính thiên văn dưới 200 đô"}},
-            ],
-        },
-        {
-            "query": "giày thể thao Nike giá từ 50 tới 150 đô",
-            "plan": [
-                {
-                    "tool": "search_products_v2",
-                    "args": {
-                        "query": "Nike giày thể thao",
-                        "min_price": "50",
-                        "max_price": "150",
-                    },
-                },
-            ],
-        },
-    ],
-    retry_config={"max_retries": 2},
-)
-```
-
-**DB mapping:** `products` table. `id`, `name`, `description`, `picture→image` (filename, tool prepends CDN base URL), `price_units+price_nanos→price`, `categories` (comma-separated TEXT → tool splits to array). Computed fields: `total`, `status`.
-
-#### `get_product_details_tool`
-
-```python
-_details_spec = ToolSpec(
-    name="get_product_details_tool",
-    description=(
-        "Lấy thông tin chi tiết của một sản phẩm theo ID. "
-        "Dùng khi user hỏi chi tiết cụ thể về sản phẩm."
-    ),
-    input_schema={
-        "type": "object",
-        "properties": {
-            "product_id": {
-                "type": "string",
-                "description": "ID của sản phẩm",
-            },
-        },
-        "required": ["product_id"],
-    },
-    output_schema={
-        "type": "object",
-        "properties": {
-            "status": {
-                "type": "string",
-                "enum": ["success", "not_found", "error"],
-            },
-            "product": {
-                "type": "object",
-                "properties": {
-                    "id": {"type": "string"},
-                    "name": {"type": "string"},
-                    "price": {"type": "string", "description": "Giá dạng '$99.99'"},
-                    "description": {"type": "string"},
-                    "image": {"type": "string", "description": "Tên file ảnh (tool ghép base URL)"},
-                    "categories": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "DB lưu comma-separated string → tool split thành array",
-                    },
-                    "rating": {"type": "number", "description": "Tính từ AVG(score) trong productreviews"},
-                    "review_count": {"type": "integer", "description": "Đếm từ productreviews"},
-                },
-                "required": ["id", "name", "price"],
-            },
-        },
-        "required": ["status"],
-    },
-    is_write=False,
-    examples=[
-        {
-            "product_id": "prod_123",
-            "plan": [
-                {"tool": "get_product_details_tool", "args": {"product_id": "prod_123"}},
-            ],
-        },
-    ],
-    retry_config={"max_retries": 2},
-)
-```
-
-**DB mapping:** `products` table + optional aggregate from `productreviews`. Removed `original_price`, `stock_status`, `attributes` (không tồn tại trong DB). `rating` và `review_count` cần JOIN/aggregate từ `productreviews`.
-
-#### `get_product_reviews_tool`
-
-```python
-_reviews_spec = ToolSpec(
-    name="get_product_reviews_tool",
-    description=(
-        "Lấy đánh giá của người dùng cho một sản phẩm. "
-        "Bao gồm điểm số, nội dung, và thống kê."
-    ),
-    input_schema={
-        "type": "object",
-        "properties": {
-            "product_id": {
-                "type": "string",
-                "description": "ID của sản phẩm",
-            },
-            "limit": {
-                "type": "integer",
-                "description": "Số lượng review tối đa (mặc định 10)",
-            },
-            "sort": {
-                "type": "string",
-                "enum": ["newest", "highest", "lowest"],
-                "description": "Cách sắp xếp review",
-            },
-        },
-        "required": ["product_id"],
-    },
-    output_schema={
-        "type": "object",
-        "properties": {
-            "status": {
-                "type": "string",
-                "enum": ["success", "error", "empty"],
-            },
-            "product_id": {"type": "string"},
-            "product_name": {"type": "string", "description": "Cần JOIN với products table"},
-            "average_score": {"type": "number", "description": "AVG(score) trong productreviews"},
-            "total_reviews": {"type": "integer", "description": "COUNT(*) trong productreviews"},
-            "distribution": {
-                "type": "object",
-                "properties": {
-                    "1": {"type": "integer"},
-                    "2": {"type": "integer"},
-                    "3": {"type": "integer"},
-                    "4": {"type": "integer"},
-                    "5": {"type": "integer"},
-                },
-                "description": "Phân bố điểm — GROUP BY ROUND(score) trên productreviews",
-            },
-            "reviews": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "review_id": {"type": "integer", "description": "DB: id INTEGER AUTOINCREMENT"},
-                        "username": {"type": "string", "description": "DB: username VARCHAR(64)"},
-                        "score": {"type": "number", "description": "DB: NUMERIC(2,1) — vd 4.5, 3.0"},
-                        "body": {"type": "string", "description": "DB: description VARCHAR(1024)"},
-                    },
-                    "required": ["review_id", "username", "score"],
-                },
-            },
-        },
-        "required": ["status", "product_id", "average_score", "total_reviews"],
-    },
-    is_write=False,
-    examples=[
-        {
-            "product_id": "prod_123",
-            "plan": [
-                {"tool": "get_product_reviews_tool", "args": {"product_id": "prod_123"}},
-            ],
-        },
-        {
-            "product_id": "prod_456",
-            "plan": [
-                {
-                    "tool": "get_product_reviews_tool",
-                    "args": {"product_id": "prod_456", "limit": 5, "sort": "newest"},
-                },
-            ],
-        },
-    ],
-    retry_config={"max_retries": 2},
-)
-
-**DB mapping:** `reviews.productreviews` table. Loại bỏ `title` và `created_at` (không tồn tại trong DB). `score` là NUMERIC(2,1) nên kiểu `number` thay vì `integer`. `review_id` là `integer` (DB auto-increment). `product_name` cần JOIN với `catalog.products`.
-
-#### `add_to_cart_tool` (WRITE)
-
-```python
-_add_cart_spec = ToolSpec(
-    name="add_to_cart_tool",
-    description=(
-        "Thêm sản phẩm vào giỏ hàng. "
-        "CẦN CONFIRM — sẽ trả về status='pending' kèm confirmation token."
-    ),
-    input_schema={
-        "type": "object",
-        "properties": {
-            "product_id": {
-                "type": "string",
-                "description": "ID sản phẩm cần thêm",
-            },
-            "quantity": {
-                "type": "integer",
-                "minimum": 1,
-                "description": "Số lượng (mặc định 1)",
-            },
-        },
-        "required": ["product_id"],
-    },
-    output_schema={
-        "type": "object",
-        "properties": {
-            "status": {
-                "type": "string",
-                "enum": ["pending", "confirmed", "denied", "error"],
-                "description": "pending = chờ user xác nhận",
-            },
-            "token": {
-                "type": "string",
-                "description": "HMAC confirmation token (khi status=pending)",
-            },
-            "message": {
-                "type": "string",
-                "description": "Thông báo cho user",
-            },
-            "item": {
-                "type": "object",
-                "properties": {
-                    "product_id": {"type": "string"},
-                    "name": {"type": "string", "description": "Tool JOIN với products table để lấy name"},
-                    "price": {"type": "string", "description": "Tool JOIN với products table để lấy price"},
-                    "quantity": {"type": "integer"},
-                },
-                "description": "Chi tiết item đã thêm (khi status=confirmed)",
-            },
-        },
-        "required": ["status"],
-    },
-    is_write=True,
-    examples=[
-        {
-            "product_id": "prod_123",
-            "plan": [
-                {"tool": "add_to_cart_tool", "args": {"product_id": "prod_123", "quantity": 2}},
-            ],
-        },
-    ],
-    retry_config={"max_retries": 1},
-)
-
-**DB mapping:** `cart` table (chỉ có `user_id`, `product_id`, `quantity`). `name` và `price` trong output cần JOIN với `products`. Cart table không có price — tool phải tự lookup.
-
-#### `get_cart_tool`
-
-```python
-_cart_spec = ToolSpec(
-    name="get_cart_tool",
-    description=(
-        "Xem giỏ hàng hiện tại. "
-        "Trả về danh sách items và tổng tiền."
-    ),
-    input_schema={
-        "type": "object",
-        "properties": {},
-        "required": [],
-    },
-    output_schema={
-        "type": "object",
-        "properties": {
-            "status": {
-                "type": "string",
-                "enum": ["success", "empty", "error"],
-            },
-            "items": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "product_id": {"type": "string"},
-                        "name": {"type": "string", "description": "JOIN với products table"},
-                        "price": {"type": "string", "description": "JOIN với products table"},
-                        "quantity": {"type": "integer"},
-                        "image": {"type": "string", "description": "picture từ products table"},
-                    },
-                    "required": ["product_id", "name", "price", "quantity"],
-                },
-            },
-            "subtotal": {"type": "string", "description": "SUM(price*quantity) — computed"},
-            "item_count": {"type": "integer"},
-        },
-        "required": ["status", "items"],
-    },
-    is_write=False,
-    examples=[
-        {
-            "query": "xem giỏ hàng của tôi",
-            "plan": [
-                {"tool": "get_cart_tool", "args": {}},
-            ],
-        },
-    ],
-    retry_config={"max_retries": 2},
-)
-```
-
-**DB mapping:** `cart` table (chỉ có `user_id`, `product_id`, `quantity`). `name`, `price`, `image` cần JOIN với `products`. `subtotal` = SUM(price*quantity). Loại bỏ `shipping`, `tax`, `total` — không có dữ liệu nguồn trong DB (shipping quote cần tool riêng).
-
-#### `get_recommendations_tool`
-
-```python
-_rec_spec = ToolSpec(
-    name="get_recommendations_tool",
-    description=(
-        "Gợi ý sản phẩm dựa trên sản phẩm hiện tại hoặc context. "
-        "Nếu không có product_id, trả về gợi ý chung (popular products)."
-    ),
-    input_schema={
-        "type": "object",
-        "properties": {
-            "product_id": {
-                "type": "string",
-                "description": "Gợi ý dựa trên sản phẩm này (optional)",
-            },
-            "context": {
-                "type": "string",
-                "description": "Gợi ý theo chủ đề (optional, vd: 'thể thao', 'gia đình')",
-            },
-            "limit": {
-                "type": "integer",
-                "description": "Số lượng gợi ý (mặc định 5)",
-            },
-        },
-        "required": [],
-    },
-    output_schema={
-        "type": "object",
-        "properties": {
-            "status": {
-                "type": "string",
-                "enum": ["success", "empty", "error"],
-            },
-            "reason": {
-                "type": "string",
-                "description": "Lý do gợi ý (vd: 'Based on your interest in telescopes')",
-            },
-            "products": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "id": {"type": "string"},
-                        "name": {"type": "string"},
-                        "price": {"type": "string", "description": "Giá dạng '$99.99'"},
-                        "description": {"type": "string"},
-                        "image": {"type": "string"},
-                        "rating": {"type": "number", "description": "JOIN với productreviews"},
-                    },
-                    "required": ["id", "name", "price"],
-                },
-            },
-        },
-        "required": ["status", "products"],
-    },
-    is_write=False,
-    examples=[
-        {
-            "product_id": "prod_123",
-            "plan": [
-                {
-                    "tool": "get_recommendations_tool",
-                    "args": {"product_id": "prod_123"},
-                },
-            ],
-        },
-    ],
-    retry_config={"max_retries": 2},
-)
-
-**DB mapping:** Không có bảng recommendations riêng. Chiến lược implement: (1) `product_id` → same-category products (WHERE categories LIKE), (2) context → full-text search, (3) fallback → popular products. Các field SELECT từ `products` table + AVG(score) từ `productreviews`.
-
-#### `convert_currency_tool`
-
-```python
-_currency_spec = ToolSpec(
-    name="convert_currency_tool",
-    description=(
-        "Chuyển đổi tiền tệ. "
-        "Dùng khi user hỏi giá theo VND, JPY, EUR, v.v."
-    ),
-    input_schema={
-        "type": "object",
-        "properties": {
-            "amount": {
-                "type": "number",
-                "description": "Số tiền cần chuyển đổi",
-            },
-            "from": {
-                "type": "string",
-                "description": "Mã tiền tệ gốc (vd: 'USD')",
-            },
-            "to": {
-                "type": "string",
-                "description": "Mã tiền tệ đích (vd: 'VND')",
-            },
-        },
-        "required": ["amount", "from", "to"],
-    },
-    output_schema={
-        "type": "object",
-        "properties": {
-            "status": {
-                "type": "string",
-                "enum": ["success", "error"],
-            },
-            "from": {"type": "string", "description": "Mã tiền tệ gốc"},
-            "to": {"type": "string", "description": "Mã tiền tệ đích"},
-            "original_amount": {"type": "number"},
-            "converted_amount": {"type": "number"},
-            "rate": {"type": "number", "description": "Tỷ giá"},
-            "formatted": {
-                "type": "string",
-                "description": "Kết quả dạng '120,000 VND'",
-            },
-        },
-        "required": ["status", "from", "to", "converted_amount", "rate"],
-    },
-    is_write=False,
-    examples=[
-        {
-            "amount": 99.99,
-            "from": "USD",
-            "to": "VND",
-            "plan": [
-                {
-                    "tool": "convert_currency_tool",
-                    "args": {"amount": 99.99, "from": "USD", "to": "VND"},
-                },
-            ],
-        },
-    ],
-    retry_config={"max_retries": 2},
-)
-
-**DB mapping:** Không có bảng exchange rates trong DB. Tool cần gọi external API (hoặc hardcode mapping USD→VND, USD→JPY, v.v.) vì products chỉ có price_currency_code='USD'. Output schema giữ nguyên như design.
-
-#### `get_shipping_quote_tool`
-
-```python
-_shipping_spec = ToolSpec(
-    name="get_shipping_quote_tool",
-    description=(
-        "Tính phí vận chuyển và thời gian giao hàng dự kiến."
-    ),
-    input_schema={
-        "type": "object",
-        "properties": {
-            "zip_code": {
-                "type": "string",
-                "description": "Mã vùng giao hàng",
-            },
-            "items_count": {
-                "type": "integer",
-                "description": "Số lượng items (optional)",
-            },
-            "cart_total": {
-                "type": "string",
-                "description": "Giá trị đơn hàng dạng '$199.99' (optional)",
-            },
-        },
-        "required": ["zip_code"],
-    },
-    output_schema={
-        "type": "object",
-        "properties": {
-            "status": {
-                "type": "string",
-                "enum": ["success", "error", "unavailable"],
-            },
-            "destination": {"type": "string", "description": "Khu vực giao hàng"},
-            "options": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "provider": {"type": "string"},
-                        "cost": {"type": "string", "description": "Phí dạng '$15.00' (units/nanos → format_price)"},
-                        "delivery_days": {
-                            "type": "integer",
-                            "description": "Số ngày giao hàng dự kiến",
-                        },
-                        "delivery_window": {
-                            "type": "string",
-                            "description": "Khung giờ (vd: '2-4 ngày')",
-                        },
-                        "description": {"type": "string"},
-                    },
-                    "required": ["provider", "cost", "delivery_days"],
-                },
-            },
-        },
-        "required": ["status", "options"],
-    },
-    is_write=False,
-    examples=[
-        {
-            "zip_code": "70000",
-            "cart_total": "$227.97",
-            "plan": [
-                {
-                    "tool": "get_shipping_quote_tool",
-                    "args": {"zip_code": "70000", "cart_total": "$227.97"},
-                },
-            ],
-        },
-    ],
-    retry_config={"max_retries": 2},
-)
-
-**DB mapping:** Không có bảng shipping quotes. `shipping` table chỉ ghi lại shipment sau khi đặt hàng. Tool implement bằng business rules (vd: free ship > $100, flat rate $15 theo zip). Cost format dùng `shipping_cost_units/nanos` pattern giống products.
-
-#### `checkout_tool` (WRITE)
-
-```python
-_checkout_spec = ToolSpec(
-    name="checkout_tool",
-    description=(
-        "Tiến hành thanh toán đơn hàng. "
-        "CẦN CONFIRM — yêu cầu user xác nhận toàn bộ đơn hàng trước khi thực hiện."
-    ),
-    input_schema={
-        "type": "object",
-        "properties": {
-            "shipping_address": {
-                "type": "object",
-                "properties": {
-                    "street": {"type": "string"},
-                    "city": {"type": "string"},
-                    "state": {"type": "string"},
-                    "zip": {"type": "string"},
-                    "country": {"type": "string"},
-                },
-                "required": ["street", "city", "zip", "country"],
-                "description": "Địa chỉ giao hàng đầy đủ",
-            },
-            "shipping_provider": {
-                "type": "string",
-                "description": "Hãng vận chuyển đã chọn từ shipping options",
-            },
-            "note": {
-                "type": "string",
-                "description": "Ghi chú cho đơn hàng (optional)",
-            },
-        },
-        "required": ["shipping_address", "shipping_provider"],
-    },
-    output_schema={
-        "type": "object",
-        "properties": {
-            "status": {
-                "type": "string",
-                "enum": ["pending", "confirmed", "denied", "error"],
-                "description": "pending = chờ user xác nhận thanh toán",
-            },
-            "token": {
-                "type": "string",
-                "description": "HMAC confirmation token (khi status=pending)",
-            },
-            "order_id": {
-                "type": "string",
-                "description": "Mã đơn hàng (khi status=confirmed) — DB: order.order_id",
-            },
-            "total": {
-                "type": "string",
-                "description": "Tổng thanh toán dạng '$227.97' — computed từ orderitem",
-            },
-            "summary": {
-                "type": "object",
-                "properties": {
-                    "items_count": {"type": "integer"},
-                    "subtotal": {"type": "string", "description": "SUM item_cost từ orderitem"},
-                    "shipping": {"type": "string", "description": "Từ shipping.shipping_cost_units/nanos"},
-                    "total": {"type": "string", "description": "subtotal + shipping"},
-                    "estimated_delivery": {"type": "string", "description": "Từ shipping quote (không lưu DB)"},
-                },
-                "description": "Tóm tắt đơn hàng trước khi xác nhận",
-            },
-        },
-        "required": ["status"],
-    },
-    is_write=True,
-    examples=[
-        {
-            "shipping_provider": "FastShip",
-            "plan": [
-                {"tool": "get_cart_tool", "args": {}},
-                {"tool": "get_shipping_quote_tool", "args": {"zip_code": "70000"}},
-                {
-                    "tool": "checkout_tool",
-                    "args": {
-                        "shipping_address": $steps[0].shipping_address,
-                        "shipping_provider": "FastShip",
-                    },
-                },
-            ],
-        },
-    ],
-    retry_config={"max_retries": 1},
-)
-
-**DB mapping:** INSERT INTO `accounting.order`(order_id), `accounting.orderitem`(product_id, quantity, item_cost_units/nanos), `accounting.shipping`(shipping_tracking_id, cost, address). Output `order_id` là primary key. `total` và `summary` computed từ orderitem + shipping. Không có `order_status` column — cần thêm migration nếu muốn tracking (hiện tại `order` table chỉ có `order_id`). `estimated_delivery` lấy từ quote response, không persist.
-
-#### `get_order_status_tool`
-
-Chỉ dùng field có sẵn trong DB. `order` table chỉ có `order_id` — không có status, carrier, timeline.
-
-```python
-_order_spec = ToolSpec(
-    name="get_order_status_tool",
-    description=(
-        "Tra cứu đơn hàng đã đặt. "
-        "Trả về danh sách sản phẩm, tổng tiền, tracking number (nếu đã giao cho ship)."
-    ),
-    input_schema={
-        "type": "object",
-        "properties": {
-            "order_id": {
-                "type": "string",
-                "description": "Mã đơn hàng",
-            },
-        },
-        "required": ["order_id"],
-    },
-    output_schema={
-        "type": "object",
-        "properties": {
-            "status": {
-                "type": "string",
-                "enum": ["success", "not_found", "error"],
-            },
-            "order_id": {"type": "string", "description": "DB: accounting.order.order_id"},
-            "total": {"type": "string", "description": "Computed: SUM(orderitem.item_cost_units/nanos)"},
-            "tracking_number": {"type": "string", "description": "DB: shipping.shipping_tracking_id (nếu có)"},
-            "shipping_address": {
-                "type": "object",
-                "properties": {
-                    "street": {"type": "string"},
-                    "city": {"type": "string"},
-                    "state": {"type": "string"},
-                    "zip": {"type": "string"},
-                    "country": {"type": "string"},
-                },
-                "description": "DB: shipping table",
-            },
-            "items": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "product_id": {"type": "string", "description": "DB: orderitem.product_id"},
-                        "name": {"type": "string", "description": "JOIN với products.name"},
-                        "quantity": {"type": "integer", "description": "DB: orderitem.quantity"},
-                        "price": {"type": "string", "description": "DB: orderitem.item_cost_units/nanos → format_price"},
-                    },
-                    "required": ["product_id", "name", "quantity", "price"],
-                },
-            },
-        },
-        "required": ["status", "order_id"],
-    },
-    is_write=False,
-    examples=[
-        {
-            "order_id": "ORD-20240715-1234",
-            "plan": [
-                {"tool": "get_order_status_tool", "args": {"order_id": "ORD-20240715-1234"}},
-            ],
-        },
-    ],
-    retry_config={"max_retries": 2},
-)
-```
-
-**DB mapping:** `accounting.order` (order_id), `accounting.orderitem` (product_id, quantity, item_cost_units/nanos), `accounting.shipping` (shipping_tracking_id, address). **Loại bỏ:** `order_status`, `carrier`, `estimated_delivery`, `items[].status`, `timeline` — không column nào tồn tại trong DB hiện tại.
+Mỗi tool cần implement output normalization: gộp `price_units` + `price_nanos` → `price` string; gộp `shipping_cost_units` + `shipping_cost_nanos` → `cost` string.
 
 #### Registry class
 
@@ -1242,24 +518,7 @@ class ToolRegistry:
 
 #### Register tool tại startup
 
-Mỗi tool file tự đăng ký với `ToolSpec` (đã define ở trên) khi import:
-
-```python
-# tools/search/__init__.py
-from tools.registry import ToolRegistry
-
-# _search_spec được define ngay trong file này
-ToolRegistry.register(_search_spec, fn=search_products_v2)
-```
-
-```python
-# tools/cart_tool.py
-from tools.registry import ToolRegistry
-
-ToolRegistry.register(_add_cart_spec, fn=add_to_cart_tool)
-```
-
-Không cần import `ToolSpec` ở mỗi file — `ToolSpec` instances là global trong module đó.
+Mỗi tool file tự đăng ký với `ToolSpec` (global variable trong module đó) khi import: gọi `ToolRegistry.register(spec_instance, fn=tool_function)`. Không cần import `ToolSpec` class — instances đã có sẵn ở module-level.
 
 #### Lợi ích
 
@@ -1275,54 +534,14 @@ Không cần import `ToolSpec` ở mỗi file — `ToolSpec` instances là globa
 
 ### Price Normalization
 
-Mọi tool output đều phải gộp `price_units` + `price_nanos` thành `price` string (được đảm bảo bởi `ToolExecutor._normalize_output`):
-
-```python
-# src/tools/_normalize.py
-
-def format_price(units: int, nanos: int, currency: str = "USD") -> str:
-    """
-    DB stores price as (units BIGINT, nanos INT) = ($101, 960000000) → $101.96.
-    nanos = 960_000_000 means 96 cents (nanos // 10_000_000).
-    Truncate to 2 decimal places for display.
-    """
-    if currency == "USD":
-        return f"${units}.{nanos // 10_000_000:02d}"
-    return f"{units}.{nanos // 10_000_000:02d} {currency}"
-
-
-def normalize_product(raw: dict) -> dict:
-    """
-    Map DB columns → API output.
-    DB column name → output field:
-      price_units (BIGINT) + price_nanos (INT) → price (string)
-      picture (filename) → image (tool prepends CDN base URL)
-      categories (comma-separated TEXT) → categories (array)
-    """
-    units = raw.get("price_units", 0) or raw.get("units", 0)
-    nanos = raw.get("price_nanos", 0) or raw.get("nanos", 0)
-    categories_raw = raw.get("categories", "")
-    categories = categories_raw.split(",") if isinstance(categories_raw, str) else list(categories_raw)
-
-    return {
-        "id": raw.get("id", ""),
-        "name": raw.get("name", ""),
-        "price": format_price(int(units), int(nanos)),
-        "description": raw.get("description", ""),
-        "image": raw.get("picture", ""),            # filename → image (API consumer ghép base URL)
-        "categories": categories,                    # "telescopes,travel" → ["telescopes", "travel"]
-    }
-
-
-def normalize_cost(raw: dict) -> str:
-    """Normalize shipping_cost_units + shipping_cost_nanos → price string."""
-    units = raw.get("shipping_cost_units", 0)
-    nanos = raw.get("shipping_cost_nanos", 0)
-    currency = raw.get("shipping_cost_currency_code", "USD")
-    return format_price(int(units), int(nanos), currency)
-```
-
-Không expose `price_units`, `price_nanos` hay `price_usd.units` trong output string.
+Mọi tool output phải gộp `price_units` (BIGINT) + `price_nanos` (INT) thành `price` string. Quy tắc:
+- `nanos // 10_000_000` → 2 decimal cents (vd: nanos=960_000_000 → 96 cents)
+- USD: format `$units.cents` (vd: `$101.96`)
+- Non-USD: format `units.cents currency` (vd: `101.96 EUR`)
+- Shipping: dùng `shipping_cost_units` + `shipping_cost_nanos` + `shipping_cost_currency_code`
+- Không expose `price_units`, `price_nanos` hay `price_usd.units` trong output
+- `picture` → `image` (filename, consumer ghép CDN base URL)
+- `categories` comma-separated TEXT → array
 
 ### Write Tool Confirmation
 
@@ -1383,121 +602,32 @@ User query
 
 **File:** `graph/nodes/intent_parser.py`
 
-```python
-# graph/nodes/intent_parser.py
+#### Thuật toán
 
-import re
-import json
-import logging
-from typing import Optional
+1. Lấy user query từ `state.messages[-1]`
+2. **Rule-based match** (zero-cost path): chạy regex patterns lên query
+   - Pattern set: `cart_view`, `cart_add`, `search`, `review`, `recommend`, `currency`, `shipping`, `checkout`, `greeting`
+   - Mỗi pattern match → gán score: `1.0` nếu match toàn bộ query, `0.8` nếu match substring
+   - Nếu intent có score ≥ 0.8 → dùng ngay (fast path)
+3. **Entity extraction rule-based**: số lượng (`quantity`), khoảng giá (`min_price`/`max_price`)
+4. **LLM fallback** (khi rule không đủ tự tin): gọi LLM với prompt ngắn (<100 tokens), yêu cầu trả JSON `{intent, entities, confidence}`
+5. **Output**: `{intent, entities, confidence, node_durations}`
 
-logger = logging.getLogger("graph.nodes.intent_parser")
+#### Rule patterns tham khảo
 
-# ── Rule patterns (đơn giản, zero-cost) ──
-PATTERNS = {
-    "cart_view":    re.compile(r"(?:xem|giỏ|cart|co.*giỏ)", re.IGNORECASE),
-    "cart_add":     re.compile(r"(?:thêm|add|cho.*vào|bỏ.*vào)", re.IGNORECASE),
-    "search":       re.compile(r"(?:tìm|search|kiếm|find)", re.IGNORECASE),
-    "review":       re.compile(r"(?:review|đánh giá|nhận xét|sao)", re.IGNORECASE),
-    "recommend":    re.compile(r"(?:gợi ý|recommend|suggest|tương tự)", re.IGNORECASE),
-    "currency":     re.compile(r"(?:VND|JPY|EUR|đổi.*tiền|convert|giá.*VN)", re.IGNORECASE),
-    "shipping":     re.compile(r"(?:ship|vận chuyển|giao.*hàng|phí.*ship)", re.IGNORECASE),
-    "checkout":     re.compile(r"(?:thanh toán|checkout|mua|đặt.*hàng|order)", re.IGNORECASE),
-    "greeting":     re.compile(r"^(?:hi|hello|chào|hey|ok|có.*giúp)", re.IGNORECASE),
-}
+| Intent | Pattern (rút gọn) |
+|---|---|
+| `cart_view` | `xem\|giỏ\|cart\|co.*giỏ` |
+| `cart_add` | `thêm\|add\|cho.*vào\|bỏ.*vào` |
+| `search` | `tìm\|search\|kiếm\|find` |
+| `review` | `review\|đánh giá\|nhận xét\|sao` |
+| `recommend` | `gợi ý\|recommend\|suggest\|tương tự` |
+| `currency` | `VND\|JPY\|EUR\|đổi.*tiền\|convert` |
+| `shipping` | `ship\|vận chuyển\|giao.*hàng\|phí.*ship` |
+| `checkout` | `thanh toán\|checkout\|mua\|đặt.*hàng\|order` |
+| `greeting` | `^(hi\|hello\|chào\|hey\|ok\|có.*giúp)` |
 
-
-class IntentParser:
-    """
-    Layer 1: Rule-based parser với LLM fallback.
-    - Fast path: regex match → confidence ≥ 0.8 → dùng ngay.
-    - Slow path: regex ambiguous → LLM classify (prompt ngắn, <100 tokens).
-    """
-
-    def __init__(self):
-        self._llm = None
-
-    def _get_llm(self):
-        if self._llm is None:
-            from src.llm.llm import llm_model
-            self._llm = llm_model
-        return self._llm
-
-    async def __call__(self, state) -> dict:
-        t0 = time.monotonic_ns()
-        user_query = self._get_user_query(state.get("messages", []))
-
-        # Bước 1: Rule-based match
-        intent_scores = {}
-        entities = self._extract_entities_rule(user_query)
-
-        for intent, pattern in PATTERNS.items():
-            m = pattern.search(user_query)
-            if m:
-                intent_scores[intent] = 1.0 if m.group(0) == user_query.strip() else 0.8
-
-        if intent_scores:
-            best_intent = max(intent_scores, key=intent_scores.get)
-            best_score = intent_scores[best_intent]
-            if best_score >= 0.8:
-                logger.info("[INTENT_PARSER] rule match | intent=%s | score=%.2f", best_intent, best_score)
-                return {
-                    "intent": best_intent,
-                    "entities": entities,
-                    "confidence": best_score,
-                    "node_durations": {"IntentParser": _ms(t0)},
-                }
-
-        # Bước 2: LLM fallback (chỉ khi rule không đủ tự tin)
-        llm = self._get_llm()
-        prompt = (
-            "Phân loại ý định người dùng từ câu sau. "
-            "Chỉ trả về JSON: {\"intent\": \"...\", \"entities\": {...}, \"confidence\": 0.0-1.0}\n"
-            f"Intents: {list(PATTERNS.keys())}\n"
-            f"Query: {user_query}\n"
-            f"History: {self._format_history(state.get('messages', []))}\n"
-        )
-        response = llm.invoke(prompt, temperature=0.0, max_tokens=200,
-                              response_format={"type": "json_object"})
-        result = json.loads(response.content)
-
-        return {
-            "intent": result.get("intent", "unknown"),
-            "entities": {**entities, **result.get("entities", {})},
-            "confidence": result.get("confidence", 0.5),
-            "node_durations": {"IntentParser": _ms(t0)},
-        }
-
-    @staticmethod
-    def _extract_entities_rule(query: str) -> dict:
-        """Rule-based entity extraction: số lượng, price range, category."""
-        entities = {}
-        # Quantity: "2 cái", "3 tents"
-        qty = re.search(r"(\d+)\s*(cái|chiếc|tents?|items?)", query, re.IGNORECASE)
-        if qty:
-            entities["quantity"] = int(qty.group(1))
-        # Price range: "dưới $200", "under $200", "từ $50 tới $150"
-        price_range = re.search(r"(?:dưới|under|<|nhỏ.*hơn)\s*\$?(\d+)", query, re.IGNORECASE)
-        if price_range:
-            entities["max_price"] = price_range.group(1)
-        price_min = re.search(r"(?:trên|over|>|lớn.*hơn)\s*\$?(\d+)", query, re.IGNORECASE)
-        if price_min:
-            entities["min_price"] = price_min.group(1)
-        return entities
-
-    @staticmethod
-    def _get_user_query(messages) -> str:
-        if not messages:
-            return ""
-        last = messages[-1]
-        return last.content if hasattr(last, "content") else str(last)
-
-    @staticmethod
-    def _format_history(messages) -> str:
-        return "; ".join(
-            m.content[:100] for m in messages[-4:] if hasattr(m, "content")
-        )
-```
+Entity extraction rules: `(\d+)\s*(cái|chiếc|tents?|items?)` → `quantity`; `dưới|under|< $(\d+)` → `max_price`; `trên|over|> $(\d+)` → `min_price`.
 
 ### 7.2 Layer 2: Task Graph Builder (TGB)
 
@@ -1537,125 +667,31 @@ class DAGPlan:
 | Dependency | implicit (index-based) | Explicit `depends_on: ["node_0"]` |
 | Partial replan | Impossible (phải restart) | Chỉ sửa node lỗi, giữ node khác |
 
-#### Implementation
+#### Thuật toán
 
-```python
-class TaskGraphBuilder:
-    """
-    LLM nhận intent + entities → sinh DAG plan.
-    Chỉ chọn tool + nối edge — không fill argument.
-    """
+1. Đọc `state`: `intent`, `entities`, `planner_memory`
+2. **Build prompt động**: đọc tất cả tool schemas từ `ToolRegistry.get_all_schemas_text()` + format `planner_memory` → ghép vào `TGB_PROMPT` template (§11)
+3. **Gọi LLM** (`temperature=0.2`, `response_format=json_object`): LLM trả DAG plan gồm `{nodes, edges, reasoning, overall_confidence}`
+4. **Validate DAG**:
+   - Mỗi `node.tool` phải tồn tại trong `ToolRegistry`
+   - Mỗi `depends_on` ID phải là node ID hợp lệ
+   - Không self-reference
+5. **Tính overall_confidence** = average confidence các node
+6. **Output**: `{plan (DAG), plan_step_index=0, current_goal, planner_reasoning, plan_confidence, node_durations}`
 
-    TGB_PROMPT = """..."""  # Xem §11 (đã cập nhật)
+#### Build prompt logic
 
-    def __init__(self):
-        self._llm = None
-
-    def _get_llm(self):
-        if self._llm is None:
-            from src.llm.llm import llm_model
-            self._llm = llm_model
-        return self._llm
-
-    async def __call__(self, state) -> dict:
-        t0 = time.monotonic_ns()
-        user_query = self._get_user_query(state.get("messages", []))
-        intent = state.get("intent", "unknown")
-        entities = state.get("entities", {})
-        planner_memory = state.get("planner_memory", {})
-
-        # Đọc schema động từ ToolRegistry
-        from tools.registry import ToolRegistry
-
-        llm = self._get_llm()
-        prompt = self._build_tgb_prompt(
-            user_query=user_query,
-            intent=intent,
-            entities=entities,
-            planner_memory=planner_memory,
-            registry=ToolRegistry,
-        )
-
-        response = llm.invoke(
-            prompt,
-            temperature=0.2,
-            max_tokens=2048,
-            response_format={"type": "json_object"},
-        )
-        dag = self._parse_dag(response.content)
-
-        # Validate: tool names trong registry + depends_on IDs tồn tại
-        node_ids = {n["id"] for n in dag["nodes"]}
-        for node in dag["nodes"]:
-            assert ToolRegistry.get_spec(node["tool"]) is not None, \
-                f"Unknown tool: {node['tool']}"
-            for dep in node.get("depends_on", []):
-                assert dep in node_ids, \
-                    f"Node {node['id']} depends on {dep} — not found"
-                assert dep != node["id"], \
-                    f"Node {node['id']} self-reference"
-
-        # Confidence check: nếu overall < threshold → không execute, hỏi user
-        overall_confidence = sum(n.get("confidence", 0.5) for n in dag["nodes"]) / max(len(dag["nodes"]), 1)
-        dag["overall_confidence"] = overall_confidence
-        dag["current_goal"] = intent
-
-        logger.info("[TGB] session=%s | intent=%s | nodes=%d | conf=%.2f",
-                     state.get("session_id"), intent, len(dag["nodes"]), overall_confidence)
-
-        return {
-            "plan": dag,                     # DAGPlan — replaces list[PlanStep]
-            "plan_step_index": 0,
-            "current_goal": intent,
-            "planner_reasoning": dag.get("reasoning", ""),
-            "plan_confidence": overall_confidence,
-            "node_durations": {"TaskGraphBuilder": _ms(t0)},
-        }
-
-    @staticmethod
-    def _parse_dag(content: str) -> dict:
-        """Parse LLM JSON output → DAGPlan."""
-        data = json.loads(content) if isinstance(content, str) else content
-        return {
-            "nodes": data.get("nodes", []),
-            "edges": data.get("edges", []),
-            "reasoning": data.get("reasoning", ""),
-            "overall_confidence": data.get("overall_confidence", 0.5),
-        }
-
-    @staticmethod
-    def _get_user_query(messages) -> str:
-        if not messages:
-            return ""
-        last = messages[-1]
-        return last.content if hasattr(last, "content") else str(last)
-
-    def _build_tgb_prompt(self, user_query, intent, entities, planner_memory, registry):
-        """Build prompt với schema động từ ToolRegistry."""
-        schemas_text = registry.get_all_schemas_text()
-        memory_text = self._format_memory(planner_memory)
-
-        return TGB_PROMPT.format(
-            tool_schemas_text=schemas_text,
-            user_query=user_query,
-            intent=intent,
-            entities=json.dumps(entities, ensure_ascii=False),
-            planner_memory=memory_text,
-        )
-
-    @staticmethod
-    def _format_memory(memory: dict) -> str:
-        if not memory:
-            return "(không có dữ liệu phiên trước)"
-        parts = []
-        if "last_search" in memory:
-            parts.append(f"Tìm kiếm gần đây: {memory['last_search']}")
-        if "current_cart_items" in memory:
-            parts.append(f"Sản phẩm trong giỏ: {len(memory['current_cart_items'])}")
-        if "last_product_id" in memory:
-            parts.append(f"Product ID gần đây: {memory['last_product_id']}")
-        return "; ".join(parts) if parts else "(không có dữ liệu phiên trước)"
 ```
+TGB_PROMPT.format(
+    tool_schemas_text=ToolRegistry.get_all_schemas_text(),
+    user_query=query,
+    intent=intent,
+    entities=json.dumps(entities),
+    planner_memory=format_memory(planner_memory),
+)
+```
+
+`format_memory`: nếu có `last_search` / `current_cart_items` / `last_product_id` / `last_intent` → tạo text ngữ cảnh ngắn; nếu không → "(không có dữ liệu phiên trước)".
 
 ### Planner Memory (ngắn hạn)
 
@@ -1757,405 +793,78 @@ Tool Executor (DAG Runner):
 
 ### 8.1 DAG Runner Implementation
 
-```python
-# graph/nodes/tool_executor.py
+**File:** `graph/nodes/tool_executor.py`
 
-import re
-import json
-import asyncio
-import logging
-from collections import defaultdict
-from typing import Optional
+#### Thuật toán chính
 
-import grpc
-
-from tools.registry import ToolRegistry
-from guardrails.tool_validator import validate_tool_call
-from guardrails.fallback import with_fallback
-from memory.store import cache_store
-
-logger = logging.getLogger("graph.nodes.tool_executor")
-
-WRITE_TOOLS = frozenset({"add_to_cart_tool"})
-
-# ── Variable reference patterns ──
-STEPS_REF = re.compile(r"^\$steps\[([a-zA-Z_]\w*)\]\.(.+)$")           # $steps[node_id].path
-SESSION_REF = re.compile(r"^\$session\.(.+)$")
-INPUT_REF = re.compile(r"^\$input\.entities\.(.+)$")
-MEMORY_REF = re.compile(r"^\$memory\.(.+)$")
-FIRST_HELPER = re.compile(r"^\$first\(steps\[([a-zA-Z_]\w*)\]\.(.+),\s*default=(.+)\)$")
-EXISTS_HELPER = re.compile(r"^\$exists\(steps\[([a-zA-Z_]\w*)\]\.(.+)\)$")
-SAFE_INDEX_HELPER = re.compile(
-    r"^\$safe_index\(steps\[([a-zA-Z_]\w*)\]\.(.+),\s*(\d+),\s*default=(.+)\)$"
-)
-
-
-class ToolExecutor:
-    """
-    DAG-based tool executor. Chạy node theo topological order,
-    song song các node không có dependency.
-    """
-
-    MAX_RETRIES = {
-        "search_products_v2": 2,
-        "get_product_reviews_tool": 1,
-        "get_recommendations_tool": 1,
-        "convert_currency_tool": 2,
-        "get_shipping_quote_tool": 2,
-        "get_cart_tool": 1,
-        "add_to_cart_tool": 1,
-    }
-
-    async def __call__(self, state: "ShoppingState") -> dict:
-        t0 = time.monotonic_ns()
-        dag = state.get("plan", {})
-        nodes = dag.get("nodes", [])
-        if not nodes:
-            return {"node_durations": {"ToolExecutor": _ms(t0)}}
-
-        node_map = {n["id"]: n for n in nodes}
-        done: set[str] = set()
-        node_outputs: dict[str, dict] = {}
-        errors: dict[str, str] = {}
-
-        # Build dependency graph
-        in_degree: dict[str, set[str]] = {}
-        for n in nodes:
-            nid = n["id"]
-            in_degree[nid] = set(n.get("depends_on", []))
-
-        while len(done) < len(nodes):
-            # Tìm node ready (all dependencies done)
-            ready_ids = [
-                nid for nid in in_degree
-                if nid not in done and in_degree[nid].issubset(done)
-            ]
-            if not ready_ids:
-                # Deadlock
-                logger.error("[TOOL_EXECUTOR] Deadlock detected | done=%s", done)
-                break
-
-            # Chạy song song các node ready
-            coros = [
-                self._execute_node(
-                    node_map[nid], node_outputs, node_map, state, errors
-                )
-                for nid in ready_ids
-            ]
-            results = await asyncio.gather(*coros, return_exceptions=True)
-
-            for nid, result in zip(ready_ids, results):
-                if isinstance(result, Exception):
-                    errors[nid] = str(result)
-                    logger.error("[TOOL_EXECUTOR] node=%s exception=%s", nid, result)
-                    done.add(nid)
-                    continue
-                if result is None:
-                    done.add(nid)
-                    continue
-
-                result_data, node_status = result
-
-                # Conditional branching
-                node = node_map[nid]
-                if node.get("condition"):
-                    branch = self._evaluate_condition(result_data, node["condition"])
-                    if branch == "ask_user":
-                        return {
-                            "tool_results": node_outputs,
-                            "errors": errors,
-                            "pending_action": {
-                                "action": "ask_user",
-                                "node_id": nid,
-                                "message": node["condition"].get("ask_message",
-                                    "Tôi cần bạn xác nhận thêm thông tin."),
-                            },
-                        }
-                    elif branch == "stop":
-                        done.add(nid)
-                        continue
-
-                done.add(nid)
-                node_outputs[nid] = result_data
-
-        return {
-            "tool_results": node_outputs,
-            "errors": errors,
-            "node_durations": {"ToolExecutor": _ms(t0)},
-        }
-
-    async def _execute_node(
-        self,
-        node: dict,
-        node_outputs: dict[str, dict],
-        node_map: dict[str, dict],
-        state: "ShoppingState",
-        errors: dict[str, str],
-    ):
-        tool_name = node["tool"]
-        nid = node["id"]
-        raw_args = node.get("args", {})
-
-        # 1. Resolve variable references với helpers an toàn
-        resolved_args = self._resolve_args(raw_args, node_outputs, state)
-        if resolved_args is None:
-            logger.warning("[TOOL_EXECUTOR] %s args resolve failed", nid)
-            return None
-
-        # 2. L3 Validate
-        validation = validate_tool_call(tool_name, resolved_args, state.user_id)
-        if not validation.is_valid:
-            logger.warning("[TOOL_EXECUTOR] %s L3 blocked: %s", nid, validation.blocked_reason)
-            errors[nid] = validation.blocked_reason
-            return None
-
-        # 3. Cache check (read-only)
-        if tool_name not in WRITE_TOOLS:
-            cache_key = (tool_name, str(resolved_args))
-            cached = cache_store.get(*cache_key)
-            if cached is not None:
-                return (json.loads(cached), "cached")
-
-        # 4. Execute tool with retry
-        raw = await self._execute_with_retry(tool_name, resolved_args)
-        if raw is None:
-            errors[nid] = f"{tool_name} failed after retries"
-            return None
-
-        # 5. Normalize output
-        normalized = self._normalize_output(tool_name, raw)
-        parsed = json.loads(normalized) if isinstance(normalized, str) else normalized
-
-        # 6. Cache set (read-only)
-        if tool_name not in WRITE_TOOLS:
-            cache_store.set(*cache_key, normalized)
-
-        return (parsed, "grpc")
-
-    # ──────────────────────────────────────────────────────────────
-    # 8.2 Variable Reference Resolver (với helpers an toàn)
-    # ──────────────────────────────────────────────────────────────
-
-    def _resolve_args(self, args: dict, node_outputs: dict, state: "ShoppingState") -> Optional[dict]:
-        resolved = {}
-        for key, value in args.items():
-            resolved[key] = self._resolve_value(value, node_outputs, state)
-            if resolved[key] is None and self._is_ref(value):
-                logger.warning("[RESOLVE] arg '%s' = '%s' → None", key, value)
-                return None
-        return resolved
-
-    def _resolve_value(self, value, node_outputs: dict, state: "ShoppingState"):
-        if isinstance(value, dict):
-            return {k: self._resolve_value(v, node_outputs, state) for k, v in value.items()}
-        if isinstance(value, list):
-            return [self._resolve_value(v, node_outputs, state) for v in value]
-        if not isinstance(value, str):
-            return value
-
-        # Helper: $first(steps[nid].path, default=val)
-        m = FIRST_HELPER.match(value)
-        if m:
-            nid, path, default = m.group(1), m.group(2), m.group(3)
-            if nid not in node_outputs:
-                return self._parse_default(default)
-            val = self._get_by_path(node_outputs[nid], path)
-            if val is None or (isinstance(val, list) and len(val) == 0):
-                return self._parse_default(default)
-            return val[0] if isinstance(val, list) else val
-
-        # Helper: $exists(steps[nid].path)
-        m = EXISTS_HELPER.match(value)
-        if m:
-            nid, path = m.group(1), m.group(2)
-            if nid not in node_outputs:
-                return False
-            return self._get_by_path(node_outputs[nid], path) is not None
-
-        # Helper: $safe_index(steps[nid].path, idx, default=val)
-        m = SAFE_INDEX_HELPER.match(value)
-        if m:
-            nid, path, idx, default = m.group(1), m.group(2), int(m.group(3)), m.group(4)
-            if nid not in node_outputs:
-                return self._parse_default(default)
-            arr = self._get_by_path(node_outputs[nid], path)
-            if not isinstance(arr, (list, tuple)) or idx >= len(arr):
-                return self._parse_default(default)
-            return arr[idx]
-
-        # $steps[node_id].path
-        m = STEPS_REF.match(value)
-        if m:
-            nid, path = m.group(1), m.group(2)
-            if nid not in node_outputs:
-                logger.error("[RESOLVE] node %s not executed yet", nid)
-                return None
-            return self._get_by_path(node_outputs[nid], path)
-
-        # $session.*
-        m = SESSION_REF.match(value)
-        if m:
-            return state.get(m.group(1)) or state.get("user_id", "")
-
-        # $input.entities.*
-        m = INPUT_REF.match(value)
-        if m:
-            return state.get("entities", {}).get(m.group(1))
-
-        # $memory.*
-        m = MEMORY_REF.match(value)
-        if m:
-            return state.get("planner_memory", {}).get(m.group(1))
-
-        return value
-
-    @staticmethod
-    def _parse_default(default_str: str):
-        """Parse default value từ syntax helper."""
-        if default_str == "null" or default_str == "None":
-            return None
-        if default_str == "true":
-            return True
-        if default_str == "false":
-            return False
-        try:
-            return int(default_str)
-        except ValueError:
-            pass
-        try:
-            return float(default_str)
-        except ValueError:
-            pass
-        return default_str
-
-    @staticmethod
-    def _is_ref(value) -> bool:
-        return isinstance(value, str) and value.startswith("$")
-
-    @staticmethod
-    def _get_by_path(data: dict, path: str):
-        parts = re.split(r"\.(?![^\[]*\])", path)
-        current = data
-        for part in parts:
-            array_match = re.match(r"^(\w+)\[(\d+)\]$", part)
-            if array_match:
-                key = array_match.group(1)
-                idx = int(array_match.group(2))
-                if isinstance(current, dict) and key in current:
-                    arr = current[key]
-                    if isinstance(arr, (list, tuple)) and idx < len(arr):
-                        current = arr[idx]
-                    else:
-                        return None
-                else:
-                    return None
-            else:
-                if isinstance(current, dict) and part in current:
-                    current = current[part]
-                    if isinstance(current, (list, tuple)) and len(current) > 0:
-                        current = current[0]
-                else:
-                    return None
-        return current
-
-    # ──────────────────────────────────────────────────────────────
-    # 8.3 Conditional Branching
-    # ──────────────────────────────────────────────────────────────
-
-    @staticmethod
-    def _evaluate_condition(result: dict, condition: dict) -> str:
-        """
-        Evaluate conditional branching dựa trên result của node.
-        Condition format:
-          {"on": "result.count", "==0": "ask_user", ">1": "ask_choose", "default": "continue"}
-        """
-        on_path = condition.get("on", "")
-        actual = ToolExecutor._get_by_path(result, on_path)
-
-        for cond_key, action in condition.items():
-            if cond_key in ("on", "default"):
-                continue
-            if ToolExecutor._eval_single_cond(actual, cond_key):
-                return action
-
-        return condition.get("default", "continue")
-
-    @staticmethod
-    def _eval_single_cond(actual, cond_key: str) -> bool:
-        """Evaluate 1 condition key like '==0', '>1', '!=null'."""
-        if cond_key.startswith("=="):
-            expected = cond_key[2:]
-            try:
-                return float(actual) == float(expected)
-            except (ValueError, TypeError):
-                return str(actual) == expected
-        if cond_key.startswith("!="):
-            expected = cond_key[2:]
-            try:
-                return float(actual) != float(expected)
-            except (ValueError, TypeError):
-                return str(actual) != expected
-        if cond_key.startswith(">"):
-            try:
-                return float(actual) > float(cond_key[1:])
-            except (ValueError, TypeError):
-                return False
-        if cond_key.startswith("<"):
-            try:
-                return float(actual) < float(cond_key[1:])
-            except (ValueError, TypeError):
-                return False
-        if cond_key == "null":
-            return actual is None
-        if cond_key == "not_null":
-            return actual is not None
-        return False
-
-    # ──────────────────────────────────────────────────────────────
-    # Tool Execution
-    # ──────────────────────────────────────────────────────────────
-
-    async def _execute_with_retry(self, tool_name: str, args: dict) -> Optional[str]:
-        max_retries = self.MAX_RETRIES.get(tool_name, 1)
-        for attempt in range(max_retries):
-            try:
-                tool_fn = ToolRegistry.get_fn(tool_name)
-                if tool_fn is None:
-                    logger.error("[TOOL_EXECUTOR] %s not in registry", tool_name)
-                    return None
-                return await tool_fn.ainvoke(args)
-            except (grpc.RpcError, Exception) as e:
-                if attempt == max_retries - 1:
-                    logger.error("[TOOL_EXECUTOR] %s failed after %d retries: %s",
-                                 tool_name, max_retries, str(e)[:200])
-                    return None
-                await asyncio.sleep(0.5 * (attempt + 1))
-        return None
-
-    def _normalize_output(self, tool_name: str, raw: str) -> str:
-        try:
-            data = json.loads(raw) if isinstance(raw, str) else raw
-        except json.JSONDecodeError:
-            return raw
-        if tool_name == "search_products_v2" and "products" in data:
-            data["products"] = [normalize_product(p) for p in data["products"]]
-        elif tool_name == "get_cart_tool" and "items" in data:
-            data["items"] = [normalize_product(i) for i in data["items"]]
-        return json.dumps(data, ensure_ascii=False)
-
-
-def normalize_product(raw: dict) -> dict:
-    from src.tools._normalize import format_price
-    units = raw.get("price_units", 0) or raw.get("units", 0)
-    nanos = raw.get("price_nanos", 0) or raw.get("nanos", 0)
-    return {
-        "id": raw.get("id", ""),
-        "name": raw.get("name", ""),
-        "price": format_price(int(units), int(nanos)),
-        "description": raw.get("description", ""),
-        "categories": raw.get("categories", []),
-    }
 ```
+DAG Runner:
+  node_map = index nodes by ID
+  in_degree = {node_id: set(depends_on)}
+  done = {}       # node IDs đã hoàn thành
+  node_outputs = {}  # {node_id: normalized_result}
+  errors = {}
+  
+  while len(done) < len(nodes):
+    ready_nodes = [n for n in nodes if n.id not in done and all deps in done]
+    if no ready_nodes → deadlock, break
+    
+    # Chạy song song tất cả ready_nodes
+    results = await asyncio.gather(*[execute_node(n) for n in ready_nodes])
+    
+    for each result:
+      if exception/None → ghi errors, continue
+      if node has condition → evaluate → ask_user/stop/continue
+      done.add(n.id); node_outputs[n.id] = result
+```
+
+#### `execute_node` — từng bước cho 1 node
+
+1. **Resolve variable references**: thay `$steps[node_id].path` / `$session.*` / `$input.entities.*` / `$memory.*` / `$first(...)` / `$exists(...)` / `$safe_index(...)` bằng giá trị thực từ `node_outputs` / `state`
+2. **L3 Validate**: `validate_tool_call(tool_name, resolved_args, user_id)` — allow-list, bounds, user isolation
+3. **Cache check**: nếu là read tool và cache hit → return cached (skip gRPC)
+4. **Execute tool với retry**: gọi `ToolRegistry.get_fn(tool_name).ainvoke(args)`, retry theo per-tool config
+5. **Normalize output**: gộp `price_units`+`price_nanos` → `price` string
+6. **Cache set**: nếu read tool → lưu cache
+7. **Return**: `(normalized_dict, source)` — source = `"grpc"` | `"cached"`
+
+### 8.2 Variable Reference Resolver
+
+Resolve các variable reference trong `node.args` trước khi gọi tool. Resolve đệ quy cho dict/list lồng nhau. Nếu bất kỳ reference nào resolve ra `None` → node fail (không execute).
+
+| Syntax | Resolve logic |
+|---|---|
+| `$steps[node_id].path` | `node_outputs[node_id]` → JSON path traversal (hỗ trợ `array[index]`) |
+| `$session.field` | `state.get(field)` |
+| `$input.entities.field` | `state.entities.get(field)` |
+| `$memory.field` | `state.planner_memory.get(field)` |
+| `$first(steps[nid].path, default=val)` | Lấy `path[0]` nếu là list, nếu empty/null → return `default` |
+| `$exists(steps[nid].path)` | Boolean: path có tồn tại trong `node_outputs[nid]` không? |
+| `$safe_index(steps[nid].path, idx, default=val)` | `path[idx]` nếu index hợp lệ, nếu không → `default` |
+
+Default value parsing: `null`/`None` → Python `None`; `true`/`false` → bool; số → int/float; giữ nguyên string.
+
+### 8.3 Conditional Branching
+
+Condition format trong DAG node:
+```json
+{"on": "total", "==0": "ask_user", ">1": "ask_choose", "default": "continue"}
+```
+
+Logic: lấy `result[on_path]` → so khớp lần lượt `==N`, `!=N`, `>N`, `<N`, `null`, `not_null` → action đầu tiên match. Fallback: `default`.
+
+Actions: `ask_user` → pause graph, trả message cho user; `stop` → dừng DAG, giữ kết quả hiện tại; `continue` → chạy node phụ thuộc bình thường.
+
+### 8.4 Tool Execution & Retry
+
+Per-tool retry config (tham khảo):
+
+| Tool | Max retries | Ghi chú |
+|---|---|---|
+| Read tools (search, product, review, recommend, currency, shipping, cart) | 2 | Exponential backoff 0.5s, 1s |
+| Write tool (add_to_cart) | 1 | Không retry checkout — tránh charge thẻ 2 lần |
+
+Output normalization: gọi `normalize_product()` trên từng item trong `products`/`items` array — gộp price units/nanos → price string.
 
 ---
 
@@ -2211,114 +920,33 @@ Partial replan:
   3. Executor chỉ chạy node mới, không chạy lại search/review
 ```
 
-### Implementation
+### Thuật toán
 
-```python
-# graph/nodes/reflection.py
-
-import json
-import logging
-
-logger = logging.getLogger("graph.nodes.reflection")
-
-REPLAN_TRIGGERS = {
-    "zero_result": {"max_count": 1},       # Allow 1 zero before replan
-    "tool_error": {"max_count": 2},
-    "low_confidence": {"threshold": 0.5},
-}
-
-
-class Reflection:
-    """
-    Post-execution check. Quyết định pass / replan dựa trên tool_results.
-    """
-
-    REPLAN_COUNT_KEY = "replan_count"
-
-    async def __call__(self, state) -> dict:
-        t0 = time.monotonic_ns()
-        tool_results = state.get("tool_results", {})
-        errors = state.get("errors", {})
-        plan_confidence = state.get("plan_confidence", 1.0)
-        replan_count = state.get("replan_count", 0)
-
-        issues = []
-
-        # Trigger 1: Zero result
-        for nid, result in tool_results.items():
-            if isinstance(result, dict):
-                total = result.get("total", -1)
-                if total == 0:
-                    issues.append({"type": "zero_result", "node": nid})
-                products = result.get("products", result.get("items", []))
-                if isinstance(products, list) and len(products) == 0:
-                    total_field = result.get("total", 0)
-                    if total_field != 0:
-                        pass  # Có other fields, not zero
-                    else:
-                        issues.append({"type": "zero_result", "node": nid, "detail": "empty list"})
-
-        # Trigger 2: Tool errors
-        error_count = len(errors)
-        if error_count >= REPLAN_TRIGGERS["tool_error"]["max_count"]:
-            issues.append({"type": "tool_error", "count": error_count})
-
-        # Trigger 3: Low confidence
-        if plan_confidence < REPLAN_TRIGGERS["low_confidence"]["threshold"]:
-            issues.append({"type": "low_confidence", "score": plan_confidence})
-
-        # Trigger 4: Semantic hallucination
-        if state.get("semantic_hallucination_detected"):
-            issues.append({"type": "semantic_hallucination", "detail": "gate rejected claim"})
-
-        if not issues:
-            logger.info("[REFLECTION] PASS | no issues | errors=%d", error_count)
-            return {
-                "reflection_result": "pass",
-                "replan_count": replan_count,
-                "node_durations": {"Reflection": _ms(t0)},
-            }
-
-        # Check replan limit
-        if replan_count >= 2:
-            logger.warning("[REFLECTION] replan limit reached | count=%d", replan_count)
-            return {
-                "reflection_result": "pass",  # Force pass, không replan nữa
-                "replan_count": replan_count,
-                "reflection_issues": issues,
-                "node_durations": {"Reflection": _ms(t0)},
-            }
-
-        logger.info("[REFLECTION] REPLAN | issues=%s", json.dumps(issues))
-        return {
-            "reflection_result": "replan",
-            "replan_count": replan_count + 1,
-            "reflection_issues": issues,
-            "node_durations": {"Reflection": _ms(t0)},
-        }
-```
+1. Đọc `tool_results`, `errors`, `plan_confidence`, `replan_count` từ state
+2. Kiểm tra lần lượt 4 trigger:
+   - **Zero result**: tool nào trả `total=0` hoặc empty products/items list?
+   - **Tool errors**: số lượng `errors` ≥ 2?
+   - **Low confidence**: `plan_confidence < 0.5`?
+   - **Semantic hallucination**: `semantic_hallucination_detected == True`?
+3. Nếu **không có issue nào** → `reflection_result = "pass"`
+4. Nếu **có issue**:
+   - Nếu `replan_count >= 2` → force pass (giới hạn replan)
+   - Nếu chưa đạt giới hạn → `reflection_result = "replan"`, `replan_count += 1`
+5. Output: `{reflection_result, replan_count, reflection_issues, node_durations}`
 
 ### Graph edges với Reflection
 
-```python
-# graph/main_graph.py — Reflection edges
+```
+ToolExecutor → REFLECTION
+                  │
+             pass │   replan
+                  ▼         ▼
+         ResponseVerifier  TaskGraphBuilder (partial → chỉ sửa node lỗi)
+                                  │
+                                  ▼
+                             ToolExecutor (chỉ chạy node mới)
 
-# ToolExecutor → Reflection
-builder.add_edge("tool_executor", "reflection")
-
-# Reflection → conditional
-builder.add_conditional_edges(
-    "reflection",
-    route_after_reflection,
-    {
-        "pass": "response_verifier",
-        "replan": "task_graph_builder",  # partial replan
-    },
-)
-
-# graph/edges.py
-def route_after_reflection(state) -> str:
-    return state.get("reflection_result", "pass")
+Route function: trả về state.reflection_result ("pass" | "replan")
 ```
 
 ### Cost
@@ -2371,25 +999,13 @@ Payload: {user_id, action, params, exp (Unix + 300s)}
 
 ### State Resumption
 
-Khi user confirm, graph resume từ checkpoint:
+Khi user confirm (`POST /api/confirm` → `verify_confirmation_token` → `Command(resume={"confirmed": True})`), graph resume từ checkpoint. Logic resume trong ToolExecutor:
 
-```python
-# ToolExecutor Loop — resume logic
-if state.get("confirmed") and state.pending_action:
-    action = state.pending_action
-    # Execute actual gRPC call
-    channel = grpc.insecure_channel(CART_ADDR)
-    stub = demo_pb2_grpc.CartServiceStub(channel)
-    stub.AddItem(demo_pb2.AddItemRequest(
-        user_id=action["params"]["user_id"],
-        item=demo_pb2.CartItem(
-            product_id=action["params"]["product_id"],
-            quantity=action["params"]["quantity"],
-        ),
-    ))
-    state.pending_action = None
-    state.tool_results["confirmed"] = {"result": "success"}
-```
+1. Kiểm tra `state.confirmed == True` và `state.pending_action` tồn tại
+2. Đọc action params từ `pending_action` (user_id, product_id, quantity)
+3. Gọi gRPC `AddItem` thật đến CartService
+4. Xoá `pending_action`, ghi kết quả vào `tool_results`
+5. Tiếp tục flow: response_verifier → answer_generator
 
 ---
 
@@ -2472,145 +1088,40 @@ TEMPLATES = {
 }
 ```
 
-### Selection Logic
+### Selection Logic (Strategy Decision Tree)
 
-```python
-def select_response_strategy(tool_results: dict, user_query: str) -> dict:
-    """
-    Chọn strategy: template hay LLM dựa trên tool types và complexity.
-    Returns: {"strategy": "template" | "llm", "template_key": str | None}
-    """
-    tool_types = set()
-    for call_id in tool_results:
-        for known in ["get_cart_tool", "get_shipping_quote_tool",
-                       "convert_currency_tool", "get_product_reviews_tool",
-                       "search_products_v2", "add_to_cart_tool",
-                       "get_recommendations_tool"]:
-            if known in call_id:
-                tool_types.add(known)
+1. **Xác định tool types** từ `tool_results` keys
+2. **Deterministic paths** (luôn template, không LLM):
+   - Chỉ `get_cart_tool` → template `cart` (hoặc `cart_empty`)
+   - Chỉ `get_shipping_quote_tool` → template `shipping`
+   - Chỉ `convert_currency_tool` → template `currency`
+   - Chỉ `get_product_reviews_tool` → template `reviews`
+3. **Search path**: nếu chỉ `search_products_v2`:
+   - `total ≤ 3` (và > 0) → template `search_single`
+   - Còn lại → LLM summarize
+4. **Multi-tool path**: tính `complexity_score` → nếu > 0.5 → LLM, còn lại template ghép
 
-    # Deterministic paths → luôn template
-    if tool_types == {"get_cart_tool"}:
-        return {"strategy": "template", "template_key": "cart"}
-    if tool_types == {"get_shipping_quote_tool"}:
-        return {"strategy": "template", "template_key": "shipping"}
-    if tool_types == {"convert_currency_tool"}:
-        return {"strategy": "template", "template_key": "currency"}
-    if tool_types == {"get_product_reviews_tool"}:
-        return {"strategy": "template", "template_key": "reviews"}
+### Complexity Scoring
 
-    # Search: single + ≤3 items → template, else → LLM
-    if tool_types == {"search_products_v2"}:
-        data = _first_result(tool_results)
-        total = data.get("total", 0)
-        if total <= 3 and total > 0:
-            return {"strategy": "template", "template_key": "search_single"}
-        return {"strategy": "llm"}
+4 factors, mỗi factor cộng dồn, clamp tối đa 1.0:
 
-    # Multi-tool: complexity decides
-    complexity = compute_complexity(user_query, tool_results)
-    if complexity > 0.5:
-        return {"strategy": "llm"}
-    return {"strategy": "template", "template_key": "multi"}
-```
+| Factor | Điều kiện | Điểm |
+|---|---|---|
+| Query length | > 20 từ / > 10 từ | +0.2 / +0.1 |
+| Số tool được gọi | mỗi tool +0.1, tối đa +0.3 | up to 0.3 |
+| Result size | > 10 items / > 5 items | +0.2 / +0.1 |
+| Write action | có pending action | +0.1 |
 
-### Complexity Scoring (cho path dùng LLM)
+**Temperature selection**: `complexity < 0.2` → 0.1; `< 0.5` → 0.3; `< 0.8` → 0.4; còn lại → 0.6.
 
-```python
-def compute_complexity(user_query: str, tool_results: dict) -> float:
-    """
-    Tính complexity score 0.0 → 1.0.
-    Chỉ dùng cho path cần LLM (template path không cần tính).
-    """
-    score = 0.0
-    
-    # Factor 1: Query length
-    word_count = len(user_query.split())
-    if word_count > 20: score += 0.2
-    elif word_count > 10: score += 0.1
-    
-    # Factor 2: Số tool được gọi
-    tool_count = len(tool_results)
-    score += min(tool_count * 0.1, 0.3)
-    
-    # Factor 3: Result size
-    total_items = sum(
-        len(r.get("products", [])) +
-        len(r.get("reviews", [])) +
-        len(r.get("items", []))
-        for r in tool_results.values() if isinstance(r, dict)
-    )
-    if total_items > 10: score += 0.2
-    elif total_items > 5: score += 0.1
-    
-    # Factor 4: Write action
-    if any("pending" in str(r) for r in tool_results.values()):
-        score += 0.1
-    
-    return min(score, 1.0)
+### Implementation — Thuật toán
 
-
-def select_temperature(complexity: float) -> float:
-    if complexity < 0.2: return 0.1
-    if complexity < 0.5: return 0.3
-    if complexity < 0.8: return 0.4
-    return 0.6
-```
-
-### Implementation
-
-```python
-# graph/nodes/response_verifier.py
-
-class ResponseVerifier:
-    """
-    Tạo câu trả lời từ tool results + user query.
-    Temperature động dựa trên complexity.
-    """
-
-    VERIFIER_PROMPT = """..."""  # Xem §11
-
-    def _get_llm(self):
-        if self._llm is None:
-            from src.llm.llm import llm_model
-            self._llm = llm_model
-        return self._llm
-
-    async def __call__(self, state: ShoppingState) -> dict:
-        t0 = time.monotonic_ns()
-        user_query = self._get_user_query(state.get("messages", []))
-        tool_results = state.get("tool_results", {})
-        entities = state.get("entities", {})
-
-        # Compute complexity → temperature
-        complexity = compute_complexity(user_query, tool_results)
-        temperature = select_temperature(complexity)
-
-        # Build prompt
-        prompt = self._build_verifier_prompt(
-            user_query=user_query,
-            tool_results=tool_results,
-            entities=entities,
-        )
-
-        # Invoke LLM
-        llm = self._get_llm()
-        response = llm.invoke(prompt, temperature=temperature, max_tokens=1024)
-        answer = response.content.strip() if response.content else ""
-
-        # Verify: check answer claims vs tool_results
-        # (future: cross-check PII, hallucination)
-
-        logger.info(
-            "[VERIFIER] complexity=%.2f | temp=%.1f | answer=%d chars",
-            complexity, temperature, len(answer)
-        )
-
-        return {
-            "final_answer": answer,
-            "node_durations": {"ResponseVerifier": _ms(t0)},
-        }
-```
+1. Lấy `user_query` từ messages, `tool_results` và `entities` từ state
+2. Gọi `select_response_strategy(tool_results, user_query)`:
+   - Template path: render template với dữ liệu từ tool_results, chọn random variant từ TEMPLATES set
+   - LLM path: build `VERIFIER_PROMPT` với `tool_results_text` format, gọi LLM với temperature động
+3. Ghi `final_answer` vào state
+4. Output: `{final_answer, node_durations}`
 
 ### Skip Conditions
 
@@ -2661,598 +1172,65 @@ ToolExecutorLoop → ResponseVerifier → HALLUCINATION_GUARD
 
 **Semantic check** (mới, 0.25) bắt hallucination tinh vi hơn — LLM có thể nói đúng product name nhưng thêm thuộc tính không có trong description. VD: tool output ghi "phù hợp cho người mới bắt đầu", answer nói "tốt nhất cho chuyên gia" → semantic violation ngay cả khi entity và price đều đúng.<｜｜DSML｜｜parameter name="replaceAll" string="false">false
 
-### Groundedness Score
-
-```python
-# hallucination_guard.py
-
-import re
-import json
-import logging
-from typing import Optional
-
-logger = logging.getLogger("graph.nodes.hallucination_guard")
-
-GROUNDEDNESS_THRESHOLD = 0.8  # configurable
-
-# ── Regex patterns ──
-PRICE_RE = re.compile(r'\$\d+(?:\.\d{2})?')
-COUNT_RE = re.compile(r'(\d+)\s*(sản phẩm|kết quả|đánh giá|món|items?|products?)', re.IGNORECASE)
-SCORE_RE = re.compile(r'(\d+\.?\d*)\s*[/\/]\s*5|(\d+\.?\d*)\s*sao', re.IGNORECASE)
-CONFIRM_ACTION_RE = re.compile(r'(đã thêm|đã xoá|đã cập nhật|đã hủy)', re.IGNORECASE)
-
-
-class GroundingResult:
-    def __init__(self, score: float, total: int, violations: list):
-        self.score = score
-        self.total_claims = total
-        self.violations = violations
-        self.is_grounded = score >= GROUNDEDNESS_THRESHOLD or total == 0
-
-
-class HallucinationGuard:
-    """
-    Rule-based fact-checking: đối chiếu từng claim trong answer với tool_results.
-    Không gọi LLM — zero cost, <3ms latency.
-    """
-
-    async def __call__(self, state) -> dict:
-        t0 = time.monotonic_ns()
-        answer = state.get("final_answer", "")
-        tool_results = state.get("tool_results", {})
-        pending_action = state.get("pending_action")
-
-        if not answer or not tool_results:
-            return {"node_durations": {"HallucinationGuard": _ms(t0)}}
-
-        result = self._check_groundedness(answer, tool_results, pending_action)
-
-        if result.is_grounded:
-            logger.info(
-                "[HALLUCINATION_GUARD] PASS | score=%.2f | claims=%d",
-                result.score, result.total_claims,
-            )
-            return {
-                "groundedness_score": result.score,
-                "node_durations": {"HallucinationGuard": _ms(t0)},
-            }
-
-        # Hallucination detected → fallback
-        logger.warning(
-            "[HALLUCINATION_GUARD] FAIL | score=%.2f | violations=%s",
-            result.score, result.violations,
-        )
-        return {
-            "groundedness_score": result.score,
-            "hallucination_detected": True,
-            "final_answer": None,  # signal FallbackGenerator
-            "node_durations": {"HallucinationGuard": _ms(t0)},
-        }
-
-    # ── Weight penalties per violation type ──
-    PENALTY = {
-        "price": 0.15,
-        "entity": 0.40,
-        "entity_zero_result": 0.50,
-        "count": 0.15,
-        "score": 0.15,
-        "action": 0.15,
-        "semantic": 0.25,      # Attribute claim không grounded
-    }
-
-    # ── Semantic claim patterns ──
-    SEMANTIC_CLAIM_PATTERNS = [
-        re.compile(r'(?:phù hợp|dành cho|thích hợp)\s+(.+?)(?:,|\.|$)', re.IGNORECASE),
-        re.compile(r'(?:chất liệu|làm từ|bằng)\s+(.+?)(?:,|\.|$)', re.IGNORECASE),
-        re.compile(r'(?:tính năng|có|sở hữu|được trang bị)\s+(.+?)(?:,|\.|$)', re.IGNORECASE),
-        re.compile(r'(?:nặng|nhẹ|cân nặng|trọng lượng)\s+(.+?)(?:,|\.|$)', re.IGNORECASE),
-        re.compile(r'(?:màu|có màu|màu sắc)\s+(.+?)(?:,|\.|$)', re.IGNORECASE),
-        re.compile(r'(?:công dụng|dùng để|sử dụng cho)\s+(.+?)(?:,|\.|$)', re.IGNORECASE),
-    ]
-
-    def _check_groundedness(
-        self, answer: str, tool_results: dict, pending_action: Optional[dict],
-    ) -> GroundingResult:
-        violations = []
-
-        # ── Price check ──
-        answer_prices = set(PRICE_RE.findall(answer))
-        actual_prices = self._extract_prices(tool_results)
-        for p in answer_prices:
-            if p not in actual_prices:
-                violations.append({"type": "price", "claim": p, "actual": list(actual_prices)})
-
-        # ── Entity Grounding check ──
-        known_products, known_categories, any_zero_total = self._extract_known_entities(tool_results)
-        noun_phrases = self._extract_noun_phrases(answer, known_products, known_categories)
-        for phrase, is_known in noun_phrases:
-            if not is_known:
-                if any_zero_total and len(known_products) == 0:
-                    # Zero-result: mọi entity mention đều violation nặng
-                    violations.append({
-                        "type": "entity_zero_result",
-                        "claim": phrase,
-                        "reason": "Không có kết quả tìm kiếm nhưng answer vẫn đề cập sản phẩm",
-                    })
-                else:
-                    violations.append({
-                        "type": "entity",
-                        "claim": phrase,
-                        "reason": "Không tồn tại trong kho dữ liệu",
-                    })
-
-        # ── Count check ──
-        for match in COUNT_RE.finditer(answer):
-            claimed_num = int(match.group(1))
-            actual_num = self._infer_count(match.group(2), tool_results)
-            if actual_num is not None and claimed_num != actual_num:
-                violations.append({
-                    "type": "count",
-                    "claim": f"{claimed_num} {match.group(2)}",
-                    "actual": actual_num,
-                })
-
-        # ── Score check ──
-        for match in SCORE_RE.finditer(answer):
-            claimed_score = float(match.group(1) or match.group(2))
-            actual_score = self._extract_avg_score(tool_results)
-            if actual_score is not None and abs(claimed_score - actual_score) > 0.1:
-                violations.append({
-                    "type": "score",
-                    "claim": claimed_score,
-                    "actual": actual_score,
-                })
-
-        # ── Action confirm check ──
-        if CONFIRM_ACTION_RE.search(answer):
-            is_confirmed = (
-                pending_action is None
-                and tool_results.get("confirmed")
-            )
-            if not is_confirmed:
-                violations.append({
-                    "type": "action",
-                    "claim": "Hành động chưa confirm nhưng answer nói đã thực hiện",
-                })
-
-        # ── Semantic attribute claim check ──
-        description_text = self._extract_descriptions(tool_results)
-        for pattern in self.SEMANTIC_CLAIM_PATTERNS:
-            for match in pattern.finditer(answer):
-                claim = match.group(0)
-                # Nếu claim attribute không xuất hiện trong description của bất kỳ product nào
-                if description_text and claim.lower() not in description_text:
-                    violations.append({
-                        "type": "semantic",
-                        "claim": claim.strip(),
-                        "reason": "Attribute claim không có trong product description",
-                    })
-
-        # ── Weighted groundedness score ──
-        score = 1.0
-        for v in violations:
-            penalty = self.PENALTY.get(v["type"], 0.15)
-            score -= penalty
-        score = max(score, 0.0)  # clamped [0, 1]
-
-        total_claims = len(violations)  # for logging only
-        return GroundingResult(score=score, total=total_claims, violations=violations)
-
-    # ──────────────────────────────────────────────────────────────
-    # Entity Grounding
-    # ──────────────────────────────────────────────────────────────
-
-    def _extract_known_entities(self, tool_results: dict) -> tuple[set, set, bool]:
-        """
-        Trích xuất danh sách tên sản phẩm + category đã biết từ tool_results.
-        Returns: (known_products, known_categories, any_zero_total)
-        """
-        known_products: set[str] = set()
-        known_categories: set[str] = set()
-        any_zero_total = False
-
-        for call_id, r in tool_results.items():
-            data = r.get("result", {})
-            if isinstance(data, str):
-                try:
-                    data = json.loads(data)
-                except (json.JSONDecodeError, TypeError):
-                    continue
-            if not isinstance(data, dict):
-                continue
-
-            # Total = 0?
-            if data.get("total") == 0:
-                any_zero_total = True
-
-            # Products / items
-            for p in data.get("products", []) + data.get("items", []):
-                name = p.get("name", "").lower().strip()
-                if name:
-                    known_products.add(name)
-
-                for cat in p.get("categories", []):
-                    c = cat.lower().strip()
-                    if c:
-                        known_categories.add(c)
-
-            # Categories list riêng (search category view)
-            for cat in data.get("categories", []):
-                c = cat.lower().strip()
-                if c:
-                    known_categories.add(c)
-
-        return known_products, known_categories, any_zero_total
-
-    @staticmethod
-    def _extract_noun_phrases(
-        answer: str, known_products: set, known_categories: set,
-    ) -> list[tuple[str, bool]]:
-        """
-        Tách câu trả lời thành các noun phrase tiềm năng.
-        Trả về list (phrase, is_known) — is_known=True nếu phrase
-        tồn tại trong known_products hoặc known_categories.
-
-        Strategy: lấy các token viết hoa (danh từ riêng) + bigram
-        xuất hiện trong known set.
-        """
-        import re
-
-        results: list[tuple[str, bool]] = []
-        seen = set()
-
-        # Strategy 1: Token viết hoa (Potential product name)
-        # VD: "Tôi thấy Telescope rất tốt" → "Telescope"
-        capitalized = re.findall(r'\b[A-ZÀ-Ỹ][a-zà-ỹ]+\b', answer)
-        for token in capitalized:
-            t = token.lower().strip()
-            if t not in seen and len(t) > 2:
-                seen.add(t)
-                is_known = t in known_products or t in known_categories
-                results.append((token, is_known))
-
-        # Strategy 2: Bigram xuất hiện trong known set
-        # VD: "Camping Stove" là 2 từ nhưng là 1 entity
-        words = re.findall(r'\b[a-zA-ZÀ-ỹà-ỹ]+\b', answer)
-        for i in range(len(words) - 1):
-            bigram = f"{words[i]} {words[i+1]}".lower().strip()
-            if bigram not in seen and len(bigram) > 3:
-                seen.add(bigram)
-                if bigram in known_products or bigram in known_categories:
-                    results.append((f"{words[i]} {words[i+1]}", True))
-
-        # Strategy 3: Nếu có danh mục trong known, check answer có nhắc tới không
-        for cat in known_categories:
-            if cat in answer.lower() and cat not in seen:
-                seen.add(cat)
-                results.append((cat, True))
-
-        return results
-
-    def _extract_prices(self, tool_results: dict) -> set:
-        prices = set()
-        for call_id, r in tool_results.items():
-            data = r.get("result", {})
-            if isinstance(data, str):
-                try:
-                    data = json.loads(data)
-                except (json.JSONDecodeError, TypeError):
-                    continue
-            if isinstance(data, dict):
-                for product in data.get("products", []) + data.get("items", []):
-                    price_str = product.get("price", "")
-                    if price_str:
-                        prices.add(price_str)
-                if "total" in data:
-                    prices.add(data["total"])
-        return prices
-
-    def _infer_count(self, keyword: str, tool_results: dict) -> Optional[int]:
-        for call_id, r in tool_results.items():
-            data = r.get("result", {})
-            if isinstance(data, str):
-                try:
-                    data = json.loads(data)
-                except (json.JSONDecodeError, TypeError):
-                    continue
-            if isinstance(data, dict):
-                if "sản phẩm" in keyword.lower() or "product" in keyword.lower():
-                    if "total" in data:
-                        return data["total"]
-                    if "products" in data:
-                        return len(data["products"])
-                if "đánh giá" in keyword.lower() or "review" in keyword.lower():
-                    if "reviews" in data:
-                        return len(data["reviews"])
-                if "món" in keyword.lower() or "item" in keyword.lower():
-                    if "items" in data:
-                        return len(data["items"])
-        return None
-
-    def _extract_avg_score(self, tool_results: dict) -> Optional[float]:
-        for call_id, r in tool_results.items():
-            data = r.get("result", {})
-            if isinstance(data, str):
-                try:
-                    data = json.loads(data)
-                except (json.JSONDecodeError, TypeError):
-                    continue
-            if isinstance(data, dict) and "average_score" in data:
-                try:
-                    return float(data["average_score"])
-                except (ValueError, TypeError):
-                    pass
-        return None
-
-    @staticmethod
-    def _extract_descriptions(tool_results: dict) -> str:
-        """Gộp tất cả description từ tool results để semantic check."""
-        texts = []
-        for call_id, r in tool_results.items():
-            data = r.get("result", {})
-            if isinstance(data, str):
-                try:
-                    data = json.loads(data)
-                except (json.JSONDecodeError, TypeError):
-                    continue
-            if isinstance(data, dict):
-                for product in data.get("products", []) + data.get("items", []):
-                    desc = product.get("description", "")
-                    if desc:
-                        texts.append(desc.lower())
-                    name = product.get("name", "")
-                    if name:
-                        texts.append(name.lower())
-        return " ".join(texts)
-```
-
-### FallbackGenerator
-
-Khi groundedness < 80%, FallbackGenerator dùng **template** thay vì LLM để tạo câu trả lời — đảm bảo 100% grounded vì template lấy dữ liệu trực tiếp từ `tool_results`.
-
-Nguyên tắc:
-- **Không technical terms**: không JSON, không error raw, không tool name
-- **Tiếng Việt tự nhiên**: câu văn thông thường, có ngữ điệu
-- **Grounded**: mọi số liệu đều từ tool_results
-
-```python
-# graph/nodes/fallback_generator.py
-
-class FallbackGenerator:
-    """
-    Sinh câu trả lời từ template khi HallucinationGuard detect hallucination.
-    Không gọi LLM — zero cost, <1ms.
-
-    Mỗi tool type có 3-4 biến thể template — random chọn để tránh robotic.
-    """
-
-    async def __call__(self, state) -> dict:
-        t0 = time.monotonic_ns()
-        tool_results = state.get("tool_results", {})
-        pending_action = state.get("pending_action")
-
-        # Xác định tool type từ tool_results keys
-        tool_types = self._detect_tool_types(tool_results)
-
-        if pending_action and pending_action.get("status") == "pending":
-            # Write tool pending — dùng template confirm
-            answer = self._template_confirm(pending_action)
-        elif len(tool_types) == 1:
-            # Single tool — dùng template tương ứng
-            answer = self._template_single(tool_types[0], tool_results)
-        else:
-            # Multi tool — dùng template tổng hợp
-            answer = self._template_multi(tool_types, tool_results)
-
-        logger.info(
-            "[FALLBACK_GENERATOR] tools=%s | answer=%d chars",
-            tool_types, len(answer),
-        )
-
-        return {
-            "final_answer": answer,
-            "fallback_used": True,
-            "node_durations": {"FallbackGenerator": _ms(t0)},
-        }
-
-    def _detect_tool_types(self, tool_results: dict) -> list[str]:
-        types = set()
-        for call_id in tool_results:
-            for known_type in [
-                "search_products_v2", "get_cart_tool",
-                "get_product_reviews_tool", "get_recommendations_tool",
-                "convert_currency_tool", "get_shipping_quote_tool",
-                "add_to_cart_tool",
-            ]:
-                if known_type in call_id:
-                    types.add(known_type)
-        return list(types)
-
-    # ── Templates ──
-
-    def _get_products(self, tool_results: dict) -> list:
-        """Lấy danh sách sản phẩm từ tool_results (đã normalized)."""
-        products = []
-        for call_id, r in tool_results.items():
-            data = r.get("result", {})
-            if isinstance(data, str):
-                try:
-                    data = json.loads(data)
-                except (json.JSONDecodeError, TypeError):
-                    continue
-            if isinstance(data, dict):
-                for p in data.get("products", []) + data.get("items", []):
-                    name = p.get("name", "")
-                    price = p.get("price", "")
-                    products.append(f"{name} ({price})" if price else name)
-        return products
-
-    def _template_single(self, tool_type: str, tool_results: dict) -> str:
-        import random
-        products = self._get_products(tool_results)
-        tool_data = self._first_result(tool_results)
-
-        if tool_type == "search_products_v2":
-            n = tool_data.get("total", len(products))
-            if n == 0:
-                return random.choice([
-                    "Tôi không tìm thấy sản phẩm nào phù hợp với yêu cầu của bạn.",
-                    "Rất tiếc, không có sản phẩm nào khớp với những gì bạn cần.",
-                    "Hiện tại chưa tìm thấy sản phẩm bạn muốn. Bạn thử tìm bằng từ khóa khác nhé?",
-                ])
-            product_list = ", ".join(products[:5])
-            if n > 5:
-                return random.choice([
-                    f"Tôi tìm thấy {n} sản phẩm phù hợp, trong đó có {product_list}. Bạn muốn xem thêm sản phẩm nào không?",
-                    f"Có {n} sản phẩm đáp ứng yêu cầu của bạn, ví dụ: {product_list}. Bạn quan tâm đến sản phẩm nào?",
-                ])
-            return random.choice([
-                f"Tôi tìm thấy {n} sản phẩm: {product_list}.",
-                f"Đây là {n} sản phẩm tôi tìm được: {product_list}.",
-            ])
-
-        if tool_type == "get_cart_tool":
-            if not products:
-                return random.choice([
-                    "Giỏ hàng của bạn hiện đang trống.",
-                    "Bạn chưa có sản phẩm nào trong giỏ hàng.",
-                ])
-            items_text = ", ".join(products)
-            total = tool_data.get("total", "")
-            if total:
-                return random.choice([
-                    f"Giỏ hàng của bạn có {len(products)} món: {items_text}. Tổng cộng {total}.",
-                    f"Bạn đang có {len(products)} sản phẩm trong giỏ: {items_text}. Tạm tính {total}.",
-                ])
-            return random.choice([
-                f"Giỏ hàng của bạn có {len(products)} món: {items_text}.",
-                f"Trong giỏ có {len(products)} sản phẩm: {items_text}.",
-            ])
-
-        if tool_type == "get_product_reviews_tool":
-            reviews = tool_data.get("reviews", [])
-            avg = tool_data.get("average_score", "")
-            if not reviews:
-                return random.choice([
-                    "Sản phẩm này chưa có đánh giá nào.",
-                    "Hiện tại chưa có ai đánh giá sản phẩm này.",
-                ])
-            top = reviews[0]
-            top_review = f'{top.get("username", "Một người dùng")} nhận xét: "{top.get("description", "")[:100]}"'
-            if avg:
-                return random.choice([
-                    f"Sản phẩm được đánh giá {avg}/5 sao với {len(reviews)} lượt nhận xét. {top_review}",
-                    f"Sản phẩm đạt {avg}/5 sao từ {len(reviews)} đánh giá. {top_review}",
-                ])
-            return random.choice([
-                f"Có {len(reviews)} đánh giá. {top_review}",
-                f"Sản phẩm có {len(reviews)} nhận xét. {top_review}",
-            ])
-
-        if tool_type == "get_recommendations_tool":
-            if not products:
-                return random.choice([
-                    "Hiện tại chưa có gợi ý nào dành cho bạn.",
-                    "Rất tiếc, tôi chưa tìm được gợi ý phù hợp cho bạn.",
-                ])
-            return random.choice([
-                f"Gợi ý dành cho bạn: {', '.join(products[:5])}.",
-                f"Có thể bạn sẽ thích: {', '.join(products[:5])}.",
-            ])
-
-        if tool_type == "convert_currency_tool":
-            return random.choice([
-                f"{tool_data.get('amount')} {tool_data.get('from')} tương đương khoảng {tool_data.get('result')} {tool_data.get('to')} (tỷ giá {tool_data.get('rate')}).",
-                f"{tool_data.get('amount')} {tool_data.get('from')} hiện tại đổi được {tool_data.get('result')} {tool_data.get('to')}.",
-            ])
-
-        if tool_type == "get_shipping_quote_tool":
-            return random.choice([
-                f"Phí vận chuyển ước tính {tool_data.get('cost')} {tool_data.get('currency')}, giao trong {tool_data.get('delivery_days', 'vài')} ngày qua {tool_data.get('provider', 'đơn vị vận chuyển')}.",
-                f"Dự kiến phí ship {tool_data.get('cost')} {tool_data.get('currency')}, thời gian giao {tool_data.get('delivery_days', 'vài')} ngày ({tool_data.get('provider', 'đơn vị vận chuyển')}).",
-            ])
-
-        return random.choice([
-            "Xin lỗi, tôi không thể tổng hợp câu trả lời ngay lúc này. Bạn có thể thử hỏi lại với cách khác được không?",
-            "Rất tiếc, tôi chưa thể trả lời câu hỏi này. Bạn vui lòng thử lại nhé?",
-            "Hiện tại tôi không có đủ thông tin để trả lời. Bạn có thể hỏi theo cách khác không?",
-        ])
-
-    def _template_confirm(self, pending_action: dict) -> str:
-        params = pending_action.get("params", {})
-        qty = params.get("quantity", 1)
-        # product name có thể lấy từ entities hoặc params
-        product_name = params.get("product_name", params.get("product_id", "sản phẩm"))
-        return f"Vui lòng xác nhận: thêm {qty} {product_name} vào giỏ hàng."
-
-    def _template_multi(self, tool_types: list, tool_results: dict) -> str:
-        parts = []
-        for t in tool_types:
-            template = self._template_single(t, {k: v for k, v in tool_results.items() if t in k})
-            parts.append(template)
-        return " ".join(parts) + " Bạn cần hỗ trợ thêm gì không?"
-
-    @staticmethod
-    def _first_result(tool_results: dict) -> dict:
-        """Lấy kết quả tool đầu tiên trong tool_results."""
-        for call_id, r in tool_results.items():
-            data = r.get("result", {})
-            if isinstance(data, str):
-                try:
-                    return json.loads(data)
-                except (json.JSONDecodeError, TypeError):
-                    return {}
-            if isinstance(data, dict):
-                return data
-        return {}
-```
+### Groundedness Score — Thuật toán
+
+1. **Input**: `answer` (string từ ResponseVerifier), `tool_results`, `pending_action`
+2. **Kiểm tra lần lượt các claim type** — mỗi violation trừ penalty khỏi groundedness score (bắt đầu từ 1.0, clamp [0, 1]):
+
+| Check | Phương pháp | Penalty |
+|---|---|---|
+| **Price** | Regex `\$\d+(?:\.\d{2})?` → từng price phải exact match với tool_results | -0.15 |
+| **Entity** | Noun phrase extraction: token viết hoa + bigram trong known set → mọi entity phải nằm trong known_products/known_categories; nếu total=0 → mọi mention đều violation (-0.50) | -0.40 |
+| **Count** | Regex `(\d+)\s*(sản phẩm\|kết quả\|đánh giá\|món)` → exact number match với tool data | -0.15 |
+| **Score** | Regex `(\d+\.?\d*)\s*/?\s*5` → match ±0.1 tolerance | -0.15 |
+| **Action confirm** | Regex `(đã thêm\|đã xoá\|đã cập nhật)` → chỉ cho phép nếu action đã confirm | -0.15 |
+| **Semantic attribute** | Regex patterns cho claim thuộc tính (phù hợp, chất liệu, tính năng, màu sắc, công dụng...) → claim phải xuất hiện trong product description/name | -0.25 |
+
+3. **Entity extraction strategies**:
+   - Token viết hoa (VD: "Telescope") → check trong known set
+   - Bigram xuất hiện trong known set (VD: "Camping Stove")
+   - Category từ known set → check trong answer
+4. **Quyết định**:
+   - `groundedness_score >= 0.8` → PASS (giữ nguyên answer)
+   - `groundedness_score < 0.8` → FAIL → set `hallucination_detected=True`, `final_answer=None` → signal FallbackGenerator
+
+### FallbackGenerator — Thuật toán
+
+Khi groundedness < 80%, FallbackGenerator dùng **template** thay vì LLM để tạo câu trả lời — đảm bảo 100% grounded.
+
+1. Xác định tool types từ `tool_results` keys
+2. Nếu `pending_action.status == "pending"` → template confirm
+3. Nếu single tool → chọn template tương ứng tool type
+4. Nếu multi tool → ghép các template single tool
+
+Mỗi tool type có 3-4 biến thể template, **random chọn** để tránh robotic:
+
+| Tool type | Template variant (rút gọn) |
+|---|---|
+| `search_products_v2` (0 results) | "Tôi không tìm thấy sản phẩm nào..." / "Rất tiếc..." |
+| `search_products_v2` (≤5 items) | "Tôi tìm thấy {n} sản phẩm: {list}." |
+| `search_products_v2` (>5 items) | "Tôi tìm thấy {n} sản phẩm, trong đó có {list}. Bạn muốn xem thêm?" |
+| `get_cart_tool` (empty) | "Giỏ hàng của bạn hiện đang trống." |
+| `get_cart_tool` (has items) | "Giỏ hàng có {count} món: {items}. Tổng cộng {total}." |
+| `get_product_reviews_tool` (none) | "Sản phẩm này chưa có đánh giá nào." |
+| `get_product_reviews_tool` | "Sản phẩm được đánh giá {avg}/5 sao. {top_review}" |
+| `get_recommendations_tool` | "Gợi ý dành cho bạn: {products}." |
+| `convert_currency_tool` | "{amount} {from} tương đương {converted} {to} (tỷ giá {rate})." |
+| `get_shipping_quote_tool` | "Phí vận chuyển ước tính {cost}, giao trong {days} ngày." |
+| Confirm (write pending) | "Vui lòng xác nhận: thêm {quantity} {product_name} vào giỏ hàng." |
+
+Nguyên tắc: không technical terms (JSON, error raw, tool name), tiếng Việt tự nhiên, mọi số liệu từ `tool_results`.
 
 ### Graph Edge Update
 
-```python
-# graph/main_graph.py — thêm HallucinationGuard + FallbackGenerator
-
-builder.add_node("response_verifier", ResponseVerifier())
-builder.add_node("hallucination_guard", HallucinationGuard())
-builder.add_node("fallback_generator", FallbackGenerator())
-builder.add_node("answer_generator", AnswerGenerator())
-
-# response_verifier → hallucination_guard
-builder.add_edge("response_verifier", "hallucination_guard")
-
-# hallucination_guard → conditional: pass → generator, fail → fallback
-builder.add_conditional_edges(
-    "hallucination_guard",
-    route_after_grounding,  # function: state → str
-    {
-        "pass": "answer_generator",
-        "fail": "fallback_generator",
-    }
-)
-
-builder.add_edge("fallback_generator", "answer_generator")
-builder.add_edge("answer_generator", END)
-
-# Blocked path cũng qua hallucination_guard
-builder.add_edge("input_guard", "hallucination_guard")
 ```
+response_verifier → HALLUCINATION_GUARD
+                       ↓ pass (groundedness ≥ 0.8)
+                  AnswerGenerator → END
+                       ↓ fail (groundedness < 0.8)
+                  FALLBACK_GENERATOR → AnswerGenerator → END
 
-```python
-# graph/edges.py
-
-def route_after_grounding(state) -> str:
-    if state.get("hallucination_detected"):
-        return "fail"
-    return "pass"
-```
-
-### State changes
-
-```python
-# Thêm vào ShoppingState
-groundedness_score: float          # 0.0-1.0 (set bởi HallucinationGuard)
-hallucination_detected: bool       # True nếu cần fallback
-fallback_used: bool                # True nếu FallbackGenerator đã chạy
+Route after grounding: state.hallucination_detected → "fail", else "pass"
 ```
 
 ### Cost
@@ -3296,45 +1274,28 @@ Lý do chọn Nova Lite thay vì Nova Micro hoặc Nova Pro:
 
 Nova Lite là điểm cân bằng: đắt hơn Micro ~1.7x nhưng vẫn rẻ hơn Groq/Bedrock Claude 10-100 lần, trong khi độ tin cậy phân loại nhị phân tốt hơn rõ rệt so với Micro theo benchmark public của Bedrock.
 
-### Gate Node — interface dùng chung
+### Gate Node — Interface
 
-```python
-# graph/gates/gate_node.py
+**File:** `graph/gates/gate_node.py`
 
-class GateResult(TypedDict):
-    decision: bool          # True = Yes, False = No
-    reason: Optional[str]   # chỉ set cho gate rủi ro cao (xem bảng dưới)
-    latency_ms: float
-    tokens: dict            # {"input": int, "output": int}
+Tất cả gate dùng chung một interface với Amazon Nova Lite (`amazon.nova-lite-v1:0`):
 
-class GateNode:
-    """
-    Node dùng chung cho mọi quyết định nhị phân cần suy luận ngữ nghĩa.
-    Luôn ép output = "YES" hoặc "NO" (+ optional 1 dòng reason).
-    """
-    MODEL_ID = "amazon.nova-lite-v1:0"
-
-    async def __call__(self, question: str, context: str, want_reason: bool = False) -> GateResult:
-        system = (
-            "Bạn là bộ phân loại nhị phân. Chỉ trả lời đúng 1 từ: YES hoặc NO."
-            + (" Sau đó xuống dòng, thêm 1 câu lý do ngắn (<15 từ)." if want_reason else " Không thêm gì khác.")
-        )
-        response = await bedrock_invoke(
-            model_id=self.MODEL_ID,
-            system=system,
-            prompt=f"{question}\n\nContext:\n{context}",
-            max_tokens=25 if want_reason else 3,
-            temperature=0.0,   # deterministic — đây là classification, không phải generation
-        )
-        text = response.text.strip()
-        decision = text.upper().startswith("YES")
-        reason = text.split("\n", 1)[1].strip() if want_reason and "\n" in text else None
-        return GateResult(
-            decision=decision, reason=reason,
-            latency_ms=response.latency_ms,
-            tokens=response.usage,
-        )
 ```
+GateResult = {
+    decision: bool,       # True = Yes, False = No
+    reason: Optional[str] # chỉ set cho gate rủi ro cao
+    latency_ms: float,
+    tokens: {input: int, output: int}
+}
+
+GateNode(question: str, context: str, want_reason: bool = False) → GateResult
+```
+
+Nguyên tắc gọi:
+- `system` prompt: "Bạn là bộ phân loại nhị phân. Chỉ trả lời đúng 1 từ: YES hoặc NO." (+ reason line nếu `want_reason`)
+- `temperature = 0.0` (deterministic — classification, không generation)
+- `max_tokens = 3` (hoặc 25 nếu có reason)
+- Parse: `text.upper().startswith("YES")` → decision; dòng sau "\n" → reason
 
 ### Các Gate được thêm vào graph
 
@@ -3378,15 +1339,7 @@ Rule-based (§10.5) chạy trước, **miễn phí**, loại được phần l�
 
 ### Fallback khi Gate lỗi/timeout
 
-```python
-try:
-    result = await gate_node(question, context, want_reason=True)
-except (TimeoutError, BedrockError):
-    logger.warning("[GATE] timeout/error — fallback to rule-based default")
-    result = GateResult(decision=DEFAULT_DECISION[gate_name], reason="gate_unavailable", ...)
-```
-
-Mỗi gate có `DEFAULT_DECISION` riêng, thiên về hướng an toàn hơn (VD: `semantic_hallucination_gate` timeout → mặc định `decision=False` tức fallback template, thà an toàn hơn là risk hallucination lọt qua).
+Mỗi gate có `DEFAULT_DECISION` riêng, thiên về hướng an toàn (VD: `semantic_hallucination_gate` timeout → `decision=False` = fallback template). Cấu trúc: `try: await gate_node(...)` / `except (TimeoutError, BedrockError):` dùng `GateResult(decision=DEFAULT_DECISION[gate_name], reason="gate_unavailable")`.
 
 ---
 
@@ -3394,215 +1347,71 @@ Mỗi gate có `DEFAULT_DECISION` riêng, thiên về hướng an toàn hơn (VD
 
 ### 11.1 Task Graph Builder Prompt
 
-```python
-# llm/prompt.py
+**File:** `llm/prompt.py` — Prompt text (không code):
 
-TGB_PROMPT = """Bạn là Task Graph Builder của Shopping Copilot — trợ lý mua sắm AI của TechX Corp.
+```
+Bạn là Task Graph Builder của Shopping Copilot — trợ lý mua sắm AI của TechX Corp.
 Nhiệm vụ của bạn là chọn tool cần gọi và nối edge dependency giữa chúng.
 
 ## Tool Output Schemas
-
-Mỗi tool khi gọi sẽ trả về dữ liệu có cấu trúc cố định như sau:
-
 {tool_schemas_text}
 
 ## DAG Format
-
-Trả về JSON object với cấu trúc:
-{{
-  "reasoning": "Giải thích ngắn gọn tại sao chọn các tool này",
-  "overall_confidence": 0.95,
-  "nodes": [
-    {{
-      "id": "n0",
-      "tool": "tool_name",
-      "description": "tại sao gọi tool này",
-      "depends_on": [],
-      "condition": null,
-      "confidence": 0.95
-    }}
-  ],
-  "edges": [["n0", "n1"], ["n0", "n2"]]
-}}
+Trả về JSON: {"reasoning": "...", "overall_confidence": 0.95,
+  "nodes": [{"id": "n0", "tool": "tool_name", "description": "...",
+             "depends_on": [], "condition": null, "confidence": 0.95}],
+  "edges": [["n0", "n1"]]}
 
 ## Quy tắc
-
 1. KHÔNG fill argument/entity — chỉ chọn tool và nối edge.
-2. Node không có dependency → depends_on: [] → Executor chạy song song.
+2. Node không dependency → depends_on: [] → Executor chạy song song.
 3. Node B cần output node A → depends_on: ["A_id"].
-4. Nếu quantity không được chỉ định, entity extractor đã parse — không cần bạn guess.
-5. add_to_cart_tool là write tool → cần user confirm sau.
-6. Không chọn tool cho: place order, charge, empty cart — empty plan = từ chối.
-7. Đánh giá confidence 0.0-1.0 cho mỗi node dựa trên độ chắc chắn.
+4. add_to_cart_tool là write tool → cần user confirm sau.
+5. Không chọn tool cho: place order, charge, empty cart.
+6. Đánh giá confidence 0.0-1.0 cho mỗi node.
 
-## Planner Memory (ngữ cảnh phiên trước)
-
+## Planner Memory
 {planner_memory}
 
-## Ví dụ (Few-shot)
-
-### Ví dụ 1: Tìm sản phẩm (1 tool, không dependency)
-User: "tìm kính thiên văn dưới 200 đô"
-Intent: search | Entities: {{"max_price": "200"}}
-DAG:
-{{
-  "reasoning": "User muốn tìm sản phẩm theo từ khóa + giá → search_products_v2",
-  "overall_confidence": 0.98,
-  "nodes": [
-    {{ "id": "n0", "tool": "search_products_v2", "description": "tìm kính thiên văn", "depends_on": [], "condition": null, "confidence": 0.98 }}
-  ],
-  "edges": []
-}}
-
-### Ví dụ 2: Thêm vào giỏ (2 tools, dependency)
-User: "thêm 2 cái lều vào giỏ"
-Intent: cart_add | Entities: {{"quantity": 2}}
-DAG:
-{{
-  "reasoning": "Cần search product_id trước, sau đó add_to_cart",
-  "overall_confidence": 0.95,
-  "nodes": [
-    {{ "id": "n0", "tool": "search_products_v2", "description": "tìm product_id lều", "depends_on": [], "condition": null, "confidence": 0.95 }},
-    {{ "id": "n1", "tool": "add_to_cart_tool", "description": "thêm lều vào giỏ", "depends_on": ["n0"], "condition": null, "confidence": 0.90 }}
-  ],
-  "edges": [["n0", "n1"]]
-}}
-
-### Ví dụ 3: Review + gợi ý (3 tools, parallel sau search)
-User: "review cái bếp camping và gợi ý sản phẩm tương tự"
-Intent: review | Entities: {{}}
-DAG:
-{{
-  "reasoning": "Search lấy product_id → review + recommend chạy song song (không phụ thuộc nhau)",
-  "overall_confidence": 0.95,
-  "nodes": [
-    {{ "id": "n0", "tool": "search_products_v2", "description": "tìm bếp camping", "depends_on": [], "condition": null, "confidence": 0.95 }},
-    {{ "id": "n1", "tool": "get_product_reviews_tool", "description": "lấy review", "depends_on": ["n0"], "condition": null, "confidence": 0.90 }},
-    {{ "id": "n2", "tool": "get_recommendations_tool", "description": "gợi ý sản phẩm tương tự", "depends_on": ["n0"], "condition": null, "confidence": 0.90 }}
-  ],
-  "edges": [["n0", "n1"], ["n0", "n2"]]
-}}
-
-### Ví dụ 4: Conditional — search, hỏi user nếu 0 kết quả
-User: "tìm giày Nike giá từ 50 tới 150 đô"
-Intent: search | Entities: {{"min_price": "50", "max_price": "150"}}
-DAG:
-{{
-  "reasoning": "Search với filter, nếu 0 kết quả thì hỏi user có muốn thử lại không",
-  "overall_confidence": 0.92,
-  "nodes": [
-    {{
-      "id": "n0", "tool": "search_products_v2",
-      "description": "tìm giày Nike theo giá",
-      "depends_on": [],
-      "condition": {{"on": "total", "==0": "ask_user", "default": "continue"}},
-      "confidence": 0.92
-    }}
-  ],
-  "edges": []
-}}
-
-## Format output
-
-Trả về JSON object như format ở trên.
-Nếu không cần gọi tool nào, trả về {{"nodes": [], "edges": [], "overall_confidence": 0.0, "reasoning": "..."}} và trả lời thẳng.
+## Few-shot examples
+[4 examples: search single-tool, add-to-cart 2-tool, review+recommend parallel, conditional search]
 
 User query: {user_query}
 Intent: {intent}
 Entities: {entities}
-Planner memory: {planner_memory}
-
-DAG:"""
+DAG:
 ```
 
 ### 11.2 Response Verifier Prompt
 
-```python
-# llm/prompt.py (continued)
+**File:** `llm/prompt.py` — Prompt text:
 
-VERIFIER_PROMPT = """Bạn là trợ lý bán hàng của TechX Corp, đang trò chuyện trực tiếp với khách hàng.
-Nhiệm vụ của bạn là trả lời khách hàng dựa trên dữ liệu thật từ hệ thống.
-
-## Dữ liệu nhận được
-
-Tool results: {tool_results_text}
-
-## Quy tắc
-
-1. CHỈ dùng thông tin có trong tool results — KHÔNG thêm chi tiết không có.
-2. Nếu không có thông tin hoặc có lỗi: "Tôi không tìm thấy..." — không bịa.
-3. Giữ nguyên giá cả (giữ format "$99.99"), tên sản phẩm, số lượng.
-4. KHÔNG dùng markdown, không emoji, không technical terms.
-5. Nếu là kết quả của write action (đã thêm vào giỏ): xác nhận ngắn gọn.
-6. Nếu cần confirm (status=pending): nói "Vui lòng xác nhận..." và mô tả hành động.
-7. Xưng hô: "tôi" — "bạn", lịch sự, gần gũi.
-8. Trả lời bằng tiếng Việt. KHÔNG thêm thuộc tính, công dụng, đánh giá không có trong tool results.
-
-Khách hàng hỏi: {user_query}
-
-Trả lời:"""
 ```
+Bạn là trợ lý bán hàng của TechX Corp, đang trò chuyện trực tiếp với khách hàng.
+Nhiệm vụ của bạn là trả lời dựa trên dữ liệu thật từ hệ thống.
 
-### 11.2 Response Verifier Prompt
-
-```python
-# llm/prompt.py (continued)
-
-VERIFIER_PROMPT = """Bạn là trợ lý bán hàng của TechX Corp, đang trò chuyện trực tiếp với khách hàng.
-Nhiệm vụ của bạn là trả lời khách hàng dựa trên dữ liệu thật từ hệ thống.
-
-## Dữ liệu nhận được
-
+## Dữ liệu
 Tool results: {tool_results_text}
 
 ## Quy tắc
-
-1. CHỈ dùng thông tin có trong tool results — KHÔNG thêm chi tiết không có.
-2. Nếu không có thông tin hoặc có lỗi: "Tôi không tìm thấy..." — không bịa.
-3. Giữ nguyên giá cả (giữ format "$99.99"), tên sản phẩm, số lượng.
-4. KHÔNG dùng markdown, không emoji, không technical terms.
-5. Nếu là kết quả của write action (đã thêm vào giỏ): xác nhận ngắn gọn.
-6. Nếu cần confirm (status=pending): nói "Vui lòng xác nhận..." và mô tả hành động.
-7. Xưng hô: "tôi" — "bạn", lịch sự, gần gũi.
-8. Trả lời bằng tiếng Việt.
+1. CHỈ dùng thông tin trong tool results — KHÔNG thêm chi tiết không có.
+2. Giữ nguyên giá cả ($99.99), tên sản phẩm, số lượng.
+3. KHÔNG markdown, emoji, technical terms.
+4. Xưng hô "tôi" — "bạn", lịch sự, gần gũi.
+5. Trả lời bằng tiếng Việt.
 
 Khách hàng hỏi: {user_query}
-
-Trả lời:"""
+Trả lời:
 ```
 
 ### 11.3 System Prompt Injection (Dynamic Tool Schemas)
 
-Cả TGB prompt và Verifier prompt đều được build động với tool schemas từ `ToolRegistry`. Thêm tool mới → chỉ cần register → prompt tự cập nhật.
+Cả TGB prompt và Verifier prompt đều được build động với tool schemas từ `ToolRegistry`:
 
-```python
-def _build_tgb_prompt(
-    user_query: str,
-    intent: str,
-    entities: dict,
-    planner_memory: dict,
-    registry: "ToolRegistry",
-) -> str:
-    schemas_text = registry.get_all_schemas_text()
-    memory_text = _format_memory(planner_memory)
-    return TGB_PROMPT.format(
-        tool_schemas_text=schemas_text,
-        user_query=user_query,
-        intent=intent,
-        entities=json.dumps(entities, ensure_ascii=False),
-        planner_memory=memory_text,
-    )
+- **TGB prompt**: `TGB_PROMPT.format(tool_schemas_text=registry.get_all_schemas_text(), user_query, intent, entities=json.dumps(entities), planner_memory=format_memory(...))`
+- **Verifier prompt**: `VERIFIER_PROMPT.format(tool_results_text=tool_results_text, user_query=user_query)`
 
-
-def _build_verifier_prompt(
-    user_query: str,
-    tool_results_text: str,
-) -> str:
-    return VERIFIER_PROMPT.format(
-        tool_results_text=tool_results_text,
-        user_query=user_query,
-    )
-```
+Thêm tool mới → chỉ cần `ToolRegistry.register(spec)` → prompt tự cập nhật ở lần gọi tiếp theo.
 
 ---
 
@@ -3718,24 +1527,326 @@ class ShoppingState(TypedDict, total=False):
 
 ---
 
-## 13. Memory & Caching
+## 13. Cache Strategy (Redis)
 
-Giữ nguyên từ v2. Xem chi tiết ở v2 spec §8.
+### Mục tiêu
 
-### CacheStore Updates
+Cache không phải để giảm thời gian phản hồi của LLM mà để giảm:
+- gRPC call đến EKS microservices (ProductCatalog, Cart, Recommendation, Currency)
+- REST call (Shipping)
+- LLM Planning (cache DAG plan cho query lặp)
+- Search, Recommendation, Currency API
 
-Cập nhật TTL map cho v3:
+đồng thời tránh cache nhầm dữ liệu riêng tư của người dùng.
 
-```python
-_CACHE_TTL_MAP = {
-    "search_products_v2":        300,   # 5 minutes
-    "get_product_reviews_tool":  300,   # 5 minutes
-    "get_recommendations_tool":  300,   # 5 minutes
-    "convert_currency_tool":      60,   # 1 minute
-    "get_shipping_quote_tool":   300,   # 5 minutes
-    # get_cart_tool và add_to_cart_tool không cache
-}
+### 13.1 Phân loại cache
+
+5 loại cache với TTL riêng:
+
+| Cache | Dữ liệu | TTL | Redis Namespace |
+|---|---|---|---|
+| L1 Planner Cache | DAG plan (nodes + edges) | 5 phút | `db0` / `planner:*` |
+| L2 Search Cache | Top N Product IDs | 10 phút | `db1` / `search:*` |
+| L3 Product Cache | Product detail (name, price, description, rating, image) | 30 phút | `db1` / `product:*` |
+| L4 External Cache | Currency rate, shipping quote, recommendation | 30-60 phút | `db1` / `currency:*`, `shipping:*`, `recommend:*` |
+| L5 Session Cache | Planner memory (last_search, current_cart, history) | 30 phút | `db2` / `session:*` |
+
+Lý do tách logical database:
+- **DB0 (Planner)**: DAG plans — dung lượng nhỏ, quan trọng, cần hit rate cao
+- **DB1 (Tool)**: Tool results — dung lượng lớn nhất, LRU eviction
+- **DB2 (Session)**: Dữ liệu session — TTL cố định, không LRU
+
+### 13.2 Planner Cache
+
+Cache DAG plan do Task Graph Builder sinh ra để tránh gọi LLM cho query giống hệt lần trước.
+
 ```
+Query: "Find telescope under $200"
+Planner → DAG: search → recommendation
+Lần sau cùng query → không gọi LLM, dùng cached DAG
+```
+
+**Key**: `planner:<SHA256(query)>`
+**Value**: DAG JSON (`{nodes, edges, overall_confidence}`)
+**TTL**: 5 phút
+**Điều kiện cache**:
+- `plan_confidence >= 0.9`
+- Không cache nếu confidence thấp (< 0.9) hoặc plan bị denied (empty nodes)
+
+### 13.3 Search Cache
+
+Cache quan trọng nhất — chiếm phần lớn traffic gRPC đến ProductCatalog.
+
+**Key**: `search:<SHA256(language + query + price_range + category)>`
+**TTL**: 10 phút
+**Dữ liệu cache**: `Top N Product IDs` (không cache raw protobuf)
+**Lý do**: Product detail có thể thay đổi (giá, description) — chỉ cache danh sách ID, detail luôn fetch real-time hoặc từ Product Cache.
+
+```
+Key: search:{sha256(lang + query + price_range + category)}
+Value: list[str] — top N Product IDs (không cache raw protobuf)
+```
+
+### 13.4 Product Cache
+
+Cache chi tiết sản phẩm theo ProductID.
+
+**Key**: `product:<product_id>`
+**TTL**: 30 phút
+**Dữ liệu**: `name`, `price`, `description`, `rating`, `image`
+**Không cache**: `stock`, `inventory` (dành cho realtime inventory sau này)
+
+```
+Key: product:{product_id}
+Value: {id, name, price, description, image, rating, categories}
+```
+
+### 13.5 Recommendation Cache
+
+Recommendation rất tốn gRPC — cache theo product_id hoặc user_id.
+
+| Loại | Key | TTL |
+|---|---|---|
+| Non-personalized | `recommend:<product_id>:<limit>` | 15 phút |
+| Personalized | `recommend:<user_id>:<product_id>` | 5 phút |
+
+Personalized TTL ngắn hơn vì thay đổi theo hành vi người dùng.
+
+### 13.6 Currency & Shipping Cache
+
+| Cache | Key | TTL |
+|---|---|---|
+| Currency | `currency:<from>:<to>` | 1 giờ |
+| Shipping | `shipping:<SHA256(zip + cart_total)>` | 10 phút |
+
+Tỷ giá ít biến động — không cần gọi API liên tục.
+
+### 13.7 Session Cache
+
+Lưu Planner Memory ngắn hạn giữa các lượt chat:
+
+```
+planner_memory = {last_search, last_product_id, current_cart_items, last_intent, history: list (max 6 turns)}
+```
+
+**Key**: `session:<session_id>`
+**TTL**: 30 phút
+**Storage**: Redis DB2 (không dùng in-memory — để pod restart không mất context)
+
+### 13.8 Cache Flow
+
+```
+Executor
+  │
+  ├── Cache Lookup
+  │     ├── Hit → Return cached
+  │     └── Miss → Call Tool → Validate → Redis SETEX → Return
+```
+
+**Chỉ cache sau khi**:
+1. Tool thành công (`status = success`)
+2. Output hợp lệ theo schema (valid JSON + đủ required fields)
+3. Không phải write tool (`add_to_cart_tool`, `checkout_tool`)
+4. Không chứa dữ liệu riêng tư của user (trừ session cache được phân vùng theo session_id)
+
+**Confirmation tokens**: Giữ nguyên HMAC stateless (§9) — không cache, không Redis.
+
+### 13.9 Redis Key Convention
+
+```
+planner:{sha256(query)}
+search:{sha256(lang + query + price_range + category)}
+product:{product_id}
+recommend:{product_id}:{limit}           # non-personalized
+recommend:{user_id}:{product_id}         # personalized
+currency:{from}:{to}
+shipping:{sha256(zip + cart_total)}
+session:{session_id}
+```
+
+Hash toàn bộ query/params bằng SHA256, lấy 16 ký tự đầu để tránh key quá dài.
+
+### 13.10 Cache Invalidation
+
+Design hiện tại chưa có invalidation. Bổ sung cơ chế:
+
+**Event-driven invalidation** (khi admin sửa sản phẩm):
+```
+ProductUpdated Event → Redis subscriber → xóa:
+- product:{product_id}
+- search:* (flush search cache)
+- recommend:* (flush recommend cache)
+```
+
+Dùng Redis Pub/Sub: publisher gửi `{"type": "product_updated", "product_id": "..."}`, subscriber cache manager nhận → xoá `product:{id}`, flush `search:*`, `recommend:*`.
+
+**Passive invalidation**: TTL tự động hết hạn — đủ cho hầu hết use case. Invalidation chỉ cần cho admin update product.
+
+### 13.11 Redis Architecture
+
+```
+                   +----------------+
+                   |   LangGraph    |
+                   +-------+--------+
+                           |
+                    Cache Manager
+                           |
+         +-----------------+-----------------+
+         |                 |                 |
+    Planner Cache     Tool Cache       Session Cache
+    (DB0)             (DB1)            (DB2)
+         |                 |                 |
+   DAG Plans       Search/Product/    Planner Memory
+                   Currency/Shipping/
+                   Recommendation
+```
+
+**Lợi ích tách logical database**:
+- Dễ cấu hình TTL theo từng nhóm
+- Dễ theo dõi tỷ lệ cache hit riêng
+- Hạn chế xoá nhầm dữ liệu (flush DB1 không ảnh hưởng DB0/DB2)
+- Có thể gán maxmemory-policy riêng (DB0: noeviction, DB1: allkeys-lru, DB2: volatile-ttl)
+
+### 13.12 Migration từ in-memory sang Redis
+
+Hiện tại `memory/store.py` dùng in-memory dict (`CacheStore`). Production chuyển sang Redis:
+
+| Giai đoạn | Cache | Storage | Ghi chú |
+|---|---|---|---|
+| Dev/Test | Tool cache | In-memory (`CacheStore`) | TTL + LRU sẵn có |
+| Production | Planner + Tool cache | Redis DB0 + DB1 | Cần Redis instance |
+| Production | Session cache | Redis DB2 | Cần Redis + session fallback |
+
+```
+REDIS_URL = env("REDIS_URL", "redis://localhost:6379/0")
+CACHE_ENABLED = env("CACHE_ENABLED", "true")
+```
+
+File mới: `memory/redis_store.py` — Redis-backed implementation của CacheStore interface.
+
+---
+
+## 13a. Resource Limits & Production Guardrails
+
+Các giới hạn cứng (hard limits) để đảm bảo hệ thống ổn định trong production, ngăn DAG mở rộng quá mức, LLM lặp lại nhiều lần, hoặc backend bị quá tải.
+
+### 13a.1 Max Tool Calls
+
+Một request tối đa **≤ 8 tool calls** (tổng số node trong DAG).
+
+```
+Ví dụ hợp lệ: search → product → review → recommend → currency → shipping → cart → checkout
+```
+
+Nếu vượt: Planner phải ưu tiên hoặc hỏi user, không execute mù.
+
+### 13a.2 Max DAG Depth
+
+**≤ 5 levels** (độ sâu tối đa của dependency chain).
+
+Nếu sâu hơn: Planner phải chia nhỏ.
+
+### 13a.3 Max Parallel Nodes
+
+**≤ 4** nodes chạy đồng thời trong một batch `asyncio.gather`.
+
+Lý do: tránh 20+ gRPC call cùng lúc đến backend (EKS microservices không có connection pool đủ lớn).
+
+### 13a.4 Replan Limit
+
+**Max Replan = 1** mỗi request. Sau 1 lần replan, dù kết quả thế nào cũng force pass.
+
+Implementation trong `reflection.py`: nếu `replan_count >= 1` → force `reflection_result = "pass"`.
+
+### 13a.5 Retry Strategy
+
+| Loại tool | Retry | Ghi chú |
+|---|---|---|
+| Read tool (search, product, review, recommend, currency) | **2 lần** | Exponential backoff (0.5s, 1s) |
+| Write tool (add_to_cart) | **0 hoặc 1 lần** | Không retry checkout — tránh charge thẻ 2 lần |
+| Checkout | **0 lần** | Fail → báo user, không retry mù |
+
+### 13a.6 LLM Timeout
+
+| LLM Call | Timeout | Hành động khi timeout |
+|---|---|---|
+| Planner (Task Graph Builder) | **3s** | Fallback → template response |
+| Response Verifier (LLM path) | **4s** | Fallback → template response |
+| Semantic Gate (Nova Lite) | **2s** | Dùng `DEFAULT_DECISION` (§10.6) |
+
+### 13a.7 Tool Timeout
+
+| Tool | Timeout |
+|---|---|
+| Default tool | **2s** |
+| Shipping (REST) | **3s** |
+| Recommendation | **2s** |
+| Search | **2s** |
+
+### 13a.8 P95 End-to-End Latency
+
+**< 5s** cho toàn bộ request (từ user gửi đến nhận reply).
+
+Nếu vượt: template response ngay, background fetch nếu cần.
+
+### 13a.9 Conversation History
+
+Không gửi toàn bộ lịch sử cho LLM. Giới hạn:
+- **6 lượt gần nhất** (kế thừa từ `SessionStore._SESSION_MAX_MESSAGES`)
+- Hoặc **2000 token** (whichever comes first)
+
+### 13a.10 Planner Memory
+
+Giới hạn dung lượng: **20 KB** mỗi session.
+
+Memory chỉ gồm các field cố định: `last_search`, `last_product_id`, `current_cart_items`, `last_intent`.
+
+Không lưu raw messages vào planner memory — messages đã có trong SessionStore.
+
+### 13a.11 Search / Recommend / Review Limits
+
+| Kết quả | Giới hạn |
+|---|---|
+| Search | **Top 20** products (không trả 500 cho LLM) |
+| Recommendation | **Top 5** items |
+| Review | **Top 10** reviews (LLM không cần 300 review) |
+
+### 13a.12 Max Response Length
+
+**1200 tokens** (khoảng ~900 chữ).
+
+Nếu dài hơn: tóm tắt hoặc template response.
+
+### 13a.13 Redis Max Cache Size
+
+LRU eviction, maxmemory cấu hình theo dung lượng Redis cluster:
+
+| DB | Policy | Maxmemory gợi ý |
+|---|---|---|
+| DB0 (Planner) | `noeviction` | 256 MB |
+| DB1 (Tool) | `allkeys-lru` | 2 GB |
+| DB2 (Session) | `volatile-ttl` | 512 MB |
+
+---
+
+## 13b. Observability Metrics
+
+Để đánh giá hiệu quả cache + resource limits trong production:
+
+| Metric | Target | Nguồn |
+|---|---|---|
+| Cache Hit Rate (Product) | > 80% | Redis INFO / cache stats |
+| Cache Hit Rate (Search) | > 60% | Redis INFO / cache stats |
+| Planner Cache Hit Rate | > 50% | Redis INFO / cache stats |
+| Average Tool Calls / Request | < 4 | LangGraph telemetry |
+| Average DAG Depth | < 4 | LangGraph telemetry |
+| Reflection Rate | < 10% request | Graph node counter |
+| Replan Success Rate | > 90% | Graph node counter |
+| Tool Timeout Rate | < 1% | ToolExecutor metric |
+| LLM Timeout Rate | < 0.5% | LLM client metric |
+| P95 End-to-End Latency | < 5s | FastAPI middleware |
+| Redis Memory Usage | < 80% capacity | Redis INFO memory |
+| Cache Invalidation Events | monitor | Redis Pub/Sub counter |
 
 ---
 
@@ -3752,67 +1863,19 @@ Giữ nguyên từ v2. Chi tiết xem v2 spec §9.
 | `GET` | `/health` | Health check | — | `{status: "ok"}` |
 | `GET` | `/` | Server info | — | `{service, version, endpoints}` |
 
-### main.py — Graph Invocation
+### Graph Invocation Flow
 
-```python
-# main.py — gọi graph planner-centric
+**`POST /api/chat`**:
+1. Gọi `graph.ainvoke({messages, session_id, user_id, trace_id})`
+2. Kiểm tra `result.pending_action` → return `{status: "pending", reply, token, session_id}`
+3. Kiểm tra `result.guardrail_violations` → return `{status: "error", reply: violation.detail}`
+4. Mặc định → `{status: "ok", reply: final_answer, session_id}`
 
-@app.post("/api/chat", response_model=ChatResponse)
-async def api_chat(req: ChatRequest):
-    graph = _get_graph()
-    config = {"configurable": {"thread_id": req.session_id}}
-
-    result = await graph.ainvoke({
-        "messages": [HumanMessage(content=req.message)],
-        "session_id": req.session_id,
-        "user_id": req.user_id,
-        "trace_id": str(uuid.uuid4()),
-    }, config=config)
-
-    # Pending confirmation
-    if result.get("pending_action"):
-        return ChatResponse(
-            status="pending",
-            reply=result["pending_action"]["message"],
-            token=result["pending_action"]["token"],
-            session_id=req.session_id,
-        )
-
-    # Guardrail violation
-    if result.get("guardrail_violations"):
-        violation = result["guardrail_violations"][0]
-        return ChatResponse(
-            status="error",
-            reply=violation.get("detail", "Yêu cầu bị từ chối."),
-            session_id=req.session_id,
-        )
-
-    return ChatResponse(
-        status="ok",
-        reply=result.get("final_answer", ""),
-        session_id=req.session_id,
-    )
-
-
-@app.post("/api/confirm", response_model=ConfirmResponse)
-async def api_confirm(req: ConfirmRequest):
-    graph = _get_graph()
-    config = {"configurable": {"thread_id": req.session_id}}
-
-    is_valid, action_data = verify_confirmation_token(req.token)
-    if not is_valid:
-        return ConfirmResponse(status="error", reply="Token không hợp lệ.")
-
-    result = await graph.ainvoke(
-        Command(resume={"confirmed": True}),
-        config=config,
-    )
-
-    return ConfirmResponse(
-        status=result.get("status", "ok"),
-        reply=result.get("final_answer", "Đã xác nhận."),
-    )
-```
+**`POST /api/confirm`**:
+1. `verify_confirmation_token(req.token)` — kiểm tra HMAC signature + expiry
+2. Nếu không hợp lệ → `{status: "error", reply: "Token không hợp lệ."}`
+3. Nếu hợp lệ → `graph.ainvoke(Command(resume={"confirmed": True}))` → resume từ checkpoint
+4. Return `{status, reply: final_answer}`
 
 ---
 
@@ -3936,7 +1999,7 @@ Gate Layer cũng hưởng lợi tương tự.
 |---|---|---|---|
 | 1 | ~~Planner chỉ support sequential plan~~ | ~~Không chạy tool song song~~ | ✅ Đã giải quyết ở v3.2 — DAG + parallel execution (§8) |
 | 2 | Rate limiter per-pod | User bypass qua replicas | Valkey/Redis global limiter (Phase 3) |
-| 3 | Session/cache in-memory | Mất khi pod restart | Valkey session store (Phase 3) |
+| 3 | ~~Session/cache in-memory~~ | ~~Mất khi pod restart~~ | ✅ Đã thiết kế — Redis cache strategy (§13) + migration plan (§13.12). Triển khai ở Phase 3 |
 | 4 | Price normalization manual | Tool phải gọi format_price() | Auto-normalize interceptor (Phase 3) |
 | 5 | LLM dependency | TGB/Verifier cùng LLM | Separate smaller LLM for TGB (Phase 4) |
 | 6 | No retry for write tools | add_to_cart fail = mất confirm token | Retry queue for write actions (Phase 4) |
@@ -3970,9 +2033,12 @@ Gate Layer cũng hưởng lợi tương tự.
 - ⏳ 37 test cases từ §17
 
 **Phase 3 — Production (Week 3)**
+- ⏳ `memory/redis_store.py` — Redis-backed CacheStore implementation (§13)
 - ⏳ Valkey/Redis for rate limiter + session store
-- ⏳ OpenTelemetry metrics (đặc biệt: template vs LLM ratio, replan rate, gate accuracy)
-- ⏳ Load test P95 < 2s
+- ⏳ Cache invalidation via Redis Pub/Sub (§13.10)
+- ⏳ Enforce resource limits trong ToolExecutor (§13a): max tool calls, DAG depth, parallel nodes, timeout
+- ⏳ OpenTelemetry metrics cho cache hit rate + resource limit counters (§13b)
+- ⏳ Load test P95 < 5s (§13a.8)
 - ⏳ Circuit breaker cho Nova Lite Gate calls
 - ⏳ Partial replan multi-step (nếu replan vẫn lỗi → backtrack)
 

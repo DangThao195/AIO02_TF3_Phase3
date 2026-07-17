@@ -69,8 +69,9 @@ flowchart TD
 1. **Trích xuất ý định:** AI Agent nhận diện ý định tìm kiếm sản phẩm và gọi tool `search_products_v2`.
 2. **Truy xuất ngữ nghĩa:** `BedrockRAGStrategy` gọi API `retrieve` của AWS Bedrock Agent Runtime để tìm 5 văn bản liên quan nhất từ OpenSearch Serverless.
 3. **Bóc tách ID sản phẩm:** Code sử dụng biểu thức chính quy (Regex) để trích xuất `Product ID` (ví dụ: `OLJCESPC7Z`) từ các đoạn văn bản trả về.
-4. **Đọc chi tiết (Entity Resolution):** Thay vì sử dụng thông tin cũ trong file văn bản, chiến lược này kết nối trực tiếp vào Database cục bộ (SQLite/PostgreSQL) để đọc thông tin giá, danh mục, mô tả mới nhất của ID sản phẩm đó. Điều này đảm bảo tính nhất quán (Consistency) của dữ liệu thời gian thực.
-5. **Gộp và Xếp hạng:** Kết quả của luồng RAG được gộp với luồng SQL, loại bỏ trùng lặp và chuyển đến Reranker để trả về cho người dùng.
+4. **Đọc chi tiết (Entity Resolution):** Thay vì sử dụng thông tin cũ trong file văn bản, chiến lược này kết nối trực tiếp vào Database cục bộ (SQLite/PostgreSQL) để đọc thông tin giá, danh mục, mô tả mới nhất của ID sản phẩm đó. Điều này đảm bảo tính nhất quán (Consistency) của dữ liệu thời gian thực. **Price normalization**: units + nanos → string format `$X.XX` tuân thủ agentic design price normalization rule (§6).
+5. **Điểm tin cậy (Confidence):** Score từ Bedrock RetrievalResult (0.0-1.0) được dùng làm tín hiệu confidence cho mỗi sản phẩm RAG. SearchOrchestrator tổng hợp confidence từ cả 2 flow để tính confidence tổng thể cho output (agentic design §8.5 — Reflection node dùng confidence để quyết định partial replan).
+6. **Gộp và Xếp hạng:** Kết quả của luồng RAG được gộp với luồng SQL, loại bỏ trùng lặp và chuyển đến Reranker để trả về cho người dùng.
 
 ---
 
