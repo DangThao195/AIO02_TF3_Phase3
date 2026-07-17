@@ -15,7 +15,7 @@ services = [
 
 print("=== STARTING EKS PORT FORWARDS IN BACKGROUND ===")
 env = os.environ.copy()
-env["AWS_PROFILE"] = "techx-corp"
+env["AWS_PROFILE"] = "default"
 
 processes = []
 for resource_path, local_port, target_port in services:
