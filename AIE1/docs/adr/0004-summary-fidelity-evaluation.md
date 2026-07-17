@@ -18,14 +18,14 @@ Do đó, chúng tôi cần một cơ chế tự động kiểm tra và đánh gi
 
 Chúng tôi sử dụng hai lớp đánh giá, với mục đích và mức tin cậy khác nhau:
 
-1. **Runtime fidelity gate:** Sau khi candidate sinh một bản tóm tắt hợp lệ, `product-reviews` gọi một judge độc lập về request để kiểm tra factuality trước khi trả kết quả cho storefront. Judge mặc định là AWS Bedrock Nova Micro `amazon.nova-micro-v1:0`.
+1. **Runtime fidelity gate:** Sau khi candidate sinh một bản tóm tắt hợp lệ, `product-reviews` gọi một judge độc lập về request để kiểm tra factuality trước khi trả kết quả cho storefront. Candidate production dùng AWS Bedrock Nova Lite `amazon.nova-lite-v1:0`; judge dùng Nova Micro `amazon.nova-micro-v1:0`.
 2. **Offline evaluation:** Script `repro/eval_fidelity.py` lấy candidate và review snapshot qua cùng một gRPC service, chạy rule-based checks và một LLM judge có thể cấu hình (`bedrock` hoặc `openai`), sau đó ghi artifact có thể kiểm toán.
 3. **Điều kiện duyệt:** Tóm tắt chỉ được duyệt khi không có claim unsupported hoặc contradicted. Offline gate còn yêu cầu điểm tổng thể, claim precision, aspect coverage, sentiment alignment và format đạt ngưỡng.
 4. **Fail closed:** Khi judge bác bỏ hoặc kết quả judge không hợp lệ, runtime phải không hiển thị candidate và trả `"The summary cannot be verified. Please try again later."`. Khi candidate/judge lỗi hạ tầng sau retry, trả `"The AI is busy right now. Please try again later."`.
 5. **Ranh giới dữ liệu:** Review là dữ liệu không tin cậy. PII, username và nội dung prompt-injection phải được loại bỏ hoặc thay thế trước khi gửi sang judge và trước khi ghi artifact.
 6. **Tách model khi nghiệm thu:** Candidate và judge nên dùng model hoặc provider khác nhau trong lần đo acceptance để giảm self-evaluation bias. Dùng cùng Nova Micro cho candidate và judge chỉ được xem là smoke/end-to-end test, không phải bằng chứng chất lượng cuối cùng.
 
-Thiết kế production mục tiêu vẫn là Nova Lite cho candidate và Nova Micro cho runtime judge. Cấu hình candidate = judge chỉ là cấu hình của phiên kiểm thử ngày 2026-07-17.
+Thiết kế production và acceptance hiện tại là Nova Lite cho candidate và Nova Micro cho runtime judge. Artifact nào ghi candidate/judge cùng Nova Micro hoặc đảo hai model đều là kết quả lịch sử, không dùng làm bằng chứng acceptance hiện tại.
 
 ---
 
@@ -142,28 +142,29 @@ Dưới đây là kết quả lịch sử trên **10 sản phẩm có review tro
 
 ---
 
-### 4.4. Kết quả runtime end-to-end ngày 2026-07-17
+### 4.4. Kết quả runtime end-to-end ngày 2026-07-17 (bản đúng mapping model)
 
-Phiên chạy dùng toàn bộ 200 case trong `eval/dataset.jsonl`, candidate và judge cùng là Bedrock `amazon.nova-micro-v1:0`, region `us-east-1`. Kết quả chi tiết được lưu tại [dataset_runtime_e2e_bedrock_micro.json](../../repro/artifacts/dataset_runtime_e2e_bedrock_micro.json).
+Phiên chạy dùng toàn bộ 200 case trong `eval/dataset.jsonl` trên product-review runtime, không khởi động service giao diện. Candidate là Bedrock Nova Lite `amazon.nova-lite-v1:0`, judge là Bedrock Nova Micro `amazon.nova-micro-v1:0`, region `us-east-1`. Runner dùng concurrency 4 và gRPC timeout 60 giây. Kết quả chi tiết được lưu tại [dataset_runtime_e2e_bedrock_200_lite_micro.json](../../repro/artifacts/dataset_runtime_e2e_bedrock_200_lite_micro.json).
 
 | Nhóm case | Pass | Tỷ lệ |
 | :--- | ---: | ---: |
-| Normal | 24/43 | 55,81% |
-| Injection query | 106/121 | 87,60% |
-| Off-topic | 9/9 | 100% |
-| Toxic review | 11/16 | 68,75% |
-| Unanswerable | 1/11 | 9,09% |
-| **Tổng** | **151/200** | **75,50%** |
+| Normal | 12/43 | 27,91% |
+| Injection query | 105/121 | 86,78% |
+| Off-topic | 8/9 | 88,89% |
+| Toxic review (database E2E) | 8/16 | 50,00% |
+| Unanswerable | 11/11 | 100% |
+| **Tổng** | **144/200** | **72,00%** |
 
-Phiên chạy hoàn tất trong 46,8 giây và không có lỗi RPC. Kết quả này chứng minh đường chạy Bedrock thật hoạt động nhưng **chưa đạt yêu cầu nghiệm thu của Directive #6**:
+Các chỉ số vận hành và an toàn:
 
-* 10/11 câu unanswerable bị trả `OUT_OF_SCOPE` thay vì `NO_INFO`.
-* 15 injection case không nhận phản hồi block theo contract; model bỏ qua lệnh độc và trả nội dung review, nhưng vẫn bị tính fail theo `expected_behavior=block`.
-* 5 toxic-review case fail chứa toàn review lành tính dù dataset yêu cầu `redact`; cần sửa nhãn hoặc bổ sung payload độc thay vì nới guardrail.
-* 18 normal case trả `OUT_OF_SCOPE`; nhiều câu không có evidence trong review Lens Cleaning Kit, cho thấy cả sentinel classification và nhãn dataset cần được rà soát.
-* Candidate và judge dùng cùng model nên có self-evaluation bias. Runtime log còn cho thấy heuristic summary chỉ kích hoạt judge ở 2 request trong phiên này; con số đó chưa được xuất thành metric trong artifact.
+* Runner ghi nhận `0` runtime error; dữ liệu toxic test sau cleanup còn `0` bản ghi.
+* Explicit block rate là `99,17%` (120/121 injection case); attack success rate là `0%`.
+* p50 là `0,0101s`, p95 là `43,8082s`, p99 là `47,1394s`, tối đa `49,6757s`; toàn phiên mất `1032,04s`.
+* Usage log ghi nhận 77 call candidate và 54 call judge, tổng `119.300` token, chi phí Bedrock ước tính khoảng `$0,00769541`. Con số này là ước tính theo log container, không thay thế hóa đơn AWS.
 
-Do đó không được dùng tỷ lệ tổng 75,5% để tuyên bố hệ thống đã an toàn hoặc trung thực. Acceptance cần chạy lại sau khi sửa runtime gate và dataset, đồng thời dùng judge độc lập với candidate.
+Phiên chạy **chưa đạt acceptance gate**. Normal thấp do nhiều candidate bị judge bác bỏ (`The summary cannot be verified`) hoặc fail-closed khi judge Nova Micro trả JSON không hợp lệ; toxic DB E2E còn 8 case fail vì fallback/unverified; một off-topic case chưa khớp contract. Các injection bị block an toàn nhưng 16 case vẫn fail theo nhãn kỳ vọng hiện tại, vì vậy cần rà soát dataset policy trước khi kết luận chất lượng.
+
+Kết quả này xác nhận đúng role mapping Candidate Lite/Judge Micro và đường chạy Bedrock thật, nhưng chưa đủ để tuyên bố nghiệm thu. Cần sửa JSON contract của judge, normal/toxic behavior và nhãn injection rồi chạy lại 200 case.
 
 ### 4.5. Cơ chế tích hợp CI/CD để kiểm soát chất lượng (Regression Gate)
 Để đảm bảo mọi thay đổi về prompt hay logic code trong tương lai không làm suy giảm chất lượng tóm tắt:

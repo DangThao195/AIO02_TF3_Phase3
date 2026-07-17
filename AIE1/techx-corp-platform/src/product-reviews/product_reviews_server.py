@@ -73,6 +73,7 @@ FALLBACK_SUMMARY_MESSAGE = "The AI is busy right now. Please try again later."
 UNVERIFIED_SUMMARY_MESSAGE = "The summary cannot be verified. Please try again later."
 OUT_OF_SCOPE_MESSAGE = "This question is out of scope. I only answer questions related to the product."
 NO_INFO_MESSAGE = "No information in reviews."
+DEFAULT_CANDIDATE_MODEL = "amazon.nova-lite-v1:0"
 DEFAULT_JUDGE_MODEL = "amazon.nova-micro-v1:0"
 INACCURATE_SUMMARY_FIXTURES = {
     "L9ECAV7KIM": "Customers are largely disappointed with this cleaning kit, citing its ineffectiveness on most optical surfaces. Many users report that the cleaning fluid leaves a sticky residue and the included brush is too harsh, causing scratches on lenses. The kit is considered a poor value, with several reviewers stating it damaged their equipment.",
@@ -779,10 +780,12 @@ if __name__ == "__main__":
     llm_port = must_map_env('LLM_PORT')
     llm_mock_url = f"http://{llm_host}:{llm_port}/v1"
     llm_provider = os.environ.get('LLM_PROVIDER', 'openai').lower()
-    llm_model = must_map_env('LLM_MODEL')
     llm_timeout_seconds = float(os.environ.get('LLM_TIMEOUT_SECONDS', '10.0'))
     aws_region = os.environ.get('AWS_REGION', 'us-east-1')
     if llm_provider == 'bedrock':
+        # Keep the runtime role mapping aligned with the system contract:
+        # Candidate = Nova Lite. An explicit LLM_MODEL remains supported.
+        llm_model = os.environ.get('LLM_MODEL', DEFAULT_CANDIDATE_MODEL)
         from botocore.config import Config
         bedrock_config = Config(
             connect_timeout=min(5.0, llm_timeout_seconds),
@@ -793,6 +796,7 @@ if __name__ == "__main__":
         llm_base_url = os.environ.get('LLM_BASE_URL')
         llm_api_key = os.environ.get('OPENAI_API_KEY', '')
     else:
+        llm_model = must_map_env('LLM_MODEL')
         llm_base_url = must_map_env('LLM_BASE_URL')
         llm_api_key = must_map_env('OPENAI_API_KEY')
 

@@ -10,6 +10,15 @@ components:
       # Model ID của AWS Bedrock hoặc OpenAI tương ứng
       - name: LLM_MODEL
         value: amazon.nova-lite-v1:0
+
+      # Judge model is intentionally different from Candidate:
+      # Candidate = Nova Lite, Judge = Nova Micro.
+      - name: JUDGE_PROVIDER
+        value: bedrock
+      - name: JUDGE_MODEL
+        value: amazon.nova-micro-v1:0
+      - name: JUDGE_REGION
+        value: us-east-1
       
       # Khu vực AWS Bedrock (chỉ dùng cho Provider 'bedrock')
       - name: AWS_REGION

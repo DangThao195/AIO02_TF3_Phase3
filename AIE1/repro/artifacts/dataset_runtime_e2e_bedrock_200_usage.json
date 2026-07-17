@@ -1,0 +1,62 @@
+{
+  "generated_at_utc": "2026-07-17T08:21:30.210161+00:00",
+  "pricing": {
+    "currency": "USD",
+    "unit": "per_1m_tokens",
+    "service_tier": "standard_on_demand",
+    "region": "us-east-1",
+    "checked_date": "2026-07-17",
+    "source": "https://aws.amazon.com/bedrock/pricing/",
+    "models": {
+      "amazon.nova-lite-v1:0": {
+        "input_per_million_usd": 0.06,
+        "output_per_million_usd": 0.24
+      },
+      "amazon.nova-micro-v1:0": {
+        "input_per_million_usd": 0.035,
+        "output_per_million_usd": 0.14
+      }
+    }
+  },
+  "groups": [
+    {
+      "role": "candidate",
+      "provider": "bedrock",
+      "model": "amazon.nova-micro-v1:0",
+      "calls": 295,
+      "input_tokens": 233846,
+      "output_tokens": 17044,
+      "total_tokens": 250890,
+      "latency_ms": {
+        "mean": 741.63,
+        "p50": 664.29,
+        "p95": 839.18,
+        "max": 4535.83
+      },
+      "estimated_cost_usd": 0.01057077
+    },
+    {
+      "role": "judge",
+      "provider": "bedrock",
+      "model": "amazon.nova-lite-v1:0",
+      "calls": 232,
+      "input_tokens": 179311,
+      "output_tokens": 69698,
+      "total_tokens": 249009,
+      "latency_ms": {
+        "mean": 3404.54,
+        "p50": 2994.47,
+        "p95": 5446.75,
+        "max": 6194.79
+      },
+      "estimated_cost_usd": 0.02748618
+    }
+  ],
+  "aggregate": {
+    "calls": 527,
+    "input_tokens": 413157,
+    "output_tokens": 86742,
+    "total_tokens": 499899,
+    "estimated_cost_usd": 0.03805695
+  }
+}
