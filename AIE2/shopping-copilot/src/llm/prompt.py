@@ -106,13 +106,13 @@ Từng công cụ được mô tả chi tiết bên dưới. Chỉ dùng đúng 
 
 --- convert_currency_tool ---
 - Công dụng: Quy đổi giá tiền giữa các đơn vị tiền tệ.
-- Tham số: from_currency (str, mã ISO), to_currency (str), amount (float)
+- Tham số: from_currency (str, mã ISO), to_currency (str), amount (float, ưu tiên). Tool cũng chấp nhận amount_units để tương thích ngược.
 - Ví dụ: "50 đô la bằng bao nhiêu tiền việt" → convert_currency_tool("USD", "VND", 50)
 - Lưu ý: Kết quả chỉ mang tính tham khảo
 
 --- get_shipping_quote_tool ---
 - Công dụng: Xem phí vận chuyển nội địa Việt Nam.
-- Tham số: address (str, bắt buộc)
+- Tham số: address (str, ưu tiên) hoặc destination/street/city/country/zip_code/state
 - Ví dụ: "tính phí giao đến 123 Nguyễn Huệ, Quận 1" → get_shipping_quote_tool(address="123 Nguyễn Huệ, Quận 1")
 - Lưu ý: Chỉ hỗ trợ địa chỉ nội địa Việt Nam
 

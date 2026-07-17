@@ -80,6 +80,7 @@ class SearchQuery:
     sort: str = "relevance"
     intent: str = "search"
     is_complex: bool = False
+    sql: Optional[str] = None
 
 
 class SearchStrategy:

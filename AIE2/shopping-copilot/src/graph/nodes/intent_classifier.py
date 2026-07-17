@@ -52,6 +52,11 @@ _REFERENCE_PATTERNS = [
     re.compile(r"\b(thứ|số)\s*(\d+|nhất|hai|ba|tư|năm)\s*(cái|sản phẩm|item)\b", re.IGNORECASE),
 ]
 
+_RANK_REFERENCE_PATTERNS = [
+    re.compile(r"\b(cái nào|sản phẩm nào|item nào|product nào).*(rẻ nhất|cheapest|lowest price|đắt nhất|most expensive|highest price)\b", re.IGNORECASE),
+    re.compile(r"\b(rẻ nhất|cheapest|lowest price|đắt nhất|most expensive|highest price)\b", re.IGNORECASE),
+]
+
 _INTENT_PATTERNS: list[tuple[str, list[re.Pattern]]] = [
     ("cart", [
         re.compile(r"\b(thêm|add|cho|bỏ|đặt|order|mua|mua ngay)\b.*(vào|into|to)?.*(giỏ|cart|basket|túi)", re.IGNORECASE),
@@ -161,6 +166,7 @@ class IntentClassifier:
 
         # Kiểm tra reference patterns (multi-turn: "cái thứ 2")
         is_reference = any(p.search(text) for p in _REFERENCE_PATTERNS)
+        is_rank_reference = any(p.search(text) for p in _RANK_REFERENCE_PATTERNS)
 
         matched_intents = []
         for intent, patterns in _INTENT_PATTERNS:
@@ -176,6 +182,10 @@ class IntentClassifier:
 
         # Multi-turn reference → search (EntityExtractor sẽ resolve từ candidate_products)
         if is_reference:
+            return "search"
+
+        # Rank reference ("cái nào rẻ nhất", "đắt nhất") → search để chọn từ candidate_products
+        if is_rank_reference:
             return "search"
 
         # Không khớp intent cụ thể → agent nếu là câu hỏi tổng quan

@@ -3,8 +3,12 @@ import os
 import re
 import sqlite3
 from pathlib import Path
-import boto3
 from typing import List, Optional
+
+try:  # pragma: no cover - optional dependency
+    import boto3
+except Exception:  # pragma: no cover - optional dependency
+    boto3 = None  # type: ignore[assignment]
 
 from src.database.connect import get_conn, init_pool
 from src.tools.search.models import Money, Product, SearchQuery, ScoredProduct, SearchStrategy
@@ -55,6 +59,9 @@ class BedrockRAGStrategy(SearchStrategy):
     def _query_kb(self, query_text: str) -> List[ScoredProduct]:
         kb_id = self.kb_id
         region = self.region
+
+        if boto3 is None:
+            return []
 
         session = boto3.Session(profile_name=os.environ.get("AWS_PROFILE"))
         client = session.client("bedrock-agent-runtime", region_name=region)

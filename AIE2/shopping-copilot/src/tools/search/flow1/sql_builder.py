@@ -34,7 +34,12 @@ class SQLBuilder:
         if where_clauses:
             query += " WHERE " + " AND ".join(where_clauses)
 
-        query += " ORDER BY price_units ASC LIMIT 15"
+        sort = str(entities.get("sort", "relevance") or "relevance").lower()
+        if sort == "price_desc":
+            query += " ORDER BY price_units DESC, price_nanos DESC"
+        else:
+            query += " ORDER BY price_units ASC, price_nanos ASC"
+        query += " LIMIT 15"
         return query
 
     def build_category_listing(self) -> str:

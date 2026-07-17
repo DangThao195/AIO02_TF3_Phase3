@@ -226,6 +226,49 @@ class EntityExtractor:
                     return {"product_name": name}
         return None
 
+    def _resolve_rank_reference(self, text: str, state: "ShoppingState") -> dict | None:
+        """
+        Resolve comparative references like "cái nào rẻ nhất?" from candidate_products.
+        """
+        candidates = state.get("candidate_products", [])
+        if not candidates:
+            return None
+
+        lowered = text.lower()
+        is_cheapest = any(token in lowered for token in ("rẻ nhất", "re nhat", "cheapest", "lowest price", "giá thấp nhất", "thap nhat"))
+        is_expensive = any(token in lowered for token in ("đắt nhất", "dat nhat", "most expensive", "highest price", "giá cao nhất", "cao nhat"))
+        if not is_cheapest and not is_expensive:
+            return None
+
+        def _price_value(product: dict) -> float:
+            if "price" in product and product["price"] is not None:
+                try:
+                    return float(product["price"])
+                except (TypeError, ValueError):
+                    pass
+            units = product.get("price_units")
+            nanos = product.get("price_nanos", 0)
+            try:
+                return float(units or 0) + (float(nanos or 0) / 1_000_000_000)
+            except (TypeError, ValueError):
+                return float("inf")
+
+        sortable = []
+        for product in candidates:
+            if not isinstance(product, dict):
+                continue
+            name = product.get("name") or product.get("product_name", "")
+            if not name:
+                continue
+            sortable.append((name, _price_value(product)))
+
+        if not sortable:
+            return None
+
+        chosen_name, _ = min(sortable, key=lambda item: item[1]) if is_cheapest else max(sortable, key=lambda item: item[1])
+        logger.info("[ENTITY] Resolved rank ref → '%s'", chosen_name)
+        return {"product_name": chosen_name}
+
     async def __call__(self, state: "ShoppingState") -> dict:
         t0 = time.monotonic_ns()
 
@@ -247,6 +290,10 @@ class EntityExtractor:
         ref_result = self._resolve_positional_reference(text, state)
         if ref_result:
             entities.update(ref_result)
+        else:
+            rank_result = self._resolve_rank_reference(text, state)
+            if rank_result:
+                entities.update(rank_result)
 
         # 1. Regex pre-extract (nhanh)
         entities.update(_regex_preextract(text))
@@ -259,10 +306,6 @@ class EntityExtractor:
             for k, v in llm_entities.items():
                 if k not in entities:
                     entities[k] = v
-
-        # Đảm bảo quantity mặc định = 1 nếu intent là cart
-        if intent == "cart" and "quantity" not in entities:
-            entities["quantity"] = 1
 
         ms = (time.monotonic_ns() - t0) // 1_000_000
         logger.info(

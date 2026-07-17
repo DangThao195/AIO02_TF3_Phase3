@@ -1,88 +1,151 @@
+"""
+Heuristic entity extractor for the SQL search flow.
+
+The extractor keeps the original public API used by existing tests:
+- extract(query) -> dict
+- get_all_categories() -> list[str]
+
+It prefers deterministic parsing first and only falls back to an LLM if one is
+available. This keeps the search flow usable even in offline/CI environments.
+"""
+
+from __future__ import annotations
+
 import json
+import logging
 import os
 import re
 import sqlite3
+import time
 from pathlib import Path
 from typing import Any, Dict, List
 
-try:
+try:  # pragma: no cover - optional dependency
     from rapidfuzz import fuzz
 except Exception:  # pragma: no cover - optional dependency
     fuzz = None
 
-from src.llm.llm import get_llm_client
+try:  # pragma: no cover - optional dependency
+    from src.llm.llm import get_llm_client
+except Exception:  # pragma: no cover - optional dependency
+    get_llm_client = None  # type: ignore[assignment]
+
+logger = logging.getLogger("src.tools.search.flow1.entity_extractor")
+
+_PRICE_RANGE_PATTERN = re.compile(
+    r"\b(?:từ|from|tu)?\s*\$?(\d+(?:[.,]\d+)?)\s*(?:đến|to|-|den)\s*\$?(\d+(?:[.,]\d+)?)\b",
+    re.IGNORECASE,
+)
+_PRICE_UNDER_PATTERN = re.compile(
+    r"\b(?:dưới|under|below|<|duoi)\s*\$?(\d+(?:[.,]\d+)?)\b",
+    re.IGNORECASE,
+)
+_PRICE_ABOVE_PATTERN = re.compile(
+    r"\b(?:trên|above|over|>|tren)\s*\$?(\d+(?:[.,]\d+)?)\b",
+    re.IGNORECASE,
+)
+_CURRENCY_PATTERN = re.compile(
+    r"\b(USD|VND|EUR|GBP|JPY|SGD|đô|đồng|do|dong)\b",
+    re.IGNORECASE,
+)
+
+_CHEAPEST_PATTERNS = (
+    "rẻ nhất",
+    "re nhat",
+    "cheapest",
+    "lowest price",
+    "giá thấp nhất",
+    "thap nhat",
+)
+_EXPENSIVE_PATTERNS = (
+    "đắt nhất",
+    "dat nhat",
+    "most expensive",
+    "highest price",
+    "giá cao nhất",
+    "cao nhat",
+)
+_CATEGORY_SIGNAL_WORDS = {
+    "loại", "loai", "danh", "muc", "danh muc", "danh mục",
+    "categories", "category", "kind", "types",
+}
+
+
+def _normalize_text(text: str) -> str:
+    return re.sub(r"\s+", " ", text.strip().lower())
 
 
 class EntityExtractor:
-    """Trích xuất thực thể từ câu hỏi bằng heuristic + LLM fallback."""
+    """Extract product search entities with deterministic rules first."""
 
     _STOP_WORDS = {
-        "tìm", "tim", "của", "cua", "cho", "for", "the", "a", "an", "và", "va", "and", "or",
-        "dưới", "duoi", "under", "từ", "tu", "from", "giữa", "giua", "between", "range",
-        "sản", "san", "phẩm", "pham", "item", "items", "product", "products", "show", "look",
-        "cheap", "affordable", "best", "good", "mới", "moi", "new",
-        "bạn", "ban", "bán", "bán", "loại", "loai", "gì", "gi", "nào", "nao",
-        "có", "co", "không", "khong", "các", "cac", "những", "nhung",
-        "này", "nay", "đó", "do", "ấy", "ay", "nhiều", "nhieu",
-        "một", "mot", "vài", "vai", "muốn", "muon", "hãy", "hay",
-        "vui", "lòng", "long", "cần", "can", "mua", "mua",
-        "thích", "thich", "nên", "nen", "phải", "phai", "được", "duoc",
-        "giúp", "giup", "tôi", "toi", "mình", "minh", "xin", "xin",
-        "mặt", "mat", "hàng", "hang", "xem", "xem",
-        "người", "nguoi", "dùng", "dung", "bằng", "bang",
-        "thế", "the", "lại", "lai", "rồi", "roi",
-        "đây", "day", "đó", "do",
-        "danh", "muc", "hot", "noi", "bat", "chay", "nhat",
-        "chao", "lam", "nguoi", "dung",
-        "what", "which", "you", "your", "me", "some", "recommend",
+        "tìm", "tim", "của", "cua", "cho", "for", "the", "a", "an", "và", "va",
+        "and", "or", "dưới", "duoi", "từ", "tu", "giữa", "giua", "between",
+        "sản", "san", "phẩm", "pham", "item", "items", "product", "products",
+        "show", "look", "cheap", "affordable", "best", "good", "mới", "moi",
+        "bạn", "ban", "bán", "loại", "loai", "gì", "gi", "nào", "nao", "có",
+        "co", "không", "khong", "các", "cac", "những", "nhung", "này", "nay",
+        "đó", "do", "ấy", "ay", "nhiều", "nhieu", "một", "mot", "vài", "vai",
+        "muốn", "muon", "hãy", "hay", "vui", "lòng", "long", "cần", "can",
+        "mua", "thích", "thich", "nên", "nen", "phải", "phai", "được", "duoc",
+        "giúp", "giup", "tôi", "toi", "mình", "minh", "xin", "hãng", "hang",
+        "xem", "người", "nguoi", "dùng", "dung", "bằng", "bang", "thế", "the",
+        "lại", "lai", "rồi", "roi", "đây", "day", "nổi", "bat", "chạy", "nhất",
+        "chao", "lam", "what", "which", "you", "your", "me", "some", "recommend",
         "something", "anything", "do", "are", "have", "where", "how", "all",
         "sell", "goi", "den", "ve", "qua", "rat", "that",
     }
 
-    _CATEGORY_SIGNAL_WORDS = {
-        "loại", "loai", "danh", "muc", "danh muc", "danh mục",
-        "categories", "category", "kind", "types",
-    }
-
     def __init__(self, llm_client=None):
-        self.llm_client = llm_client or get_llm_client()
+        if llm_client is not None:
+            self.llm_client = llm_client
+        elif get_llm_client is not None:
+            try:
+                self.llm_client = get_llm_client()
+            except Exception:
+                self.llm_client = None
+        else:
+            self.llm_client = None
 
     def extract(self, query: str) -> Dict[str, Any]:
         query = (query or "").strip()
         if not query:
-            return {"category": None, "price_max": None, "price_min": None, "keywords": [], "intent": "general"}
+            return {
+                "category": None,
+                "price_max": None,
+                "price_min": None,
+                "keywords": [],
+                "sort": "relevance",
+                "intent": "general",
+            }
 
         entities = self._heuristic_extract(query)
 
-        if os.getenv("SKIP_LLM_SQL_FLOW", "0") == "1":
-            return self._infer_intent(query, entities)
-
-        try:
-            response = self.llm_client.invoke(
-                self._build_prompt(query),
-                temperature=0.0,
-                max_tokens=300,
-            )
-            if response and getattr(response, "content", ""):
-                data = self._parse_response(response.content)
-                if data:
-                    entities = self._merge(entities, data)
-        except Exception:
-            pass
+        if self.llm_client is not None and os.getenv("SKIP_LLM_SQL_FLOW", "0") != "1":
+            try:
+                response = self.llm_client.invoke(
+                    self._build_prompt(query),
+                    temperature=0.0,
+                    max_tokens=300,
+                )
+                if response and getattr(response, "content", ""):
+                    data = self._parse_response(response.content)
+                    if data:
+                        entities = self._merge(entities, data)
+            except Exception:
+                pass
 
         return self._infer_intent(query, entities)
 
     def _heuristic_extract(self, query: str) -> Dict[str, Any]:
         lowered = query.lower()
         entities: Dict[str, Any] = {
-            "category": None,
+            "category": self._infer_category(query),
             "price_max": None,
             "price_min": None,
             "keywords": [],
             "sort": "relevance",
         }
-
-        entities["category"] = self._infer_category(query)
 
         price_matches = re.findall(r"(\d+)", query)
         if price_matches:
@@ -94,8 +157,17 @@ class EntityExtractor:
                     entities["price_max"] = int(price_matches[1])
                 else:
                     entities["price_max"] = int(price_matches[0])
+            elif any(token in lowered for token in ["trên", "tren", "above", "over", ">"]):
+                entities["price_min"] = int(price_matches[0])
             else:
                 entities["price_max"] = int(price_matches[0])
+
+        sort = "relevance"
+        if any(token in lowered for token in _CHEAPEST_PATTERNS):
+            sort = "price_asc"
+        elif any(token in lowered for token in _EXPENSIVE_PATTERNS):
+            sort = "price_desc"
+        entities["sort"] = sort
 
         catalog_hints = self._get_catalog_category_hints()
         tokens = re.findall(r"[a-zA-ZÀ-ỹ0-9]+", query.lower())
@@ -113,7 +185,6 @@ class EntityExtractor:
         return entities
 
     def _infer_intent(self, query: str, entities: Dict[str, Any]) -> Dict[str, Any]:
-        """Xác định intent: product_search, category_listing, hay general."""
         has_filters = (
             entities.get("category") is not None
             or entities.get("price_max") is not None
@@ -125,14 +196,14 @@ class EntityExtractor:
             return entities
 
         lowered = query.lower()
-        has_category_signal = any(sw in lowered for sw in self._CATEGORY_SIGNAL_WORDS)
+        has_category_signal = any(sw in lowered for sw in _CATEGORY_SIGNAL_WORDS)
         has_keywords = bool(entities.get("keywords"))
 
         if has_category_signal and not has_keywords:
             entities["intent"] = "category_listing"
         elif has_category_signal and has_keywords:
             kw_text = " ".join(entities["keywords"])
-            if any(sw in kw_text for sw in self._CATEGORY_SIGNAL_WORDS):
+            if any(sw in kw_text for sw in _CATEGORY_SIGNAL_WORDS):
                 entities["keywords"] = []
                 entities["intent"] = "category_listing"
             else:
@@ -157,7 +228,11 @@ class EntityExtractor:
         if not catalog_hints:
             return None
 
-        query_tokens = [re.sub(r"[^a-z0-9]+", "", t.lower()) for t in re.findall(r"[a-zA-ZÀ-ỹ0-9]+", query.lower()) if re.sub(r"[^a-z0-9]+", "", t.lower())]
+        query_tokens = [
+            re.sub(r"[^a-z0-9]+", "", t.lower())
+            for t in re.findall(r"[a-zA-ZÀ-ỹ0-9]+", query.lower())
+            if re.sub(r"[^a-z0-9]+", "", t.lower())
+        ]
         if not query_tokens:
             return None
 
@@ -217,7 +292,7 @@ class EntityExtractor:
         return hints
 
     def get_all_categories(self) -> List[str]:
-        """Lấy danh sách tất cả danh mục sản phẩm từ database."""
+        """Get all categories from the backing database."""
         hints = self._get_catalog_category_hints()
         return sorted(set(hints.values()))
 
@@ -231,14 +306,8 @@ class EntityExtractor:
             "- price_min: giá tối thiểu (số) hoặc null\n"
             "- keywords: mảng từ khóa tìm kiếm chính (TIẾNG ANH, loại bỏ từ chung chung)\n"
             "- sort: 'relevance', 'price_asc', 'price_desc' hoặc null\n\n"
-            "Ví dụ:\n"
-            "  Câu hỏi: 'kính thiên văn dưới 100 đô'\n"
-            '  -> {"intent":"product_search","category":null,"price_max":100,"price_min":null,"keywords":["telescope"],"sort":"relevance"}\n\n'
-            "  Câu hỏi: 'bạn bán loại sản phẩm nào'\n"
-            '  -> {"intent":"category_listing","category":null,"price_max":null,"price_min":null,"keywords":[],"sort":null}\n\n'
-            "  Câu hỏi: 'gợi ý cho tôi vài sản phẩm'\n"
-            '  -> {"intent":"general","category":null,"price_max":null,"price_min":null,"keywords":[],"sort":null}\n\n'
-            f"Câu hỏi: {query}\n"
+            "Câu hỏi: "
+            f"{query}\n"
             "JSON:"
         )
 

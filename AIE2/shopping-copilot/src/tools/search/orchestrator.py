@@ -104,7 +104,7 @@ class SearchOrchestrator:
                 tracer.end(s_rw, "skip", "No rewrite needed")
 
             s_kb = tracer.time("KB Query")
-            sq = SearchQuery(raw=query)
+            sq = SearchQuery(raw=rewritten or query)
             results = await asyncio.wait_for(self.flow2.run(sq), timeout=5.0)
             if not results:
                 tracer.end(s_kb, "skip", "No KB results (BEDROCK_KB_ID not set or empty)")

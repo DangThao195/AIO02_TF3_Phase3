@@ -3,7 +3,9 @@ import json
 from langchain_core.tools import tool
 
 from src.tools.search.models import SearchToolResponse
+from src.tools.search.query_analyzer import QueryAnalyzerPipeline
 from src.tools.search.orchestrator import SearchOrchestrator
+from src.tools.search.synonym_cache import SynonymCache
 from src.tools.search.tracer import SearchTracer
 
 
@@ -56,4 +58,4 @@ async def search_products_v2(query: str) -> str:
     return response.to_json()
 
 
-__all__ = ["search_products_v2"]
+__all__ = ["search_products_v2", "QueryAnalyzerPipeline", "SynonymCache"]

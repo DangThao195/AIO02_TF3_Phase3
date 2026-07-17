@@ -99,16 +99,38 @@ _STEP_LABELS: dict[str, str] = {
     "EntityExtractor": "Trích xuất thông tin",
     "ResolveProduct": "Tra cứu sản phẩm",
     "Router": "Định tuyến",
+    "Confirmation": "Xác nhận hành động",
+    "ResponseEditor": "Biên tập câu trả lời",
     "AnswerGenerator": "Tạo câu trả lời",
     "LLMNode": "AI Agent",
     "ToolsNode": "Thực thi công cụ",
     "GetCart": "Xem giỏ hàng",
+    "AddToCart": "Thêm vào giỏ",
     "ToolExecutor": "Công cụ",
 }
+
 
 def _build_steps(state: dict) -> List[StepInfo]:
     durations = state.get("node_durations", {})
     errors = state.get("errors", [])
+    violations = state.get("guardrail_violations", [])
+    tool_results = state.get("tool_results", {})
+    interrupts = state.get("__interrupt__", [])
+
+    # Build error map: node_key → error_detail
+    error_map: dict[str, str] = {}
+    for err in errors:
+        n = err.get("node", "")
+        error_map[n] = err.get("error", "")
+
+    # Build tool error map: tool_name → error_detail
+    tool_error_map: dict[str, str] = {}
+    for key, val in tool_results.items():
+        if val.get("error"):
+            tool_name = key.split(":")[0]
+            warn = val.get("source", "")
+            tool_error_map[tool_name] = f"[{warn}] {val['error']}" if warn else val["error"]
+
     steps: List[StepInfo] = []
 
     for node_key, ms in durations.items():
@@ -123,11 +145,15 @@ def _build_steps(state: dict) -> List[StepInfo]:
 
         status = "ok"
         detail = ""
-        for err in errors:
-            if err.get("node", "").startswith(base):
-                status = "error"
-                detail = err.get("error", "")[:100]
-                break
+
+        # Match error by exact node_key first, then base
+        err_detail = error_map.get(node_key) or error_map.get(base)
+        if err_detail:
+            status = "error"
+            detail = err_detail
+        elif base in tool_error_map:
+            status = "error"
+            detail = tool_error_map[base]
 
         if base == "ResolveProduct" and status == "ok":
             pname = state.get("resolved_product_name")
@@ -135,11 +161,15 @@ def _build_steps(state: dict) -> List[StepInfo]:
                 detail = f"Đã tìm thấy: {pname}"
             elif state.get("entities", {}).get("product_name"):
                 detail = "Không tìm thấy sản phẩm"
-        elif base == "InputGuard" and status == "ok":
-            violations = state.get("guardrail_violations", [])
-            if violations:
-                status = "block"
-                detail = violations[0].get("type", "Violation")
+
+        if base == "Confirmation":
+            pending = state.get("pending_action")
+            if pending:
+                detail = pending.get("message", "")[:80]
+            elif status == "error":
+                pass
+            else:
+                detail = "Đã xác nhận"
 
         steps.append(StepInfo(
             action=action,
@@ -148,7 +178,149 @@ def _build_steps(state: dict) -> List[StepInfo]:
             duration_ms=ms,
         ))
 
+    # Thêm steps cho tool_results không có trong node_durations (vd tool chạy trong subgraph)
+    seen_tools = set()
+    for node_key in durations:
+        if node_key.startswith("ToolExecutor:"):
+            seen_tools.add(node_key.split(":", 1)[1])
+    for key, val in tool_results.items():
+        tool_name = key.split(":")[0]
+        if tool_name not in seen_tools:
+            seen_tools.add(tool_name)
+            result_text = str(val.get("result", ""))
+            err_text = val.get("error", "")
+            is_error = bool(err_text) or ("lỗi" in result_text.lower()[:10] or "error" in result_text.lower()[:10] or "unavail" in result_text.lower()[:30])
+            steps.append(StepInfo(
+                action=f"Công cụ: {tool_name}",
+                status="error" if is_error else "ok",
+                detail=(err_text or result_text)[:150],
+                duration_ms=0,
+            ))
+
+    # Thêm guardrail violations nếu chưa có trong steps
+    for v in violations:
+        already = any(s.status == "block" for s in steps)
+        if not already:
+            steps.append(StepInfo(
+                action="Guardrail",
+                status="block",
+                detail=f"{v.get('type', 'Violation')}: {v.get('detail', '')}",
+                duration_ms=0,
+            ))
+
+    # Thêm interrupt step nếu graph bị suspend (ConfirmationNode chưa return)
+    if interrupts:
+        has_pending = any(s.status == "pending" for s in steps)
+        for intr in interrupts:
+            val = intr.value if hasattr(intr, "value") else intr
+            if not isinstance(val, dict):
+                continue
+            # Thêm tool errors từ interrupt value (ConfirmationNode capture từ subgraph)
+            for tool_name, err_detail in val.get("tool_errors", {}).items():
+                seen_tools.add(tool_name)  # tránh duplicate
+                steps.append(StepInfo(
+                    action=f"Công cụ: {tool_name}",
+                    status="error",
+                    detail=err_detail[:150],
+                    duration_ms=0,
+                ))
+            # Thêm pending step nếu chưa có
+            if not has_pending and val.get("pending_action"):
+                pa = val["pending_action"]
+                steps.append(StepInfo(
+                    action="Chờ xác nhận",
+                    status="pending",
+                    detail=pa.get("message", "")[:120],
+                    duration_ms=0,
+                ))
+
     return steps
+
+
+def _log_steps(state: dict, session_id: str):
+    """Log step-by-step debug info ra console."""
+    durations = state.get("node_durations", {})
+    errors = state.get("errors", [])
+    violations = state.get("guardrail_violations", [])
+    tool_results = state.get("tool_results", {})
+    interrupts = state.get("__interrupt__", [])
+    final_answer = state.get("final_answer", "")
+
+    logger.info("[DEBUG] ═════════════════ Steps ═════════════════")
+
+    # Log steps từ node_durations (parent graph nodes)
+    for node_key, ms in sorted(durations.items(), key=lambda x: list(durations.keys()).index(x[0])):
+        base = node_key.split(":")[0]
+        label = _STEP_LABELS.get(base, base)
+        if node_key.startswith("ToolExecutor:"):
+            label = f"Công cụ:{node_key.split(':',1)[1]}"
+
+        status_icon = "✓"
+        err_detail = ""
+        for err in errors:
+            if err.get("node", "") == node_key or err.get("node", "") == base:
+                status_icon = "✗"
+                err_detail = f" — {err.get('error', '')[:100]}"
+                break
+        if not err_detail and base in tool_results:
+            for k, v in tool_results.items():
+                if k.startswith(base) and v.get("error"):
+                    status_icon = "✗"
+                    err_detail = f" — {v['error'][:100]}"
+                    break
+
+        if base == "InputGuard" and violations:
+            status_icon = "⊘"
+            err_detail = f" — {violations[0].get('type','')}"
+
+        logger.info("[DEBUG]   %s %s (%dms)%s", status_icon, label, ms, err_detail)
+
+    # Log tool_results không có trong durations (chạy trong subgraph)
+    seen_tools = set()
+    for nk in durations:
+        if nk.startswith("ToolExecutor:"):
+            seen_tools.add(nk.split(":", 1)[1])
+    for key, val in tool_results.items():
+        tool_name = key.split(":")[0]
+        if tool_name in seen_tools:
+            continue
+        seen_tools.add(tool_name)
+        result_text = str(val.get("result", ""))
+        err_text = val.get("error", "")
+        icon = "✗" if (err_text or "lỗi" in result_text.lower()[:10]) else "✓"
+        detail = (err_text or result_text)[:100]
+        logger.info("[DEBUG]   %s Công cụ:%s %s", icon, tool_name, f" — {detail}" if detail else "")
+
+    if violations:
+        logger.info("[DEBUG]   ⊘ Guardrail: %s", violations[0].get("detail", ""))
+
+    if errors:
+        logger.info("[DEBUG] ── Chi tiết lỗi ──")
+        for e in errors:
+            logger.info("[DEBUG]   [%s] %s", e.get("node", "?"), e.get("error", ""))
+
+    if interrupts:
+        for intr in interrupts:
+            val = intr.value if hasattr(intr, "value") else intr
+            if isinstance(val, dict):
+                if val.get("tool_errors"):
+                    logger.info("[DEBUG] ── Lỗi tool (trong subgraph) ──")
+                    for tool, err in val["tool_errors"].items():
+                        logger.info("[DEBUG]   ✗ %s: %s", tool, err[:150])
+                if val.get("pending_action"):
+                    pa = val["pending_action"]
+                    logger.info("[DEBUG]   ⏸ Chờ xác nhận: %s", pa.get("message", "")[:120])
+
+    if tool_results:
+        err_tools = {k: v for k, v in tool_results.items() if v.get("error")}
+        if err_tools:
+            logger.info("[DEBUG] ── Lỗi tool ──")
+            for k, v in err_tools.items():
+                logger.info("[DEBUG]   [%s] %s (source=%s)", k, v["error"][:150], v.get("source", "?"))
+
+    answer_preview = final_answer[:120].replace("\n", " ")
+    logger.info("[DEBUG] ── Trả lời: %s", answer_preview if answer_preview else "(trống)")
+    logger.info("[DEBUG] ═════════════════════════════════════════")
 
 
 class ConfirmRequest(BaseModel):
@@ -284,28 +456,14 @@ async def api_chat(req: ChatRequest):
     config = {"configurable": {"thread_id": req.session_id}}
 
     try:
+        # Chỉ gửi input mới; để checkpoint giữ lại context cũ như candidate_products,
+        # pending_action và lịch sử workflow giữa các lượt chat.
         result = await graph.ainvoke(
             {
                 "messages": [HumanMessage(content=req.message)],
                 "session_id": req.session_id,
                 "user_id": req.user_id,
                 "trace_id": str(uuid.uuid4()),
-                "intent": "agent",
-                "intent_source": "default",
-                "entities": {},
-                "candidate_products": [],
-                "tool_results": {},
-                "final_answer": "",
-                "pending_workflows": [],
-                "current_workflow_index": 0,
-                "workflow_results": [],
-                "pending_action": None,
-                "confirmed": False,
-                "errors": [],
-                "retry_count": 0,
-                "node_retry_counts": {},
-                "guardrail_violations": [],
-                "node_durations": {},
             },
             config=config,
         )
@@ -317,12 +475,9 @@ async def api_chat(req: ChatRequest):
             session_id=req.session_id,
         )
 
-    logger.info(
-        "[API] LangGraph response | session=%s | violations=%d",
-        req.session_id, len(result.get("guardrail_violations", []))
-    )
+    steps = _build_steps(result)
+    _log_steps(result, req.session_id)
 
-    # Nếu có guardrail violation → trả lỗi
     violations = result.get("guardrail_violations", [])
     if violations:
         violation = violations[0]
@@ -330,25 +485,29 @@ async def api_chat(req: ChatRequest):
             status="error",
             reply=violation.get("detail", "Yêu cầu bị từ chối."),
             session_id=req.session_id,
-            steps=_build_steps(result),
+            steps=steps,
         )
 
-    # Nếu confirmation pending
-    pending_action = result.get("pending_action")
-    if pending_action and not result.get("confirmed", False):
-        return ChatResponse(
-            status="pending",
-            reply=pending_action.get("message", "Vui lòng xác nhận hành động."),
-            token=pending_action.get("token"),
-            session_id=req.session_id,
-            steps=_build_steps(result),
-        )
+    # Kiểm tra __interrupt__ từ ConfirmationNode (graph bị suspend chờ confirm)
+    interrupts = result.get("__interrupt__", [])
+    if interrupts:
+        interrupt_value = interrupts[0].value if hasattr(interrupts[0], "value") else interrupts[0]
+        if isinstance(interrupt_value, dict):
+            pending_action = interrupt_value.get("pending_action")
+            if pending_action:
+                return ChatResponse(
+                    status="pending",
+                    reply=pending_action.get("message", "Vui lòng xác nhận hành động."),
+                    token=pending_action.get("token"),
+                    session_id=req.session_id,
+                    steps=steps,
+                )
 
     return ChatResponse(
         status="ok",
         reply=result.get("final_answer", ""),
         session_id=req.session_id,
-        steps=_build_steps(result),
+        steps=steps,
     )
 
 
@@ -374,7 +533,8 @@ async def api_confirm(req: ConfirmRequest):
     config = {"configurable": {"thread_id": req.session_id}}
 
     try:
-        # Resume graph từ checkpoint với confirmed=True
+        # Resume graph từ checkpoint — interrupt() trong ConfirmationNode
+        # trả về resume data, node trả về {"confirmed": True}
         result = await graph.ainvoke(
             Command(resume={"confirmed": True}),
             config=config,

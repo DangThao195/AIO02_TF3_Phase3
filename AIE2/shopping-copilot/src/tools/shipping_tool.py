@@ -1,52 +1,80 @@
 # tools/shipping_tool.py
+from __future__ import annotations
+
+import json
 import requests
 from langchain_core.tools import tool
 
 from src.tools.service_config import SHIPPING_ADDR as SHIPPING_REST_ADDR
 
+
 @tool
-def get_shipping_quote_tool(street: str, city: str, country: str, zip_code: str, state: str = "") -> str:
+def get_shipping_quote_tool(
+    address: str = "",
+    destination: str = "",
+    street: str = "",
+    city: str = "",
+    country: str = "",
+    zip_code: str = "",
+    state: str = "",
+    product_id: str = "",
+    quantity: int = 1,
+) -> str:
     """
-    (Rest-based Intent - Extended)
-    Use this REST tool (HTTP/1.1) to get estimated shipping costs based on the delivery address.
-    Do not use as a gRPC tool. Required input: street, city, country, zip_code.
+    Get a shipping estimate for a domestic delivery.
+    Accepts either a free-form address or structured address fields.
     """
-    # 🛡️ Guardrail Check: Only authorized for deliveries within Vietnam
-    if country.lower() != "vietnam":
+    if country and country.lower() != "vietnam":
         return "I am only authorized to estimate shipping costs for domestic deliveries within Vietnam."
 
-    # 🛠️ REST GET parameters matching Member 2/3's structure
-    # (Removed product_id as it's not defined in the provided proto context for this intent)
+    normalized_address = (address or destination or "").strip()
+    if not normalized_address:
+        structured = [street, city, state, zip_code, country]
+        normalized_address = ", ".join(part.strip() for part in structured if part and part.strip())
+
     params = {
+        "address": normalized_address,
         "street": street,
         "city": city,
         "state": state,
         "country": country,
         "zip_code": zip_code,
+        "product_id": product_id,
+        "quantity": quantity,
+    }
+    params = {
+        key: value
+        for key, value in params.items()
+        if value not in ("", None, 0)
     }
 
     try:
-        # Execute the REST GET Request to the local port-forwarded service
         response = requests.get(
             f"{SHIPPING_REST_ADDR}/api/v1/shipping/quote",
             params=params,
-            timeout=5
+            timeout=5,
         )
-        
-        # Check for HTTP errors (like 404, 500)
-        response.raise_for_status() 
-        
-        # Parse the JSON response
+        response.raise_for_status()
+
         data = response.json()
-        
-        # Extract the Money object data (assuming it returns JSON matching demo.Money fields)
         cost_info = data.get("cost_usd", {})
-        units = cost_info.get("units", "0")
+        units = cost_info.get("units", 0)
+        nanos = cost_info.get("nanos", 0)
         currency_code = cost_info.get("currency_code", "USD")
-        
-        return f"Estimated shipping cost for domestic delivery within Vietnam obtained from AWS Cloud: {units} {currency_code}."
-        
+        shipping_fee = float(units) + (float(nanos) / 1_000_000_000)
+
+        payload = {
+            "shipping_fee": round(shipping_fee, 2),
+            "currency_code": currency_code,
+            "address": normalized_address,
+        }
+        if "shipping_days" in data:
+            payload["estimated_days"] = data.get("shipping_days")
+        if "carrier" in data:
+            payload["carrier"] = data.get("carrier")
+
+        return json.dumps(payload, ensure_ascii=False)
     except requests.exceptions.RequestException as e:
         return f"System error when estimating shipping cost (REST Service on EKS): {str(e)}"
     except ValueError:
-        return f"Error: Received invalid JSON data from the REST shipping service on EKS Cluster."
+        return "Error: Received invalid JSON data from the REST shipping service on EKS Cluster."
