@@ -1,8 +1,12 @@
-import json
 import os
 import sys
+import json
 import boto3
 from dotenv import load_dotenv
+
+# Load credentials from repro/.env
+repro_env = os.path.abspath(os.path.join(os.path.dirname(__file__), '../repro/.env'))
+load_dotenv(repro_env)
 
 # Force UTF-8 output for Windows console to print Vietnamese safely
 if sys.platform.startswith('win'):
@@ -15,10 +19,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../t
 
 from guardrails.input_filter import check_input
 from guardrails.output_filter import filter_output
-
-# Load credentials from repro/.env
-repro_env = os.path.abspath(os.path.join(os.path.dirname(__file__), '../repro/.env'))
-load_dotenv(repro_env)
 
 # Initialize AWS Bedrock client using the credentials loaded
 bedrock_client = None

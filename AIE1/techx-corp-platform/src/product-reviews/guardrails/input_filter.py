@@ -231,7 +231,14 @@ def check_input(user_message: str) -> InputFilterResult:
                 blocked_tier="REGEX",
             )
 
-    # Tất cả pattern đều không khớp → tin nhắn sạch (tầng Regex)
+    # Nếu có BEDROCK_GUARDRAIL_ID, chạy Tầng 2: Bedrock Guardrails
+    guardrail_id = os.getenv("BEDROCK_GUARDRAIL_ID", "")
+    if guardrail_id:
+        bedrock_result = check_input_bedrock(user_message)
+        if not bedrock_result.is_safe:
+            return bedrock_result
+
+    # Tất cả pattern đều không khớp → tin nhắn sạch
     return InputFilterResult(
         is_safe=True,
         blocked_reason="",
@@ -244,22 +251,35 @@ def check_input(user_message: str) -> InputFilterResult:
 # Tầng 2: AWS Bedrock Guardrails (Semantic Check)
 # ═══════════════════════════════════════════════════
 
-# Config — set từ biến môi trường hoặc sau khi tạo guardrail trên AWS
-_BEDROCK_GUARDRAIL_ID = os.getenv("BEDROCK_GUARDRAIL_ID", "")
-_BEDROCK_GUARDRAIL_VERSION = os.getenv("BEDROCK_GUARDRAIL_VERSION", "DRAFT")
-_BEDROCK_GUARDRAIL_REGION = os.getenv("BEDROCK_GUARDRAIL_REGION") or os.getenv("BEDROCK_REGION") or "ap-southeast-1"
+def get_guardrail_id():
+    return os.getenv("BEDROCK_GUARDRAIL_ID", "")
+
+def get_guardrail_version():
+    return os.getenv("BEDROCK_GUARDRAIL_VERSION", "DRAFT")
+
+def get_guardrail_region():
+    return (
+        os.getenv("BEDROCK_GUARDRAIL_REGION")
+        or os.getenv("BEDROCK_REGION")
+        or os.getenv("AWS_DEFAULT_REGION")
+        or os.getenv("AWS_REGION")
+        or "ap-southeast-1"
+    )
 
 # Lazy init client — tránh import lỗi khi boto3 chưa cài
 _bedrock_client = None
+_bedrock_client_region = None
 
 
 def _get_bedrock_client():
     """Lazy init boto3 bedrock-runtime client."""
-    global _bedrock_client
-    if _bedrock_client is None:
+    global _bedrock_client, _bedrock_client_region
+    region = get_guardrail_region()
+    if _bedrock_client is None or _bedrock_client_region != region:
         try:
             import boto3
-            _bedrock_client = boto3.client("bedrock-runtime", region_name=_BEDROCK_GUARDRAIL_REGION)
+            _bedrock_client = boto3.client("bedrock-runtime", region_name=region)
+            _bedrock_client_region = region
         except Exception as e:
             logger.error(f"[INPUT_FILTER] Không thể khởi tạo Bedrock client: {e}")
             return None
@@ -278,8 +298,9 @@ def check_input_bedrock(user_message: str) -> InputFilterResult:
 
     Nếu BEDROCK_GUARDRAIL_ID chưa được cấu hình → bỏ qua (cho phép đi tiếp).
     """
+    guardrail_id = get_guardrail_id()
     # Nếu chưa cấu hình guardrail ID → skip tầng này
-    if not _BEDROCK_GUARDRAIL_ID:
+    if not guardrail_id:
         logger.debug("[INPUT_FILTER] Bedrock Guardrails chưa cấu hình — skip tầng 2")
         return InputFilterResult(
             is_safe=True,
@@ -301,8 +322,8 @@ def check_input_bedrock(user_message: str) -> InputFilterResult:
 
     try:
         response = client.apply_guardrail(
-            guardrailIdentifier=_BEDROCK_GUARDRAIL_ID,
-            guardrailVersion=_BEDROCK_GUARDRAIL_VERSION,
+            guardrailIdentifier=guardrail_id,
+            guardrailVersion=get_guardrail_version(),
             source="INPUT",
             content=[{"text": {"text": user_message}}],
         )

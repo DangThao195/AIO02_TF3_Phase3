@@ -15,6 +15,14 @@ components:
       - name: AWS_REGION
         value: us-east-1
 
+      # Bedrock Guardrail
+      - name: BEDROCK_GUARDRAIL_ID
+        value: 3ab7r29x59x4
+      - name: BEDROCK_GUARDRAIL_VERSION
+        value: DRAFT
+      - name: BEDROCK_GUARDRAIL_REGION
+        value: us-east-1
+
       # Cấu hình API Key (chỉ dùng cho Provider 'openai' hoặc mock)
       - name: OPENAI_API_KEY
         valueFrom: { secretKeyRef: { name: llm-api-key, key: key } }

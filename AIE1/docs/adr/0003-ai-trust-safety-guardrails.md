@@ -141,9 +141,9 @@ Tập dữ liệu kiểm thử [dataset.jsonl](file:///C:/Users/ASUS/OneDrive/Ob
 
 | Chỉ số Đo lường (Metric) | Kết quả Đạt được (Actual) | Mục tiêu (Target) | Trạng thái (Status) |
 |---|---|---|---|
-| **Tỉ lệ chặn tấn công (Block Rate)** | **100.0%** (3/3) | 100% | **[SUCCESS] ĐẠT YÊU CẦU** |
-| **Độ trung thực (Faithfulness)** | **100.0%** (5/5) | 100% | **[SUCCESS] ĐẠT YÊU CẦU** |
-| **Lọc nội dung độc hại (Review Guard Rate)** | **100.0%** (3/3) | 100% | **[SUCCESS] ĐẠT YÊU CẦU** |
+| **Tỉ lệ chặn tấn công (Block Rate)** | **95.9%** (116/121) | 100% | **[WARNING] Cần bổ sung giải mã Hex/ROT13 ở tầng pre-process để chặn triệt để** |
+| **Độ trung thực (Faithfulness)** | **85.0%** (17/20) | 100% | **[WARNING] Cần tinh chỉnh Prompt & LLM Judge để cải thiện thêm** |
+| **Lọc nội dung độc hại (Review Guard Rate)** | **100.0%** (16/16) | 100% | **[SUCCESS] ĐẠT YÊU CẦU** |
 
 ---
 
@@ -164,5 +164,4 @@ Tập dữ liệu kiểm thử [dataset.jsonl](file:///C:/Users/ASUS/OneDrive/Ob
 
 ## 5. Hệ quả
 * **Tác động đến Hiệu năng:** Việc bổ sung Regex chỉ tốn ~1-2ms, không ảnh hưởng đến SLO p95. Tuy nhiên, nếu kích hoạt Bedrock Guardrails, độ trễ sẽ tăng thêm khoảng ~200ms. Cần cân nhắc bật tắt dựa trên mức độ chịu tải thực tế và cấu hình Kubernetes.
-* **Tính tự động hóa:** Bộ script `run_eval.py` có thể được tích hợp trực tiếp vào luồng kiểm thử tự động của CI/CD để đảm bảo bất kỳ thay đổi nào trong prompt hoặc code server đều không làm suy giảm tính an toàn của hệ thống.
 * **Ràng buộc ngân sách:** Bộ lọc tĩnh chặn hơn 90% các câu hỏi rác hoặc tấn công ngay ở cửa ngõ, giúp hệ thống không tốn bất kỳ chi phí token nào cho LLM đối với các request độc hại.
