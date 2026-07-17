@@ -82,20 +82,27 @@ Dưới đây là bảng phân tích trade-off chi tiết giữa hai lựa chọ
 | **Triển khai ở môi trường Local & Docker** | **Đơn giản tối đa**<br>- Chỉ cần viết thêm script khởi tạo Schema cho bảng cache trên DB PostgreSQL đang có sẵn. Không cần sửa đổi file `docker-compose.yaml`. | **Cần thêm cấu hình**<br>- Cần thêm service Redis vào file `docker-compose.yaml` (thêm container mới).<br>- Code Python phải import thư viện `redis` (thêm vào `requirements.txt`). | **PostgreSQL Thắng**:<br>- Giúp giữ cho môi trường Local cực kỳ tinh gọn, ít thành phần phụ thuộc. |
 | **Deploy & Vận hành trên AWS Cloud** | **Amazon RDS / Aurora Serverless**<br>- Tái sử dụng Instance RDS hiện tại, chỉ tăng nhẹ tải đọc/ghi. Vận hành tập trung trên một DB duy nhất. | **Amazon ElastiCache / MemoryDB**<br>- Cần quản lý thêm một dịch vụ chuyên biệt (ElastiCache). Có cơ chế Cluster / Replication tự động phân mảnh và sao lưu.<br>- Giảm tải hoàn toàn truy vấn đọc/ghi cache cho PostgreSQL chính để dành tài nguyên cho các nghiệp vụ ACID quan trọng khác. | **Redis Thắng về mặt kiến trúc**:<br>- Giúp tách biệt rõ ràng lớp lưu trữ chính (Database) và lớp bộ đệm (Caching), tăng độ bền vững và khả năng scale cho hệ thống lớn. |
 
-#### Kết luận Trade-off:
-- **Chọn PostgreSQL** khi: Dự án đang ở giai đoạn Prototype, muốn **tối giản hóa hạ tầng**, tiết kiệm chi phí, không muốn quản lý thêm container/dịch vụ ngoài PostgreSQL và tải lượng truy cập không quá lớn.
-- **Chọn Redis** khi: Hệ thống phục vụ lượng người dùng lớn ở môi trường **Production**, yêu cầu **độ trễ siêu thấp (< 1ms)**, cần cơ chế quản lý TTL tự động mà không làm ảnh hưởng đến hiệu năng ghi/đọc của cơ sở dữ liệu quan hệ chính.
+#### Quyết Định Cuối Cùng: Chọn Redis + Hybrid Audit (PostgreSQL)
 
-#### Đánh giá Mức độ Tương thích với Mandate-06:
-Để lựa chọn hạ tầng phù hợp nhất với các chỉ thị trong [MANDATE-06-ai-trust-safety.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIE1/mandates/MANDATE-06-ai-trust-safety.md), hai hạ tầng được đánh giá theo 3 lăng kính ràng buộc cốt lõi:
-1. **Tiêu chí Độ bền bỉ chống treo trang (Resilience & Fallback - Yêu cầu số 1):** 
-   * **Redis Thắng:** Bằng cách lưu cache trên RAM độc lập, Redis cô lập hoàn toàn truy vấn cache khỏi PostgreSQL nghiệp vụ chính (nơi đang gánh dữ liệu catalog, reviews). Khi chịu tải cao, điều này ngăn chặn hiện tượng nghẽn cổ chai cơ sở dữ liệu chính, đáp ứng tốt nhất yêu cầu *"không để treo trang sản phẩm"*.
-2. **Tiêu chí Khả năng kiểm toán hệ thống (Auditability - Yêu cầu số 4):**
-   * **PostgreSQL Thắng:** Kiểu dữ liệu `JSONB` của Postgres hỗ trợ truy vấn SQL phân tích cấu trúc phức tạp cực tốt. Dễ dàng thống kê: *Bao nhiêu request bị Fidelity Judge từ chối? Tổng số token tiêu tốn là bao nhiêu?* Điều này giúp việc báo cáo số đo kiểm định chất lượng (Eval) cho Mentor hoặc Ban giám khảo trực quan và khả thi hơn rất nhiều so với cơ chế Key-Value của Redis.
-3. **Tiêu chí Ràng buộc về ngân sách (Budget & Resources):**
-   * **PostgreSQL Thắng:** Tiết kiệm hoàn toàn chi phí hạ tầng bổ sung (chi phí cho AWS ElastiCache tốn thêm khoảng **$30 - $60 / tháng**), tối ưu hóa ngân sách hiện tại của Task Force.
+> [!IMPORTANT]
+> **Bối cảnh quyết định:** CDO xác nhận hạ tầng hiện tại thoải mái cả về RAM lẫn dung lượng Database, do đó rào cản chi phí Redis không còn là yếu tố quyết định.
 
-* **Hướng tiếp cận Hybrid đề xuất:** Kết hợp dùng **Redis** để phục vụ cache đáp ứng thời gian thực < 1ms (đáp ứng Resilience) và đồng thời ghi log kiểm toán, số đo eval cấu trúc vào **PostgreSQL** (đáp ứng Auditability).
+**Hạ tầng chính:** **Redis** — phục vụ cache LLM Response thời gian thực.
+
+| Lý do chọn Redis | Chi tiết |
+| :--- | :--- |
+| **Latency < 1ms** vs Postgres 5-15ms | Trải nghiệm người dùng tốt hơn rõ rệt, đáp ứng SLO p95 |
+| **TTL tự động** (SETEX/EXPIRE) | Không cần cronjob dọn cache, code ứng dụng sạch hơn |
+| **Tách biệt tải** khỏi DB nghiệp vụ | Tránh nghẽn Postgres khi tải cao — đáp ứng Mandate-06 Resilience: *"không để treo trang sản phẩm"* |
+| **Eviction Policy LRU** tự động | Bộ nhớ tự quản lý khi đầy, không cần can thiệp thủ công |
+
+**Hạ tầng bổ trợ (Hybrid Audit):** **PostgreSQL** — ghi audit log kiểm toán song song.
+
+| Lý do giữ PostgreSQL cho Audit | Chi tiết |
+| :--- | :--- |
+| **Truy vấn SQL phân tích cấu trúc** | Kiểu `JSONB` hỗ trợ thống kê phức tạp: *Bao nhiêu request bị Fidelity Judge từ chối? Tổng token tiêu tốn?* |
+| **Đáp ứng Mandate-06 Auditability** | Báo cáo số đo kiểm định chất lượng cho Mentor hoặc Ban giám khảo trực quan và khả thi hơn Key-Value của Redis |
+| **Không tốn thêm chi phí** | Tái sử dụng instance Postgres sẵn có, chỉ thêm 1 bảng audit log |
 
 ---
 
@@ -141,9 +148,155 @@ Tại bước chuẩn hóa context trước khi gửi LLM, hệ thống phải q
 
 ---
 
-## 4. Minh Họa Logic Mã Nguồn Python
+## 4. Phân Tích Rủi Ro & Giải Pháp Kỹ Thuật
 
-### 4.1. Hàm sinh Cache Key và Cache Policy cho LLM Cache
+Dưới đây là các vấn đề tiềm ẩn của phương án đã chọn (Redis cho Tầng 1, DB Column `is_safe` cho Tầng 2) cùng giải pháp cụ thể:
+
+### 4.1. Redis Connection Failure — Single Point of Failure (Mức độ: 🔴 Nghiêm trọng)
+
+**Vấn đề:** Khi Redis sập hoặc mất kết nối, toàn bộ luồng RAG sẽ bị lỗi nếu code không xử lý ngoại lệ đúng cách. Điều này vi phạm trực tiếp Mandate-06 về tính sẵn sàng dịch vụ.
+
+**Giải pháp: Fail-Open Pattern**
+
+Áp dụng nguyên tắc **fail-open** nhất quán với cách hệ thống đã xử lý Bedrock Guardrails — khi Redis không khả dụng, bỏ qua cache và tiếp tục luồng bình thường:
+```python
+# Cache Lookup — fail-open
+try:
+    cached = redis_client.get(cache_key)
+except (redis.ConnectionError, redis.TimeoutError) as e:
+    logger.warning(f"Redis unavailable for read, bypassing cache: {e}")
+    cached = None  # Tiếp tục như Cache Miss
+
+# Cache Write — fail-open
+try:
+    redis_client.setex(cache_key, TTL_SECONDS, json.dumps(cache_data))
+except (redis.ConnectionError, redis.TimeoutError) as e:
+    logger.warning(f"Redis unavailable for write, skipping cache save: {e}")
+    # Vẫn trả kết quả cho client bình thường, chỉ bỏ qua lưu cache
+```
+
+**Hiệu quả:** Dịch vụ luôn hoạt động bình thường ngay cả khi Redis hoàn toàn sập. Hiệu năng giảm (mất cache) nhưng tính sẵn sàng được bảo toàn 100%.
+
+---
+
+### 4.2. Cache Stampede (Thundering Herd) khi Cache Miss đồng loạt (Mức độ: 🟡 Trung bình)
+
+**Vấn đề:** Khi có review mới → `review_version` thay đổi → Toàn bộ cache cũ của sản phẩm đó bị miss → Nhiều request cùng lúc đồng loạt gọi LLM, gây nghẽn token và chi phí đột biến.
+
+**Giải pháp: Distributed Lock bằng Redis `SET NX`**
+
+Chỉ cho phép **1 request đầu tiên** gọi LLM, các request sau chờ kết quả từ cache:
+```python
+lock_key = f"lock:{cache_key}"
+acquired = redis_client.set(lock_key, "1", nx=True, ex=10)  # lock tối đa 10 giây
+
+if acquired:
+    # Request đầu tiên: gọi LLM, ghi cache, xóa lock
+    result = call_llm(...)
+    redis_client.setex(cache_key, TTL, json.dumps(result))
+    redis_client.delete(lock_key)
+    return result
+else:
+    # Các request sau: poll cache trong vòng 10 giây
+    for _ in range(20):
+        time.sleep(0.5)
+        cached = redis_client.get(cache_key)
+        if cached:
+            return json.loads(cached)
+    # Timeout → fallback gọi LLM bình thường để không treo request
+    return call_llm(...)
+```
+
+**Hiệu quả:** Giảm số lượng cuộc gọi LLM trùng lặp từ N xuống còn 1 trong trường hợp burst traffic, tiết kiệm đáng kể chi phí token.
+
+---
+
+### 4.3. Background Migration Job cho cột `is_safe` khi cập nhật Regex Rules (Mức độ: 🟡 Trung bình)
+
+**Vấn đề:** Khi thay đổi bộ quy tắc Regex (thêm/sửa pattern mới), toàn bộ review cũ trong DB cần được quét lại để cập nhật cột `is_safe`. Nếu job chạy trực tiếp trên luồng API sẽ chặn dịch vụ phục vụ.
+
+**Giải pháp: Batch Update ngoài Request Path**
+
+* Chạy migration job dạng **batch nhỏ** (500-1000 rows/batch) với `LIMIT` + `OFFSET`, kèm `time.sleep(0.1)` giữa các batch để không tạo áp lực I/O lên Postgres:
+```python
+def migrate_is_safe_column(batch_size=500, sleep_between=0.1):
+    """Quét lại toàn bộ reviews cũ bằng Regex Guardrails mới."""
+    offset = 0
+    total_updated = 0
+    while True:
+        rows = fetch_batch(offset, batch_size)  # SELECT id, description LIMIT batch_size OFFSET offset
+        if not rows:
+            break
+        for row_id, description in rows:
+            result = check_input(description)
+            if not result.is_safe:
+                update_is_safe(row_id, False)  # UPDATE SET is_safe = FALSE WHERE id = row_id
+                total_updated += 1
+        offset += batch_size
+        time.sleep(sleep_between)  # Giảm áp lực I/O lên DB
+    logger.info(f"Migration complete: {total_updated} reviews marked unsafe")
+```
+
+* **Trade-off an toàn trong khoảng thời gian migration đang chạy:** Các review cũ chưa được quét lại vẫn giữ `is_safe = TRUE` (giá trị mặc định). Điều này có nghĩa hệ thống có thể **lọt review xấu tạm thời** nhưng **không bao giờ chặn nhầm review sạch** — đây là hướng trade-off an toàn hơn chiều ngược lại.
+
+---
+
+### 4.4. Thiếu hàm tính `review_version` trong mã nguồn hiện tại (Mức độ: 🟡 Trung bình)
+
+**Vấn đề:** Tài liệu mô tả `review_version = SHA256(timestamp_newest + count)` nhưng hiện tại [database.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/database.py) chưa có hàm nào tính giá trị này. Nếu không có `review_version`, cơ chế invalidation động sẽ không hoạt động.
+
+**Giải pháp: Thêm hàm `get_review_version()` vào `database.py`**
+```python
+import hashlib
+
+def get_review_version(product_id: str) -> str:
+    """Tính mã phiên bản review dựa trên count + max timestamp.
+    Khi có review mới hoặc review bị đánh dấu unsafe → version thay đổi → Cache Miss tự động.
+    """
+    connection = None
+    try:
+        connection = db_pool.getconn()
+        with connection.cursor() as cursor:
+            query = """
+                SELECT COUNT(*), COALESCE(MAX(created_at), '1970-01-01')
+                FROM reviews.productreviews
+                WHERE product_id = %s AND is_safe = TRUE
+            """
+            cursor.execute(query, (product_id,))
+            count, max_ts = cursor.fetchone()
+        connection.commit()
+        raw = f"{product_id}:{count}:{max_ts}"
+        return hashlib.sha256(raw.encode('utf-8')).hexdigest()[:12]
+    except Exception as e:
+        if connection is not None:
+            connection.rollback()
+        raise e
+    finally:
+        if connection is not None:
+            db_pool.putconn(connection)
+```
+
+---
+
+### 4.5. Normalize câu hỏi chưa đủ mạnh → Cache Hit Rate thấp (Mức độ: 🟢 Thấp)
+
+**Vấn đề:** Hiện tại chỉ `lower().strip().split()` — hai câu hỏi *"Pin có tốt không?"* và *"Pin có tốt ko?"* sẽ tạo ra 2 cache key khác nhau dù ngữ nghĩa giống hệt.
+
+**Đánh giá: Chấp nhận trade-off hiện tại**
+
+| Phương án cải thiện | Rủi ro | Đánh giá |
+| :--- | :--- | :--- |
+| **Stemming / Synonym mapping** | Sai ngữ nghĩa — *"pin tốt"* và *"pin tồi"* có thể bị normalize trùng | ❌ Không nên áp dụng |
+| **Embedding similarity** (cosine > 0.95) | Tốn thêm 1 cuộc gọi embedding model, tăng latency | ⏳ Cân nhắc cho giai đoạn sau |
+| **Giữ nguyên normalize đơn giản** | Cache hit rate thấp hơn lý tưởng nhưng an toàn về mặt ngữ nghĩa | ✅ **Chấp nhận** |
+
+**Lý do chấp nhận:** Phần lớn request là **summary request mặc định** (câu hỏi cố định từ frontend: *"Summarize reviews for this product"*) → cache hit rate tự nhiên đã cao mà không cần normalize phức tạp.
+
+---
+
+## 5. Minh Họa Logic Mã Nguồn Python
+
+### 5.1. Hàm sinh Cache Key và Cache Policy cho LLM Cache
 ```python
 import hashlib
 import json
@@ -173,7 +326,7 @@ def should_cache(response_text: str, eval_passed: bool) -> bool:
     return True
 ```
 
-### 4.2. Logic luồng RAG tích hợp Caching & Song song hóa Tool Calls
+### 5.2. Logic luồng RAG tích hợp Caching & Song song hóa Tool Calls
 ```python
 # Giả lập luồng xử lý AskProductAIAssistant tích hợp Caching
 def ask_product_ai_assistant(product_id, question):
@@ -210,7 +363,7 @@ def ask_product_ai_assistant(product_id, question):
 
 ---
 
-## 5. Lộ Trình Triển Khai Kỹ Thuật (Implementation Roadmap)
+## 6. Lộ Trình Triển Khai Kỹ Thuật (Implementation Roadmap)
 
 ### Giai đoạn 1: Chuẩn bị hạ tầng & Database Migration
 * **Database Schema Update:** Cập nhật cơ sở dữ liệu PostgreSQL để hỗ trợ lọc bảo mật ở tầng lưu trữ:
