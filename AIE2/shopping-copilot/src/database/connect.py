@@ -62,7 +62,7 @@ class DBConfig:
             "keepalives_idle": 30,
             "keepalives_interval": 10,
             "keepalives_count": 5,
-            "options": f"-c statement_timeout={self.connect_timeout * 1000}",
+            "options": f"-c statement_timeout={self.connect_timeout * 1000} -c search_path=catalog,reviews,public",
         }
         return kwargs
 
