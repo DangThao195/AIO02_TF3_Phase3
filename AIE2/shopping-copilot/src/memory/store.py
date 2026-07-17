@@ -165,6 +165,26 @@ class SessionStore:
         """Trả về toàn bộ store (dùng để debug / export)."""
         return dict(self._store)
 
+    def get_recent_history_str(self, session_id: str, limit: int = 3) -> str:
+        """Lấy chuỗi lịch sử hội thoại gần nhất (không chứa system/tool)."""
+        try:
+            session = self._store.get(session_id)
+            if not session or not session.get("messages"):
+                return "No history."
+            
+            recent_msgs = []
+            for msg in reversed(session["messages"]):
+                if msg.get("role") in ["user", "assistant"]:
+                    content = msg.get("content") or ""
+                    recent_msgs.insert(0, f"{msg['role'].upper()}: {content}")
+                if len(recent_msgs) >= limit:
+                    break
+                    
+            return "\n".join(recent_msgs) if recent_msgs else "No history."
+        except Exception as e:
+            logger.warning("[SESSION] get_recent_history_str failed: %s", e)
+            return "No history."
+
     # ── Private ──
 
     def _create(self, session_id: str, user_id: str) -> dict:

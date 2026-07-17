@@ -145,7 +145,14 @@
   .reply hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
 
   /* ── Confirm button ── */
-  .confirm-area { margin-top: 12px; display: flex; gap: 8px; }
+  .confirm-area {
+    margin-top: 12px; display: flex; gap: 8px;
+    transition: opacity .3s ease, transform .3s ease;
+  }
+  .confirm-area.done {
+    opacity: 0; pointer-events: none; transform: translateY(-4px);
+    /* keep layout space while fading so chat doesn't jump */
+  }
   .btn-confirm {
     padding: 8px 20px; font-size: 13px; font-weight: 600;
     background: var(--primary); color: #fff; border: none;
@@ -158,7 +165,8 @@
     background: var(--surface); color: var(--text-secondary); border: 1px solid var(--border);
     border-radius: var(--radius-sm); cursor: pointer; transition: all .15s;
   }
-  .btn-cancel:hover { background: var(--surface-alt); }
+  .btn-cancel:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-cancel:hover:not(:disabled) { background: var(--surface-alt); }
 
   /* ── Loading ── */
   .loading {
@@ -714,8 +722,19 @@ async function send() {
 }
 
 // ── Confirmation ──
-async function confirmAction(token, confirmed = true) {
+function _disableConfirmArea(areaId) {
+  const area = areaId ? document.getElementById(areaId) : null;
+  if (!area) return;
+  // Disable all buttons immediately to prevent double-click
+  area.querySelectorAll('button').forEach(b => b.disabled = true);
+  // Fade out and hide after animation
+  area.classList.add('done');
+  setTimeout(() => { area.style.display = 'none'; }, 350);
+}
+
+async function confirmAction(token, confirmed = true, areaId = null) {
   STATE.busy = true;
+  _disableConfirmArea(areaId);
   try {
     const res = await fetch(API_CONFIRM, {
       method: 'POST',
@@ -727,7 +746,7 @@ async function confirmAction(token, confirmed = true) {
       }),
     });
     const data = await res.json();
-    appendBotMsg(data.reply || (confirmed ? 'Đã xác nhận.' : 'Đã hủy xác nhận.'));
+    appendBotMsg(data.reply || (confirmed ? 'Đã xác nhận.' : 'Đã hủy.'));
     loadCart();
   } catch (err) {
     showToast('Lỗi xác nhận: ' + err.message);
@@ -736,12 +755,13 @@ async function confirmAction(token, confirmed = true) {
   }
 }
 
-function cancelConfirm(token) {
+function cancelConfirm(token, areaId = null) {
   if (!token) {
-    appendBotMsg('Đã hủy xác nhận.');
+    _disableConfirmArea(areaId);
+    appendBotMsg('Đã hủy.');
     return;
   }
-  confirmAction(token, false);
+  confirmAction(token, false, areaId);
 }
 
 // ── Render helpers ──
@@ -785,9 +805,10 @@ function appendBotResponse(data) {
 
   if (status === 'pending') {
     html += `<div class="reply">${renderMarkdown(reply)}</div>`;
-    html += `<div class="confirm-area">
-      <button class="btn-confirm" onclick="confirmAction('${token}', true)">Xác nhận</button>
-      <button class="btn-cancel" onclick="cancelConfirm('${token}')">Hủy</button>
+    const confirmAreaId = 'confirm-' + Date.now();
+    html += `<div class="confirm-area" id="${confirmAreaId}">
+      <button class="btn-confirm" onclick="confirmAction('${token}', true, '${confirmAreaId}')">Xác nhận</button>
+      <button class="btn-cancel" onclick="cancelConfirm('${token}', '${confirmAreaId}')">Hủy</button>
     </div>`;
   } else if (status === 'ok') {
     html += `<div class="reply">${renderMarkdown(reply)}</div>`;

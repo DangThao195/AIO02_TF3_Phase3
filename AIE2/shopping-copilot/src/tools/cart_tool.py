@@ -93,7 +93,8 @@ def add_to_cart_tool(user_id: str, product_id: str, quantity: int) -> str:
 
         return json.dumps({
             "status": "pending",
-            "message": f"Please confirm adding {quantity} of product '{product_name}' to your cart.",
+            # FIX #6: Use Vietnamese-friendly confirmation message
+            "message": f"Bạn có muốn thêm {quantity} '{product_name}' vào giỏ hàng không?",
             "token": confirmation.confirmation_token,
             "action_data": {
                 "user_id": user_id,

@@ -45,9 +45,11 @@ app = FastAPI(
     docs_url="/docs",
 )
 
+# FIX #7: Lock down CORS origins from env var in production
+_ALLOWED_ORIGINS = os.getenv("CORS_ALLOWED_ORIGINS", "*").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_ALLOWED_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )

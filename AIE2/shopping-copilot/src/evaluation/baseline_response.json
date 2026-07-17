@@ -1,0 +1,1202 @@
+[
+  {
+    "id": "RES_SGL_001",
+    "kind": "single_intent",
+    "input_text": "Cho tôi xem các loại ống nhòm",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_002",
+    "kind": "single_intent",
+    "input_text": "Danh sách toàn bộ sản phẩm cửa hàng",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_003",
+    "kind": "single_intent",
+    "input_text": "Tìm phụ kiện giá rẻ",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_004",
+    "kind": "single_intent",
+    "input_text": "Cho tôi xem các loại ống nhòm",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_005",
+    "kind": "single_intent",
+    "input_text": "Tìm phụ kiện giá rẻ",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_006",
+    "kind": "single_intent",
+    "input_text": "Find me a telescope under $500",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_007",
+    "kind": "single_intent",
+    "input_text": "Tìm phụ kiện giá rẻ",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_008",
+    "kind": "single_intent",
+    "input_text": "Có sản phẩm nào bán chạy nhất không?",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_009",
+    "kind": "single_intent",
+    "input_text": "Tìm kính thiên văn giá rẻ",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_010",
+    "kind": "single_intent",
+    "input_text": "Danh sách toàn bộ sản phẩm cửa hàng",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_011",
+    "kind": "single_intent",
+    "input_text": "Tìm phụ kiện giá rẻ",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_012",
+    "kind": "single_intent",
+    "input_text": "Danh sách toàn bộ sản phẩm cửa hàng",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_013",
+    "kind": "single_intent",
+    "input_text": "Danh sách toàn bộ sản phẩm cửa hàng",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_014",
+    "kind": "single_intent",
+    "input_text": "Tìm phụ kiện giá rẻ",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_015",
+    "kind": "single_intent",
+    "input_text": "Cho tôi xem các loại ống nhòm",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_016",
+    "kind": "single_intent",
+    "input_text": "Cho tôi xem các loại ống nhòm",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_017",
+    "kind": "single_intent",
+    "input_text": "Find me a telescope under $200",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_018",
+    "kind": "single_intent",
+    "input_text": "Danh sách toàn bộ sản phẩm cửa hàng",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_019",
+    "kind": "single_intent",
+    "input_text": "Cho tôi xem các loại ống nhòm",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_020",
+    "kind": "single_intent",
+    "input_text": "Danh sách toàn bộ sản phẩm cửa hàng",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_021",
+    "kind": "single_intent",
+    "input_text": "Danh sách toàn bộ sản phẩm cửa hàng",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_022",
+    "kind": "single_intent",
+    "input_text": "Danh sách toàn bộ sản phẩm cửa hàng",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_023",
+    "kind": "single_intent",
+    "input_text": "Danh sách toàn bộ sản phẩm cửa hàng",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_024",
+    "kind": "single_intent",
+    "input_text": "Danh sách toàn bộ sản phẩm cửa hàng",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_025",
+    "kind": "single_intent",
+    "input_text": "Cho tôi xem các loại ống nhòm",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_026",
+    "kind": "single_intent",
+    "input_text": "Cho tôi xem các loại ống nhòm",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_027",
+    "kind": "single_intent",
+    "input_text": "Find me a telescope under $100",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_028",
+    "kind": "single_intent",
+    "input_text": "Danh sách toàn bộ sản phẩm cửa hàng",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_029",
+    "kind": "single_intent",
+    "input_text": "Tìm phụ kiện giá rẻ",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_030",
+    "kind": "single_intent",
+    "input_text": "Danh sách toàn bộ sản phẩm cửa hàng",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_031",
+    "kind": "single_intent",
+    "input_text": "Danh sách toàn bộ sản phẩm cửa hàng",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_032",
+    "kind": "single_intent",
+    "input_text": "Danh sách toàn bộ sản phẩm cửa hàng",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_033",
+    "kind": "single_intent",
+    "input_text": "Có sản phẩm nào bán chạy nhất không?",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_034",
+    "kind": "single_intent",
+    "input_text": "Find me a telescope under $500",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_035",
+    "kind": "single_intent",
+    "input_text": "Find me a telescope under $200",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_036",
+    "kind": "single_intent",
+    "input_text": "Find me a telescope under $500",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_037",
+    "kind": "single_intent",
+    "input_text": "Find me a telescope under $100",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_038",
+    "kind": "single_intent",
+    "input_text": "Find me a telescope under $500",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_039",
+    "kind": "single_intent",
+    "input_text": "Tìm phụ kiện giá rẻ",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_040",
+    "kind": "single_intent",
+    "input_text": "Find me a telescope under $500",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_041",
+    "kind": "single_intent",
+    "input_text": "Danh sách toàn bộ sản phẩm cửa hàng",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_042",
+    "kind": "single_intent",
+    "input_text": "Có sản phẩm nào bán chạy nhất không?",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_043",
+    "kind": "single_intent",
+    "input_text": "Cho tôi xem các loại ống nhòm",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_044",
+    "kind": "single_intent",
+    "input_text": "Find me a telescope under $100",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_045",
+    "kind": "single_intent",
+    "input_text": "Find me a telescope under $500",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_046",
+    "kind": "single_intent",
+    "input_text": "Có sản phẩm nào bán chạy nhất không?",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_047",
+    "kind": "single_intent",
+    "input_text": "Danh sách toàn bộ sản phẩm cửa hàng",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_048",
+    "kind": "single_intent",
+    "input_text": "Tìm ống nhòm giá rẻ",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_049",
+    "kind": "single_intent",
+    "input_text": "Tìm ống nhòm giá rẻ",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_SGL_050",
+    "kind": "single_intent",
+    "input_text": "Có sản phẩm nào bán chạy nhất không?",
+    "expected_intent": "search_or_list"
+  },
+  {
+    "id": "RES_CTX_001",
+    "kind": "contextual",
+    "input_text": "Cái nào rẻ hơn?",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_002",
+    "kind": "contextual",
+    "input_text": "What about the last one?",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_003",
+    "kind": "contextual",
+    "input_text": "Cái nào rẻ hơn?",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_004",
+    "kind": "contextual",
+    "input_text": "Thêm cái đầu tiên vào giỏ hàng",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_005",
+    "kind": "contextual",
+    "input_text": "What about the last one?",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_006",
+    "kind": "contextual",
+    "input_text": "So sánh 2 cái đó",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_007",
+    "kind": "contextual",
+    "input_text": "Thêm cái đầu tiên vào giỏ hàng [6]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_008",
+    "kind": "contextual",
+    "input_text": "Cái nào rẻ hơn? [7]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_009",
+    "kind": "contextual",
+    "input_text": "What about the last one? [8]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_010",
+    "kind": "contextual",
+    "input_text": "Thêm cái đầu tiên vào giỏ hàng [9]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_011",
+    "kind": "contextual",
+    "input_text": "Cái nào rẻ hơn? [10]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_012",
+    "kind": "contextual",
+    "input_text": "So sánh 2 cái đó [11]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_013",
+    "kind": "contextual",
+    "input_text": "So sánh 2 cái đó [12]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_014",
+    "kind": "contextual",
+    "input_text": "Cái nào rẻ hơn? [13]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_015",
+    "kind": "contextual",
+    "input_text": "So sánh 2 cái đó [14]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_016",
+    "kind": "contextual",
+    "input_text": "Thêm cái đầu tiên vào giỏ hàng [15]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_017",
+    "kind": "contextual",
+    "input_text": "So sánh 2 cái đó [16]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_018",
+    "kind": "contextual",
+    "input_text": "Sản phẩm thứ 2 có đánh giá tốt không? [17]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_019",
+    "kind": "contextual",
+    "input_text": "So sánh 2 cái đó [18]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_020",
+    "kind": "contextual",
+    "input_text": "Sản phẩm thứ 2 có đánh giá tốt không? [19]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_021",
+    "kind": "contextual",
+    "input_text": "What about the last one? [20]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_022",
+    "kind": "contextual",
+    "input_text": "Thêm cái đầu tiên vào giỏ hàng [21]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_023",
+    "kind": "contextual",
+    "input_text": "What about the last one? [22]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_024",
+    "kind": "contextual",
+    "input_text": "What about the last one? [23]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_025",
+    "kind": "contextual",
+    "input_text": "So sánh 2 cái đó [24]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_026",
+    "kind": "contextual",
+    "input_text": "So sánh 2 cái đó [25]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_027",
+    "kind": "contextual",
+    "input_text": "So sánh 2 cái đó [26]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_028",
+    "kind": "contextual",
+    "input_text": "What about the last one? [27]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_029",
+    "kind": "contextual",
+    "input_text": "Thêm cái đầu tiên vào giỏ hàng [28]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_030",
+    "kind": "contextual",
+    "input_text": "Thêm cái đầu tiên vào giỏ hàng [29]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_031",
+    "kind": "contextual",
+    "input_text": "Sản phẩm thứ 2 có đánh giá tốt không? [30]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_032",
+    "kind": "contextual",
+    "input_text": "Cái nào rẻ hơn? [31]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_033",
+    "kind": "contextual",
+    "input_text": "Thêm cái đầu tiên vào giỏ hàng [32]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_034",
+    "kind": "contextual",
+    "input_text": "So sánh 2 cái đó [33]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_035",
+    "kind": "contextual",
+    "input_text": "Sản phẩm thứ 2 có đánh giá tốt không? [34]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_036",
+    "kind": "contextual",
+    "input_text": "So sánh 2 cái đó [35]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_037",
+    "kind": "contextual",
+    "input_text": "What about the last one? [36]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_038",
+    "kind": "contextual",
+    "input_text": "What about the last one? [37]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_039",
+    "kind": "contextual",
+    "input_text": "So sánh 2 cái đó [38]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_040",
+    "kind": "contextual",
+    "input_text": "Thêm cái đầu tiên vào giỏ hàng [39]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_041",
+    "kind": "contextual",
+    "input_text": "Cái nào rẻ hơn? [40]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_042",
+    "kind": "contextual",
+    "input_text": "So sánh 2 cái đó [41]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_043",
+    "kind": "contextual",
+    "input_text": "Thêm cái đầu tiên vào giỏ hàng [42]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_044",
+    "kind": "contextual",
+    "input_text": "Sản phẩm thứ 2 có đánh giá tốt không? [43]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_045",
+    "kind": "contextual",
+    "input_text": "So sánh 2 cái đó [44]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_046",
+    "kind": "contextual",
+    "input_text": "Sản phẩm thứ 2 có đánh giá tốt không? [45]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_047",
+    "kind": "contextual",
+    "input_text": "Thêm cái đầu tiên vào giỏ hàng [46]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_048",
+    "kind": "contextual",
+    "input_text": "Thêm cái đầu tiên vào giỏ hàng [47]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_049",
+    "kind": "contextual",
+    "input_text": "Thêm cái đầu tiên vào giỏ hàng [48]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_CTX_050",
+    "kind": "contextual",
+    "input_text": "Thêm cái đầu tiên vào giỏ hàng [49]",
+    "expected_intent": "rank_or_lookup"
+  },
+  {
+    "id": "RES_MUL_001",
+    "kind": "multilingual",
+    "input_text": "Zeige mir Teleskope unter 100 Euro",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_002",
+    "kind": "multilingual",
+    "input_text": "Bao nhiêu tiền for the telescope?",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_003",
+    "kind": "multilingual",
+    "input_text": "Zeige mir Teleskope unter 100 Euro",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_004",
+    "kind": "multilingual",
+    "input_text": "Donnez-moi des jumelles (Tìm ống nhòm)",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_005",
+    "kind": "multilingual",
+    "input_text": "Zeige mir Teleskope unter 100 Euro",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_006",
+    "kind": "multilingual",
+    "input_text": "Hoshi o miru tame no bōenkyō (Kính thiên văn ngắm sao)",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_007",
+    "kind": "multilingual",
+    "input_text": "Donnez-moi des jumelles (Tìm ống nhòm) [6]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_008",
+    "kind": "multilingual",
+    "input_text": "Hoshi o miru tame no bōenkyō (Kính thiên văn ngắm sao) [7]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_009",
+    "kind": "multilingual",
+    "input_text": "Quiero ver accesorios [8]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_010",
+    "kind": "multilingual",
+    "input_text": "Quiero ver accesorios [9]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_011",
+    "kind": "multilingual",
+    "input_text": "Zeige mir Teleskope unter 100 Euro [10]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_012",
+    "kind": "multilingual",
+    "input_text": "Hoshi o miru tame no bōenkyō (Kính thiên văn ngắm sao) [11]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_013",
+    "kind": "multilingual",
+    "input_text": "Quiero ver accesorios [12]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_014",
+    "kind": "multilingual",
+    "input_text": "Quiero ver accesorios [13]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_015",
+    "kind": "multilingual",
+    "input_text": "Quiero ver accesorios [14]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_016",
+    "kind": "multilingual",
+    "input_text": "Donnez-moi des jumelles (Tìm ống nhòm) [15]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_017",
+    "kind": "multilingual",
+    "input_text": "Donnez-moi des jumelles (Tìm ống nhòm) [16]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_018",
+    "kind": "multilingual",
+    "input_text": "Bao nhiêu tiền for the telescope? [17]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_019",
+    "kind": "multilingual",
+    "input_text": "Hoshi o miru tame no bōenkyō (Kính thiên văn ngắm sao) [18]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_020",
+    "kind": "multilingual",
+    "input_text": "Quiero ver accesorios [19]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_021",
+    "kind": "multilingual",
+    "input_text": "Hoshi o miru tame no bōenkyō (Kính thiên văn ngắm sao) [20]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_022",
+    "kind": "multilingual",
+    "input_text": "Bao nhiêu tiền for the telescope? [21]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_023",
+    "kind": "multilingual",
+    "input_text": "Zeige mir Teleskope unter 100 Euro [22]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_024",
+    "kind": "multilingual",
+    "input_text": "Bao nhiêu tiền for the telescope? [23]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_025",
+    "kind": "multilingual",
+    "input_text": "Quiero ver accesorios [24]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_026",
+    "kind": "multilingual",
+    "input_text": "Zeige mir Teleskope unter 100 Euro [25]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_027",
+    "kind": "multilingual",
+    "input_text": "Zeige mir Teleskope unter 100 Euro [26]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_028",
+    "kind": "multilingual",
+    "input_text": "Bao nhiêu tiền for the telescope? [27]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_029",
+    "kind": "multilingual",
+    "input_text": "Quiero ver accesorios [28]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_030",
+    "kind": "multilingual",
+    "input_text": "Zeige mir Teleskope unter 100 Euro [29]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_031",
+    "kind": "multilingual",
+    "input_text": "Bao nhiêu tiền for the telescope? [30]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_032",
+    "kind": "multilingual",
+    "input_text": "Bao nhiêu tiền for the telescope? [31]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_033",
+    "kind": "multilingual",
+    "input_text": "Quiero ver accesorios [32]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_034",
+    "kind": "multilingual",
+    "input_text": "Bao nhiêu tiền for the telescope? [33]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_035",
+    "kind": "multilingual",
+    "input_text": "Bao nhiêu tiền for the telescope? [34]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_036",
+    "kind": "multilingual",
+    "input_text": "Bao nhiêu tiền for the telescope? [35]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_037",
+    "kind": "multilingual",
+    "input_text": "Hoshi o miru tame no bōenkyō (Kính thiên văn ngắm sao) [36]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_038",
+    "kind": "multilingual",
+    "input_text": "Donnez-moi des jumelles (Tìm ống nhòm) [37]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_039",
+    "kind": "multilingual",
+    "input_text": "Hoshi o miru tame no bōenkyō (Kính thiên văn ngắm sao) [38]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_040",
+    "kind": "multilingual",
+    "input_text": "Bao nhiêu tiền for the telescope? [39]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_041",
+    "kind": "multilingual",
+    "input_text": "Donnez-moi des jumelles (Tìm ống nhòm) [40]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_042",
+    "kind": "multilingual",
+    "input_text": "Zeige mir Teleskope unter 100 Euro [41]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_043",
+    "kind": "multilingual",
+    "input_text": "Hoshi o miru tame no bōenkyō (Kính thiên văn ngắm sao) [42]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_044",
+    "kind": "multilingual",
+    "input_text": "Hoshi o miru tame no bōenkyō (Kính thiên văn ngắm sao) [43]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_045",
+    "kind": "multilingual",
+    "input_text": "Hoshi o miru tame no bōenkyō (Kính thiên văn ngắm sao) [44]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_046",
+    "kind": "multilingual",
+    "input_text": "Quiero ver accesorios [45]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_047",
+    "kind": "multilingual",
+    "input_text": "Bao nhiêu tiền for the telescope? [46]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_048",
+    "kind": "multilingual",
+    "input_text": "Zeige mir Teleskope unter 100 Euro [47]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_049",
+    "kind": "multilingual",
+    "input_text": "Zeige mir Teleskope unter 100 Euro [48]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_MUL_050",
+    "kind": "multilingual",
+    "input_text": "Zeige mir Teleskope unter 100 Euro [49]",
+    "expected_intent": "search"
+  },
+  {
+    "id": "RES_CPL_001",
+    "kind": "complex_logic",
+    "input_text": "Cái nào đắt nhất trong danh sách sản phẩm?",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_002",
+    "kind": "complex_logic",
+    "input_text": "So sánh giá và số sao của Starsense Explorer và Eclipsmart Travel",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_003",
+    "kind": "complex_logic",
+    "input_text": "Tìm kính thiên văn dưới $300 và có đánh giá trên 4 sao",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_004",
+    "kind": "complex_logic",
+    "input_text": "Cái nào đắt nhất trong danh sách sản phẩm?",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_005",
+    "kind": "complex_logic",
+    "input_text": "Tìm kính thiên văn dưới $300 và có đánh giá trên 4 sao",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_006",
+    "kind": "complex_logic",
+    "input_text": "Cái nào đắt nhất trong danh sách sản phẩm?",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_007",
+    "kind": "complex_logic",
+    "input_text": "Tìm kính thiên văn dưới $300 và có đánh giá trên 4 sao [6]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_008",
+    "kind": "complex_logic",
+    "input_text": "Cái nào đắt nhất trong danh sách sản phẩm? [7]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_009",
+    "kind": "complex_logic",
+    "input_text": "So sánh giá và số sao của Starsense Explorer và Eclipsmart Travel [8]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_010",
+    "kind": "complex_logic",
+    "input_text": "Quy đổi giá của Starsense Explorer sang VND [9]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_011",
+    "kind": "complex_logic",
+    "input_text": "Tìm kính thiên văn dưới $300 và có đánh giá trên 4 sao [10]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_012",
+    "kind": "complex_logic",
+    "input_text": "Cái nào đắt nhất trong danh sách sản phẩm? [11]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_013",
+    "kind": "complex_logic",
+    "input_text": "So sánh giá và số sao của Starsense Explorer và Eclipsmart Travel [12]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_014",
+    "kind": "complex_logic",
+    "input_text": "So sánh giá và số sao của Starsense Explorer và Eclipsmart Travel [13]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_015",
+    "kind": "complex_logic",
+    "input_text": "Quy đổi giá của Starsense Explorer sang VND [14]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_016",
+    "kind": "complex_logic",
+    "input_text": "Cái nào đắt nhất trong danh sách sản phẩm? [15]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_017",
+    "kind": "complex_logic",
+    "input_text": "Tìm kính thiên văn dưới $300 và có đánh giá trên 4 sao [16]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_018",
+    "kind": "complex_logic",
+    "input_text": "I want a telescope for stargazing and a cleaning kit, what do you recommend? [17]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_019",
+    "kind": "complex_logic",
+    "input_text": "So sánh giá và số sao của Starsense Explorer và Eclipsmart Travel [18]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_020",
+    "kind": "complex_logic",
+    "input_text": "So sánh giá và số sao của Starsense Explorer và Eclipsmart Travel [19]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_021",
+    "kind": "complex_logic",
+    "input_text": "Quy đổi giá của Starsense Explorer sang VND [20]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_022",
+    "kind": "complex_logic",
+    "input_text": "Cái nào đắt nhất trong danh sách sản phẩm? [21]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_023",
+    "kind": "complex_logic",
+    "input_text": "I want a telescope for stargazing and a cleaning kit, what do you recommend? [22]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_024",
+    "kind": "complex_logic",
+    "input_text": "I want a telescope for stargazing and a cleaning kit, what do you recommend? [23]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_025",
+    "kind": "complex_logic",
+    "input_text": "I want a telescope for stargazing and a cleaning kit, what do you recommend? [24]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_026",
+    "kind": "complex_logic",
+    "input_text": "Cái nào đắt nhất trong danh sách sản phẩm? [25]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_027",
+    "kind": "complex_logic",
+    "input_text": "Tìm kính thiên văn dưới $300 và có đánh giá trên 4 sao [26]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_028",
+    "kind": "complex_logic",
+    "input_text": "So sánh giá và số sao của Starsense Explorer và Eclipsmart Travel [27]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_029",
+    "kind": "complex_logic",
+    "input_text": "Cái nào đắt nhất trong danh sách sản phẩm? [28]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_030",
+    "kind": "complex_logic",
+    "input_text": "I want a telescope for stargazing and a cleaning kit, what do you recommend? [29]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_031",
+    "kind": "complex_logic",
+    "input_text": "So sánh giá và số sao của Starsense Explorer và Eclipsmart Travel [30]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_032",
+    "kind": "complex_logic",
+    "input_text": "So sánh giá và số sao của Starsense Explorer và Eclipsmart Travel [31]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_033",
+    "kind": "complex_logic",
+    "input_text": "I want a telescope for stargazing and a cleaning kit, what do you recommend? [32]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_034",
+    "kind": "complex_logic",
+    "input_text": "I want a telescope for stargazing and a cleaning kit, what do you recommend? [33]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_035",
+    "kind": "complex_logic",
+    "input_text": "So sánh giá và số sao của Starsense Explorer và Eclipsmart Travel [34]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_036",
+    "kind": "complex_logic",
+    "input_text": "Quy đổi giá của Starsense Explorer sang VND [35]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_037",
+    "kind": "complex_logic",
+    "input_text": "So sánh giá và số sao của Starsense Explorer và Eclipsmart Travel [36]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_038",
+    "kind": "complex_logic",
+    "input_text": "Tìm kính thiên văn dưới $300 và có đánh giá trên 4 sao [37]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_039",
+    "kind": "complex_logic",
+    "input_text": "Tìm kính thiên văn dưới $300 và có đánh giá trên 4 sao [38]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_040",
+    "kind": "complex_logic",
+    "input_text": "Quy đổi giá của Starsense Explorer sang VND [39]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_041",
+    "kind": "complex_logic",
+    "input_text": "Cái nào đắt nhất trong danh sách sản phẩm? [40]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_042",
+    "kind": "complex_logic",
+    "input_text": "So sánh giá và số sao của Starsense Explorer và Eclipsmart Travel [41]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_043",
+    "kind": "complex_logic",
+    "input_text": "Tìm kính thiên văn dưới $300 và có đánh giá trên 4 sao [42]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_044",
+    "kind": "complex_logic",
+    "input_text": "So sánh giá và số sao của Starsense Explorer và Eclipsmart Travel [43]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_045",
+    "kind": "complex_logic",
+    "input_text": "Quy đổi giá của Starsense Explorer sang VND [44]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_046",
+    "kind": "complex_logic",
+    "input_text": "I want a telescope for stargazing and a cleaning kit, what do you recommend? [45]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_047",
+    "kind": "complex_logic",
+    "input_text": "Quy đổi giá của Starsense Explorer sang VND [46]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_048",
+    "kind": "complex_logic",
+    "input_text": "Quy đổi giá của Starsense Explorer sang VND [47]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_049",
+    "kind": "complex_logic",
+    "input_text": "Quy đổi giá của Starsense Explorer sang VND [48]",
+    "expected_intent": "compare_or_complex"
+  },
+  {
+    "id": "RES_CPL_050",
+    "kind": "complex_logic",
+    "input_text": "Tìm kính thiên văn dưới $300 và có đánh giá trên 4 sao [49]",
+    "expected_intent": "compare_or_complex"
+  }
+]

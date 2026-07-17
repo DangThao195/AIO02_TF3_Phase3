@@ -91,6 +91,15 @@ def filter_output(llm_response: str) -> OutputFilterResult:
             redacted_items.append(info_type)
             logger.warning(f"[OUTPUT_FILTER] REDACTED | type={info_type}")
 
+    # Quét Template Hallucination
+    if re.search(r"\[(?:Tên sản phẩm|Insert|Product Name|Product|Tên|Tên sản phẩm tương tự).*?\]", filtered, re.IGNORECASE):
+        logger.warning("[OUTPUT_FILTER] BLOCKED | Hallucinated Template detected")
+        return OutputFilterResult(
+            is_clean=False,
+            filtered_response="Xin lỗi, tôi chưa tìm được thông tin chi tiết về sản phẩm phù hợp với yêu cầu của bạn.",
+            redacted_items=["HALLUCINATED_TEMPLATE"]
+        )
+
     return OutputFilterResult(
         is_clean=len(redacted_items) == 0,
         filtered_response=filtered,

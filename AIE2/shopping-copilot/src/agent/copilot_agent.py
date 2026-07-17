@@ -53,7 +53,7 @@ class CopilotAgent:
                 model=model,
                 region_name=region,
                 temperature=0.1,
-                max_tokens=1024,
+                max_tokens=2048,
             )
         except Exception as e:
             logger.error(f"[AGENT] Cannot init Bedrock LLM: {e}")
@@ -104,8 +104,17 @@ class CopilotAgent:
             return {"task_type": "search", "target_entity": "product", "product_query": user_message}
 
         context = session.get("context", {})
-        context_str = json.dumps(context, ensure_ascii=False)
-        prompt = INTENT_PARSE_PROMPT.format(context=context_str, user_message=user_message)
+        
+        # FIX #3: Use a shallow copy to avoid mutating the session's context dict
+        context_for_prompt = dict(context)
+        if "last_search_results" in context_for_prompt:
+            context_for_prompt["_display_list"] = [
+                f"{i+1}. {p.get('name')}" for i, p in enumerate(context_for_prompt["last_search_results"])
+            ]
+            
+        context_str = json.dumps(context_for_prompt, ensure_ascii=False)
+        chat_history = self._sessions.get_recent_history_str(session.get("session_id", ""))
+        prompt = INTENT_PARSE_PROMPT.format(chat_history=chat_history, context=context_str, user_message=user_message)
         
         try:
             response = await self.llm.ainvoke([HumanMessage(content=prompt)])
@@ -124,6 +133,18 @@ class CopilotAgent:
     def _resolve_context_references(self, intent: dict, session: dict) -> dict:
         context = session.get("context", {})
         context_ref = intent.get("context_reference", "none")
+
+        # Try to fuzzy match product_name against last_search_results
+        pname = intent.get("product_name", "").lower()
+        if pname and not intent.get("product_id"):
+            for p in context.get("last_search_results", []):
+                db_name = p.get("name", "").lower()
+                # If db_name is a substring of pname or vice-versa
+                if db_name in pname or pname in db_name:
+                    intent["product_id"] = p.get("id")
+                    intent["product_name"] = p.get("name") # normalize name
+                    break
+
         if context_ref in ["this", "that", "it", "previous", "last", "these"]:
             if context.get("last_product_name") and not intent.get("product_name"):
                 intent["product_name"] = context["last_product_name"]
@@ -137,10 +158,16 @@ class CopilotAgent:
         plan = []
 
         if task_type == "add_to_cart":
+            pid = intent.get("product_id")
             pname = intent.get("product_name")
-            if pname:
+            if pid:
+                # FIX #2: product_id already resolved via fuzzy match — skip get_product_id lookup
+                plan.append({"name": "add_to_cart_tool", "args": {"user_id": user_id, "product_id": pid, "quantity": intent.get("quantity", 1)}})
+            elif pname:
                 plan.append({"name": "get_product_id", "args": {"product_name": pname}})
-            plan.append({"name": "add_to_cart_tool", "args": {"user_id": user_id, "product_id": "$PREV", "quantity": intent.get("quantity", 1)}})
+                plan.append({"name": "add_to_cart_tool", "args": {"user_id": user_id, "product_id": "$PREV", "quantity": intent.get("quantity", 1)}})
+            else:
+                plan.append({"name": "add_to_cart_tool", "args": {"user_id": user_id, "product_id": "$CTX", "quantity": intent.get("quantity", 1)}})
         elif task_type == "view_cart":
             plan.append({"name": "get_cart_tool", "args": {"user_id": user_id}})
         elif task_type == "get_reviews":
@@ -182,6 +209,20 @@ class CopilotAgent:
         elif task_type == "get_shipping":
             address = intent.get("shipping_address") or intent.get("product_query", "")
             plan.append({"name": "get_shipping_quote_tool", "args": {"address": address}})
+        elif task_type == "get_recommendations":
+            if intent.get("target_entity") == "cart":
+                plan.append({"name": "get_cart_tool", "args": {"user_id": user_id}})
+                plan.append({"name": "get_recommendations_tool", "args": {"product_id": "$PREV_CART"}})
+            else:
+                pname = intent.get("product_name")
+                pid = intent.get("product_id")
+                if pid:
+                    plan.append({"name": "get_recommendations_tool", "args": {"product_id": pid}})
+                elif pname:
+                    plan.append({"name": "get_product_id", "args": {"product_name": pname}})
+                    plan.append({"name": "get_recommendations_tool", "args": {"product_id": "$PREV"}})
+                else:
+                    plan.append({"name": "get_recommendations_tool", "args": {"product_id": "$CTX"}})
 
         # Dynamic Modular Planner: append review block whenever LLM signals needs_reviews
         if intent.get("needs_reviews"):
@@ -201,13 +242,27 @@ class CopilotAgent:
             # Resolve dependencies
             if tc_args.get("product_id") == "$PREV":
                 if isinstance(prev_result, dict) and prev_result.get("status") == "not_found":
-                    return {"status": "error", "error": f"Product not found: {prev_result.get('product_name')}"}
+                    # FIX #1: Return a structured error that LLM can render in user's language
+                    pname = prev_result.get('product_name', '')
+                    return {"status": "error", "error": f"Xin lỗi, không tìm thấy sản phẩm '{pname}' trong hệ thống. Vui lòng kiểm tra lại tên sản phẩm hoặc thử tìm kiếm bằng từ khóa khác."}
                 if isinstance(prev_result, dict) and prev_result.get("product_id"):
                     tc_args["product_id"] = prev_result["product_id"]
                 elif session.get("context", {}).get("last_product_id"):
                     tc_args["product_id"] = session["context"]["last_product_id"]
                 else:
-                    return {"status": "error", "error": "Cannot resolve product for action"}
+                    return {"status": "error", "error": "Xin lỗi, không thể xác định sản phẩm bạn đang muốn thực hiện thao tác. Vui lòng tìm kiếm sản phẩm trước."}
+
+            elif tc_args.get("product_id") == "$PREV_CART":
+                if isinstance(prev_result, dict) and prev_result.get("items"):
+                    tc_args["product_id"] = prev_result["items"][0]["product_id"]
+                else:
+                    return {"status": "error", "error": "Your cart is empty. Cannot find related products."}
+
+            elif tc_args.get("product_id") == "$CTX":
+                if session.get("context", {}).get("last_product_id"):
+                    tc_args["product_id"] = session["context"]["last_product_id"]
+                else:
+                    return {"status": "error", "error": "Cannot resolve product from context."}
 
             if tc_name == "__fetch_reviews_for_context__":
                 search_ids = session.get("context", {}).get("last_search_ids", [])
