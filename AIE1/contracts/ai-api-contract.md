@@ -233,6 +233,10 @@ Provider-specific note:
 - OpenAI-compatible path: does not use the fixed fixture; it appends an `inaccurate_prompt` to the message stack and therefore is less deterministic as a negative-control harness
 
 This directly supports the mandate requirement that the team must be able to demonstrate a bad output being blocked instead of shown to the user.
+- Reproducible attack-block-rate evidence for this contract now exists through 
+epro/eval_attack_block_rate.py, 
+epro/datasets/attack_eval_cases.json, and the latest validated artifact 
+epro/artifacts/attack_eval_20260715T152649Z.json.
 
 Important scope note:
 - `FORCE_FLAG_*` overrides are local validation controls only.
@@ -275,6 +279,8 @@ The following copied AIE2 endpoints are not part of AIE1 and must not be referen
 - HTTP health check `GET /chatbot`
 
 AIE1 is a gRPC service, not a shopping-copilot HTTP service.
+
+
 
 
 

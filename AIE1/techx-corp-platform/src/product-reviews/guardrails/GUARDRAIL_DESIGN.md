@@ -71,7 +71,7 @@ Guardrail của AIE1 hoạt động theo mô hình **pipeline đồng bộ** —
 
 ### 3.1 Điểm 1 — User Input Guardrail
 
-**File:** [`guardrails/input_filter.py`](input_filter.py)  
+**File:** [`guardrails/input_filter.py`](XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/guardrails/input_filter.py)  
 **Vị trí trong server:** Line 169–173 (`get_ai_assistant_response`)  
 **Khi nào chạy:** Ngay khi nhận request, **trước khi gọi LLM**
 
@@ -163,7 +163,7 @@ if "NO_INFO" in result:
 
 ### 3.4 Điểm 3b — Output Guardrail
 
-**File:** [`guardrails/output_filter.py`](output_filter.py)  
+**File:** [`guardrails/output_filter.py`](XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/guardrails/output_filter.py)  
 **Vị trí trong server:** Line 343–344 và 358–359  
 **Khi nào chạy:** Sau Hallucination Check, **trước khi trả về client**
 
@@ -186,7 +186,7 @@ if "NO_INFO" in result:
 
 ### 3.5 Fallback Handler
 
-**File:** [`guardrails/fallback.py`](fallback.py)  
+**File:** [`guardrails/fallback.py`](XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/guardrails/fallback.py)  
 **Vị trí trong server:** Line 237–239 (LLM call 1) và 333–335 (LLM call 2)  
 **Khi nào chạy:** Khi LLM timeout, network error, hoặc bất kỳ exception nào khác
 

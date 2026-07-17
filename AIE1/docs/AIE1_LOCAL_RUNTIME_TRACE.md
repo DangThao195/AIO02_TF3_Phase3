@@ -1,4 +1,4 @@
-﻿# AIE1 Local Runtime Trace Report
+# AIE1 Local Runtime Trace Report
 
 Snapshot date: 2026-07-14
 Report scope: local host-run verification for AIE1 `product-reviews` after the Bedrock-direct runtime update and offline fidelity-eval alignment.

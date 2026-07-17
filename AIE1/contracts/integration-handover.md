@@ -22,7 +22,8 @@ AIE1 does not require cart, recommendation, currency, shipping, or Bedrock Knowl
 | Runtime file | `techx-corp-platform/src/product-reviews/product_reviews_server.py` |
 | Candidate model path | Bedrock direct via `boto3` |
 | Runtime judge path | Bedrock direct via `boto3` |
-| Offline evaluator | `repro/eval_fidelity.py` |
+| Offline fidelity evaluator | `repro/eval_fidelity.py` |
+| Offline attack evaluator | `repro/eval_attack_block_rate.py` |
 | Local runtime trace report | `docs/AIE1_LOCAL_RUNTIME_TRACE.md` |
 
 ## 3. Runtime dependencies that must exist
@@ -36,6 +37,7 @@ AIE1 runtime depends on these systems:
   - `GetAverageProductReviewScore`
   - `AskProductAIAssistant`
   - `repro/eval_fidelity.py`
+  - `repro/eval_attack_block_rate.py`
 
 2. `product-catalog` gRPC service
 - Used to fetch product metadata for AI answers
@@ -180,8 +182,12 @@ This section maps directly to the mandate requirements.
 ### 8.4 Evidence must remain reproducible
 - The service must be deployable in a way that still allows:
   - runtime negative-control testing
-  - offline evaluator runs
+  - offline fidelity evaluator runs
+  - offline attack-block-rate evaluator runs
   - artifact generation from committed scripts/data
+- The current committed evidence paths are:
+  - fidelity: `repro/eval_fidelity.py` -> `repro/artifacts/fidelity_eval_*.json`
+  - attack-block-rate: `repro/eval_attack_block_rate.py` + `repro/datasets/attack_eval_cases.json` -> `repro/artifacts/attack_eval_*.json`
 
 ## 9. Non-functional constraints from the mandate
 
@@ -241,6 +247,12 @@ The deployed or local-integrated system must allow AIE1 to demonstrate these cas
 
 These are not optional demos; they are required to show mandate compliance.
 
+Committed evidence now exists for the attack-block-rate path as well:
+- dataset: `repro/datasets/attack_eval_cases.json`
+- runner: `repro/eval_attack_block_rate.py`
+- validated example artifact: `repro/artifacts/attack_eval_20260715T152649Z.json`
+- current validated result: `attack_block_rate = 1.0` on `12/12` executed attack cases with `false_positive_rate = 0.0` on `4` benign control cases and `0` skipped attack cases
+
 ## 12. Ownership boundary
 
 | Responsibility | AIE1 | Integration / Deploy side |
@@ -262,14 +274,21 @@ These are not optional demos; they are required to show mandate compliance.
 The current AIE1 package already has these ADRs in `docs/adr/`:
 - `0001-choose-bedrock-nova-lite.md`
 - `0002-fallback-mechanism.md`
+- `0003-ai-trust-safety-guardrails.md`
+- `0004-summary-fidelity-evaluation.md`
 
 These ADRs cover:
 - candidate model choice
 - fallback and reliability behavior
+- trust-safety guardrails, prompt-injection resistance, PII, and action-scope constraints
+- runtime fidelity-judge design for summary factuality
 
-Still-open documentation gap:
-- there is not yet a separate ADR dedicated only to runtime factuality-eval scope and attack-block-rate measurement.
-- If the team claims full mandate closure, that gap should be closed or explicitly accepted.
+Attack-block-rate is no longer an open mandate-evidence gap because the repo now includes a committed evaluator, dataset, and JSON artifact path:
+- `repro/eval_attack_block_rate.py`
+- `repro/datasets/attack_eval_cases.json`
+- `repro/artifacts/attack_eval_20260715T152649Z.json`
+
+If the team later wants a dedicated ADR only for attack-block-rate methodology, that is a documentation hardening step rather than a current deployment blocker.
 
 ## 14. What should be removed from the copied AIE2 handover assumptions
 
