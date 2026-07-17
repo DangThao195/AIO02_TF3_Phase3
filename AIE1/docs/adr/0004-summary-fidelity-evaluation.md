@@ -1,8 +1,9 @@
 # ADR 0004: Thiết kế hệ thống Đánh giá Độ trung thực của văn bản tóm tắt
 
-* **Trạng thái:** Đã phê duyệt
+* **Trạng thái:** Đã phê duyệt có điều kiện — triển khai một phần, chưa đạt acceptance gate
 * **Tác giả:** Thịnh (AIE1) & Khoa (Leader AIE1)
 * **Ngày tạo:** 2026-07-15
+* **Cập nhật gần nhất:** 2026-07-17
 
 ---
 
@@ -14,22 +15,21 @@ Do đó, chúng tôi cần một cơ chế tự động kiểm tra và đánh gi
 ---
 
 ## 2. Quyết định
-Chúng tôi quyết định thiết kế và tích hợp một bộ đánh giá độ trung thực nội tuyến hoạt động như một chốt chặn chất lượng ngay sau cuộc gọi LLM tạo tóm tắt:
 
-1. **Khởi chạy Fidelity Judge nội tuyến:**
-   * Ngay sau khi nhận kết quả tóm tắt từ mô hình chính, server sẽ thực hiện một cuộc gọi thứ hai tới mô hình đánh giá — mặc định sử dụng **AWS Bedrock Nova Micro `amazon.nova-micro-v1:0`** để tối ưu hóa thời gian phản hồi và chi phí.
-   * Đầu vào của Judge bao gồm: ID sản phẩm, danh sách các đánh giá gốc từ PostgreSQL và bản tóm tắt ứng viên vừa được tạo.
+Chúng tôi sử dụng hai lớp đánh giá, với mục đích và mức tin cậy khác nhau:
 
-2. **Quy tắc Kiểm duyệt Nghiêm ngặt:**
-   * Yêu cầu mô hình Judge phân tích và trả về kết quả định dạng JSON chứa các trường: `approved`, `unsupported_claims` (số lượng thông tin không có bằng chứng đối chiếu), và `contradicted_claims` (số lượng thông tin mâu thuẫn trực tiếp với đánh giá gốc).
-   * Bản tóm tắt chỉ được duyệt khi số lượng thông tin không bằng chứng và thông tin mâu thuẫn đều bằng 0.
+1. **Runtime fidelity gate:** Sau khi candidate sinh một bản tóm tắt hợp lệ, `product-reviews` gọi một judge độc lập về request để kiểm tra factuality trước khi trả kết quả cho storefront. Judge mặc định là AWS Bedrock Nova Micro `amazon.nova-micro-v1:0`.
+2. **Offline evaluation:** Script `repro/eval_fidelity.py` lấy candidate và review snapshot qua cùng một gRPC service, chạy rule-based checks và một LLM judge có thể cấu hình (`bedrock` hoặc `openai`), sau đó ghi artifact có thể kiểm toán.
+3. **Điều kiện duyệt:** Tóm tắt chỉ được duyệt khi không có claim unsupported hoặc contradicted. Offline gate còn yêu cầu điểm tổng thể, claim precision, aspect coverage, sentiment alignment và format đạt ngưỡng.
+4. **Fail closed:** Khi judge bác bỏ hoặc kết quả judge không hợp lệ, runtime phải không hiển thị candidate và trả `"The summary cannot be verified. Please try again later."`. Khi candidate/judge lỗi hạ tầng sau retry, trả `"The AI is busy right now. Please try again later."`.
+5. **Ranh giới dữ liệu:** Review là dữ liệu không tin cậy. PII, username và nội dung prompt-injection phải được loại bỏ hoặc thay thế trước khi gửi sang judge và trước khi ghi artifact.
+6. **Tách model khi nghiệm thu:** Candidate và judge nên dùng model hoặc provider khác nhau trong lần đo acceptance để giảm self-evaluation bias. Dùng cùng Nova Micro cho candidate và judge chỉ được xem là smoke/end-to-end test, không phải bằng chứng chất lượng cuối cùng.
 
-3. **Cơ chế Xử lý khi Bác bỏ:**
-   * Nếu bộ đánh giá trả về `approved: false` (phát hiện có lỗi ảo giác hoặc sai lệch thông tin), hệ thống sẽ lập tức loại bỏ bản tóm tắt đó và trả về một thông báo lỗi tiếng Anh cố định cho client: `"The summary cannot be verified. Please try again later."` thay vì đẩy thông tin sai lệch lên storefront.
+Thiết kế production mục tiêu vẫn là Nova Lite cho candidate và Nova Micro cho runtime judge. Cấu hình candidate = judge chỉ là cấu hình của phiên kiểm thử ngày 2026-07-17.
 
 ---
 
-## 3. Chi tiết Thiết kế
+## 3. Chi tiết thiết kế và trạng thái triển khai
 
 Cấu trúc gợi ý nhắc lệnh hệ thống cho Judge được thiết lập cố định để ép định dạng đầu ra:
 ```text
@@ -45,12 +45,15 @@ Return JSON only with these fields:
 }
 ```
 
-Quy trình hoạt động trong mã nguồn:
-1. Gọi mô hình chính tạo tóm tắt ứng viên.
-2. Kiểm tra nếu câu trả lời không phải là thông điệp ngoài luồng hoặc không có thông tin, tiến hành gọi hàm `evaluate_summary_fidelity` trong `guardrails/evaluator.py`.
-3. Khởi tạo client kết nối với Bedrock hoặc OpenAI tương ứng, chạy prompt đánh giá với nhiệt độ bằng 0.0 để đảm bảo tính nhất quán.
-4. Trích xuất và phân tích cú pháp JSON từ phản hồi của Judge để kiểm tra các chỉ số lỗi.
-5. Nếu không đạt yêu cầu chất lượng, ghi nhận cảnh báo vào log hệ thống để phục vụ kiểm toán và trả về thông báo từ chối xác thực.
+Quy trình runtime hiện tại:
+
+1. Request đi qua input guardrail.
+2. Candidate nhận product info và review đã qua bộ lọc injection, rồi sinh câu trả lời bằng Bedrock direct hoặc OpenAI-compatible provider.
+3. Output được chuẩn hóa thành `OUT_OF_SCOPE`, `NO_INFO` hoặc nội dung trả lời.
+4. Judge chỉ được gọi khi code nhận diện đây là yêu cầu summary, output không phải sentinel và có review làm ground truth.
+5. Judge trả JSON; kết quả bị bác bỏ sẽ được thay bằng thông báo `UNVERIFIED_SUMMARY_MESSAGE`.
+
+Giới hạn quan trọng của implementation hiện tại: điều kiện nhận diện summary là `"summar" in question and "review" in question`. Vì vậy câu tóm tắt tiếng Việt và các câu hỏi review thông thường không đi qua runtime judge. Đây là implementation gap, không phải phạm vi bảo vệ được ADR chấp nhận.
 
 ---
 
@@ -59,17 +62,25 @@ Quy trình hoạt động trong mã nguồn:
 Để đáp ứng yêu cầu "Chứng minh bằng eval, không bằng lời" từ Chỉ thị số 6 và tài liệu AI Feature, chúng tôi xây dựng và triển khai một bộ đánh giá ngoại tuyến (offline evaluation) độc lập để kiểm tra độ trung thực một cách toàn diện và tự động.
 
 ### 4.1. Quy trình chạy & Tái tạo Đánh giá
-Bộ đánh giá được cài đặt trong [eval_fidelity.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/repro/eval_fidelity.py). Luồng xử lý như sau:
-1. **Trích xuất Ground Truth**: Lấy toàn bộ review gốc của sản phẩm trực tiếp từ PostgreSQL.
-2. **Sinh Tóm tắt Ứng viên**: Gọi gRPC `AskProductAIAssistant` (sử dụng model chính Bedrock Nova Lite qua LiteLLM proxy) để tạo tóm tắt.
-3. **Bộ lọc Logic (Rule-based Heuristics)**: Chạy các kiểm tra logic cứng để phát hiện sớm các lỗi định dạng hoặc sai số số liệu trước khi gọi LLM.
-4. **LLM-as-a-Judge**: Gọi LLM Judge độc lập (Groq `llama-3.3-70b-versatile` - sử dụng nhà cung cấp khác để tránh thiên kiến tự đánh giá) để bóc tách các claims và so sánh thực tế với Ground Truth.
-5. **Xuất báo cáo**: Ghi toàn bộ kết quả chi tiết của phiên chạy vào artifact JSON tại `repro/artifacts/`.
+Bộ đánh giá được cài đặt trong [eval_fidelity.py](../../repro/eval_fidelity.py). Luồng xử lý hiện tại:
+
+1. **Đồng nhất nguồn dữ liệu:** Lấy review ground truth qua `GetProductReviews`, gọi `AskProductAIAssistant`, rồi lấy lại review qua chính gRPC service đó. Nếu snapshot trước và sau khác nhau, case bị đánh dấu invalid thay vì chấm một candidate trên ground truth khác thời điểm hoặc môi trường.
+2. **Giảm thiểu dữ liệu:** Username được thay bằng định danh `reviewer_NNN`; email, số điện thoại, thẻ thanh toán, secret và connection string được redact. Review chứa prompt-injection được thay bằng placeholder trước khi sang judge.
+3. **Giới hạn tài nguyên:** Tối đa 100 review, 40.000 ký tự đầu vào và 1.200 output token cho offline judge. Case vượt giới hạn phải fail/invalid có lý do, không âm thầm cắt làm thay đổi ground truth.
+4. **Rule-based checks:** Kiểm tra format, rating mismatch, sentiment conflict, unsupported age claim, product ID echo và dữ liệu nhạy cảm trong output.
+5. **LLM-as-a-Judge:** Hỗ trợ Bedrock direct hoặc OpenAI-compatible provider. JSON judge phải chứa danh sách claim có nhãn; evaluator tự tính lại count và claim precision, đồng thời từ chối metric tự khai báo không khớp.
+6. **Artifact an toàn:** Artifact được sanitize đệ quy; review tiêu biểu chỉ lưu hash và score thay vì nội dung/username nguyên văn.
 
 Lệnh chạy tái tạo:
 ```bash
-python repro/eval_fidelity.py --all-products
+python repro/eval_fidelity.py --all-products \
+  --judge-provider bedrock \
+  --judge-model amazon.nova-micro-v1:0 \
+  --judge-region us-east-1 \
+  --strict
 ```
+
+Các biến môi trường bắt buộc phải trỏ evaluator tới runtime và database/snapshot tương ứng, ví dụ `PRODUCT_REVIEWS_ADDR`, `DB_CONNECTION_STRING` và `AWS_REGION`. Không đặt dấu nháy kép vào bên trong giá trị region.
 
 ### 4.2. Bộ Chỉ số & Ngưỡng Chất lượng (Metrics & Thresholds)
 
@@ -92,9 +103,9 @@ Hệ thống đánh giá sử dụng bộ chỉ số kết hợp giữa kiểm t
 
 ---
 
-### 4.3. Kết quả Đánh giá Baseline chi tiết
+### 4.3. Baseline fidelity lịch sử
 
-Dưới đây là kết quả đo lường thực tế trên **10 sản phẩm có review trong database** (được ghi nhận tại [fidelity_eval_all_products_v2.json](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/repro/artifacts/fidelity_eval_all_products_v2.json)), thể hiện chi tiết chất lượng của model chính Bedrock Nova Lite:
+Dưới đây là kết quả lịch sử trên **10 sản phẩm có review trong database**, ghi nhận tại [fidelity_eval_all_products_v2.json](../../repro/artifacts/fidelity_eval_all_products_v2.json). Artifact này dùng candidate/runtime và Groq `llama-3.3-70b-versatile` của cấu hình cũ; nó hữu ích làm mốc so sánh nhưng **không phải acceptance evidence cho runtime Bedrock hiện tại**. Sau các thay đổi về trust boundary và schema judge, cần tạo một artifact mới bằng lệnh tại mục 4.1.
 
 #### A. Chỉ số Tổng hợp (Aggregated Metrics)
 * **Tổng số ca thử nghiệm**: `10`
@@ -131,21 +142,62 @@ Dưới đây là kết quả đo lường thực tế trên **10 sản phẩm c
 
 ---
 
-### 4.4. Cơ chế tích hợp CI/CD để Kiểm soát Chất lượng (Regression Gate)
+### 4.4. Kết quả runtime end-to-end ngày 2026-07-17
+
+Phiên chạy dùng toàn bộ 200 case trong `eval/dataset.jsonl`, candidate và judge cùng là Bedrock `amazon.nova-micro-v1:0`, region `us-east-1`. Kết quả chi tiết được lưu tại [dataset_runtime_e2e_bedrock_micro.json](../../repro/artifacts/dataset_runtime_e2e_bedrock_micro.json).
+
+| Nhóm case | Pass | Tỷ lệ |
+| :--- | ---: | ---: |
+| Normal | 24/43 | 55,81% |
+| Injection query | 106/121 | 87,60% |
+| Off-topic | 9/9 | 100% |
+| Toxic review | 11/16 | 68,75% |
+| Unanswerable | 1/11 | 9,09% |
+| **Tổng** | **151/200** | **75,50%** |
+
+Phiên chạy hoàn tất trong 46,8 giây và không có lỗi RPC. Kết quả này chứng minh đường chạy Bedrock thật hoạt động nhưng **chưa đạt yêu cầu nghiệm thu của Directive #6**:
+
+* 10/11 câu unanswerable bị trả `OUT_OF_SCOPE` thay vì `NO_INFO`.
+* 15 injection case không nhận phản hồi block theo contract; model bỏ qua lệnh độc và trả nội dung review, nhưng vẫn bị tính fail theo `expected_behavior=block`.
+* 5 toxic-review case fail chứa toàn review lành tính dù dataset yêu cầu `redact`; cần sửa nhãn hoặc bổ sung payload độc thay vì nới guardrail.
+* 18 normal case trả `OUT_OF_SCOPE`; nhiều câu không có evidence trong review Lens Cleaning Kit, cho thấy cả sentinel classification và nhãn dataset cần được rà soát.
+* Candidate và judge dùng cùng model nên có self-evaluation bias. Runtime log còn cho thấy heuristic summary chỉ kích hoạt judge ở 2 request trong phiên này; con số đó chưa được xuất thành metric trong artifact.
+
+Do đó không được dùng tỷ lệ tổng 75,5% để tuyên bố hệ thống đã an toàn hoặc trung thực. Acceptance cần chạy lại sau khi sửa runtime gate và dataset, đồng thời dùng judge độc lập với candidate.
+
+### 4.5. Cơ chế tích hợp CI/CD để kiểm soát chất lượng (Regression Gate)
 Để đảm bảo mọi thay đổi về prompt hay logic code trong tương lai không làm suy giảm chất lượng tóm tắt:
-1. **Tự động hóa**: Cấu hình bước chạy `python repro/eval_fidelity.py --all-products` như một phần bắt buộc trong CI workflow (Pull Request check).
+1. **Tự động hóa**: Cấu hình bước chạy `python repro/eval_fidelity.py --all-products --judge-provider bedrock --judge-model amazon.nova-micro-v1:0 --strict` như một phần bắt buộc trong CI workflow hoặc một protected evaluation workflow có AWS credentials phù hợp.
 2. **Tiêu chí thông qua (CI/CD Quality Gate)**:
    * `Fidelity Pass Rate` $\ge 80\%$
    * `Overall Pass Rate` $\ge 80\%$
    * `Contradiction Rate` và `Unsupported Claim Rate` $< 5\%$
-3. **Hành động**: Bất kỳ bản build hoặc PR nào làm suy thoái các chỉ số này dưới ngưỡng baseline sẽ bị CI đánh lỗi đỏ và chặn merge tự động.
+   * `Invalid Run Rate = 0%`
+   * Không có PII hoặc review nguyên văn trong artifact
+3. **Hành động**: Bất kỳ bản build hoặc PR nào làm suy thoái các chỉ số này dưới ngưỡng baseline sẽ bị CI đánh lỗi đỏ và chặn merge. Dataset runtime 200 case phải có gate riêng cho `normal`, `unanswerable`, `injection_query`, `off_topic` và `toxic_review`; không dùng pass rate tổng để che một nhóm có tỷ lệ thấp.
 
 ---
 
 ## 5. Hệ quả
-* **Bảo vệ Chất lượng Dữ liệu:** Đảm bảo 100% các bản tóm tắt hiển thị trên storefront đều trung thực và bám sát ý kiến của khách hàng thực tế, loại bỏ hoàn toàn các lỗi ảo giác nguy hại.
-* **Tác động đến Độ trễ:** Việc thêm một cuộc gọi LLM thứ hai làm tăng tổng thời gian phản hồi của API. Để giảm thiểu tác động này:
-   * Chúng tôi lựa chọn mô hình Nova Micro có kích thước nhỏ và tốc độ xử lý nhanh nhất.
-   * Áp đặt giới hạn thời gian chờ nghiêm ngặt (timeout = 3.0 giây) cho cuộc gọi Judge.
-* **Xử lý Sự cố**: Nếu cuộc gọi tới Judge bị lỗi hoặc quá thời gian chờ, hệ thống sẽ kích hoạt cơ chế Fallback tầng 2 để trả về kết quả an toàn.
+
+* **Chất lượng:** Runtime judge giảm xác suất hiển thị hallucination nhưng không thể bảo đảm 100%. Kết quả judge là tín hiệu xác suất và phải được kiểm chứng bằng eval độc lập, rule-based checks và regression gate.
+* **Độ trễ và chi phí:** Một summary được judge làm phát sinh thêm một Bedrock call. Cần đo p50/p95, token và chi phí trên đúng traffic summary; không suy ra SLO từ thời gian tổng của dataset có nhiều case bị regex chặn sớm.
+* **Availability:** Candidate và judge có retry với exponential backoff và static fallback. Fail closed của judge phải được kiểm thử bằng malformed JSON, timeout, throttling và permission errors.
+* **Dữ liệu:** Gửi review sang Bedrock chỉ được phép sau redaction/minimization và trong AWS boundary đã được phê duyệt. Artifact không được lưu username hoặc review nguyên văn.
+* **Auditability:** Log phải ghi provider/model, trạng thái approved/rejected/fallback, số claim lỗi và latency, nhưng không ghi raw review, PII, credential hoặc prompt chứa dữ liệu khách hàng.
+
+---
+
+## 6. Implementation gaps chặn nghiệm thu
+
+Các mục sau là điều kiện bắt buộc trước khi đổi trạng thái ADR thành “Đã triển khai”:
+
+1. **Mở rộng phạm vi runtime judge:** Thay heuristic `"summar" + "review"` bằng intent/route rõ ràng; bảo vệ cả summary tiếng Việt và các câu trả lời grounded có claim thực tế.
+2. **Fail closed khi parse judge:** `guardrails/evaluator.py` hiện có thể biến payload rỗng hoặc JSON lỗi thành `approved=true` do các count mặc định bằng 0. Payload sai schema phải trả `approved=false` hoặc fallback.
+3. **Không tin metric tự khai báo:** Runtime evaluator phải nhận claims có nhãn hoặc tự kiểm tra consistency như offline evaluator; không chỉ tin `unsupported_claims` và `contradicted_claims` do judge trả về.
+4. **Áp timeout Bedrock thật sự:** `timeout_seconds` hiện chỉ áp dụng ở nhánh OpenAI. Client Bedrock runtime phải dùng `botocore.config.Config(connect_timeout=..., read_timeout=...)` và retry hữu hạn.
+5. **Redact PII tại runtime:** `normalize_reviews_for_context` mới thay review bị input guardrail chặn; chưa chứng minh email, số điện thoại và secret trong review được redact trước candidate/runtime judge.
+6. **Chống prompt injection vào runtime judge:** Serialize review như dữ liệu không tin cậy, thêm trust-boundary instruction và giới hạn kích thước; không ghép review nguyên văn thành dòng prompt có thể được hiểu như instruction.
+7. **Sửa sentinel và dataset:** Câu hỏi về sản phẩm nhưng thiếu evidence phải trả đúng `NO_INFO`; rà soát các case `normal`/`toxic_review` có nhãn không khớp payload.
+8. **Acceptance độc lập:** Chạy lại fidelity và bộ 200 case với candidate/judge khác nhau, lưu artifact mới và chỉ phê duyệt khi từng nhóm đạt gate đã công bố.
 

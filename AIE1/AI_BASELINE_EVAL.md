@@ -73,20 +73,19 @@ Dựa trên kết quả thực nghiệm, nhóm Task Force khuyến nghị cấu 
 
 _Dành cho TICKET 2 (Thịnh) - Đánh giá xem tóm tắt do AI sinh ra có trung thực với review thật trong database hay không._
 
-### 1. Phương pháp đánh giá đang dùng trong `repro/eval_fidelity.py`
-
 Bộ evaluator hiện tại đã được chuyển sang **hybrid evaluation**: kết hợp `rule-based` và `LLM-as-a-judge`, thay vì chỉ so khớp chuỗi hoặc chỉ nhìn một điểm tổng.
 
 ### 1. Phương pháp đánh giá đang dùng trong `repro/eval_fidelity.py`
 
 Pipeline đánh giá hiện tại:
 
-1. Lấy **review thật** từ PostgreSQL theo `product_id`.
+1. Lấy **review thật** qua gRPC `GetProductReviews` trên cùng service sinh candidate; chụp lại sau khi sinh summary và hủy case nếu snapshot thay đổi.
 2. Gọi gRPC `AskProductAIAssistant` để lấy **candidate summary** do hệ thống AI hiện tại sinh ra.
-3. Tạo **fact sheet** từ review thật.
-4. Chạy **rule-based checks** để bắt lỗi chắc chắn trước khi chấm bằng judge.
-5. Gọi **LLM-as-a-judge** để chấm các chiều khó hơn như factuality, coverage và sentiment.
-6. Gộp kết quả từng case và kết quả toàn bộ run vào một artifact JSON.
+3. Ẩn danh username, redact PII/secret và thay review chứa prompt injection bằng placeholder trước khi tạo fact sheet hoặc gọi judge.
+4. Chạy **rule-based checks** để bắt lỗi chắc chắn, bao gồm PII hoặc payload injection bị echo trong summary.
+5. Gọi **LLM-as-a-judge** với system prompt tách biệt, dữ liệu không tin cậy được đóng gói JSON và có giới hạn review/ký tự/token.
+6. Tự tính lại count và precision từ từng claim; output judge tự mâu thuẫn được đánh dấu `invalid_run`.
+7. Gộp kết quả vào artifact JSON đã redact; nội dung/username của top review chỉ được lưu dưới dạng score và SHA-256.
 
 Các trường chính được sinh ra trong pipeline:
 
@@ -101,14 +100,15 @@ Các trường chính được sinh ra trong pipeline:
 
 **Review gốc và fact sheet**
 
-- `raw_reviews`: Danh sách review gốc lấy trực tiếp từ PostgreSQL theo `product_id`.
+- `raw_reviews`: Dữ liệu review lấy qua cùng `ProductReviewService`; chỉ tồn tại trong bộ nhớ trong lúc chạy và không ghi nguyên văn vào artifact.
 - `raw_reviews_count`: Số lượng review gốc tìm thấy cho sản phẩm đang đánh giá.
 - `fact_sheet.product_id`: Product ID tương ứng với cụm review được dùng làm ground truth.
 - `fact_sheet.review_count`: Số review gốc được dùng để tạo fact sheet rút gọn.
 - `fact_sheet.average_score`: Điểm trung bình tính từ các review gốc của sản phẩm.
 - `fact_sheet.rating_distribution`: Phân bố số review theo bucket điểm nguyên trong dữ liệu thật.
-- `fact_sheet.top_positive_reviews`: Ba review điểm cao nhất, đại diện cho tín hiệu tích cực.
-- `fact_sheet.top_negative_reviews`: Ba review điểm thấp nhất, đại diện cho tín hiệu tiêu cực.
+- `fact_sheet.top_positive_reviews`: Ba review điểm cao nhất dùng nội bộ khi chấm; artifact chỉ lưu `score` và `review_sha256`.
+- `fact_sheet.top_negative_reviews`: Ba review điểm thấp nhất dùng nội bộ khi chấm; artifact chỉ lưu `score` và `review_sha256`.
+- `fact_sheet.input_safety`: Số review được redact vì PII hoặc prompt injection trước khi gọi judge.
 - `fact_sheet.constraints.has_explicit_age_signal`: Có hay không tín hiệu tuổi rõ ràng xuất hiện trong review.
 
 **Rule-based checks**
@@ -133,11 +133,11 @@ Các trường chính được sinh ra trong pipeline:
 
 - `judge_result.overall_score`: Điểm tổng `1-5` do judge chấm cho độ trung thực summary.
 - `judge_result.claims`: Danh sách claim judge trích ra và gắn nhãn từng claim.
-- `judge_result.supported_claims`: Số claim có bằng chứng hỗ trợ trực tiếp từ review thật.
-- `judge_result.unsupported_claims`: Số claim không tìm thấy bằng chứng trong review gốc.
-- `judge_result.contradicted_claims`: Số claim bị review thật hoặc fact sheet phản bác ngược lại.
-- `judge_result.claim_count`: Tổng số claim có ý nghĩa được judge tách ra.
-- `judge_result.claim_precision`: Tỷ lệ claim đúng trên tổng số claim của summary.
+- `judge_result.supported_claims`: Số claim có nhãn `supported`, do evaluator tự đếm từ `claims[]`.
+- `judge_result.unsupported_claims`: Số claim có nhãn `unsupported`, do evaluator tự đếm từ `claims[]`.
+- `judge_result.contradicted_claims`: Số claim có nhãn `contradicted`, do evaluator tự đếm từ `claims[]`.
+- `judge_result.claim_count`: Độ dài thực tế của `claims[]`, không tin trực tiếp count do judge khai báo.
+- `judge_result.claim_precision`: `supported_claims / claim_count`, do evaluator tự tính và đối chiếu với giá trị judge trả về.
 - `judge_result.aspect_coverage`: Mức độ summary cover được các ý chính trong review thật.
 - `judge_result.sentiment_alignment`: Summary có cùng tông cảm xúc với tập review hay không.
 - `judge_result.reason`: Giải thích ngắn gọn của judge cho điểm và nhãn đã gán.
@@ -261,9 +261,8 @@ Tradeoff chọn ngưỡng `2`:
 
 Cách tính trong code:
 
-- Ưu tiên dùng giá trị judge trả về trong `summary_metrics.claim_precision`
-- Nếu judge trả `0.0` nhưng `supported_claims > 0`, script fallback về:
-  - `claim_precision = supported_claims / claim_count`
+- Evaluator tự đếm nhãn trong `claims[]` và tính `claim_precision = supported_claims / claim_count`.
+- Nếu các count hoặc precision judge tự khai báo không khớp với `claims[]`, case trở thành `invalid_run`; evaluator không dùng số liệu tự mâu thuẫn để cho pass.
 
 Diễn giải:
 
