@@ -135,3 +135,48 @@ Shopping Copilot yêu cầu các service sau **đã chạy** trước khi deploy
 | Xác nhận các microservices phụ thuộc đang chạy | | ✅ |
 | Fix lỗi tầng AI / code | ✅ | |
 | Xử lý Pod crash / tài nguyên cluster | | ✅ |
+
+---
+
+## Phụ lục: Luồng đồng bộ dữ liệu RAG (DB -> S3 -> Bedrock KB)
+
+Để cập nhật dữ liệu sản phẩm và review mới từ PostgreSQL lên Bedrock Knowledge Base (RAG), hệ thống sử dụng script:
+`scripts/sync_kb_data.py` (nằm trong thư mục code của image).
+
+### 1. Cơ chế hoạt động:
+1. Đọc dữ liệu review mới nhất từ PostgreSQL schema `reviews` (bảng `productreviews`).
+2. Format dữ liệu thành file text và upload lên S3 Bucket (`techx-products-catalog-2026`) tại prefix `reviews/`.
+3. Gọi API Bedrock Agent để trigger job **Sync (Ingest)** cho cả 2 data sources (products & reviews).
+
+### 2. CDO cần chuẩn bị cho Sync Job:
+- **Tần suất chạy:** Nên cấu hình chạy định kỳ dưới dạng **K8s CronJob** (ví dụ: mỗi ngày 1 lần vào lúc 0h) hoặc chạy thủ công bằng lệnh:
+  ```bash
+  # Chạy trực tiếp bên trong container
+  python scripts/sync_kb_data.py
+  ```
+- **IAM Permission bổ sung cho ServiceAccount chạy Job:**
+  Ngoài các quyền Bedrock ở mục trên, IAM Role chạy Sync Job cần thêm quyền ghi S3 và quản lý Bedrock Data Source Ingestion:
+  ```json
+  {
+    "Effect": "Allow",
+    "Action": [
+      "s3:PutObject",
+      "s3:GetObject",
+      "s3:ListBucket"
+    ],
+    "Resource": [
+      "arn:aws:s3:::techx-products-catalog-2026",
+      "arn:aws:s3:::techx-products-catalog-2026/*"
+    ]
+  },
+  {
+    "Effect": "Allow",
+    "Action": [
+      "bedrock:StartIngestionJob",
+      "bedrock:GetIngestionJob",
+      "bedrock:ListIngestionJobs"
+    ],
+    "Resource": "*"
+  }
+  ```
+
