@@ -164,6 +164,9 @@ $env:JUDGE_PROVIDER="bedrock"
 $env:JUDGE_MODEL="amazon.nova-micro-v1:0"
 $env:JUDGE_REGION="us-east-1"
 $env:JUDGE_TIMEOUT_SECONDS="3.0"
+$env:BEDROCK_GUARDRAIL_ID="3ab7r29x59x4"
+$env:BEDROCK_GUARDRAIL_VERSION="DRAFT"
+$env:BEDROCK_GUARDRAIL_REGION="us-east-1"
 
 python product_reviews_server.py
 ```
@@ -193,6 +196,9 @@ export JUDGE_PROVIDER="bedrock"
 export JUDGE_MODEL="amazon.nova-micro-v1:0"
 export JUDGE_REGION="us-east-1"
 export JUDGE_TIMEOUT_SECONDS="3.0"
+export BEDROCK_GUARDRAIL_ID="3ab7r29x59x4"
+export BEDROCK_GUARDRAIL_VERSION="DRAFT"
+export BEDROCK_GUARDRAIL_REGION="us-east-1"
 
 python3 product_reviews_server.py
 ```
