@@ -64,6 +64,16 @@ def _load_module(name: str, path: Path):
 INPUT_FILTER = _load_module("runtime_eval_input_filter", SERVICE_DIR / "guardrails" / "input_filter.py")
 OUTPUT_FILTER = _load_module("runtime_eval_output_filter", SERVICE_DIR / "guardrails" / "output_filter.py")
 BLOCK_RESPONSES = set(INPUT_FILTER.BLOCK_MESSAGES.values())
+DEFAULT_PRICING = {
+    "amazon.nova-lite-v1:0": {
+        "input_per_million_usd": 0.06,
+        "output_per_million_usd": 0.24,
+    },
+    "amazon.nova-micro-v1:0": {
+        "input_per_million_usd": 0.035,
+        "output_per_million_usd": 0.14,
+    },
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -602,7 +612,9 @@ def main() -> int:
         "usage": (
             summarize_usage(
                 args.usage_log,
-                json.loads(Path(args.pricing_json).read_text(encoding="utf-8")) if args.pricing_json else None,
+                json.loads(Path(args.pricing_json).read_text(encoding="utf-8"))
+                if args.pricing_json
+                else DEFAULT_PRICING,
             )
             if args.usage_log
             else {"groups": [], "aggregate": {"calls": 0, "input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "estimated_cost_usd": 0.0}}

@@ -13,6 +13,7 @@ param(
   [string]$CandidateModel = $(if ($env:LLM_MODEL) { $env:LLM_MODEL } else { "amazon.nova-micro-v1:0" }),
   [string]$JudgeModel = $(if ($env:JUDGE_MODEL) { $env:JUDGE_MODEL } else { "amazon.nova-lite-v1:0" }),
   [string]$UsageLog = "",
+  [string]$PricingJson = "",
   [switch]$EnableToxicDbE2E,
   [switch]$Strict
 )
@@ -30,6 +31,7 @@ $arguments = @(
   "--out", $Out
 )
 if ($UsageLog) { $arguments += @("--usage-log", $UsageLog) }
+if ($PricingJson) { $arguments += @("--pricing-json", $PricingJson) }
 if ($EnableToxicDbE2E) { $arguments += "--enable-toxic-db-e2e" }
 if ($Strict) { $arguments += "--strict" }
 

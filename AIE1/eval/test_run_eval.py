@@ -35,6 +35,10 @@ class RuntimeAcceptanceContractTests(unittest.TestCase):
         self.assertEqual(group["latency_ms"]["p95"], 29.0)
         self.assertGreater(group["estimated_cost_usd"], 0)
 
+    def test_default_bedrock_pricing_covers_acceptance_models(self):
+        self.assertIn("amazon.nova-micro-v1:0", run_eval.DEFAULT_PRICING)
+        self.assertIn("amazon.nova-lite-v1:0", run_eval.DEFAULT_PRICING)
+
 
 if __name__ == "__main__":
     unittest.main()
