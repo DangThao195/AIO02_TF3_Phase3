@@ -1,116 +1,137 @@
-# Deployment Contract - AIE2 Shopping Copilot
+# Deployment Contract — AIE2 Shopping Copilot
+<!-- Owner: AIO02 | Version: 1.1.0 | Date: 2026-07-17 -->
+<!-- Cập nhật: thêm Valkey session, ECR image thực tế, K8s manifests đầy đủ -->
 
-<!-- Owner: AIO02 | Signed by: AI Lead + CDO Leads | Date: 2026-07-14 -->
+## Tổng quan
 
-## Mục đích
-
-Đặc tả những gì CDO cần làm để tích hợp Shopping Copilot vào cluster TF và những gì AIE cần CDO cung cấp.
+Shopping Copilot là AI chatbot hỗ trợ mua sắm, chạy dưới dạng FastAPI service, tích hợp với:
+- **AWS Bedrock** (Nova Lite LLM + Guardrails + Knowledge Base RAG)
+- **EKS Microservices** của TechX Corp qua gRPC
+- **PostgreSQL** của cluster qua K8s DNS
+- **Valkey** (Redis-compatible) cho session và cache persistence
 
 ---
 
 ## AIE cung cấp cho CDO
 
-| Artifact | Nội dung |
+| Artifact | Giá trị |
 |---|---|
-| **ECR Image** | `<ACCOUNT>.dkr.ecr.ap-southeast-1.amazonaws.com/techx-corp:1.0-shopping-copilot` |
+| **ECR Image URI** | `197826770971.dkr.ecr.ap-southeast-1.amazonaws.com/shopping-copilot:v1.0.0` |
+| **ECR Region** | `ap-southeast-1` (Singapore) |
 | **Port** | `8001` |
-| **Health check path** | `GET /chatbot` → HTTP 200 |
-| **Prometheus metrics** | `GET /metrics` — scrape vào Prometheus của TF |
+| **Health check** | `GET /health` → HTTP 200 |
+| **API doc** | `GET /docs` (Swagger UI) |
+| **K8s manifests** | `contracts/k8s-deployment.yaml`, `contracts/k8s-serviceaccount.yaml` |
 
 ---
 
-## CDO cần thiết lập
+## CDO cần thực hiện
 
-### 1. Environment Variables (ConfigMap)
+### 1. Tạo IAM Role cho IRSA
 
-```env
-# AWS Bedrock
-AWS_REGION=ap-southeast-1
-BEDROCK_MODEL_ID=apac.amazon.nova-lite-v1:0
-
-# AWS Bedrock Knowledge Base (RAG)
-BEDROCK_KB_ID=VGXRPNYPPA
-BEDROCK_KB_DATA_SOURCE_ID=KWOKJG5BSI
-PRODUCTS_S3_BUCKET=techx-products-catalog-2026
-BEDROCK_KB_REGION=us-east-1
-
-# Database (PostgreSQL for Direct DB Queries & Sync Job)
-DB_HOST=postgresql.<namespace>.svc.cluster.local
-DB_PORT=5432
-DB_USER=otelu
-DB_PASSWORD=otelp
-DB_NAME=otel
-DB_CONNECTION_STRING="host=postgresql.<namespace>.svc.cluster.local port=5432 user=otelu password=otelp dbname=otel"
-
-# Địa chỉ gRPC microservices trong cluster (CDO điền theo DNS thật của TF)
-CATALOG_ADDR=product-catalog.<namespace>.svc.cluster.local:3550
-CART_ADDR=cart.<namespace>.svc.cluster.local:7070
-REVIEWS_ADDR=product-reviews.<namespace>.svc.cluster.local:9090
-RECO_ADDR=recommendation.<namespace>.svc.cluster.local:8081
-CURRENCY_ADDR=currency.<namespace>.svc.cluster.local:7001
-SHIPPING_ADDR=http://shipping.<namespace>.svc.cluster.local:50051
-
-# OpenTelemetry
-OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector.<namespace>.svc.cluster.local:4317
-```
-
-### 2. IAM Permission cho Pod (IRSA)
-
-Pod cần IAM Role với các quyền sau để gọi Bedrock và thực hiện truy vấn semantic (Retrieve) từ Knowledge Base:
+Pod cần quyền gọi AWS Bedrock. CDO tạo IAM Role với trust policy cho EKS OIDC và policy sau:
 
 ```json
 {
-  "Effect": "Allow",
-  "Action": [
-    "bedrock:InvokeModel",
-    "bedrock:ApplyGuardrail",
-    "bedrock:Retrieve"
-  ],
-  "Resource": "*"
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "bedrock:InvokeModel",
+        "bedrock:InvokeModelWithResponseStream",
+        "bedrock:ApplyGuardrail",
+        "bedrock:Retrieve"
+      ],
+      "Resource": "*"
+    }
+  ]
 }
 ```
 
-### 3. Prometheus Scrape Config
-
-Thêm scrape target vào Prometheus của TF:
+Sau khi tạo Role, điền ARN vào annotation trong `k8s-serviceaccount.yaml`:
 ```yaml
-- job_name: shopping-copilot
-  static_configs:
-    - targets: ['shopping-copilot.<namespace>.svc.cluster.local:8001']
+eks.amazonaws.com/role-arn: "arn:aws:iam::197826770971:role/<tên-role-CDO-tạo>"
+```
+
+### 2. Apply các manifest theo thứ tự
+
+```bash
+# 1. ServiceAccount (IRSA)
+kubectl apply -f contracts/k8s-serviceaccount.yaml
+
+# 2. ConfigMap + Secret + Deployment + Service
+kubectl apply -f contracts/k8s-deployment.yaml
+
+# 3. Kiểm tra Pod đã Ready
+kubectl get pods -n techx-tf3 -l app=shopping-copilot
+kubectl logs -n techx-tf3 -l app=shopping-copilot --tail=30
+```
+
+### 3. Xác nhận Health Check
+
+```bash
+# Port-forward để test local (hoặc dùng Service ClusterIP)
+kubectl port-forward svc/shopping-copilot 8001:8001 -n techx-tf3
+curl http://localhost:8001/health
+# → {"status": "ok", ...}
 ```
 
 ---
 
-## AIE cần CDO cung cấp
+## Cấu hình môi trường đầy đủ
 
-### Kết nối Database (cho tính năng RAG)
+Tất cả biến đã có trong `k8s-deployment.yaml` (ConfigMap + Secret). Ghi chú quan trọng:
 
-Shopping Copilot cần đọc dữ liệu **product reviews** từ database của `product-reviews` service để phục vụ tính năng hỏi-đáp dựa trên review thật (RAG — không hallucinate).
-
-Sau khi kiểm tra cấu hình chạy hiện tại của microservice `product-reviews` trên cluster EKS, thông tin kết nối Database của hệ thống như sau:
-
-| Thông tin | Giá trị mặc định trên EKS | Ghi chú |
+| Biến | Giá trị | Ghi chú |
 |---|---|---|
-| **DB Host** | `postgresql` (hoặc `postgresql.<namespace>.svc.cluster.local`) | CDO cấu hình qua DNS nội bộ K8s |
-| **DB Port** | `5432` | Cổng PostgreSQL tiêu chuẩn |
-| **DB Name** | `otel` | Tên database của hệ thống |
-| **DB User** | `otelu` | AIE chỉ cần quyền `SELECT` |
-| **DB Password** | `otelp` | Mật khẩu truy cập |
-| **Bảng dữ liệu** | `productreviews` | Chứa review của khách hàng |
+| `VALKEY_URL` | `redis://valkey-cart.techx-tf3.svc.cluster.local:6379/1` | DB=1 để tách Cart (DB=0) |
+| `DB_HOST` | `postgresql.techx-tf3.svc.cluster.local` | K8s internal DNS |
+| `DB_PORT` | `5432` | Cổng PostgreSQL tiêu chuẩn trên cluster |
+| `BEDROCK_KB_ID` | `UCTITOWFHE` | Knowledge Base ID trên AWS |
+| `REVIEWS_ADDR` | `product-reviews.techx-tf3.svc.cluster.local:3551` | gRPC port 3551 |
+| `CATALOG_ADDR` | `product-catalog.techx-tf3.svc.cluster.local:8080` | gRPC port 8080 |
 
-> ⚠️ CDO cần cấu hình các tham số kết nối Database trên dưới dạng các biến môi trường (hoặc Secrets) tương ứng cho Pod `shopping-copilot` khi triển khai. AIE **chỉ cần quyền đọc (SELECT)**, đảm bảo an toàn dữ liệu.
+> ⚠️ **Lưu ý quan trọng về `REVIEWS_ADDR`**: port phải là `3551` (gRPC internal), không phải `9090` (port-forward dev).
 
 ---
 
-## Tóm tắt phân công
+## Phụ thuộc trên cluster
+
+Shopping Copilot yêu cầu các service sau **đã chạy** trước khi deploy:
+
+| Service | Namespace | Ghi chú |
+|---|---|---|
+| `postgresql` | `techx-tf3` | Schema `catalog` và `reviews` phải tồn tại |
+| `valkey-cart` | `techx-tf3` | Dùng DB=1, không cần password |
+| `product-catalog` | `techx-tf3` | gRPC port 8080 |
+| `cart` | `techx-tf3` | gRPC port 8080 |
+| `product-reviews` | `techx-tf3` | gRPC port 3551 |
+| `recommendation` | `techx-tf3` | gRPC port 8080 |
+| `currency` | `techx-tf3` | gRPC port 8080 |
+| `shipping` | `techx-tf3` | HTTP port 8080 |
+
+---
+
+## Resource Requirements
+
+| | Request | Limit |
+|---|---|---|
+| **CPU** | 250m | 1000m |
+| **Memory** | 512Mi | 1Gi |
+| **Replicas** | 2 | — |
+
+---
+
+## Phân công
 
 | Việc | AIE | CDO |
 |---|---|---|
 | Build & push image lên ECR | ✅ | |
-| Tích hợp image vào Helm chart / deployment | | ✅ |
-| Cấu hình env vars theo bảng trên | | ✅ |
-| Cấp IAM Role (IRSA) | | ✅ |
-| Thêm Prometheus scrape target | | ✅ |
-| Cung cấp DB connection cho RAG | | ✅ |
-| Sửa code khi lỗi tầng AI | ✅ | |
-| Xử lý Pod sập / tài nguyên | | ✅ |
+| Tạo IAM Role IRSA | | ✅ |
+| Apply ServiceAccount + annotate IRSA | | ✅ |
+| Apply ConfigMap, Secret, Deployment, Service | | ✅ |
+| Cấp quyền pull ECR image cho node group | | ✅ |
+| Xác nhận các microservices phụ thuộc đang chạy | | ✅ |
+| Fix lỗi tầng AI / code | ✅ | |
+| Xử lý Pod crash / tài nguyên cluster | | ✅ |
