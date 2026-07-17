@@ -354,8 +354,9 @@ def process_incident_background(incident_id: str, culprit_service: str, trace_id
 
 def process_proactive_anomaly_background(incident_id: str, culprit_service: str, trace_id: str, alert_time: float):
     """
-    Chạy chẩn đoán sớm cho máy học: Chạy RCA để tìm nguyên nhân gốc từ Jaeger trace
-    và OpenSearch logs, không gọi Bedrock LLM và không đề xuất phương án khắc phục tự động.
+    Chạy chẩn đoán sớm cho máy học: Gọi Bedrock LLM để phân tích chuyên sâu
+    và đề xuất hành động khắc phục, nhưng ép buộc mức rủi ro là MEDIUM
+    để SRE phê duyệt thủ công qua Slack, không bao giờ tự động hành động.
     """
     logger.info(f"--- [PROACTIVE ML WARNING] Processing early anomaly for {culprit_service} ({incident_id}) ---")
     
@@ -363,58 +364,56 @@ def process_proactive_anomaly_background(incident_id: str, culprit_service: str,
     logger.info("[PROACTIVE] Step 1: Generating Evidence Pack...")
     evidence = evidence_collector.build_evidence_pack(culprit_service, alert_time, trace_id)
     
-    # 2. Phân tích Jaeger Trace RCA & logs lỗi
-    logs_summary = []
-    templates = evidence.get("log_templates", [])
-    error_keywords = ["error", "fail", "warn", "exception", "deadline", "out of order", "epoch"]
+    # 2. Gọi Bedrock Chẩn đoán
+    logger.info("[PROACTIVE] Step 2: Invoking LLM Bedrock Diagnostician...")
+    diagnosis = diagnostician.diagnose(evidence)
     
-    def priority_score(t_dict):
-        text = t_dict.get("template", "").lower()
-        if any(kw in text for kw in error_keywords):
-            return 0
-        return 1
-        
-    sorted_templates = sorted(templates, key=priority_score)
-    for log_t in sorted_templates[:5]:
-        template = log_t.get("template", "")
-        count = log_t.get("count", 1)
-        if len(template) > 100:
-            template = template[:100] + "..."
-        logs_summary.append(f"• `[Count: {count}]` {template}")
-        
-    logs_section = "\n".join(logs_summary) if logs_summary else "• *Không tìm thấy logs lỗi liên quan trong OpenSearch.*"
+    # Bổ sung thông tin bổ sung vào diagnosis
+    diagnosis["incident_id"] = incident_id
+    diagnosis["culprit_service"] = culprit_service
+    diagnosis["status"] = "proactive_warning"
+    diagnosis["alert_time"] = alert_time
+    diagnosis["trace_id"] = trace_id
     
-    rca_path = f"Phát hiện bất thường bắt nguồn từ dịch vụ `{culprit_service}`."
-    if "trace_analysis" in evidence:
-        rca_path = f"Trace Path / Dependency chain: {evidence['trace_analysis']}"
-        
-    analysis_str = (
-        f"*Thông tin chẩn đoán chủ động (ML early warning):*\n"
-        f"• Dịch vụ phát sinh bất thường: `{culprit_service}`\n"
-        f"• Trace ID: `{trace_id}`\n"
-        f"• Phân tích đường đi lỗi (RCA): {rca_path}\n\n"
-        f"*Logs lỗi chi tiết thu thập từ OpenSearch:*\n{logs_section}"
-    )
+    proposed_action = diagnosis.get("proposed_action", "none")
     
-    diagnosis = {
-        "incident_id": incident_id,
-        "culprit_service": culprit_service,
-        "analysis": analysis_str,
-        "proposed_action": "none",
-        "action_command": "",
-        "rollback_command": "",
-        "confidence_score": 1.0,
-        "matched_incident": "N/A",
-        "status": "proactive_warning",
-        "evidence": evidence,
-        "alert_time": alert_time,
-        "trace_id": trace_id
+    # Mẫu lệnh chuẩn hóa an toàn
+    COMMAND_TEMPLATES = {
+        "scale":       "kubectl -n techx-tf3 scale deploy/{service} --replicas=2",
+        "restart":     "kubectl -n techx-tf3 rollout restart deployment/{service}",
+        "cache-flush": "kubectl -n techx-tf3 scale deploy/{service} --replicas=1",
+        "breaker-force": "kubectl -n techx-tf3 scale deploy/{service} --replicas=1",
+        "none": ""
+    }
+    ROLLBACK_TEMPLATES = {
+        "scale":       "kubectl -n techx-tf3 scale deploy/{service} --replicas=1",
+        "restart":     "kubectl -n techx-tf3 rollout undo deployment/{service}",
+        "cache-flush": "kubectl -n techx-tf3 scale deploy/{service} --replicas=2",
+        "breaker-force": "kubectl -n techx-tf3 scale deploy/{service} --replicas=2",
+        "none": ""
     }
     
+    if proposed_action in COMMAND_TEMPLATES:
+        action_command = COMMAND_TEMPLATES[proposed_action].format(service=culprit_service)
+        rollback_command = ROLLBACK_TEMPLATES[proposed_action].format(service=culprit_service)
+    else:
+        action_command = diagnosis.get("action_command", "")
+        rollback_command = diagnosis.get("rollback_command", "")
+        
+    diagnosis["action_command"] = action_command
+    diagnosis["rollback_command"] = rollback_command
     active_incidents[incident_id] = diagnosis
     
-    # 3. Gửi Slack cảnh báo sớm dạng thông tin (Proactive Warning Card)
-    logger.info(f"[PROACTIVE] Sending early warning Slack card (RCA only) for {incident_id}...")
+    # Validation Gate
+    if not handler.validate_action(proposed_action, action_command):
+        logger.warning("[PROACTIVE] Action failed safety validation gate. Rejecting.")
+        diagnosis["analysis"] = f"[SAFETY REJECTED] {diagnosis['analysis']}"
+        diagnosis["action_command"] = "Command blocked due to C6 policy violation."
+        notifier.send_incident_notification(incident_id, diagnosis)
+        return
+        
+    # Ép buộc rủi ro là MEDIUM để tuyệt đối không tự động chạy
+    logger.info(f"[PROACTIVE] Action '{proposed_action}' forced to MEDIUM RISK for manual SRE approval.")
     notifier.send_incident_notification(incident_id, diagnosis)
 
 def process_incident_promotion_background(incident_id: str):

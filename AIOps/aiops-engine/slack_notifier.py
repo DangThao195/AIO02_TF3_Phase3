@@ -60,7 +60,7 @@ class SlackNotifier:
 
 
         # Slack Block Kit payload structure
-        if incident_id.startswith("INC-ML-"):
+        if incident_id.startswith("INC-ML-") and not diagnosis.get("action_command"):
             # Thẻ cảnh báo sớm máy học dạng thông tin thuần túy
             payload = {
                 "blocks": [

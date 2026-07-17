@@ -6,43 +6,23 @@ pod `fraud-detection` (`kubectl -n techx-tf3 scale deploy/fraud-detection --repl
 yêu cầu, nhà cung cấp trả về lỗi HTTP 429 (Too Many Requests / Rate Limit). * **Đã xử:** Tắt tính năng AI review summary bằng cách kích hoạt Feature Flag cục bộ (`kubectl -n techx-tf3 exec deploy/flagd -- toggle-flag tf3-ai-summary-disabled=true`), giúp trang web fallback về hiển thị review thô bình thường để hồi phục latency. * **Bài học còn treo:** Cần triển khai rate limiting nội bộ hoặc cơ chế caching kết quả LLM để giảm tần suất gọi API trực tiếp. --- ## INC-5 · Chậm xử lý đơn hàng do Kafka Consumer Lag lớn trên accounting (đã đóng) * **Khi nào:** Sau sự kiện Flash Sale lớn. * **Triệu chứng:** Khách hàng thanh toán thành công nhưng không thấy đơn hàng được ghi nhận trong trang lịch sử đơn hàng hoặc sổ kế toán. * **Nguyên nhân gốc:** Lưu lượng đặt
 
 === PHẢN HỒI THÔ TỪ LLM (RAW TEXT) ===
+```json
 {
-  "analysis": "Phân tích...",
+  "analysis": "* **Hiện tượng**: Lỗi truy cập API Bedrock từ dịch vụ llm, gây ra tỷ lệ lỗi cao và tính khả dụng kém của trang web.\n* **Nguyên nhân**: Vượt quá giới hạn tần suất yêu cầu API của Bedrock, trả về lỗi HTTP 429 (Too Many Requests). (Nguồn tham chiếu: INC-4 từ Bedrock Knowledge Base)\n* **Bằng chứng**:\n  - *Jaeger Trace*: Bottleneck tại dịch vụ llm.\n  - *Logs (Drain3)*: Mẫu log lỗi 'WARNING: LLM provider rate limit 429 Too Many Requests' xuất hiện 12 lần.\n* **Vùng ảnh hưởng (Blast Radius)**: Tính năng tóm tắt review bằng AI và các tính năng khác phụ thuộc vào API Bedrock sẽ bị ảnh hưởng.",
   "matched_incident": "INC-4",
   "proposed_action": "toggle-tf-flag",
   "action_command": "kubectl -n techx-tf3 exec deploy/flagd -- toggle-flag tf3-ai-summary-disabled=true",
   "rollback_command": "kubectl -n techx-tf3 exec deploy/flagd -- toggle-flag tf3-ai-summary-disabled=false",
-  "confidence_score": 0.95,
-  "details": {
-    "analysis": {
-      "hiện tượng": "Gọi đến Bedrock API thất bại hoặc bị timeout",
-      "nguyên nhân": "Cổng dịch vụ LLM gọi đến AWS Bedrock API vượt quá giới hạn tần suất yêu cầu, nhà cung cấp trả về lỗi HTTP 429 (Too Many Requests) Nguồn tham chiếu: INC-4 từ Bedrock Knowledge Base",
-      "bằng chứng": {
-        "Jaeger Trace": "Bottleneck tại dịch vụ llm.",
-        "logs (Drain3)": "Mẫu log lỗi 'ERROR: Bedrock API call failed or timed out after 5000ms' xuất hiện 1 lần. Mẫu log lỗi 'WARNING: LLM provider rate limit 429 Too Many Requests' xuất hiện 12 lần."
-      },
-      "vùng ảnh hưởng (blast radius)": "Khả năng ảnh hưởng đến tính năng tóm tắt review bằng AI, dẫn đến latency cao và không thể hiển thị review thô đúng cách."
-    }
-  }
+  "confidence_score": 0.95
 }
+```
 
 === KẾT QUẢ PARSE JSON SAU KHI LỌC DỮ LIỆU ===
 {
-  "analysis": "Phân tích...",
+  "analysis": "* **Hiện tượng**: Lỗi truy cập API Bedrock từ dịch vụ llm, gây ra tỷ lệ lỗi cao và tính khả dụng kém của trang web.\n* **Nguyên nhân**: Vượt quá giới hạn tần suất yêu cầu API của Bedrock, trả về lỗi HTTP 429 (Too Many Requests). (Nguồn tham chiếu: INC-4 từ Bedrock Knowledge Base)\n* **Bằng chứng**:\n  - *Jaeger Trace*: Bottleneck tại dịch vụ llm.\n  - *Logs (Drain3)*: Mẫu log lỗi 'WARNING: LLM provider rate limit 429 Too Many Requests' xuất hiện 12 lần.\n* **Vùng ảnh hưởng (Blast Radius)**: Tính năng tóm tắt review bằng AI và các tính năng khác phụ thuộc vào API Bedrock sẽ bị ảnh hưởng.",
   "matched_incident": "INC-4",
   "proposed_action": "toggle-tf-flag",
   "action_command": "kubectl -n techx-tf3 exec deploy/flagd -- toggle-flag tf3-ai-summary-disabled=true",
   "rollback_command": "kubectl -n techx-tf3 exec deploy/flagd -- toggle-flag tf3-ai-summary-disabled=false",
-  "confidence_score": 0.95,
-  "details": {
-    "analysis": {
-      "hiện tượng": "Gọi đến Bedrock API thất bại hoặc bị timeout",
-      "nguyên nhân": "Cổng dịch vụ LLM gọi đến AWS Bedrock API vượt quá giới hạn tần suất yêu cầu, nhà cung cấp trả về lỗi HTTP 429 (Too Many Requests) Nguồn tham chiếu: INC-4 từ Bedrock Knowledge Base",
-      "bằng chứng": {
-        "Jaeger Trace": "Bottleneck tại dịch vụ llm.",
-        "logs (Drain3)": "Mẫu log lỗi 'ERROR: Bedrock API call failed or timed out after 5000ms' xuất hiện 1 lần. Mẫu log lỗi 'WARNING: LLM provider rate limit 429 Too Many Requests' xuất hiện 12 lần."
-      },
-      "vùng ảnh hưởng (blast radius)": "Khả năng ảnh hưởng đến tính năng tóm tắt review bằng AI, dẫn đến latency cao và không thể hiển thị review thô đúng cách."
-    }
-  }
+  "confidence_score": 0.95
 }
