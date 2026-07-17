@@ -9,11 +9,12 @@ import os
 import json
 import uuid
 import time
+import hashlib
 import logging
 from typing import Dict, Any, List, Optional
 
 from langchain_aws import ChatBedrockConverse
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.guardrails import (
     rate_limiter,
@@ -116,6 +117,14 @@ class CopilotAgent:
         chat_history = self._sessions.get_recent_history_str(session.get("session_id", ""))
         prompt = INTENT_PARSE_PROMPT.format(chat_history=chat_history, context=context_str, user_message=user_message)
         
+        # ── Check Cache cho Intent Parser ──
+        prompt_hash = hashlib.sha256(prompt.encode('utf-8')).hexdigest()
+        cache_key = f"intent:{prompt_hash}"
+        cached_intent = self._cache.get_raw(cache_key)
+        if cached_intent is not None:
+            logger.debug("Cache HIT for Intent Parser")
+            return cached_intent
+
         try:
             response = await self.llm.ainvoke([HumanMessage(content=prompt)])
             text = self._extract_text(response)
@@ -124,7 +133,12 @@ class CopilotAgent:
                 text = text.split("```json")[1].split("```")[0]
             elif "```" in text:
                 text = text.split("```")[1].split("```")[0]
-            return json.loads(text.strip())
+            
+            parsed_intent = json.loads(text.strip())
+            
+            # Lưu vào cache trong 10 phút
+            self._cache.set_raw(cache_key, parsed_intent, ttl=600)
+            return parsed_intent
         except Exception as e:
             logger.error(f"Intent parse failed: {e}")
             return {"task_type": "search", "target_entity": "product", "product_query": user_message}
@@ -294,7 +308,16 @@ class CopilotAgent:
                 continue
 
             try:
-                res_str = await tool_fn.ainvoke(tc_args)
+                # ── Kiểm tra Cache Tool ──
+                cached_str = self._cache.get(tc_name, tc_args)
+                if cached_str is not None:
+                    res_str = cached_str
+                    logger.debug(f"Cache HIT for tool {tc_name}")
+                else:
+                    res_str = await tool_fn.ainvoke(tc_args)
+                    self._cache.set(tc_name, tc_args, res_str)
+                    logger.debug(f"Cache MISS for tool {tc_name}")
+
                 try:
                     res_json = json.loads(res_str)
                 except Exception:
@@ -346,7 +369,10 @@ class CopilotAgent:
         prompt = EVIDENCE_SYNTHESIS_PROMPT.format(user_message=user_message, evidence=ev_str)
 
         try:
-            response = await self.llm.ainvoke([HumanMessage(content=prompt)])
+            response = await self.llm.ainvoke([
+                SystemMessage(content=SYSTEM_PROMPT),
+                HumanMessage(content=prompt)
+            ])
             return self._extract_text(response)
         except Exception as e:
             logger.error(f"Synthesis failed: {e}")

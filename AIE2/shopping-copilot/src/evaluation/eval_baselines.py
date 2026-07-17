@@ -75,7 +75,7 @@ def run_evaluation(
         req_body = {
             "message": case["input_text"],
             "session_id": f"{session_prefix}_session_{case['id']}",
-            "user_id": "eval_user",
+            "user_id": f"eval_user_{case['id']}",
         }
 
         t0 = time.time()
