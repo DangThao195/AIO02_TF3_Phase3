@@ -284,13 +284,14 @@ def get_product_reviews(request_product_id):
         records = fetch_product_reviews_from_db(request_product_id)
 
         for row in records:
-            logger.info(f"  username: {row[0]}, description: {row[1]}, score: {str(row[2])}")
+            logger.debug(f"  username: {row[0]}, description: {row[1]}, score: {str(row[2])}")
             product_reviews.product_reviews.add(
                 username=row[0],
                 description=row[1],
                 score=str(row[2])
             )
 
+        logger.info(f"Retrieved {len(records)} reviews for product_id: {request_product_id}")
         span.set_attribute("app.product_reviews.count", len(product_reviews.product_reviews))
         product_review_svc_metrics["app_product_review_counter"].add(len(product_reviews.product_reviews), {'product.id': request_product_id})
         return product_reviews
@@ -447,23 +448,38 @@ def get_ai_assistant_response(request_product_id, question):
             messages.append(response_message)
             raw_reviews_for_judge = []
 
-            for tool_call in tool_calls:
+            futures_list = []
+            with futures.ThreadPoolExecutor(max_workers=len(tool_calls)) as executor:
+                for tool_call in tool_calls:
+                    function_name = tool_call.function.name
+                    function_args = json.loads(tool_call.function.arguments)
+                    logger.info(f"Scheduling tool call: '{function_name}' with arguments: {function_args}")
+
+                    if function_name == "fetch_product_reviews":
+                        future = executor.submit(fetch_product_reviews, product_id=function_args.get("product_id"))
+                    elif function_name == "fetch_product_info":
+                        future = executor.submit(fetch_product_info, product_id=function_args.get("product_id"))
+                    else:
+                        raise Exception(f"Received unexpected tool call request: {function_name}")
+                    futures_list.append((tool_call, future))
+
+            for tool_call, future in futures_list:
                 function_name = tool_call.function.name
-                function_args = json.loads(tool_call.function.arguments)
-                logger.info(f"Processing tool call: '{function_name}' with arguments: {function_args}")
+                try:
+                    result_raw = future.result()
+                except Exception as e:
+                    logger.error(f"Tool call '{function_name}' raised exception: {e}")
+                    result_raw = json.dumps({"error": str(e)})
 
                 if function_name == "fetch_product_reviews":
-                    function_response_raw = fetch_product_reviews(product_id=function_args.get("product_id"))
                     try:
-                        function_response, raw_reviews_for_judge = normalize_reviews_for_context(function_response_raw)
+                        function_response, raw_reviews_for_judge = normalize_reviews_for_context(result_raw)
                     except Exception as e:
                         logger.error(f"Error filtering reviews: {e}")
-                        function_response = function_response_raw
+                        function_response = result_raw
                         raw_reviews_for_judge = []
                 elif function_name == "fetch_product_info":
-                    function_response = fetch_product_info(product_id=function_args.get("product_id"))
-                else:
-                    raise Exception(f"Received unexpected tool call request: {function_name}")
+                    function_response = result_raw
 
                 messages.append(
                     {
@@ -548,7 +564,7 @@ def get_ai_assistant_response(request_product_id, question):
 
 def fetch_product_info(product_id):
     try:
-        product = product_catalog_stub.GetProduct(demo_pb2.GetProductRequest(id=product_id))
+        product = product_catalog_stub.GetProduct(demo_pb2.GetProductRequest(id=product_id), timeout=3.0)
         logger.info(f"product_catalog_stub.GetProduct returned: '{product}'")
         return MessageToJson(product)
     except Exception as e:
@@ -595,7 +611,7 @@ if __name__ == "__main__":
     logger = logging.getLogger('main')
     logger.addHandler(handler)
 
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=50))
     service = ProductReviewService()
     demo_pb2_grpc.add_ProductReviewServiceServicer_to_server(service, server)
     health_pb2_grpc.add_HealthServicer_to_server(service, server)
@@ -607,7 +623,9 @@ if __name__ == "__main__":
     llm_model = must_map_env('LLM_MODEL')
     aws_region = os.environ.get('AWS_REGION', 'us-east-1')
     if llm_provider == 'bedrock':
-        bedrock_client = boto3.client('bedrock-runtime', region_name=aws_region)
+        from botocore.config import Config
+        bedrock_config = Config(connect_timeout=3.0, read_timeout=10.0)
+        bedrock_client = boto3.client('bedrock-runtime', region_name=aws_region, config=bedrock_config)
         llm_base_url = os.environ.get('LLM_BASE_URL')
         llm_api_key = os.environ.get('OPENAI_API_KEY', '')
     else:
