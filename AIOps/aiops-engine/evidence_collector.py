@@ -141,13 +141,34 @@ class EvidenceCollector:
             
         log_templates = self.cluster_logs(raw_logs)
         
-        # 2. Đóng gói
+        # 2. Lấy trace data và phân tích chuỗi liên kết lỗi (Dependency chain)
+        from rca_engine import RCAEngine
+        rca_engine = RCAEngine()
+        
+        if trace_id.startswith("mock-"):
+            import os
+            inc_num = trace_id.split("-")[-1]  # inc1, inc2, inc3
+            fixture_path = f"fixtures/{inc_num}_trace_response.json"
+            if not os.path.exists(fixture_path):
+                fixture_path = f"aiops-engine/{fixture_path}"
+            try:
+                with open(fixture_path, "r", encoding="utf-8") as f:
+                    trace_data = json.load(f)
+            except Exception:
+                trace_data = {}
+        else:
+            trace_data = rca_engine.fetch_trace(trace_id)
+            
+        trace_analysis = rca_engine.build_error_dependency_chain(trace_data, culprit_service)
+
+        # 3. Đóng gói
         evidence_pack = {
             "culprit_service": culprit_service,
             "trace_id": trace_id,
             "alert_time": alert_time,
             "log_templates": log_templates,
-            "total_raw_logs": len(raw_logs)
+            "total_raw_logs": len(raw_logs),
+            "trace_analysis": trace_analysis
         }
         
         return evidence_pack

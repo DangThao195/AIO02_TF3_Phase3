@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: engine
-        image: 197826770971.dkr.ecr.ap-southeast-1.amazonaws.com/tf-2-ai-engine:IF-v13
+        image: 197826770971.dkr.ecr.ap-southeast-1.amazonaws.com/tf-2-ai-engine:IF-v14
         imagePullPolicy: Always
         ports:
         - containerPort: 8000
@@ -30,7 +30,7 @@ spec:
         - name: PROMETHEUS_URL
           value: "http://prometheus.techx-tf3.svc.cluster.local:9090"
         - name: JAEGER_URL
-          value: "http://jaeger.techx-tf3.svc.cluster.local:16686"
+          value: "http://jaeger.techx-tf3.svc.cluster.local:16686/jaeger/ui"
         - name: OPENSEARCH_URL
           value: "http://opensearch.techx-tf3.svc.cluster.local:9200"
         
