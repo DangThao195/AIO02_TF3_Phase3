@@ -1,0 +1,67 @@
+{
+  "scenarios": [
+    {
+      "scenario_name": "checkout_incident",
+      "service": "checkout",
+      "data": [
+        {"timestamp": "2026-07-17T12:00:00Z", "rps": 5.0, "cpu_usage": 0.08, "memory_usage": 0.40, "latency_p90": 50.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 10.0, "label": 1},
+        {"timestamp": "2026-07-17T12:05:00Z", "rps": 5.2, "cpu_usage": 0.08, "memory_usage": 0.40, "latency_p90": 52.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 12.0, "label": 1},
+        {"timestamp": "2026-07-17T12:10:00Z", "rps": 4.8, "cpu_usage": 0.07, "memory_usage": 0.40, "latency_p90": 48.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 9.0,  "label": 1},
+        {"timestamp": "2026-07-17T12:15:00Z", "rps": 5.1, "cpu_usage": 0.08, "memory_usage": 0.40, "latency_p90": 51.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 11.0, "label": 1},
+        {"timestamp": "2026-07-17T12:20:00Z", "rps": 5.0, "cpu_usage": 0.08, "memory_usage": 0.41, "latency_p90": 50.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 10.0, "label": 1},
+        {"timestamp": "2026-07-17T12:25:00Z", "rps": 5.3, "cpu_usage": 0.08, "memory_usage": 0.41, "latency_p90": 53.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 13.0, "label": 1},
+        {"timestamp": "2026-07-17T12:30:00Z", "rps": 4.9, "cpu_usage": 0.08, "memory_usage": 0.41, "latency_p90": 49.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 10.0, "label": 1},
+        {"timestamp": "2026-07-17T12:35:00Z", "rps": 5.2, "cpu_usage": 0.08, "memory_usage": 0.41, "latency_p90": 52.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 11.0, "label": 1},
+        {"timestamp": "2026-07-17T12:40:00Z", "rps": 5.0, "cpu_usage": 0.08, "memory_usage": 0.42, "latency_p90": 50.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 10.0, "label": 1},
+        {"timestamp": "2026-07-17T12:45:00Z", "rps": 5.1, "cpu_usage": 0.08, "memory_usage": 0.42, "latency_p90": 51.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 12.0, "label": 1},
+        {"timestamp": "2026-07-17T12:50:00Z", "rps": 4.8, "cpu_usage": 0.07, "memory_usage": 0.42, "latency_p90": 48.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 8.0,  "label": 1},
+        {"timestamp": "2026-07-17T12:55:00Z", "rps": 5.0, "cpu_usage": 0.08, "memory_usage": 0.42, "latency_p90": 50.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 10.0, "label": 1},
+        {"timestamp": "2026-07-17T13:00:00Z", "rps": 5.1, "cpu_usage": 0.15, "memory_usage": 0.43, "latency_p90": 620.0, "error_rate": 3.0, "client_error_rate": 0.0, "kafka_lag": 55.0, "label": -1},
+        {"timestamp": "2026-07-17T13:05:00Z", "rps": 4.9, "cpu_usage": 0.16, "memory_usage": 0.43, "latency_p90": 650.0, "error_rate": 3.1, "client_error_rate": 0.0, "kafka_lag": 80.0, "label": -1},
+        {"timestamp": "2026-07-17T13:10:00Z", "rps": 5.0, "cpu_usage": 0.15, "memory_usage": 0.44, "latency_p90": 630.0, "error_rate": 2.9, "client_error_rate": 0.0, "kafka_lag": 95.0, "label": -1}
+      ]
+    },
+    {
+      "scenario_name": "masking_incident",
+      "service": "checkout",
+      "data": [
+        {"timestamp": "2026-07-17T12:00:00Z", "rps": 5.0, "cpu_usage": 0.08, "memory_usage": 0.40, "latency_p90": 50.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 10.0, "label": 1},
+        {"timestamp": "2026-07-17T12:05:00Z", "rps": 5.2, "cpu_usage": 0.08, "memory_usage": 0.40, "latency_p90": 52.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 12.0, "label": 1},
+        {"timestamp": "2026-07-17T12:10:00Z", "rps": 4.8, "cpu_usage": 0.07, "memory_usage": 0.40, "latency_p90": 48.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 9.0,  "label": 1},
+        {"timestamp": "2026-07-17T12:15:00Z", "rps": 5.1, "cpu_usage": 0.08, "memory_usage": 0.40, "latency_p90": 51.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 11.0, "label": 1},
+        {"timestamp": "2026-07-17T12:20:00Z", "rps": 5.0, "cpu_usage": 0.08, "memory_usage": 0.41, "latency_p90": 50.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 10.0, "label": 1},
+        {"timestamp": "2026-07-17T12:25:00Z", "rps": 5.3, "cpu_usage": 0.08, "memory_usage": 0.41, "latency_p90": 53.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 13.0, "label": 1},
+        {"timestamp": "2026-07-17T12:30:00Z", "rps": 4.9, "cpu_usage": 0.08, "memory_usage": 0.41, "latency_p90": 49.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 10.0, "label": 1},
+        {"timestamp": "2026-07-17T12:35:00Z", "rps": 5.2, "cpu_usage": 0.08, "memory_usage": 0.41, "latency_p90": 52.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 11.0, "label": 1},
+        {"timestamp": "2026-07-17T12:40:00Z", "rps": 5.0, "cpu_usage": 0.08, "memory_usage": 0.42, "latency_p90": 50.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 10.0, "label": 1},
+        {"timestamp": "2026-07-17T12:45:00Z", "rps": 5.1, "cpu_usage": 0.08, "memory_usage": 0.42, "latency_p90": 51.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 12.0, "label": 1},
+        {"timestamp": "2026-07-17T12:50:00Z", "rps": 4.8, "cpu_usage": 0.07, "memory_usage": 0.42, "latency_p90": 48.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 8.0,  "label": 1},
+        {"timestamp": "2026-07-17T12:55:00Z", "rps": 5.0, "cpu_usage": 0.08, "memory_usage": 0.42, "latency_p90": 50.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 10.0, "label": 1},
+        {"timestamp": "2026-07-17T13:00:00Z", "rps": 150.0, "cpu_usage": 0.80, "memory_usage": 0.48, "latency_p90": 120.0, "error_rate": 6.0, "client_error_rate": 0.0, "kafka_lag": 20.0, "label": -1},
+        {"timestamp": "2026-07-17T13:05:00Z", "rps": 152.0, "cpu_usage": 0.82, "memory_usage": 0.49, "latency_p90": 125.0, "error_rate": 5.8, "client_error_rate": 0.0, "kafka_lag": 25.0, "label": -1},
+        {"timestamp": "2026-07-17T13:10:00Z", "rps": 148.0, "cpu_usage": 0.79, "memory_usage": 0.49, "latency_p90": 118.0, "error_rate": 5.5, "client_error_rate": 0.0, "kafka_lag": 18.0, "label": -1}
+      ]
+    },
+    {
+      "scenario_name": "high_load_healthy",
+      "service": "checkout",
+      "data": [
+        {"timestamp": "2026-07-17T12:00:00Z", "rps": 5.0, "cpu_usage": 0.08, "memory_usage": 0.40, "latency_p90": 50.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 10.0, "label": 1},
+        {"timestamp": "2026-07-17T12:05:00Z", "rps": 5.2, "cpu_usage": 0.08, "memory_usage": 0.40, "latency_p90": 52.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 12.0, "label": 1},
+        {"timestamp": "2026-07-17T12:10:00Z", "rps": 4.8, "cpu_usage": 0.07, "memory_usage": 0.40, "latency_p90": 48.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 9.0,  "label": 1},
+        {"timestamp": "2026-07-17T12:15:00Z", "rps": 5.1, "cpu_usage": 0.08, "memory_usage": 0.40, "latency_p90": 51.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 11.0, "label": 1},
+        {"timestamp": "2026-07-17T12:20:00Z", "rps": 5.0, "cpu_usage": 0.08, "memory_usage": 0.41, "latency_p90": 50.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 10.0, "label": 1},
+        {"timestamp": "2026-07-17T12:25:00Z", "rps": 5.3, "cpu_usage": 0.08, "memory_usage": 0.41, "latency_p90": 53.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 13.0, "label": 1},
+        {"timestamp": "2026-07-17T12:30:00Z", "rps": 4.9, "cpu_usage": 0.08, "memory_usage": 0.41, "latency_p90": 49.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 10.0, "label": 1},
+        {"timestamp": "2026-07-17T12:35:00Z", "rps": 5.2, "cpu_usage": 0.08, "memory_usage": 0.41, "latency_p90": 52.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 11.0, "label": 1},
+        {"timestamp": "2026-07-17T12:40:00Z", "rps": 5.0, "cpu_usage": 0.08, "memory_usage": 0.42, "latency_p90": 50.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 10.0, "label": 1},
+        {"timestamp": "2026-07-17T12:45:00Z", "rps": 5.1, "cpu_usage": 0.08, "memory_usage": 0.42, "latency_p90": 51.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 12.0, "label": 1},
+        {"timestamp": "2026-07-17T12:50:00Z", "rps": 4.8, "cpu_usage": 0.07, "memory_usage": 0.42, "latency_p90": 48.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 8.0,  "label": 1},
+        {"timestamp": "2026-07-17T12:55:00Z", "rps": 5.0, "cpu_usage": 0.08, "memory_usage": 0.42, "latency_p90": 50.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 10.0, "label": 1},
+        {"timestamp": "2026-07-17T13:00:00Z", "rps": 150.0, "cpu_usage": 0.80, "memory_usage": 0.48, "latency_p90": 55.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 15.0, "label": 1},
+        {"timestamp": "2026-07-17T13:05:00Z", "rps": 152.0, "cpu_usage": 0.82, "memory_usage": 0.49, "latency_p90": 54.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 12.0, "label": 1},
+        {"timestamp": "2026-07-17T13:10:00Z", "rps": 148.0, "cpu_usage": 0.79, "memory_usage": 0.49, "latency_p90": 56.0, "error_rate": 0.0, "client_error_rate": 0.0, "kafka_lag": 14.0, "label": 1}
+      ]
+    }
+  ]
+}
