@@ -10,7 +10,7 @@ services = [
     ("deployment/recommendation", 8081, 8080),
     ("deployment/currency", 7001, 8080),
     ("deployment/shipping", 50051, 8080),
-    ("svc/postgresql", 5432, 5432)  # Port-forward PostgreSQL
+    ("svc/postgresql", 5433, 5432)  # Port-forward PostgreSQL (5433 local to avoid conflict with local Postgres)
 ]
 
 print("=== STARTING EKS PORT FORWARDS IN BACKGROUND ===")
