@@ -52,6 +52,7 @@ python-dotenv>=1.0.0   # Load .env file cho GROQ_API_KEY, COPILOT_CONFIRMATION_S
 # ══════════════════════════════════════
 
 psycopg2-binary>=2.9.0
+redis>=5.0.0              # Valkey/Redis client cho session + cache trên EKS production
 
 # ══════════════════════════════════════
 # Testing
