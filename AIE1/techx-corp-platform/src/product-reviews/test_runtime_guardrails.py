@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 from guardrails import evaluator
 from guardrails.input_filter import check_input
 from guardrails.routing import is_clearly_off_topic_question
+import product_reviews_server as server
 
 
 class RuntimeJudgeTests(unittest.TestCase):
@@ -87,9 +88,10 @@ class RuntimeJudgeTests(unittest.TestCase):
                 "message": {
                     "content": [
                         {
-                            "text": json.dumps(
-                                {
-                                    "approved": True,
+                            "toolUse": {
+                                "name": evaluator.JUDGE_TOOL_NAME,
+                                "toolUseId": "tool-1",
+                                "input": {
                                     "claims": [
                                         {
                                             "text": "Customers praise the optics.",
@@ -97,11 +99,9 @@ class RuntimeJudgeTests(unittest.TestCase):
                                             "evidence": ["Great optics"],
                                         }
                                     ],
-                                    "unsupported_claims": 0,
-                                    "contradicted_claims": 0,
                                     "reason": "grounded",
-                                }
-                            )
+                                },
+                            }
                         }
                     ]
                 }
@@ -125,6 +125,40 @@ class RuntimeJudgeTests(unittest.TestCase):
         self.assertEqual(config.connect_timeout, 5.0)
         self.assertEqual(config.read_timeout, 7.5)
         self.assertEqual(config.retries["max_attempts"], 1)
+        self.assertEqual(
+            client.converse.call_args.kwargs["toolConfig"]["toolChoice"]["tool"]["name"],
+            evaluator.JUDGE_TOOL_NAME,
+        )
+
+
+class DeterministicRatingAnswerTests(unittest.TestCase):
+    def setUp(self):
+        self.reviews = [
+            {"score": 5.0},
+            {"score": 5.0},
+            {"score": 4.0},
+            {"score": 4.0},
+            {"score": 4.0},
+        ]
+
+    def test_five_star_percentage_is_computed_from_scores(self):
+        answer = server.answer_deterministic_rating_question(
+            "What percentage of reviewers gave 5 stars?",
+            self.reviews,
+        )
+        self.assertEqual(answer, "2 of 5 reviews gave 5 stars (40%).")
+
+    def test_negative_count_uses_strict_below_three_definition(self):
+        answer = server.answer_deterministic_rating_question(
+            "Có bao nhiêu review tiêu cực?",
+            self.reviews,
+        )
+        self.assertEqual(answer, "0 of 5 reviews scored below 3 stars, so there are no negative reviews.")
+
+    def test_unrelated_question_is_not_intercepted(self):
+        self.assertIsNone(
+            server.answer_deterministic_rating_question("Sản phẩm có bền không?", self.reviews)
+        )
 
 
 class InputFilterObfuscationTests(unittest.TestCase):
