@@ -104,8 +104,20 @@ class AnomalyDetector:
 
     def extract_features_realtime(self, service: str) -> pd.DataFrame:
         """Thu thập dữ liệu 1 giờ gần nhất của service để sinh 13 features."""
+        # Kiểm tra và nạp tệp dữ liệu giả lập cục bộ nếu được cấu hình (phục vụ demo/testing)
+        fake_path = f"datametric/fake_{service}.csv"
+        if os.path.exists(fake_path):
+            try:
+                df = pd.read_csv(fake_path)
+                df["timestamp"] = pd.to_datetime(df["timestamp"])
+                logger.info(f"[SIMULATION] Loaded fake metric file for {service} from local disk: {fake_path}")
+                return df
+            except Exception as e:
+                logger.error(f"[SIMULATION] Failed to read fake metric file {fake_path}: {e}")
+
         end_time = time.time()
         start_time = end_time - 3600  # 1 giờ trước
+        
         
         # PromQL
         queries = {
