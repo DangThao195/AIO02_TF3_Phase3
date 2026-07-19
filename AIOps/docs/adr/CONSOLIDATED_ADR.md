@@ -2,7 +2,7 @@
 
 - **Trạng thái**: Accepted (Hoàn chỉnh)
 - **Ngày cập nhật cuối**: 2026-07-17
-- **Tác giả / Ký tên**: Team AIO02 (Task Force 3)
+- **Tác giả / Ký tên**: Hảo (Leader team AIOps)
 - **Phạm vi tác động**: Toàn bộ hệ thống AIOps Engine, Tầng AI, và Hạ tầng Giám sát/Tự động Phục hồi (Remediation) trên cụm EKS.
 
 ---

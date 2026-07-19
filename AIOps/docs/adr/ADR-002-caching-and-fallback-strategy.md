@@ -2,7 +2,7 @@
 
 - **Trạng thái**: Accepted
 - **Ngày lập**: 2026-07-06
-- **Tác giả / Ký tên**: Team AIO02 (Task Force 3)
+- **Tác giả / Ký tên**: Hảo (Leader team AIOps)
 - **Phạm vi tác động**: Microservice `product-reviews`, Tầng AI (AIE & AIOps)
 
 ---
