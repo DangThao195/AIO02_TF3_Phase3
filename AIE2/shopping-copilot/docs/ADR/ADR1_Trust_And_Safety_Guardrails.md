@@ -3,7 +3,7 @@
 - **Trạng thái:** Accepted
 - **Ngày:** 2026-07-15
 - **Tác giả:** TF3 / AIE2
-- **Người chịu trách nhiệm (Deciders):** Dang Thao
+- **Người chịu trách nhiệm (Deciders):** Bùi Lê Tuấn
 
 ---
 
