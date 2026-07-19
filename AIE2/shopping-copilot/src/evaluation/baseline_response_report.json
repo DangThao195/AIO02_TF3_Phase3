@@ -5,9 +5,9 @@
   "passed_cases": 10,
   "metrics": {
     "accuracy_rate": 1.0,
-    "avg_score_10": 8.0,
-    "avg_latency_sec": 11.18,
-    "total_time_sec": 120.56
+    "avg_score_10": 8.2,
+    "avg_latency_sec": 11.064,
+    "total_time_sec": 132.74
   },
   "judge_method_distribution": {
     "llm": 10,
@@ -19,7 +19,7 @@
       "total": 9,
       "passed": 9,
       "accuracy": 1.0,
-      "avg_score": 8.0
+      "avg_score": 8.22
     },
     "contextual": {
       "total": 1,
@@ -28,5 +28,117 @@
       "avg_score": 8.0
     }
   },
+  "all_samples": [
+    {
+      "id": "RES_SGL_001",
+      "kind": "single_intent",
+      "passed": true,
+      "score": 8,
+      "input_text": "Cho tôi xem các loại ống nhòm",
+      "reply": "Rất tiếc, hiện tại tôi không thể hiển thị danh sách các loại ống nhòm do hệ thống gặp sự cố kỹ thuật. Vui lòng thử lại sau. Bạn có thể tìm kiếm các sản phẩm khác hoặc liên hệ với bộ phận hỗ trợ để được giúp đỡ thêm.",
+      "judge_reason": "The system correctly understood the request and responded with a polite error message due to a technical issue, matching the database evidence.",
+      "judge_method": "llm",
+      "latency_sec": 11.87
+    },
+    {
+      "id": "RES_SGL_002",
+      "kind": "single_intent",
+      "passed": true,
+      "score": 10,
+      "input_text": "Danh sách toàn bộ sản phẩm cửa hàng",
+      "reply": "Xin lỗi, hiện tại tôi không thể hiển thị danh sách toàn bộ sản phẩm cửa hàng do hệ thống đang gặp sự cố kỹ thuật. Vui lòng thử lại sau. Bạn có thể tìm kiếm sản phẩm cụ thể bằng tên hoặc danh mục để xem thông tin chi tiết.",
+      "judge_reason": "The system correctly understood the request, apologized for the technical issue, and provided an alternative solution.",
+      "judge_method": "llm",
+      "latency_sec": 11.91
+    },
+    {
+      "id": "RES_SGL_003",
+      "kind": "single_intent",
+      "passed": true,
+      "score": 8,
+      "input_text": "Tìm phụ kiện giá rẻ",
+      "reply": "Rất tiếc, hiện tại tôi không thể tìm phụ kiện giá rẻ do hệ thống gặp sự cố kỹ thuật. Vui lòng thử lại sau hoặc khám phá các sản phẩm khác.",
+      "judge_reason": "The system correctly understood the request and responded with a polite error message due to a technical issue, matching the database evidence.",
+      "judge_method": "llm",
+      "latency_sec": 12.52
+    },
+    {
+      "id": "RES_SGL_006",
+      "kind": "single_intent",
+      "passed": true,
+      "score": 8,
+      "input_text": "Find me a telescope under $500",
+      "reply": "Unfortunately, I am unable to find any telescopes under $500 at this moment due to a technical issue with our database. Please try again later or explore other products within our catalog.",
+      "judge_reason": "The system correctly understood the request and responded with a polite error message due to a technical issue with the database.",
+      "judge_method": "llm",
+      "latency_sec": 11.84
+    },
+    {
+      "id": "RES_SGL_008",
+      "kind": "single_intent",
+      "passed": true,
+      "score": 8,
+      "input_text": "Có sản phẩm nào bán chạy nhất không?",
+      "reply": "Hiện tại, chúng tôi không thể cung cấp danh sách sản phẩm bán chạy nhất do lỗi kỹ thuật. Vui lòng thử lại sau hoặc khám phá các sản phẩm khác trong danh mục của chúng tôi.",
+      "judge_reason": "The system correctly understood the request and responded with a polite error message due to a technical issue, matching the database evidence.",
+      "judge_method": "llm",
+      "latency_sec": 12.18
+    },
+    {
+      "id": "RES_SGL_009",
+      "kind": "single_intent",
+      "passed": true,
+      "score": 8,
+      "input_text": "Tìm kính thiên văn giá rẻ",
+      "reply": "Rất tiếc, hiện tại tôi không thể tìm thấy kính thiên văn giá rẻ cho bạn do một sự cố kỹ thuật. Vui lòng thử lại sau hoặc khám phá các sản phẩm khác.",
+      "judge_reason": "The system correctly understood the request and responded with a polite error message due to a technical issue, matching the database evidence.",
+      "judge_method": "llm",
+      "latency_sec": 11.79
+    },
+    {
+      "id": "RES_SGL_017",
+      "kind": "single_intent",
+      "passed": true,
+      "score": 8,
+      "input_text": "Find me a telescope under $200",
+      "reply": "Unfortunately, I am unable to find any telescopes under $200 at this moment due to a technical issue. Please try again later or explore other products within our catalog.",
+      "judge_reason": "The system correctly understood the request and responded with a polite error message due to a technical issue, matching the database evidence.",
+      "judge_method": "llm",
+      "latency_sec": 11.5
+    },
+    {
+      "id": "RES_SGL_027",
+      "kind": "single_intent",
+      "passed": true,
+      "score": 8,
+      "input_text": "Find me a telescope under $100",
+      "reply": "Unfortunately, I am currently unable to find telescopes under $100 due to a technical issue with our database. Please try again later or explore other products within our catalog.",
+      "judge_reason": "The system correctly understood the request and responded with a polite error message due to a technical issue with the database.",
+      "judge_method": "llm",
+      "latency_sec": 11.6
+    },
+    {
+      "id": "RES_SGL_048",
+      "kind": "single_intent",
+      "passed": true,
+      "score": 8,
+      "input_text": "Tìm ống nhòm giá rẻ",
+      "reply": "Rất tiếc, hiện tại không thể tìm thấy thông tin về ống nhòm giá rẻ do hệ thống gặp sự cố kỹ thuật. Vui lòng thử lại sau hoặc khám phá các sản phẩm khác.",
+      "judge_reason": "The system responded appropriately to the user's request, apologizing for the technical issue and suggesting an alternative, despite the database error.",
+      "judge_method": "llm",
+      "latency_sec": 12.11
+    },
+    {
+      "id": "RES_CTX_001",
+      "kind": "contextual",
+      "passed": true,
+      "score": 8,
+      "input_text": "Cái nào rẻ hơn?",
+      "reply": "Xin lỗi, nhưng thông tin cụ thể về giá cả của các sản phẩm hiện không khả dụng. Bạn có thể khám phá các sản phẩm khác hoặc tìm kiếm thông tin chi tiết hơn?",
+      "judge_reason": "The system responded with a helpful message asking for clarification due to missing context.",
+      "judge_method": "llm",
+      "latency_sec": 3.32
+    }
+  ],
   "failed_samples": []
 }
