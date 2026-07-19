@@ -3,6 +3,7 @@
 - **Trạng thái:** Accepted
 - **Ngày:** 2026-07-16
 - **Tác giả:** TF3 / AIE2
+- **Người chịu trách nhiệm (Deciders):** Đặng Thị Ngọc Thảo
 
 ---
 

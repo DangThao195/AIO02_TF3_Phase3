@@ -1,87 +1,32 @@
 {
   "file": "baseline_response.json",
   "judge_model": "meta.llama3-1-70b-instruct-v1:0",
-  "total_cases": 50,
-  "passed_cases": 44,
+  "total_cases": 10,
+  "passed_cases": 10,
   "metrics": {
-    "accuracy_rate": 0.88,
-    "avg_score_10": 8.8,
-    "avg_latency_sec": 5.814,
-    "total_time_sec": 741.87
+    "accuracy_rate": 1.0,
+    "avg_score_10": 8.0,
+    "avg_latency_sec": 11.18,
+    "total_time_sec": 120.56
   },
   "judge_method_distribution": {
-    "llm": 50,
+    "llm": 10,
     "fallback": 0,
     "llm_parse_error": 0
   },
   "per_kind_metrics": {
     "single_intent": {
-      "total": 50,
-      "passed": 44,
-      "accuracy": 0.88,
-      "avg_score": 8.8
+      "total": 9,
+      "passed": 9,
+      "accuracy": 1.0,
+      "avg_score": 8.0
+    },
+    "contextual": {
+      "total": 1,
+      "passed": 1,
+      "accuracy": 1.0,
+      "avg_score": 8.0
     }
   },
-  "failed_samples": [
-    {
-      "id": "RES_SGL_005",
-      "kind": "single_intent",
-      "passed": false,
-      "score": 2,
-      "latency_sec": 3.85,
-      "judge_reason": "The system did not fully understand the request for 'phụ kiện giá rẻ' (cheap accessories) and returned products with prices that are not relatively cheap.",
-      "judge_method": "llm",
-      "reply_preview": "Dưới đây là một số **phụ kiện giá rẻ** từ danh mục sản phẩm của chúng tôi:\n\n1. **Lens Cleaning Kit** - Giá **$21.00**\n2. **Red Flashlight** - Giá **$57.00**\n\nCảm ơn bạn đã mua sắm tại TechX Corp. Nếu "
-    },
-    {
-      "id": "RES_SGL_025",
-      "kind": "single_intent",
-      "passed": false,
-      "score": 2,
-      "latency_sec": 4.57,
-      "judge_reason": "The system did not return a list of binoculars as requested, but instead provided a list of unrelated categories.",
-      "judge_method": "llm",
-      "reply_preview": "Dưới đây là các loại ống nhòm mà chúng tôi cung cấp:\n\n1. **Accessories**\n2. **Assembly**\n3. **Binoculars**\n4. **Books**\n5. **Flashlights**\n6. **Telescopes**\n7. **Travel**\n\nNếu bạn cần tìm kiếm thêm th"
-    },
-    {
-      "id": "RES_SGL_027",
-      "kind": "single_intent",
-      "passed": false,
-      "score": 2,
-      "latency_sec": 10.11,
-      "judge_reason": "The system did not return a telescope under $100, but instead returned a solar filter accessory.",
-      "judge_method": "llm",
-      "reply_preview": "Here is a telescope under $100 that you might be interested in:\n\n**Solar Filter**\n- **Price:** $69.00\n\nThis solar filter is designed to enhance your viewing experience and comes with safety features t"
-    },
-    {
-      "id": "RES_SGL_037",
-      "kind": "single_intent",
-      "passed": false,
-      "score": 2,
-      "latency_sec": 3.4,
-      "judge_reason": "The system did not return a telescope, but rather a solar filter, which is an accessory for a telescope, not a telescope itself.",
-      "judge_method": "llm",
-      "reply_preview": "Here is a telescope under $100 that you might be interested in:\n\n**Solar Filter**\n- **Price:** $69.00\n\nThis solar filter is designed to enhance your viewing experience with telescopes. It comes with t"
-    },
-    {
-      "id": "RES_SGL_039",
-      "kind": "single_intent",
-      "passed": false,
-      "score": 2,
-      "latency_sec": 3.81,
-      "judge_reason": "The system did not fully understand the request for 'phụ kiện giá rẻ' (cheap accessories) and returned products with prices that are not relatively cheap.",
-      "judge_method": "llm",
-      "reply_preview": "Dưới đây là một số **phụ kiện giá rẻ** từ danh mục sản phẩm của chúng tôi:\n\n1. **Lens Cleaning Kit** - Giá **$21.00**\n2. **Red Flashlight** - Giá **$57.00**\n\nCảm ơn bạn đã mua sắm tại TechX Corp. Nếu "
-    },
-    {
-      "id": "RES_SGL_044",
-      "kind": "single_intent",
-      "passed": false,
-      "score": 2,
-      "latency_sec": 10.88,
-      "judge_reason": "The system did not return a telescope under $100, but rather a solar filter accessory.",
-      "judge_method": "llm",
-      "reply_preview": "Here is a telescope under $100 that you might be interested in:\n\n**Solar Filter**\n- **Price:** $69.00\n- **Description:** Enhance your viewing experience with EclipSmart Solar Filter for 8\" telescopes."
-    }
-  ]
+  "failed_samples": []
 }

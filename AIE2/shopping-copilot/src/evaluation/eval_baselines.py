@@ -88,14 +88,18 @@ def run_evaluation(
 
         reply = data.get("reply", "")
         status = data.get("status", "error")
+        intent = data.get("intent")
+        evidence = data.get("evidence")
 
-        # ── Đánh giá bằng LLM Judge hoặc Rule-based ──
+        # ── Đánh giá bằng LLM Judge ──
         if judge:
             verdict = judge.judge(
                 case_kind=case_kind,
                 user_input=case["input_text"],
                 reply=reply,
                 status=status,
+                intent=intent,
+                evidence=evidence,
             )
         else:
             h_judge = HeuristicJudge()
@@ -200,7 +204,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     base_dir = Path(__file__).parent
-    use_llm = args.llm
+    use_llm = True  # Luôn dùng LLM Judge theo yêu cầu
 
     if args.file:
         files = [base_dir / args.file]

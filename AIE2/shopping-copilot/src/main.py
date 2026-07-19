@@ -92,6 +92,8 @@ class ChatResponse(BaseModel):
     session_id: str
     token: str | None = None
     steps: List[StepInfo] = []
+    intent: dict | None = None
+    evidence: dict | None = None
 
 class ConfirmRequest(BaseModel):
     session_id: str = Field(..., description="ID phiên chat")
@@ -240,6 +242,8 @@ async def api_chat(req: ChatRequest):
         token=result.get("token"),
         session_id=req.session_id,
         steps=steps,
+        intent=result.get("intent"),
+        evidence=result.get("evidence"),
     )
 
 

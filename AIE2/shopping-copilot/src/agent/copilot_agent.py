@@ -18,7 +18,6 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.guardrails import (
     rate_limiter,
-    check_input,
     check_input_bedrock,
     validate_tool_call,
     request_confirmation,
@@ -390,10 +389,10 @@ class CopilotAgent:
         self._end(s1, a1, "PASS", "Rate OK")
 
         s2, a2 = self._time("InputFilter")
-        if not check_input(user_message).is_safe or not check_input_bedrock(user_message).is_safe:
+        if not check_input_bedrock(user_message).is_safe:
             detail = "Message blocked by safety filters."
             self._end(s2, a2, "BLOCK", detail)
-            return {"status": "error", "reply": detail, "session_id": session_id, "steps": list(self._steps)}
+            return {"status": "error", "reply": detail, "session_id": session_id, "steps": list(self._steps), "intent": {}, "evidence": {}}
         self._end(s2, a2, "PASS", "Safety OK")
 
         session = self._sessions.get_or_create(session_id, user_id)
@@ -408,7 +407,7 @@ class CopilotAgent:
         if intent.get("needs_clarification"):
             reply = intent.get("clarification_question", "Could you please clarify?")
             self._sessions.append_message(session_id, "assistant", reply)
-            return {"status": "ok", "reply": reply, "session_id": session_id, "steps": list(self._steps)}
+            return {"status": "ok", "reply": reply, "session_id": session_id, "steps": list(self._steps), "intent": intent, "evidence": {}}
 
         # L2: Planner
         s4, a4 = self._time("Planner")
@@ -430,12 +429,14 @@ class CopilotAgent:
                 "token": exec_result["token"],
                 "session_id": session_id,
                 "steps": list(self._steps),
+                "intent": intent,
+                "evidence": exec_result.get("evidence", {}),
             }
 
         if exec_result.get("status") == "error":
             reply = exec_result.get("error", "Error executing plan.")
             self._sessions.append_message(session_id, "assistant", reply)
-            return {"status": "error", "reply": reply, "session_id": session_id, "steps": list(self._steps)}
+            return {"status": "error", "reply": reply, "session_id": session_id, "steps": list(self._steps), "intent": intent, "evidence": exec_result.get("evidence", {})}
 
         # L5 & L6: Answer Gen + Guarding
         s6, a6 = self._time("AnswerGenerator")
@@ -453,6 +454,8 @@ class CopilotAgent:
             "reply": reply,
             "session_id": session_id,
             "steps": list(self._steps),
+            "intent": intent,
+            "evidence": exec_result.get("evidence", {}),
         }
 
     async def confirm(self, session_id: str, token: str, confirmed: bool = True) -> Dict[str, Any]:

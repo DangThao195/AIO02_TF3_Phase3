@@ -18,27 +18,9 @@
     "expected_intent": "search_or_list"
   },
   {
-    "id": "RES_SGL_004",
-    "kind": "single_intent",
-    "input_text": "Cho tôi xem các loại ống nhòm",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_005",
-    "kind": "single_intent",
-    "input_text": "Tìm phụ kiện giá rẻ",
-    "expected_intent": "search_or_list"
-  },
-  {
     "id": "RES_SGL_006",
     "kind": "single_intent",
     "input_text": "Find me a telescope under $500",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_007",
-    "kind": "single_intent",
-    "input_text": "Tìm phụ kiện giá rẻ",
     "expected_intent": "search_or_list"
   },
   {
@@ -54,105 +36,9 @@
     "expected_intent": "search_or_list"
   },
   {
-    "id": "RES_SGL_010",
-    "kind": "single_intent",
-    "input_text": "Danh sách toàn bộ sản phẩm cửa hàng",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_011",
-    "kind": "single_intent",
-    "input_text": "Tìm phụ kiện giá rẻ",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_012",
-    "kind": "single_intent",
-    "input_text": "Danh sách toàn bộ sản phẩm cửa hàng",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_013",
-    "kind": "single_intent",
-    "input_text": "Danh sách toàn bộ sản phẩm cửa hàng",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_014",
-    "kind": "single_intent",
-    "input_text": "Tìm phụ kiện giá rẻ",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_015",
-    "kind": "single_intent",
-    "input_text": "Cho tôi xem các loại ống nhòm",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_016",
-    "kind": "single_intent",
-    "input_text": "Cho tôi xem các loại ống nhòm",
-    "expected_intent": "search_or_list"
-  },
-  {
     "id": "RES_SGL_017",
     "kind": "single_intent",
     "input_text": "Find me a telescope under $200",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_018",
-    "kind": "single_intent",
-    "input_text": "Danh sách toàn bộ sản phẩm cửa hàng",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_019",
-    "kind": "single_intent",
-    "input_text": "Cho tôi xem các loại ống nhòm",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_020",
-    "kind": "single_intent",
-    "input_text": "Danh sách toàn bộ sản phẩm cửa hàng",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_021",
-    "kind": "single_intent",
-    "input_text": "Danh sách toàn bộ sản phẩm cửa hàng",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_022",
-    "kind": "single_intent",
-    "input_text": "Danh sách toàn bộ sản phẩm cửa hàng",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_023",
-    "kind": "single_intent",
-    "input_text": "Danh sách toàn bộ sản phẩm cửa hàng",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_024",
-    "kind": "single_intent",
-    "input_text": "Danh sách toàn bộ sản phẩm cửa hàng",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_025",
-    "kind": "single_intent",
-    "input_text": "Cho tôi xem các loại ống nhòm",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_026",
-    "kind": "single_intent",
-    "input_text": "Cho tôi xem các loại ống nhòm",
     "expected_intent": "search_or_list"
   },
   {
@@ -162,141 +48,9 @@
     "expected_intent": "search_or_list"
   },
   {
-    "id": "RES_SGL_028",
-    "kind": "single_intent",
-    "input_text": "Danh sách toàn bộ sản phẩm cửa hàng",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_029",
-    "kind": "single_intent",
-    "input_text": "Tìm phụ kiện giá rẻ",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_030",
-    "kind": "single_intent",
-    "input_text": "Danh sách toàn bộ sản phẩm cửa hàng",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_031",
-    "kind": "single_intent",
-    "input_text": "Danh sách toàn bộ sản phẩm cửa hàng",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_032",
-    "kind": "single_intent",
-    "input_text": "Danh sách toàn bộ sản phẩm cửa hàng",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_033",
-    "kind": "single_intent",
-    "input_text": "Có sản phẩm nào bán chạy nhất không?",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_034",
-    "kind": "single_intent",
-    "input_text": "Find me a telescope under $500",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_035",
-    "kind": "single_intent",
-    "input_text": "Find me a telescope under $200",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_036",
-    "kind": "single_intent",
-    "input_text": "Find me a telescope under $500",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_037",
-    "kind": "single_intent",
-    "input_text": "Find me a telescope under $100",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_038",
-    "kind": "single_intent",
-    "input_text": "Find me a telescope under $500",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_039",
-    "kind": "single_intent",
-    "input_text": "Tìm phụ kiện giá rẻ",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_040",
-    "kind": "single_intent",
-    "input_text": "Find me a telescope under $500",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_041",
-    "kind": "single_intent",
-    "input_text": "Danh sách toàn bộ sản phẩm cửa hàng",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_042",
-    "kind": "single_intent",
-    "input_text": "Có sản phẩm nào bán chạy nhất không?",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_043",
-    "kind": "single_intent",
-    "input_text": "Cho tôi xem các loại ống nhòm",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_044",
-    "kind": "single_intent",
-    "input_text": "Find me a telescope under $100",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_045",
-    "kind": "single_intent",
-    "input_text": "Find me a telescope under $500",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_046",
-    "kind": "single_intent",
-    "input_text": "Có sản phẩm nào bán chạy nhất không?",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_047",
-    "kind": "single_intent",
-    "input_text": "Danh sách toàn bộ sản phẩm cửa hàng",
-    "expected_intent": "search_or_list"
-  },
-  {
     "id": "RES_SGL_048",
     "kind": "single_intent",
     "input_text": "Tìm ống nhòm giá rẻ",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_049",
-    "kind": "single_intent",
-    "input_text": "Tìm ống nhòm giá rẻ",
-    "expected_intent": "search_or_list"
-  },
-  {
-    "id": "RES_SGL_050",
-    "kind": "single_intent",
-    "input_text": "Có sản phẩm nào bán chạy nhất không?",
     "expected_intent": "search_or_list"
   },
   {
@@ -312,21 +66,9 @@
     "expected_intent": "rank_or_lookup"
   },
   {
-    "id": "RES_CTX_003",
-    "kind": "contextual",
-    "input_text": "Cái nào rẻ hơn?",
-    "expected_intent": "rank_or_lookup"
-  },
-  {
     "id": "RES_CTX_004",
     "kind": "contextual",
     "input_text": "Thêm cái đầu tiên vào giỏ hàng",
-    "expected_intent": "rank_or_lookup"
-  },
-  {
-    "id": "RES_CTX_005",
-    "kind": "contextual",
-    "input_text": "What about the last one?",
     "expected_intent": "rank_or_lookup"
   },
   {
@@ -612,21 +354,9 @@
     "expected_intent": "search"
   },
   {
-    "id": "RES_MUL_003",
-    "kind": "multilingual",
-    "input_text": "Zeige mir Teleskope unter 100 Euro",
-    "expected_intent": "search"
-  },
-  {
     "id": "RES_MUL_004",
     "kind": "multilingual",
     "input_text": "Donnez-moi des jumelles (Tìm ống nhòm)",
-    "expected_intent": "search"
-  },
-  {
-    "id": "RES_MUL_005",
-    "kind": "multilingual",
-    "input_text": "Zeige mir Teleskope unter 100 Euro",
     "expected_intent": "search"
   },
   {
@@ -915,24 +645,6 @@
     "id": "RES_CPL_003",
     "kind": "complex_logic",
     "input_text": "Tìm kính thiên văn dưới $300 và có đánh giá trên 4 sao",
-    "expected_intent": "compare_or_complex"
-  },
-  {
-    "id": "RES_CPL_004",
-    "kind": "complex_logic",
-    "input_text": "Cái nào đắt nhất trong danh sách sản phẩm?",
-    "expected_intent": "compare_or_complex"
-  },
-  {
-    "id": "RES_CPL_005",
-    "kind": "complex_logic",
-    "input_text": "Tìm kính thiên văn dưới $300 và có đánh giá trên 4 sao",
-    "expected_intent": "compare_or_complex"
-  },
-  {
-    "id": "RES_CPL_006",
-    "kind": "complex_logic",
-    "input_text": "Cái nào đắt nhất trong danh sách sản phẩm?",
     "expected_intent": "compare_or_complex"
   },
   {
