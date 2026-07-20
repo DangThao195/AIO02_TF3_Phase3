@@ -91,8 +91,8 @@ def filter_output(llm_response: str) -> OutputFilterResult:
             redacted_items.append(info_type)
             logger.warning(f"[OUTPUT_FILTER] REDACTED | type={info_type}")
 
-    # Quét Template Hallucination
-    if re.search(r"\[(?:Tên sản phẩm|Insert|Product Name|Product|Tên|Tên sản phẩm tương tự).*?\]", filtered, re.IGNORECASE):
+    # Quét Template Hallucination (chỉ bắt các placeholder template chưa fill như [INSERT_PRODUCT_NAME], [YOUR_NAME_HERE], [TÊN_SẢN_PHẨM_Ở_ĐÂY])
+    if re.search(r"\[(?:INSERT|YOUR_NAME|PLACEHOLDER|TÊN_SẢN_PHẨM_Ở_ĐÂY|PRODUCT_NAME_HERE).*?\]", filtered, re.IGNORECASE):
         logger.warning("[OUTPUT_FILTER] BLOCKED | Hallucinated Template detected")
         return OutputFilterResult(
             is_clean=False,

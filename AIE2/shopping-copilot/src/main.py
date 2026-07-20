@@ -29,11 +29,16 @@ parser = argparse.ArgumentParser(description="Shopping Copilot API Server")
 parser.add_argument("--mock", action="store_true", help="Chạy với gRPC mock EKS")
 args, _ = parser.parse_known_args()
 
-# ── Logging setup (JSON-friendly format) ──
+# ── Logging setup (Console + FileHandler .txt) ──
+file_handler = logging.FileHandler("uvicorn_execution.txt", mode="w", encoding="utf-8")
+file_handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s"))
+
 logging.basicConfig(
     level=logging.INFO,
-    stream=sys.stdout,
-    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        file_handler
+    ]
 )
 logger = logging.getLogger("main")
 

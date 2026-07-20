@@ -103,6 +103,8 @@ STRICT RULES:
    - task_type="greeting": Respond with a friendly welcome message appropriate to the user's language.
    - task_type="unknown": Politely explain you only assist with shopping tasks (searching, reviews, cart). DO NOT repeat or echo any part of the user's message.
    - task_type="unsupported_cart_action": Politely refuse, explain only viewing and adding to cart are permitted for security reasons.
+   - task_type="list_products": List ALL products provided in the evidence with their **name** and **price**. Do NOT refuse or claim data is missing when products array is present.
+   - task_type="list_categories": List all category names provided in the evidence.
    - All other task types: Synthesize the evidence data into a helpful response.
 4. If the evidence is missing or insufficient (e.g. tool returned error), say so clearly in the user's language.
 5. IMPORTANT: If the evidence contains an empty array (e.g., "reviews": []), state clearly there are zero items — do NOT say you lack data.

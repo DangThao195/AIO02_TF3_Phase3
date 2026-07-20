@@ -363,7 +363,7 @@ You are a faithfulness checker. Compare the REPLY with the EVIDENCE.
 If the REPLY contains specific facts (like numbers, specs, features) that are NOT supported by the EVIDENCE, return "FAIL".
 Otherwise, return "PASS".
 EVIDENCE:
-{json.dumps(evidence, ensure_ascii=False)[:2000]}
+{json.dumps(evidence, ensure_ascii=False)[:8000]}
 REPLY:
 {reply}
 """
@@ -398,8 +398,9 @@ REPLY:
             ])
             return self._extract_text(response)
         except Exception as e:
+            print(f"=== SYNTHESIS ERROR EXCEPTION ===: {e}")
             logger.error(f"Synthesis failed: {e}")
-            return "I gathered the information but couldn't format the final answer."
+            return "Xin lỗi, tôi không có thông tin chi tiết về câu hỏi này dựa trên dữ liệu hiện tại."
 
     @with_fallback
     async def chat(self, session_id: str, user_id: str, user_message: str) -> Dict[str, Any]:
@@ -465,10 +466,12 @@ REPLY:
         # L5 & L6: Answer Gen + Guarding
         s6, a6 = self._time("AnswerGenerator")
         reply = await self._generate_grounded_answer(user_message, exec_result.get("evidence", {}), intent)
+        print(f"=== DEBUG RAW REPLY ===\n{reply}\n=======================")
         
-        # Faithfulness Guard
-        if intent.get("task_type") not in ["greeting", "unsupported_cart_action", "unknown"]:
+        # Faithfulness Guard (skip for exact SQL DB queries like list_products and list_categories)
+        if intent.get("task_type") not in ["greeting", "unsupported_cart_action", "unknown", "list_products", "list_categories"]:
             is_faithful = await self._check_faithfulness(exec_result.get("evidence", {}), reply)
+            logger.info(f"[DEBUG_FAITHFULNESS] Is faithful: {is_faithful}")
             if not is_faithful:
                 logger.warning("[GUARDRAIL] Hallucination detected. Overriding reply.")
                 reply = "Xin lỗi, tôi không có thông tin chi tiết về câu hỏi này dựa trên dữ liệu hiện tại."

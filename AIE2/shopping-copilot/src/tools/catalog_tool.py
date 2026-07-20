@@ -82,10 +82,7 @@ def get_all_products() -> str:
                 "id": str(r.get("id", "")),
                 "name": r.get("name", ""),
                 "price": round(price_u + price_n / 1e9, 2),
-                "price_units": price_u,
-                "price_nanos": price_n,
                 "categories": r.get("categories", ""),
-                "description": (r.get("description", "") or "")[:120],
             })
 
         return json.dumps({
