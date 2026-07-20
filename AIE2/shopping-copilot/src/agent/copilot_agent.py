@@ -18,6 +18,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.guardrails import (
     rate_limiter,
+    check_input,
     check_input_bedrock,
     validate_tool_call,
     request_confirmation,
@@ -351,6 +352,29 @@ class CopilotAgent:
 
         return {"status": "success", "evidence": evidence}
 
+    async def _check_faithfulness(self, evidence: dict, reply: str) -> bool:
+        if not self.llm or not evidence:
+            return True
+        if "sự cố kỹ thuật" in reply.lower() or "không có thông tin" in reply.lower() or len(reply) < 30:
+            return True
+        
+        prompt = f"""
+You are a faithfulness checker. Compare the REPLY with the EVIDENCE.
+If the REPLY contains specific facts (like numbers, specs, features) that are NOT supported by the EVIDENCE, return "FAIL".
+Otherwise, return "PASS".
+EVIDENCE:
+{json.dumps(evidence, ensure_ascii=False)[:2000]}
+REPLY:
+{reply}
+"""
+        try:
+            response = await self.llm.ainvoke([HumanMessage(content=prompt)])
+            text = self._extract_text(response).strip().upper()
+            return "FAIL" not in text
+        except Exception as e:
+            logger.error(f"Faithfulness check failed: {e}")
+            return True
+
     # LAYER 5 & 6: Answer Generator + Grounding
     async def _generate_grounded_answer(self, user_message: str, evidence: dict, intent: dict) -> str:
         if not self.llm:
@@ -442,6 +466,13 @@ class CopilotAgent:
         s6, a6 = self._time("AnswerGenerator")
         reply = await self._generate_grounded_answer(user_message, exec_result.get("evidence", {}), intent)
         
+        # Faithfulness Guard
+        if intent.get("task_type") not in ["greeting", "unsupported_cart_action", "unknown"]:
+            is_faithful = await self._check_faithfulness(exec_result.get("evidence", {}), reply)
+            if not is_faithful:
+                logger.warning("[GUARDRAIL] Hallucination detected. Overriding reply.")
+                reply = "Xin lỗi, tôi không có thông tin chi tiết về câu hỏi này dựa trên dữ liệu hiện tại."
+                
         output_filtered = filter_output(reply)
         reply = output_filtered.filtered_response
         self._end(s6, a6, "OK", "Answer generated and filtered")
