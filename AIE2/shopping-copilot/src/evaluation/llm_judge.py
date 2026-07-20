@@ -52,21 +52,22 @@ Respond ONLY with valid JSON: {{"pass": true/false, "score": 0-10, "reason": "on
 """,
 
     "factuality": """
-You are a factuality evaluator for an AI shopping assistant that sells telescopes, binoculars, and accessories.
-The user asked about a product feature that is NOT documented (e.g., Bluetooth, IP68, built-in camera on a basic telescope).
-A correct system response should honestly say it doesn't have that information, NOT fabricate a technical spec.
+You are a factuality evaluator for an AI shopping assistant.
+Your job is to verify if the system's claims match the provided evidence (Data Accuracy & Anti-Hallucination).
 
 USER INPUT: {user_input}
+DATABASE EVIDENCE: {evidence}
 SYSTEM RESPONSE: {reply}
 
 A PASS means the system:
-- Admitted it doesn't know / that feature isn't mentioned
-- Redirected to what it DOES know about the product
-- Did NOT make up specs, numbers, or certifications
+- Answered accurately based on the exact figures, names, and features provided in the DATABASE EVIDENCE.
+- If the feature or product is NOT in the DATABASE EVIDENCE (or the evidence is empty/error), it honestly admitted it doesn't know or redirected safely.
+- Did NOT fabricate specs, prices, features, numbers, or certifications that are not present in the evidence.
 
 A FAIL means the system:
-- Invented technical specifications (e.g., "Yes, it has IP67 water resistance")
-- Gave a confident answer about features not in the product description
+- Provided details, specs, or prices that contradict the DATABASE EVIDENCE.
+- Invented technical specifications or features when the evidence lacked that information.
+- Confidently answered about features not found in the evidence.
 
 Respond ONLY with valid JSON: {{"pass": true/false, "score": 0-10, "reason": "one sentence"}}
 """,
@@ -141,40 +142,43 @@ Respond ONLY with valid JSON: {{"pass": true/false, "score": 0-10, "reason": "on
     "contextual": """
 You are a context-awareness evaluator for an AI shopping assistant.
 The user sent a follow-up message that relies on conversational context (e.g., "the first one", "compare those two").
-Since this is tested in isolation (no real prior context), the system may ask for clarification OR attempt an answer.
 
 USER INPUT: {user_input}
+DATABASE EVIDENCE: {evidence}
 SYSTEM RESPONSE: {reply}
 SYSTEM STATUS: {status}
 
 A PASS means the system:
-- Asked for clarification because context is missing, OR
-- Attempted a reasonable response based on available session context
-- Did NOT crash or return a raw Python error
+- Successfully resolved the context and answered accurately based on the DATABASE EVIDENCE.
+- Or, if context was truly missing, politely asked for clarification.
+- The numbers and facts in the response match the DATABASE EVIDENCE perfectly.
 
 A FAIL means the system:
-- Returned a raw internal error message
-- Ignored the request completely with no helpful response
+- Returned a raw internal error message.
+- Answered with hallucinated data that contradicts the DATABASE EVIDENCE.
+- Ignored the request completely with no helpful response.
 
 Respond ONLY with valid JSON: {{"pass": true/false, "score": 0-10, "reason": "one sentence"}}
 """,
 
     "multilingual": """
 You are a multilingual evaluator for an AI shopping assistant.
-The user wrote in a non-English or mixed language. Evaluate if the system understood and responded helpfully.
+The user wrote in a non-English or mixed language. Evaluate if the system understood, responded in the correct language, and faithfully translated facts.
 
 USER INPUT: {user_input}
+DATABASE EVIDENCE: {evidence}
 SYSTEM RESPONSE: {reply}
 SYSTEM STATUS: {status}
 
 A PASS means the system:
-- Understood the shopping intent regardless of language
-- Returned relevant product results or information
-- Responded in the same language as the user (or in Vietnamese as default)
+- Understood the shopping intent regardless of language.
+- Responded in the same language as the user (or in Vietnamese as default).
+- Accurately translated the product information (names, prices, features) from the DATABASE EVIDENCE without altering facts or hallucinating new data.
 
 A FAIL means the system:
-- Completely failed to understand a shopping query due to language barrier
-- Returned empty or error response for a clear shopping request
+- Completely failed to understand a shopping query due to language barrier.
+- Hallucinated facts or prices that do not match the DATABASE EVIDENCE while translating.
+- Returned an error for a valid request instead of politely explaining in the target language.
 
 Respond ONLY with valid JSON: {{"pass": true/false, "score": 0-10, "reason": "one sentence"}}
 """,
@@ -184,18 +188,21 @@ You are a reasoning evaluator for an AI shopping assistant.
 The user made a complex request requiring multi-step reasoning (compare, filter + sort, currency conversion, etc.).
 
 USER INPUT: {user_input}
+PARSED INTENT: {intent}
+DATABASE EVIDENCE: {evidence}
 SYSTEM RESPONSE: {reply}
 SYSTEM STATUS: {status}
 
 A PASS means the system:
-- Attempted to address the complex request meaningfully
-- Provided a structured, reasoned response
-- Did NOT return a generic refusal for a valid complex shopping query
+- Addressed the complex request meaningfully.
+- The reasoning logic (comparison, filtering, math, etc.) is perfectly grounded in the numbers and facts provided in the DATABASE EVIDENCE.
+- If the system could not perform a step due to missing tools or errors in evidence, it politely explained the limitation without hallucinating data.
 
 A FAIL means the system:
-- Completely failed to handle the complexity
-- Returned a generic error or refused without attempting
-- Gave a response completely unrelated to the request
+- Made logical errors or math errors based on the provided DATABASE EVIDENCE.
+- Claimed a product was the cheapest/best when the DATABASE EVIDENCE showed otherwise.
+- Fabricated data to answer the complex query instead of relying on the evidence.
+- Completely failed to handle the request with a raw technical error.
 
 Respond ONLY with valid JSON: {{"pass": true/false, "score": 0-10, "reason": "one sentence"}}
 """,
