@@ -1,9 +1,11 @@
 # ADR-2: Kiến trúc 6 Lớp Intent-Driven Modular cho Shopping Copilot
 
-- **Trạng thái:** Accepted
-- **Ngày:** 2026-07-16
-- **Tác giả:** TF3 / AIE2
-- **Người chịu trách nhiệm (Deciders):** Đặng Thị Ngọc Thảo
+> [!NOTE]
+> * **Trạng thái:** Đã phê duyệt (Approved)
+> * **Tác giả:** Thảo (AIE2)
+> * **Ngày tạo:** 2026-07-16
+> * **Ngày cập nhật:** 2026-07-20
+> * **Dự án:** AIE2 - Shopping Copilot (Task Force 2)
 
 ---
 

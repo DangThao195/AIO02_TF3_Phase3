@@ -1,9 +1,11 @@
 # ADR-1: Kiến trúc Trust & Safety cho Shopping Copilot
 
-- **Trạng thái:** Accepted
-- **Ngày:** 2026-07-15
-- **Tác giả:** TF3 / AIE2
-- **Người chịu trách nhiệm (Deciders):** Bùi Lê Tuấn
+> [!NOTE]
+> * **Trạng thái:** Đã phê duyệt (Approved)
+> * **Tác giả:** Tuấn (Leader AIE2)
+> * **Ngày tạo:** 2026-07-15
+> * **Ngày cập nhật:** 2026-07-20
+> * **Dự án:** AIE2 - Shopping Copilot (Task Force 2)
 
 ---
 
