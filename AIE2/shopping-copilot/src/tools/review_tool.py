@@ -5,6 +5,7 @@ get_product_reviews_tool — Lấy đánh giá sản phẩm theo 2 tầng:
   2. [Fallback] gRPC product-reviews EKS    (cần port-forward localhost:9090)
 """
 import json
+import logging
 import grpc
 from langchain_core.tools import tool
 
@@ -12,6 +13,28 @@ import src.protos.demo_pb2 as demo_pb2
 import src.protos.demo_pb2_grpc as demo_pb2_grpc
 from src.tools.service_config import REVIEWS_ADDR
 from src.tools.search.flow2.kb_client import BedrockRAGStrategy
+from src.guardrails.input_filter import check_input
+
+logger = logging.getLogger("tools.review_tool")
+
+
+def _sanitize_review_description(description: str) -> str:
+    """
+    Lọc injection attempts trong nội dung review trước khi đưa vào context LLM.
+
+    Nếu review chứa câu lệnh tấn công (prompt injection), thay bằng
+    placeholder thay vì để LLM thấy toàn bộ nội dung độc.
+    """
+    if not description:
+        return description
+    result = check_input(description)
+    if not result.is_safe:
+        logger.warning(
+            f"[REVIEW_TOOL] Injection detected in review text | "
+            f"reason={result.blocked_reason} | tier={result.blocked_tier}"
+        )
+        return "[Nội dung review bị xóa: vi phạm chính sách nội dung]"
+    return description
 
 
 def _reviews_via_rag(product_id: str) -> list:
@@ -40,7 +63,7 @@ def _reviews_via_grpc(product_id: str) -> list:
             reviews.append({
                 "username": username,
                 "score": score,
-                "description": rev.description if rev.description else "",
+                "description": _sanitize_review_description(rev.description if rev.description else ""),
             })
         return reviews
     finally:
@@ -63,11 +86,16 @@ def get_product_reviews_tool(product_id: str) -> str:
     try:
         rag_reviews = _reviews_via_rag(product_id)
         if rag_reviews:
+            # Sanitize injection attempts in review descriptions from RAG
+            for r in rag_reviews:
+                if "description" in r:
+                    r["description"] = _sanitize_review_description(r["description"])
             reviews = rag_reviews
             source = "rag"
             print(f"[REVIEW] Using RAG source: {len(reviews)} reviews for {product_id}")
     except Exception as e:
         print(f"[REVIEW] RAG failed: {e}")
+
 
     # ── Fallback: gRPC EKS service ────────────────────────────────────────────
     if not reviews:
