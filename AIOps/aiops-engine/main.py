@@ -25,7 +25,7 @@ evidence_collector = EvidenceCollector()
 diagnostician = LLMDiagnostician()
 handler = RemediationHandler()
 notifier = SlackNotifier()
-correlator = AlertCorrelator()
+correlator = AlertCorrelator(window_seconds=600)  # 10 phút — đủ bao phủ cascade failure chậm
 
 # Bộ đếm số lần chạy hành động chống chạy lặp vô hạn (C6 Invariant 4)
 action_counters = {}  # {incident_id: count}
@@ -41,6 +41,80 @@ simulation_state = SIMULATION_STATE
 # Cấu hình Active Metrics Polling Loop (Chế độ tự động quét chủ động - Mode B)
 ACTIVE_POLLING_ENABLED = True
 POLLING_INTERVAL_SECONDS = 30
+
+
+def enrich_culprit_with_upstream_check(trigger_service: str, lookback_minutes: int = 15) -> str:
+    """
+    Upstream Health Check — Hướng 3: Trace + Prometheus Fallback.
+
+    Khi RCA qua Jaeger trace không tìm được upstream culprit (trace thiếu do sampling,
+    hoặc culprit trả về chính trigger_service), hàm này query Prometheus để xem
+    service upstream nào có error_rate cao nhất trong lookback_minutes qua.
+
+    Quy trình:
+      1. Lấy tất cả upstream dependencies của trigger_service từ NetworkX graph
+         (nx.ancestors = những service mà trigger_service phụ thuộc vào)
+      2. Với mỗi upstream, query Prometheus: max error_rate trong N phút qua
+      3. Upstream nào có error_rate > ngưỡng → candidate culprit
+      4. Trả về upstream có error_rate cao nhất
+      5. Nếu không có upstream nào bị lỗi → giữ nguyên trigger_service
+
+    Args:
+        trigger_service: Service đang bị alert/trigger
+        lookback_minutes: Cửa sổ lookback về quá khứ (mặc định 15 phút)
+
+    Returns:
+        Tên service thực sự là root cause (có thể là trigger_service nếu không tìm được upstream)
+    """
+    # Bỏ qua trong Simulation Mode
+    if os.getenv("AIOPS_SIMULATION_MODE") == "true":
+        return trigger_service
+
+    if trigger_service not in correlator.nx_graph:
+        logger.debug(f"[UpstreamCheck] {trigger_service} not in topology graph, skipping.")
+        return trigger_service
+
+    import networkx as nx
+    upstreams = list(nx.ancestors(correlator.nx_graph, trigger_service))
+    if not upstreams:
+        logger.debug(f"[UpstreamCheck] {trigger_service} has no upstream dependencies.")
+        return trigger_service
+
+    logger.info(f"[UpstreamCheck] Checking {len(upstreams)} upstream(s) of {trigger_service}: {upstreams}")
+
+    best_upstream = None
+    best_error_rate = 0.0
+
+    for upstream in upstreams:
+        # Query max error_rate của upstream trong lookback window
+        # Dùng max_over_time để bắt được spike lỗi dù đã qua
+        query = (
+            f'max_over_time('
+            f'(sum(rate(traces_span_metrics_calls_total{{'
+            f'service_name="{upstream}",span_kind="SPAN_KIND_SERVER",'
+            f'status_code="STATUS_CODE_ERROR"}}[5m])) or vector(0))'
+            f'[{lookback_minutes}m:])'
+        )
+        result = detector.query_prometheus(query)
+        error_rate = detector.parse_query_value(result)
+
+        logger.debug(f"[UpstreamCheck] {upstream}: max_error_rate={error_rate:.5f} in last {lookback_minutes}m")
+
+        if error_rate > best_error_rate:
+            best_error_rate = error_rate
+            best_upstream = upstream
+
+    # Ngưỡng tối thiểu: > 0.001 req/s error để tránh noise
+    ERROR_RATE_THRESHOLD = 0.001
+    if best_upstream and best_error_rate > ERROR_RATE_THRESHOLD:
+        logger.warning(
+            f"[UpstreamCheck] ROOT CAUSE ENRICHED: {trigger_service} → {best_upstream} "
+            f"(max_error_rate={best_error_rate:.5f} in last {lookback_minutes}m)"
+        )
+        return best_upstream
+
+    logger.info(f"[UpstreamCheck] No upstream error found for {trigger_service}, keeping as culprit.")
+    return trigger_service
 
 async def active_metrics_polling_loop():
     logger.info("Starting Active Metrics Polling Loop (Mode B)...")
@@ -152,19 +226,24 @@ async def active_metrics_polling_loop():
                         
                 if anomalous_services:
                     # Chuyển đổi anomalous_services thành danh sách mock alerts để chạy qua correlator
+                    # Ghi lại thời điểm phát hiện riêng cho từng service để correlator tính first-drift đúng
                     mock_alerts = []
                     for service in anomalous_services:
                         if simulation_state["scenario"].startswith("inc"):
                             trace_id = f"mock-{simulation_state['scenario']}"
                         else:
                             trace_id = rca_engine.fetch_latest_trace_id(service)
+                        # Đưa fired_at thực tế vào alert để correlate_alerts_windowed tính first-drift
+                        svc_fired_at = last_proactive_alert_time.get(service, now_ts)
                         mock_alerts.append({
                             "labels": {"service": service, "alertname": "MLProactiveAnomaly", "severity": "warning"},
-                            "annotations": {"trace_id": trace_id}
+                            "annotations": {"trace_id": trace_id},
+                            "fired_at": svc_fired_at
                         })
                     
-                    # Sử dụng Union-Find & Topology Correlation để gom nhóm và xác định culprit gốc
-                    clusters = correlator.correlate_alerts(mock_alerts)
+                    # BUG 1+2 FIX: Dùng correlate_alerts_windowed thay vì correlate_alerts
+                    # → time-window clustering + upstream NetworkX topology scoring
+                    clusters = correlator.correlate_alerts_windowed(mock_alerts)
                     
                     for cluster in clusters:
                         service = cluster["culprit_service"]
@@ -255,7 +334,17 @@ def process_incident_background(incident_id: str, culprit_service: str, trace_id
     Quy trình tự động hóa khép kín chạy ngầm (Giai đoạn 3 -> Giai đoạn 5)
     """
     logger.info(f"--- Processing Incident {incident_id} ---")
-    
+
+    # [Upstream Health Check] Nếu culprit chỉ là service bị trigger mà không có context
+    # upstream rõ ràng từ correlator, thử Prometheus lookback để enrich culprit
+    enriched_culprit = enrich_culprit_with_upstream_check(culprit_service, lookback_minutes=15)
+    if enriched_culprit != culprit_service:
+        logger.warning(
+            f"[Incident {incident_id}] Culprit enriched via Prometheus upstream check: "
+            f"{culprit_service} → {enriched_culprit}"
+        )
+        culprit_service = enriched_culprit
+
     # 1. Giai đoạn 3: Gom logs và traces làm Bằng chứng (Evidence Pack)
     logger.info("Step 1: Generating Evidence Pack...")
     evidence = evidence_collector.build_evidence_pack(culprit_service, alert_time, trace_id)
@@ -267,6 +356,8 @@ def process_incident_background(incident_id: str, culprit_service: str, trace_id
     # Bổ sung thông tin bổ sung vào diagnosis trước khi phân loại rủi ro
     diagnosis["incident_id"] = incident_id
     diagnosis["culprit_service"] = culprit_service
+    diagnosis["trace_id"] = trace_id
+    diagnosis["trace_analysis"] = evidence.get("trace_analysis", culprit_service)
     
     # 3. Giai đoạn 5.1 & 5.2: Bộ lọc an toàn & Phân loại rủi ro (Risk Assessment)
     proposed_action = diagnosis.get("proposed_action", "none")
@@ -359,6 +450,16 @@ def process_proactive_anomaly_background(incident_id: str, culprit_service: str,
     để SRE phê duyệt thủ công qua Slack, không bao giờ tự động hành động.
     """
     logger.info(f"--- [PROACTIVE ML WARNING] Processing early anomaly for {culprit_service} ({incident_id}) ---")
+
+    # [Upstream Health Check] Với proactive scan, culprit là service IF phát hiện lỗi.
+    # Tuy nhiên lỗi có thể bắt nguồn từ upstream dependency — enrich trước khi chạy pipeline.
+    enriched_culprit = enrich_culprit_with_upstream_check(culprit_service, lookback_minutes=15)
+    if enriched_culprit != culprit_service:
+        logger.warning(
+            f"[Proactive {incident_id}] Culprit enriched via Prometheus upstream check: "
+            f"{culprit_service} → {enriched_culprit}"
+        )
+        culprit_service = enriched_culprit
     
     # 1. Thu thập bằng chứng
     logger.info("[PROACTIVE] Step 1: Generating Evidence Pack...")
@@ -374,6 +475,7 @@ def process_proactive_anomaly_background(incident_id: str, culprit_service: str,
     diagnosis["status"] = "proactive_warning"
     diagnosis["alert_time"] = alert_time
     diagnosis["trace_id"] = trace_id
+    diagnosis["trace_analysis"] = evidence.get("trace_analysis", culprit_service)
     
     proposed_action = diagnosis.get("proposed_action", "none")
     
@@ -436,6 +538,8 @@ def process_incident_promotion_background(incident_id: str):
     
     diagnosis["incident_id"] = incident_id
     diagnosis["culprit_service"] = culprit_service
+    diagnosis["trace_id"] = evidence.get("trace_id", "unknown-trace-id")
+    diagnosis["trace_analysis"] = evidence.get("trace_analysis", culprit_service)
     
     # 3. Giai đoạn 5.1 & 5.2: Bộ lọc an toàn & Phân loại rủi ro (Risk Assessment)
     proposed_action = diagnosis.get("proposed_action", "none")
@@ -529,8 +633,22 @@ async def receive_prometheus_alert(payload: AlertmanagerWebhook, background_task
     if not raw_alerts:
         return {"status": "no active firing alerts"}
         
-    # Gom nhóm cảnh báo bằng AlertCorrelator
-    clusters = correlator.correlate_alerts(raw_alerts)
+    # BUG 1+2 FIX: Dùng correlate_alerts_windowed để gom nhóm theo time-window
+    # và chọn culprit bằng upstream NetworkX topology scoring
+    # Alertmanager truyền fired_at qua label "startsAt" — normalize về float timestamp
+    for alert in raw_alerts:
+        if "fired_at" not in alert:
+            starts_at_str = alert.get("labels", {}).get("startsAt", "")
+            if starts_at_str:
+                try:
+                    from datetime import datetime, timezone
+                    dt = datetime.fromisoformat(starts_at_str.replace("Z", "+00:00"))
+                    alert["fired_at"] = dt.timestamp()
+                except Exception:
+                    alert["fired_at"] = time.time()
+            else:
+                alert["fired_at"] = time.time()
+    clusters = correlator.correlate_alerts_windowed(raw_alerts)
     
     for idx, cluster in enumerate(clusters):
         incident_id = f"INC-{int(time.time())}-{idx}"
@@ -700,6 +818,161 @@ async def simulate_remediate():
 @app.get("/simulate/state")
 async def simulate_state_endpoint():
     return simulation_state
+
+
+from typing import List
+
+class MetricPoint(BaseModel):
+    timestamp: str
+    rps: float
+    cpu_usage: float
+    memory_usage: float
+    latency_p90: float
+    error_rate: float
+    client_error_rate: float
+    kafka_lag: float
+    label: int
+
+class ReplayPayload(BaseModel):
+    service: str
+    data: List[MetricPoint]
+
+@app.post("/simulate/replay")
+async def simulate_replay(payload: ReplayPayload):
+    import pandas as pd
+    import numpy as np
+    
+    service = payload.service
+    records = [p.model_dump() for p in payload.data]
+    
+    if not records:
+        raise HTTPException(status_code=400, detail="Empty data list")
+        
+    # 1. Convert to DataFrame
+    df = pd.DataFrame(records)
+    df["timestamp"] = pd.to_datetime(df["timestamp"])
+    df = df.sort_values("timestamp").reset_index(drop=True)
+    
+    # 2. Derived features calculation
+    df["error_ratio"] = df["error_rate"] / (df["rps"] + 1e-5)
+    df["client_error_ratio"] = df["client_error_rate"] / (df["rps"] + 1e-5)
+    df["rolling_median_1h"] = df["latency_p90"].rolling(window=12, min_periods=1).median()
+    df["latency_deviation"] = df["latency_p90"] / (df["rolling_median_1h"] + 1e-5)
+    df["rps_delta"] = df["rps"] - df["rps"].shift(1).fillna(0)
+    df["cpu_per_rps"] = df["cpu_usage"] / (df["rps"] + 1e-5)
+    df["memory_growth"] = df["memory_usage"] - df["memory_usage"].shift(6).fillna(0)
+    df["kafka_lag_growth"] = df["kafka_lag"] - df["kafka_lag"].shift(1).fillna(0)
+    
+    df["hour_of_day"] = df["timestamp"].dt.hour
+    df["day_of_week"] = df["timestamp"].dt.weekday
+    df["is_business_hours"] = ((df["hour_of_day"] >= 8) & (df["hour_of_day"] <= 18) & (df["day_of_week"] < 5)).astype(int)
+    
+    df["rolling_median_rps_1h"] = df["rps"].rolling(window=12, min_periods=1).median()
+    df["is_high_traffic_period"] = ((df["rps"] > 100) & (df["rps"] > 1.5 * df["rolling_median_rps_1h"])).astype(int)
+    
+    df = df.fillna(0)
+    
+    # 3. Model inference
+    feature_cols = [
+        "rps", "cpu_usage", "memory_usage", "latency_p90", "error_rate", "client_error_rate", "kafka_lag",
+        "error_ratio", "client_error_ratio", "latency_deviation", "rps_delta", "cpu_per_rps", "memory_growth", "kafka_lag_growth",
+        "hour_of_day", "day_of_week", "is_business_hours", "is_high_traffic_period"
+    ]
+    
+    predictions = []
+    scores = []
+    
+    model = detector.models.get(service)
+    
+    for idx, row in df.iterrows():
+        X_t = row[feature_cols].values.reshape(1, -1)
+        if model:
+            pred = int(model.predict(X_t)[0])
+            score = float(model.decision_function(X_t)[0])
+        else:
+            pred = 1
+            score = 0.0
+        
+        predictions.append(pred)
+        scores.append(score)
+    df["prediction"] = predictions
+    df["anomaly_score"] = scores
+    
+    # Calculate SLO Burn Rate metrics for each row
+    df["burn_rate_5m"] = df["error_ratio"] * 1000.0
+    df["rolling_error_rate_1h"] = df["error_rate"].rolling(window=12, min_periods=1).mean()
+    df["rolling_rps_1h"] = df["rps"].rolling(window=12, min_periods=1).mean()
+    df["rolling_error_ratio_1h"] = df["rolling_error_rate_1h"] / (df["rolling_rps_1h"] + 1e-5)
+    df["burn_rate_1h"] = df["rolling_error_ratio_1h"] * 1000.0
+    df["slo_breached"] = (df["burn_rate_5m"] >= 14.4) & (df["burn_rate_1h"] >= 14.4)
+    
+    # 4. Metrics evaluation
+    # 4. Metrics evaluation (excludign warmup rows to let sliding window features stabilize)
+    warmup = 12
+    eval_df = df.iloc[warmup:] if len(df) > warmup else df
+    
+    tp = int(((eval_df["prediction"] == -1) & (eval_df["label"] == -1)).sum())
+    fp = int(((eval_df["prediction"] == -1) & (eval_df["label"] == 1)).sum())
+    fn = int(((eval_df["prediction"] == 1) & (eval_df["label"] == -1)).sum())
+    tn = int(((eval_df["prediction"] == 1) & (eval_df["label"] == 1)).sum())
+    
+    precision = float(tp) / (tp + fp) if (tp + fp) > 0 else 1.0
+    recall = float(tp) / (tp + fn) if (tp + fn) > 0 else 1.0
+    
+    # Lead-Time calculation:
+    first_label_idx = None
+    first_pred_idx = None
+    
+    # Scan sequentially starting from warmup index
+    start_idx = warmup if len(df) > warmup else 0
+    for idx in range(start_idx, len(df)):
+        row = df.iloc[idx]
+        if row["label"] == -1 and first_label_idx is None:
+            first_label_idx = idx
+        if row["prediction"] == -1 and first_pred_idx is None:
+            first_pred_idx = idx
+            
+    lead_time_seconds = 0.0
+    lead_time_cycles = 0
+    if first_label_idx is not None and first_pred_idx is not None:
+        lead_time_cycles = first_pred_idx - first_label_idx
+        t_label = df.iloc[first_label_idx]["timestamp"]
+        t_pred = df.iloc[first_pred_idx]["timestamp"]
+        lead_time_seconds = (t_pred - t_label).total_seconds()
+        
+    results_detail = []
+    for idx, row in df.iterrows():
+        results_detail.append({
+            "timestamp": row["timestamp"].isoformat(),
+            "rps": float(row["rps"]),
+            "latency_p90": float(row["latency_p90"]),
+            "error_rate": float(row["error_rate"]),
+            "label": int(row["label"]),
+            "prediction": int(row["prediction"]),
+            "anomaly_score": float(row["anomaly_score"]),
+            "burn_rate_5m": float(row["burn_rate_5m"]),
+            "burn_rate_1h": float(row["burn_rate_1h"]),
+            "slo_breached": bool(row["slo_breached"])
+        })
+        
+    return {
+        "status": "evaluated",
+        "service": service,
+        "metrics": {
+            "precision": precision,
+            "recall": recall,
+            "lead_time_cycles": lead_time_cycles,
+            "lead_time_seconds": lead_time_seconds,
+            "confusion_matrix": {
+                "true_positives": tp,
+                "false_positives": fp,
+                "false_negatives": fn,
+                "true_negatives": tn
+            },
+            "slo_breaches_detected": int(eval_df["slo_breached"].sum())
+        },
+        "details": results_detail
+    }
 
 @app.get("/mock-prometheus/api/v1/query")
 async def mock_prometheus_query(query: str):

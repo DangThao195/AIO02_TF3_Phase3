@@ -2,20 +2,24 @@ import logging
 import json
 import os
 import hashlib
+import time
+import networkx as nx
 from datetime import datetime, timezone
 
 logger = logging.getLogger("AIOpsEngine.AlertCorrelator")
 
 class AlertCorrelator:
-    def __init__(self, max_hop=2, config_path="services.json"):
+    def __init__(self, max_hop=2, config_path="services.json", window_seconds=600):
         self.max_hop = max_hop
-        
+        self.window_seconds = window_seconds
+
         # Tìm đường dẫn file config thích hợp
         if not os.path.exists(config_path):
             config_path = os.path.join("aiops-engine", config_path)
-            
+
         self.config_path = config_path
         self.service_graph = {}
+        self.nx_graph = nx.DiGraph()   # NetworkX graph, built on reload_graph()
         self.metadata = {
             "graph_version": "none",
             "graph_loaded_at": "none",
@@ -23,7 +27,7 @@ class AlertCorrelator:
             "graph_edge_count": 0,
             "graph_source": "local-json"
         }
-        
+
         # Tải đồ thị lần đầu
         self.reload_graph()
 
@@ -62,6 +66,13 @@ class AlertCorrelator:
                 "graph_edge_count": edges,
                 "graph_source": "manual-json"
             }
+
+            # Build NetworkX DiGraph for upstream traversal (ADR-007)
+            self.nx_graph = nx.DiGraph()
+            for u, neighbors in data.items():
+                for v in neighbors:
+                    self.nx_graph.add_edge(u, v)  # edge: caller → callee (upstream → downstream)
+
             logger.info(f"Successfully loaded service graph version {graph_version} ({len(nodes)} nodes, {edges} edges)")
             return True
         except Exception as e:
@@ -107,12 +118,13 @@ class AlertCorrelator:
         return f"{service}|{alertname}|{severity}"
 
     def select_rca_candidate(self, services: list[str]) -> str:
-        """Lựa chọn culprit tiềm năng nằm ở hạ nguồn sâu nhất (cách xa frontend nhất)."""
+        """[LEGACY] Lựa chọn culprit tiềm năng nằm ở hạ nguồn sâu nhất (cách xa frontend nhất).
+        Kept for backward compatibility with correlate_alerts(). Prefer select_rca_candidate_scored()."""
         if not services:
             return "unknown-service"
         if len(services) == 1:
             return services[0]
-            
+
         best_service = services[0]
         max_dist = -1
         for s in services:
@@ -120,6 +132,98 @@ class AlertCorrelator:
             if dist != 999 and dist > max_dist:
                 max_dist = dist
                 best_service = s
+        return best_service
+
+    def _build_reverse_adj(self) -> dict:
+        """[LEGACY] Kept for internal reference. Prefer nx_graph for traversal."""
+        rev = {}
+        for u, neighbors in self.service_graph.items():
+            for v in neighbors:
+                if v not in rev:
+                    rev[v] = set()
+                rev[v].add(u)
+            if u not in rev:
+                rev[u] = set()
+        return rev
+
+    def _upstream_distance(self, service: str, candidate: str) -> int:
+        """[LEGACY] Kept for backward compat. Prefer nx.ancestors() via select_rca_candidate_scored().
+        Trả về số hop ngược dòng từ service đến candidate, 999 nếu không liên thông."""
+        if service == candidate:
+            return 0
+        rev = self._build_reverse_adj()
+        queue = [(service, 0)]
+        visited = {service}
+        while queue:
+            node, dist = queue.pop(0)
+            for parent in rev.get(node, []):
+                if parent == candidate:
+                    return dist + 1
+                if parent not in visited:
+                    visited.add(parent)
+                    queue.append((parent, dist + 1))
+        return 999
+
+    def select_rca_candidate_scored(
+        self,
+        services_with_time: list[tuple[str, float]]
+    ) -> str:
+        """
+        [BUG 2 FIX — NetworkX] Chọn culprit dựa trên 3 tín hiệu theo ADR-007:
+          1. Upstream score: đếm số victim service nào mà candidate là ancestor
+             (theo NetworkX DiGraph — edge A→B nghĩa là A gọi B, tức B là downstream của A).
+             candidate là upstream của victim ⟺ candidate ∈ nx.ancestors(G_reversed, victim)
+             ⟺ victim ∈ nx.descendants(G, candidate)
+          2. First-drift time: fired_at sớm nhất là culprit khi upstream_score bằng nhau.
+          3. Tie-break cuối: thứ tự alphabet.
+
+        Args:
+            services_with_time: list of (service_name, fired_at_timestamp)
+        Returns:
+            culprit service name
+        """
+        if not services_with_time:
+            return "unknown-service"
+        if len(services_with_time) == 1:
+            return services_with_time[0][0]
+
+        services = [s for s, _ in services_with_time]
+        fired_at = {s: t for s, t in services_with_time}
+        services_set = set(services)
+
+        best_service = services[0]
+        best_upstream = -1
+        best_drift = float("inf")
+
+        for candidate in services:
+            # Ngữ nghĩa graph: u -> v nghĩa là u gọi v (u phụ thuộc v).
+            # nx.ancestors(G, candidate) trả về tất cả node có đường đến candidate
+            # tức là tất cả service phụ thuộc (gọi) candidate → candidate là upstream của chúng.
+            # Candidate nào có nhiều callers/dependents bị lỗi cùng lúc nhất là Root Cause.
+            if candidate in self.nx_graph:
+                dependents = nx.ancestors(self.nx_graph, candidate)
+            else:
+                dependents = set()
+            upstream_score = len(dependents & services_set)
+
+            first_drift = fired_at.get(candidate, float("inf"))
+
+            # Ưu tiên: (1) upstream_score cao hơn thắng,
+            #          (2) nếu bằng nhau → fired_at sớm hơn thắng,
+            #          (3) tie-break cuối: tên alphabet nhỏ hơn thắng
+            if (upstream_score > best_upstream
+                    or (upstream_score == best_upstream and first_drift < best_drift)
+                    or (upstream_score == best_upstream and first_drift == best_drift
+                        and candidate < best_service)):
+                best_upstream = upstream_score
+                best_drift = first_drift
+                best_service = candidate
+
+        logger.info(
+            f"[NetworkX RCA] candidates={[(s, fired_at[s]) for s, _ in services_with_time]} "
+            f"→ culprit={best_service} "
+            f"(upstream_score={best_upstream}, first_drift={best_drift:.3f})"
+        )
         return best_service
 
     def correlate_alerts(self, alerts: list[dict]) -> list[dict]:
@@ -216,4 +320,109 @@ class AlertCorrelator:
             })
 
         logger.info(f"Alert correlation complete. Clustered {len(alerts)} alerts into {len(clusters)} unique incident clusters.")
+        return clusters
+
+    def correlate_alerts_windowed(self, alerts: list[dict]) -> list[dict]:
+        """
+        [BUG 1 + BUG 2 FIX] Correlate alerts với time-window clustering và upstream RCA scoring.
+
+        Quy trình:
+          1. Đọc fired_at từ mỗi alert (key "fired_at", mặc định = now).
+          2. Gom các alert có chênh lệch thời gian <= window_seconds VÀ cùng
+             topology cluster (khoảng cách <= max_hop) vào cùng 1 cluster.
+          3. Chọn culprit bằng select_rca_candidate_scored() (upstream + first-drift).
+
+        Args:
+            alerts: list of alert dicts, mỗi dict có thể chứa key "fired_at" (float timestamp).
+        Returns:
+            list of cluster dicts (giống format correlate_alerts() nhưng culprit đúng hơn).
+        """
+        if not alerts:
+            return []
+
+        now = time.time()
+
+        # --- Bước 1: Normalize và đọc fired_at ---
+        normalized = []
+        for a in alerts:
+            labels = a.get("labels", {})
+            annotations = a.get("annotations", {})
+            service   = labels.get("service", a.get("service", "unknown"))
+            alertname = labels.get("alertname", a.get("alertname", "UnknownAlert"))
+            severity  = labels.get("severity", a.get("severity", "warning"))
+            trace_id  = annotations.get("trace_id", labels.get("trace_id", a.get("trace_id", "mock-trace-id")))
+            fired_at  = float(a.get("fired_at", now))
+            normalized.append({
+                "service": service,
+                "alertname": alertname,
+                "severity": severity,
+                "trace_id": trace_id,
+                "fired_at": fired_at,
+            })
+
+        # --- Bước 2: Dedup bằng fingerprint ---
+        seen_fps: dict[str, dict] = {}
+        for item in normalized:
+            fp = f"{item['service']}|{item['alertname']}|{item['severity']}"
+            if fp not in seen_fps:
+                seen_fps[fp] = {**item, "fingerprint": fp, "count": 1, "raw_alerts": [item]}
+            else:
+                seen_fps[fp]["count"] += 1
+                # Giữ fired_at SỚM nhất (first-drift)
+                if item["fired_at"] < seen_fps[fp]["fired_at"]:
+                    seen_fps[fp]["fired_at"] = item["fired_at"]
+                seen_fps[fp]["raw_alerts"].append(item)
+
+        items = list(seen_fps.values())
+
+        # --- Bước 3: Union-Find gộp bởi (time_window AND topology) ---
+        parent = {item["fingerprint"]: item["fingerprint"] for item in items}
+
+        def find(x: str) -> str:
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            return x
+
+        def union(x: str, y: str) -> None:
+            root_x, root_y = find(x), find(y)
+            if root_x != root_y:
+                parent[root_x] = root_y
+
+        for i, item1 in enumerate(items):
+            for item2 in items[i + 1:]:
+                time_close = abs(item1["fired_at"] - item2["fired_at"]) <= self.window_seconds
+                topo_close = self.get_distance(item1["service"], item2["service"]) <= self.max_hop
+                if time_close and topo_close:
+                    union(item1["fingerprint"], item2["fingerprint"])
+
+        # --- Bước 4: Gom nhóm ---
+        groups: dict[str, list] = {}
+        for item in items:
+            root = find(item["fingerprint"])
+            groups.setdefault(root, []).append(item)
+
+        # --- Bước 5: Chọn culprit bằng upstream scoring ---
+        clusters = []
+        for idx, (root, group_items) in enumerate(groups.items()):
+            services_with_time = [(g["service"], g["fired_at"]) for g in group_items]
+            culprit = self.select_rca_candidate_scored(services_with_time)
+            services = sorted({g["service"] for g in group_items})
+            total_count = sum(g["count"] for g in group_items)
+            trace_id = min(group_items, key=lambda g: g["fired_at"])["trace_id"]
+
+            clusters.append({
+                "cluster_id": f"cluster-{idx:03d}",
+                "alert_count": total_count,
+                "services": services,
+                "alert_names": sorted({g["alertname"] for g in group_items}),
+                "culprit_service": culprit,
+                "trace_id": trace_id,
+                "items": group_items,
+            })
+
+        logger.info(
+            f"[Windowed] Clustered {len(alerts)} alerts into {len(clusters)} clusters "
+            f"(window={self.window_seconds}s, max_hop={self.max_hop})."
+        )
         return clusters
