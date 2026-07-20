@@ -131,6 +131,9 @@ def run_evaluation(
             "latency_sec": round(latency, 2),
             "judge_reason": reason,
             "judge_method": jmethod,
+            # Full content for PM review
+            "input_text": case["input_text"],
+            "reply": reply,
             "reply_preview": reply[:200],
         })
 
@@ -169,7 +172,32 @@ def run_evaluation(
         },
         "judge_method_distribution": judge_method_counts,
         "per_kind_metrics": per_kind,
-        "failed_samples": [r for r in results if not r["passed"]][:20],
+        # Chi tiết từng case: câu hỏi, câu trả lời đầy đủ, kết quả judge
+        "all_samples": [
+            {
+                "id": r["id"],
+                "kind": r["kind"],
+                "passed": r["passed"],
+                "score": r["score"],
+                "input_text": r["input_text"],
+                "reply": r["reply"],
+                "judge_reason": r["judge_reason"],
+                "judge_method": r["judge_method"],
+                "latency_sec": r["latency_sec"],
+            }
+            for r in results
+        ],
+        "failed_samples": [
+            {
+                "id": r["id"],
+                "kind": r["kind"],
+                "input_text": r["input_text"],
+                "reply": r["reply"],
+                "judge_reason": r["judge_reason"],
+                "score": r["score"],
+            }
+            for r in results if not r["passed"]
+        ][:20],
     }
 
     out_file = file_path.with_name(file_path.stem + "_report.json")
