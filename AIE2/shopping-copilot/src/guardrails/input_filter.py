@@ -111,14 +111,17 @@ ATTACK_PATTERNS: List[Tuple[re.Pattern, str]] = [
     (re.compile(r"(chế\s*độ|mode)\s*(nhà\s*phát\s*triển|developer|không\s*giới\s*hạn|tự\s*do)", re.IGNORECASE),
      "JAILBREAK"),
 
-    # ══════════════════════════════════════
-    # Danh mục 4: Delimiter Injection
+    # ── Danh mục 4: Delimiter Injection ──
     # ══════════════════════════════════════
     (re.compile(r"\n\s*(system|assistant)\s*:", re.IGNORECASE),
      "DELIMITER_INJECTION"),
     (re.compile(r"<\|?(system|assistant|im_start)\|?>", re.IGNORECASE),
      "DELIMITER_INJECTION"),
     (re.compile(r"\[INST\]|\[/INST\]|\\<<SYS\\>>", re.IGNORECASE),
+     "DELIMITER_INJECTION"),
+    # Bắt dạng [SYSTEM: ...] hoặc [ASSISTANT: ...] trong ngoặc vuông
+    # (vector phổ biến khi user paste "review" chứa injection)
+    (re.compile(r"\[\s*(system|assistant|inst|prompt|instruction)\s*:", re.IGNORECASE),
      "DELIMITER_INJECTION"),
 
     # ══════════════════════════════════════
