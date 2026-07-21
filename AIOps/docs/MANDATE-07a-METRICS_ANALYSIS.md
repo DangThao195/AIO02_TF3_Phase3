@@ -2,386 +2,348 @@
 ## AIOps Engine · Anomaly Detection · Task Force 3 (Team AIO02)
 
 > **Ticket loại:** Analysis / Design Document
-> **Trạng thái:** Draft
+> **Trạng thái:** v2 — Cập nhật baseline từ EKS thực tế
 > **Tác giả:** AIO02 — AIE1 Team
 > **Ngày tạo:** 20/07/2026
-**Cập nhật lần cuối:** 20/07/2026 — Bổ sung Metric 4 (`memory_usage`) và Metric 5 (`rps`)
+> **Cập nhật lần cuối:** 21/07/2026 — Align toàn bộ baseline với `datametric/*_train.csv` (EKS 14–17/07/2026)
 
+---
+
+## 📌 Nguồn Dữ Liệu Baseline
+
+> **Tất cả baseline trong tài liệu này được đo trực tiếp từ `datametric/*_train.csv`** — dữ liệu thu thập qua `pull_live_prometheus_data.py` từ cụm EKS thực tế, giai đoạn **14/07/2026 00:00 → 17/07/2026 09:30**, step 5 phút, 979 data points/service.
+>
+> Giá trị baseline sử dụng **median** (không phải mean) vì median bền vững hơn với spike ngắn hạn và outlier.
+> Mean được ghi kèm để tham khảo.
 
 ---
 
 ## 1. Phạm Vi & Mục Tiêu
 
-Tài liệu này xác định **5 chỉ số giám sát (metrics) trọng yếu** được lựa chọn để làm input cho mô hình phát hiện bất thường chủ động (**Isolation Forest**) của AIOps Engine.
-
-Với mỗi metric, tài liệu trình bày:
-- **Lý do lựa chọn** — căn cứ vào SLO, lịch sử sự cố và kiến trúc hệ thống.
-- **Baseline "bình thường"** — khoảng giá trị dự kiến trong điều kiện vận hành ổn định, suy luận từ SLO, lịch sử sự cố và đặc tính kiến trúc của từng service. Baseline chính xác sẽ được hiệu chỉnh dần sau khi thu thập đủ telemetry production và postmortem thực tế.
-- **Ngưỡng bất thường** — điều kiện định lượng để coi một điểm dữ liệu là anomaly.
-- **Phương pháp phát hiện** — cơ chế kỹ thuật áp dụng (ML model, derived feature, fallback).
+Tài liệu xác định **5 chỉ số giám sát (metrics) trọng yếu** làm input cho mô hình **Isolation Forest** của AIOps Engine,
+với baseline đo từ EKS thực tế và ngưỡng phát hiện bất thường được căn chỉnh theo đó.
 
 ### Dịch vụ ưu tiên phân tích
 
-Dựa trên `SLO.md` và `INCIDENT_HISTORY.md`, ba service được xem là **trọng yếu nhất**:
-
 | Dịch vụ | Lý do ưu tiên |
 |---|---|
-| **`checkout`** | SLO cứng ≥ 99.0% (cao nhất hệ thống), trực tiếp tạo doanh thu; liên quan INC-1 (checkout chậm + lỗi giờ cao điểm) |
-| **`payment`** | Xử lý giao dịch tài chính; liên quan INC-3 (lỗi thanh toán trong lúc deploy); service stateful có rủi ro OOMKill cao |
-| **`product-catalog`** | SLO non-5xx ≥ 99.5% và p95 latency < 1s; là upstream của toàn bộ luồng duyệt/tìm sản phẩm, có RPS cao trong hệ thống |
+| **`checkout`** | SLO ≥ 99.0% (cao nhất hệ thống), trực tiếp tạo doanh thu; liên quan INC-1 |
+| **`payment`** | Xử lý giao dịch tài chính, service stateful; liên quan INC-3 |
+| **`product-catalog`** | SLO non-5xx ≥ 99.5%, upstream của toàn luồng duyệt/tìm sản phẩm |
 
 ---
 
-## 2. Phân Tích Chi Tiết Từng Metric
+## 2. Bảng Baseline Thực Tế (EKS 14–17/07/2026)
+
+| Service | RPS median | RPS max | CPU median (cores) | CPU max | MEM median | MEM max | Latency P90 median (ms) |
+|---|---|---|---|---|---|---|---|
+| `frontend` | **4.587** | 89.74 | **0.02796** | 0.395 | **0.348** | 1.022 | **33.76** |
+| `checkout` | **0.246** | 2.68 | **0.00389** | 0.023 | **0.203** | 0.332 | **41.20** |
+| `payment` | **0.088** | 2.31 | **0.01975** | 0.032 | **0.345** | 0.651 | **1.80** |
+| `product-catalog` | **2.625** | 44.30 | **0.00495** | 0.042 | **0.210** | 0.578 | **2.50** |
+| `product-reviews` | **0.354** | 3.71 | **0.01959** | 0.143 | **0.532** | 1.317 | **5.65** |
+| `recommendation` | **0.304** | 3.65 | **0.00897** | 0.068 | **0.088** | 0.190 | **5.76** |
+| `shipping` | **0.100** | 4.88 | **0.00072** | 0.004 | **0.071** | 0.156 | **5.08** |
+
+> **Lưu ý đơn vị:**
+> - `latency_p90` trong CSV lưu theo **milliseconds**.
+> - `cpu_usage` = CPU cores thực tế tiêu thụ (không phải %).
+> - `memory_usage` = tỷ lệ 0.0–1.0 (`working_set / memory_limit`). `frontend` và `product-reviews` có lúc > 1.0 do memory limit chưa được set chính xác trên cluster staging.
+> - `error_rate` = 0.0 errors/s trên tất cả service trong giai đoạn thu thập (hệ thống ổn định).
+> - `kafka_lag` = 0.0 trên tất cả service (không có consumer lag).
+
+
+---
+
+## 3. Phân Tích Chi Tiết Từng Metric
 
 ---
 
 ### Metric 1 — `error_rate` · Error Rate (Tỷ Lệ Lỗi Server-side 5xx)
 
-**Service áp dụng:** `checkout`, `payment`, `product-catalog` (và toàn bộ 7 service)
+**Service áp dụng:** Tất cả 7 service
 
-#### 2.1.1 Lý Do Lựa Chọn
+#### Lý Do Lựa Chọn
 
-`error_rate` là **Golden Signal** trực tiếp nhất — mỗi lỗi server-side (5xx) đồng nghĩa một request của người dùng thất bại và tiêu thụ Error Budget SLO. Cụ thể:
+`error_rate` là Golden Signal trực tiếp nhất — mỗi lỗi 5xx đồng nghĩa một request thất bại và tiêu Error Budget SLO.
+- **Checkout SLO ≥ 99.0%:** Error budget chỉ 1% — bất kỳ chuỗi lỗi kéo dài > 1 chu kỳ đều cần điều tra.
+- **INC-1:** tỷ lệ đặt hàng thành công tụt ~95% (error rate ~5%) vào giờ cao điểm.
+- **INC-3:** lỗi thanh toán spike ngắn trong lúc deploy.
 
-- **Checkout SLO ≥ 99.0%:** Error budget chỉ 1%. Bất kỳ chuỗi lỗi nào duy trì `error_ratio > 1%` trong một cửa sổ đo đều có nghĩa là **đã vượt SLO ngay trong chu kỳ đó**.
-- **INC-1** ghi nhận: tỉ lệ đặt hàng thành công tụt xuống ~95% (error rate ~5%) vào giờ cao điểm — hoàn toàn có thể phát hiện sớm nếu monitor `error_rate` với ngưỡng thích hợp.
-- **INC-3** ghi nhận: lỗi thanh toán xuất hiện trong vài phút deploy — spike ngắn trên `payment.error_rate` là dấu hiệu cần bắt được.
+#### Baseline Thực Tế (EKS 14–17/07/2026)
 
-Không monitor error_rate đồng nghĩa với việc chỉ biết SLO bị vi phạm **sau khi tác động đã xảy ra với khách hàng**.
-
-#### 2.1.2 Baseline "Bình Thường"
-
-Baseline được suy luận từ SLO và đặc tính kiến trúc — chưa có telemetry production đủ để đo chính xác:
-
-| Service | Baseline Error Rate dự kiến | Ghi chú |
+| Service | Baseline Error Rate | Ngưỡng cảnh báo |
 |---|---|---|
-| `checkout` | **~0 errors/s** trong điều kiện bình thường | SLO 99.0% cho phép tối đa 1% request lỗi; bất kỳ lỗi kéo dài nào đều đáng điều tra |
-| `payment` | **~0 errors/s** trong điều kiện bình thường | Giao dịch tài chính — bất kỳ 5xx nào đều là sự kiện nghiêm trọng |
-| `product-catalog` | **~0 errors/s** trong điều kiện bình thường | Service stateless, thuần read; lỗi là dấu hiệu bất thường rõ ràng |
+| `frontend` | **0.0 errors/s** (median) | > 0.001 errors/s liên tục 2 chu kỳ (10 phút) |
+| `checkout` | **0.0 errors/s** (median) | > 0.001 errors/s liên tục 2 chu kỳ |
+| `payment` | **0.0 errors/s** (median) | > 0.001 errors/s — bất kỳ lỗi nào đều là sự kiện nghiêm trọng |
+| `product-catalog` | **0.0 errors/s** (median) | > 0.002 errors/s |
+| `product-reviews` | **0.0 errors/s** (median) | > 0.001 errors/s |
+| `shipping` | **0.0 errors/s** (median) | > 0.001 errors/s |
+| `recommendation` | **0.0 errors/s** (median) | > 0.001 errors/s |
 
-- **Derived feature liên quan:** `error_ratio = error_rate / (rps + ε)` — chuẩn hóa lỗi theo tải; baseline bình thường: **< 0.5%** (tức còn dưới ngưỡng SLO budget).
-- Baseline tuyệt đối (số errors/s) sẽ được hiệu chỉnh sau khi có đủ telemetry production và postmortem.
+> **Lưu ý:** Trong 979 data points thực tế, checkout có max error_rate = 0.1625 errors/s (spike cực ngắn), frontend max = 0.089 errors/s. Đây là anomaly spike — không phải baseline bình thường.
 
-#### 2.1.3 Ngưỡng Bất Thường
+#### Ngưỡng Bất Thường
 
-| Điều kiện | Mức độ | Lý giải |
-|---|---|---|
-| `error_rate > 0` liên tục ≥ 2 chu kỳ (10 phút) trên `checkout` hoặc `payment` | **WARNING** | Bất kỳ lỗi nào kéo dài > 1 chu kỳ đều cần điều tra — error budget quá nhỏ |
-| `error_ratio > 1.0%` tại bất kỳ chu kỳ nào trên service trọng yếu | **WARNING** | Vượt ngưỡng SLO checkout (1% budget) |
-| `error_ratio > 2.0%` | **CRITICAL** | Tiêu cạn toàn bộ error budget 24h trong < 1h nếu duy trì |
-| SLO Burn Rate ≥ 14.4× trên cả cửa sổ 5m VÀ 1h | **CRITICAL (SLO)** | Tiêu cạn 100% error budget 30 ngày trong ~50 phút |
-| `error_rate` tăng đột biến > 10× baseline trong 1 chu kỳ | **Isolation Forest anomaly** | Spike ngắn — đặc trưng của lỗi deploy (INC-3 pattern) |
+| Điều kiện | Mức độ |
+|---|---|
+| `error_rate > 0` liên tục ≥ 2 chu kỳ trên `checkout` / `payment` | **WARNING** |
+| `error_ratio = error_rate / rps > 1.0%` trên service trọng yếu | **WARNING** |
+| `error_ratio > 2.0%` | **CRITICAL** |
+| SLO Burn Rate ≥ 14.4× trên cả cửa sổ 5m VÀ 1h | **CRITICAL** |
 
-#### 2.1.4 Phương Pháp Phát Hiện
+#### Phương Pháp Phát Hiện
 
-| Layer | Phương pháp | Chi tiết |
-|---|---|---|
-| **Primary (Proactive)** | Isolation Forest | Features: `error_rate` + `error_ratio`; Model học phân phối bình thường (error = 0) và tự coi mọi spike là outlier |
-| **Secondary (Reactive)** | SLO Burn Rate Alert | `BurnRate = (error_rate / SLO_budget_rate) × 720`; kích hoạt khi ≥ 14.4× trên cả 5m và 1h |
-| **Fallback** | Z-Score | `Z = (error_rate_t - μ_24h) / (σ_24h + ε)`; kích hoạt khi `|Z| ≥ 3.0` và không có model IF |
+- **Primary:** Isolation Forest — features `error_rate` + `error_ratio`
+- **Secondary:** SLO Burn Rate multi-window (reactive)
+- **Fallback:** Z-Score `|Z| ≥ 3.0` khi không có IF model
 
-**Lý do dùng cả `error_rate` lẫn `error_ratio`:** Cùng một giá trị error_rate tuyệt đối sẽ nghiêm trọng hơn nhiều trên service có RPS thấp như `checkout` so với service có RPS cao hơn như `frontend`. `error_ratio` giúp model IF nhận ra sự khác biệt này mà không cần biết số RPS tuyệt đối là bao nhiêu.
 
 ---
 
-### Metric 2 — `latency_p90` · Độ Trễ Phân Vị 90 (P90 Latency)
+### Metric 2 — `latency_p90` · Độ Trễ Phân Vị 90 (ms)
 
-**Service áp dụng chính:** `checkout`, `product-catalog`, `frontend`
+**Service áp dụng chính:** `checkout`, `product-catalog`, `frontend`, `payment`
 
-#### 2.2.1 Lý Do Lựa Chọn
+#### Lý Do Lựa Chọn
 
-`latency_p90` là **Golden Signal** đo trải nghiệm người dùng thực tế. SLO về latency được định nghĩa trực tiếp trong `SLO.md`:
+P90 phản ánh trải nghiệm của 90% người dùng — đủ nhạy để phát hiện suy giảm sớm, ít bị nhiễu bởi outlier đơn lẻ hơn P99.
 
-- **Duyệt sản phẩm (storefront/product-catalog):** p95 latency < 1s → P90 là proxy tốt, giảm nhạy với outlier đơn lẻ so với P95/P99.
-- **INC-1** ghi nhận: "p95 latency checkout vọt lên vài giây" vào giờ cao điểm — latency spike là triệu chứng đầu tiên có thể nhận được trước khi SLO vỡ hẳn.
-- **Tại sao P90 chứ không phải P99 hay P50:**
-  - P99 quá nhạy với outlier cô lập (GC pause, DNS lookup lần đầu) → false alarm cao.
-  - P50 (median) không nhạy với suy giảm ảnh hưởng 10% người dùng → bỏ sót sự cố.
-  - P90 phản ánh trải nghiệm của 90% người dùng — **đủ nhạy, đủ ổn định**.
+#### Baseline Thực Tế (EKS 14–17/07/2026)
 
-#### 2.2.2 Baseline "Bình Thường"
+| Service | Median P90 (ms) | Mean P90 (ms) | Max P90 (ms) | Ngưỡng WARNING |
+|---|---|---|---|---|
+| `frontend` | **33.76 ms** | 24.06 ms | 93.05 ms | > 200 ms hoặc `latency_deviation > 2.0` |
+| `checkout` | **41.20 ms** | 486.07 ms* | 15,000 ms* | > 500 ms hoặc `latency_deviation > 2.0` |
+| `payment` | **1.80 ms** | 1.15 ms | 6.40 ms | > 50 ms hoặc `latency_deviation > 2.0` |
+| `product-catalog` | **2.50 ms** | 2.09 ms | 17.13 ms | > 50 ms hoặc `latency_deviation > 2.0` |
+| `product-reviews` | **5.65 ms** | 546.32 ms* | 6,753.97 ms* | > 200 ms hoặc `latency_deviation > 2.0` |
+| `recommendation` | **5.76 ms** | 4.17 ms | 60.00 ms | > 100 ms hoặc `latency_deviation > 2.0` |
+| `shipping` | **5.08 ms** | 9.03 ms | 3,200 ms* | > 100 ms hoặc `latency_deviation > 2.0` |
 
-Baseline latency được suy luận từ SLO và đặc tính kiến trúc của từng service:
+> **(*) Mean >> Median:** `checkout`, `product-reviews`, `shipping` có mean bị kéo lên rất cao bởi một số spike outlier cực lớn (max 15s, 6.7s, 3.2s). Đây là lý do phải dùng **median làm baseline**, không phải mean. Model IF sẽ học phân phối thực tế từ toàn bộ 979 data points.
 
-| Service | Khoảng latency dự kiến (production) | Ngưỡng cần điều tra |
-|---|---|---|
-| `checkout` | **50–300 ms** (sync, có DB call) | > 1s — INC-1 ghi nhận khách bỏ giỏ khi latency vọt vài giây |
-| `payment` | **100–500 ms** (stateful, I/O DB + downstream) | > 1.5s — giao dịch timeout nguy cơ double-charge |
-| `product-catalog` | **20–150 ms** (read-heavy, có thể cache) | > 700ms — SLO p95 < 1s; P90 > 700ms → P95 khả năng đã vi phạm SLO |
+#### Ngưỡng Bất Thường
 
-> **Lưu ý:** Đây là khoảng ước tính dựa trên đặc tính kiến trúc (sync/async, có DB không, có cache không). Baseline chính xác cần được đo từ telemetry production thực tế và sẽ được cập nhật sau postmortem đầu tiên.
+| Điều kiện | Mức độ |
+|---|---|
+| `latency_deviation = latency_p90 / (rolling_median_1h + ε) > 2.0` | **WARNING** |
+| `latency_deviation > 4.0` | **CRITICAL** |
+| `latency_p90 > 500 ms` trên `checkout` | **WARNING** (SLO erosion) |
+| `latency_p90 > 1000 ms` trên bất kỳ service trọng yếu | **CRITICAL** |
 
-- **Derived feature:** `latency_deviation = latency_p90 / (rolling_median_1h + ε)` — baseline bình thường: **< 2.0** (không vượt quá 2× median 1 giờ gần nhất của chính service đó).
+#### Phương Pháp Phát Hiện
 
-#### 2.2.3 Ngưỡng Bất Thường
+- **Primary:** Isolation Forest — features `latency_p90` + `latency_deviation` (rolling median 1h = 12 data points)
+- **Fallback:** Static threshold — `latency_p90 > 1s` trên `checkout` / `product-catalog`
 
-| Điều kiện | Mức độ | Lý giải |
-|---|---|---|
-| `latency_p90 > 700ms` trên `product-catalog` | **WARNING** | Tiệm cận SLO p95 < 1s; P90 > 700ms → P95 khả năng đã > 1s |
-| `latency_p90 > 1000ms (1s)` trên `checkout` | **WARNING** | INC-1 pattern: latency checkout vọt lên → khách bỏ giỏ |
-| `latency_p90 > 2000ms (2s)` trên bất kỳ service trọng yếu | **CRITICAL** | Trải nghiệm người dùng rõ ràng bị ảnh hưởng |
-| `latency_deviation > 2.0` (gấp 2× median 1h) | **WARNING** | Tăng đột ngột không giải thích được bởi tải bình thường |
-| `latency_deviation > 4.0` (gấp 4× median 1h) | **CRITICAL** | Tương đương spike latency nghiêm trọng |
-| Latency tăng đều qua ≥ 3 chu kỳ liên tiếp (SLO Erosion) | **WARNING** | Xu hướng degradation chậm — khó thấy bằng threshold tĩnh |
-
-#### 2.2.4 Phương Pháp Phát Hiện
-
-| Layer | Phương pháp | Chi tiết |
-|---|---|---|
-| **Primary (Proactive)** | Isolation Forest | Features: `latency_p90` + `latency_deviation`; `latency_deviation` dùng rolling median 1h (12 data points ở step 5m) làm baseline động — tránh báo nhầm khi hệ thống scale up hợp lý |
-| **Trending (Proactive)** | Slope Detection | Kiểm tra `latency_p90` có xu hướng tăng đơn điệu qua ≥ 3 chu kỳ → phát hiện degradation chậm mà ngưỡng tĩnh bỏ sót |
-| **Fallback** | Static Threshold | Hard cutoff: `latency_p90 > 1s` trên `checkout/product-catalog` → alert ngay dù model chưa ready |
-
-**Tại sao không dùng ngưỡng tĩnh duy nhất:** Latency bình thường lúc 3h sáng (RPS thấp) khác latency bình thường lúc 11h (giờ cao điểm). `latency_deviation` chuẩn hóa theo lịch sử 1h của chính service đó, tự thích nghi với pattern tải theo thời gian.
 
 ---
 
-### Metric 3 — `cpu_usage` · Mức Tiêu Thụ CPU (Saturation)
+### Metric 3 — `cpu_usage` · Mức Tiêu Thụ CPU (cores)
 
 **Service áp dụng chính:** `checkout`, `payment`, `product-catalog`
 
-#### 2.3.1 Lý Do Lựa Chọn
+#### Lý Do Lựa Chọn
 
-`cpu_usage` là **Saturation Signal** — đo mức độ bão hòa tài nguyên tính toán. CPU saturation không ảnh hưởng trực tiếp đến người dùng, nhưng là **dấu hiệu cảnh báo sớm** trước khi latency và error rate tăng:
+CPU saturation là dấu hiệu cảnh báo sớm 5–15 phút trước khi latency và error rate tăng:
+- CPU cao + RPS ổn định → nghi ngờ memory pressure, retry loop, deadlock (`cpu_per_rps` tăng).
+- CPU spike + error rate spike đồng thời → deployment issue (INC-3 pattern).
+- CPU sụt về 0 khi có load → pod crash hoặc OOMKill.
 
-- **INC-1** ghi nhận: "số kết nối tới cơ sở dữ liệu cạn khi tải tăng đột biến" → CPU vọt cao kèm RPS tăng đột biến là pattern tiền thân của DB connection exhaustion.
-- **Phát hiện bất thường nội bộ:** `cpu_per_rps = cpu_usage / (rps + ε)` tăng mạnh trong khi RPS không đổi → nghẽn xử lý nội bộ (deadlock, infinite retry loop, memory pressure) mà không thể thấy từ latency/error rate đơn thuần.
-- **INC-3 pattern:** Deploy mới gây CPU spike ngắn khi pod khởi động và xử lý burst request lúc readiness chưa đạt → CPU spike + error rate spike đồng thời = dấu hiệu deployment issue.
-- **Phát hiện service down ngược chiều:** CPU sụt về 0 khi đáng lẽ phải có tải → pod đã dừng nhận traffic (crash, OOMKill).
+#### Baseline Thực Tế (EKS 14–17/07/2026)
 
-#### 2.3.2 Baseline "Bình Thường"
+| Service | CPU median (cores) | CPU mean (cores) | CPU max (cores) | Ngưỡng WARNING |
+|---|---|---|---|---|
+| `frontend` | **0.02796** | 0.04180 | 0.39516 | > 0.14 cores (5× median) |
+| `checkout` | **0.00389** | 0.00459 | 0.02294 | > 0.020 cores (5× median) |
+| `payment` | **0.01975** | 0.01891 | 0.03205 | > 0.099 cores (5× median) |
+| `product-catalog` | **0.00495** | 0.00532 | 0.04165 | > 0.025 cores (5× median) |
+| `product-reviews` | **0.01959** | 0.01983 | 0.14323 | > 0.098 cores (5× median) |
+| `recommendation` | **0.00897** | 0.00929 | 0.06774 | > 0.045 cores (5× median) |
+| `shipping` | **0.00072** | 0.00072 | 0.00436 | > 0.004 cores (5× median) |
 
-Baseline CPU được suy luận từ đặc tính xử lý của từng service — chưa có telemetry production để định lượng chính xác:
+> **Lưu ý:** CPU median và mean rất gần nhau ở hầu hết service — phân phối CPU ổn định hơn latency. Ngoại lệ là `frontend` (mean 0.042 vs median 0.028) do một số burst ngắn kéo mean lên.
 
-| Service | Đặc tính CPU dự kiến | Dấu hiệu cần chú ý |
-|---|---|---|
-| `checkout` | Tương đối thấp (sync handler, DB call là bottleneck) | CPU tăng đột biến khi RPS tăng → coi là tiền thân của DB exhaustion (INC-1) |
-| `payment` | Vừa phải (transaction processing, có retry logic) | `cpu_per_rps` tăng mà RPS ổn định → retry loop hoặc downstream timeout |
-| `product-catalog` | Thấp (read-heavy, stateless) | CPU cao bất thường ngay cả lúc ít request → nghi ngờ background task hoặc memory pressure |
+#### Ngưỡng Bất Thường
 
-- **Derived feature:** `cpu_per_rps = cpu_usage / (rps + ε)` — bất thường khi tăng > 3× so với rolling median 1h của chính service đó, bất kể giá trị tuyệt đối là bao nhiêu.
-- Ngưỡng tuyệt đối (số cores) sẽ được hiệu chỉnh sau khi có đủ data production — model IF sẽ học baseline thực tế từ telemetry.
+| Điều kiện | Mức độ |
+|---|---|
+| `cpu_usage > 5× rolling_median_1h` liên tục ≥ 2 chu kỳ | **WARNING** |
+| `cpu_per_rps > 3× rolling_median_1h` trong khi RPS ổn định | **WARNING** (nghẽn nội bộ) |
+| `cpu_per_rps` tăng đồng thời với `latency_deviation > 2.0` | **CRITICAL** |
+| `cpu_usage` sụt > 80% median trong khi RPS không sụt | **CRITICAL** (pod down) |
 
-#### 2.3.3 Ngưỡng Bất Thường
+#### Phương Pháp Phát Hiện
 
-| Điều kiện | Mức độ | Lý giải |
-|---|---|---|
-| `cpu_usage` vượt 5× rolling median 1h liên tục ≥ 2 chu kỳ (10 phút) | **WARNING** | Tải tăng bất thường hoặc nghẽn nội bộ |
-| `cpu_per_rps` tăng > 3× rolling median 1h trong khi RPS ổn định | **WARNING** | Chi phí CPU/request tăng → nghi ngờ memory pressure, GC storm, hoặc retry loop |
-| `cpu_per_rps` tăng đồng thời với `latency_deviation > 2.0` | **CRITICAL** | Thread contention → latency tăng, SLO bị đe dọa |
-| `cpu_usage` sụt > 80% so với median 1h trong khi RPS không sụt | **CRITICAL** | Service có thể đang crash-loop hoặc bị OOMKill |
-| Z-Score CPU `> 3.0` so với baseline 24h | **WARNING (Fallback)** | Kích hoạt khi model IF không available |
+- **Primary:** Isolation Forest — features `cpu_usage` + `cpu_per_rps`
+- **Fallback:** Z-Score `|Z| ≥ 3.0` so với baseline 24h
 
-#### 2.3.4 Phương Pháp Phát Hiện
-
-| Layer | Phương pháp | Chi tiết |
-|---|---|---|
-| **Primary (Proactive)** | Isolation Forest | Features: `cpu_usage` + `cpu_per_rps`; đặc biệt hiệu quả trong không gian đa chiều với `latency_p90` và `error_rate` — phát hiện correlation bất thường (CPU cao + error cao + latency cao) mà rule đơn lẻ không thấy |
-| **Correlation Check** | Multi-metric Rule | `cpu_per_rps > 3× median` VÀ `latency_deviation > 2.0` → cảnh báo mức CRITICAL dù IF chưa kết luận |
-| **Fallback** | Z-Score | `Z = (cpu_t - μ_24h) / σ_24h`; kích hoạt khi `|Z| ≥ 3.0` — đặc biệt hữu ích trong giai đoạn bootstrap trước khi IF model có đủ data |
-
-**Contextual awareness:** Các feature `hour_of_day`, `is_business_hours`, `is_high_traffic_period` được đưa vào cùng IF model, đảm bảo cùng một mức CPU tiêu thụ lúc 3h sáng được đánh giá khác với lúc 11h trưa giờ cao điểm.
 
 ---
 
-### Metric 4 — `memory_usage` · Tỷ Lệ Sử Dụng Bộ Nhớ (Memory Saturation)
+### Metric 4 — `memory_usage` · Tỷ Lệ Sử Dụng Bộ Nhớ (0.0–1.0)
 
 **Service áp dụng chính:** `payment`, `product-reviews`, `checkout`
 
-#### 2.4.1 Lý Do Lựa Chọn
+#### Lý Do Lựa Chọn
 
-`memory_usage` là **Saturation Signal** thứ hai bên cạnh CPU, và có đặc điểm quan trọng là **xu hướng tích lũy** (không phải spike ngắn) — điều này làm nó vô hình với alert ngưỡng tĩnh nếu chỉ theo dõi giá trị tức thời:
+Memory leak biểu hiện qua xu hướng tăng đều đặn — vô hình với alert ngưỡng tĩnh theo dõi giá trị tức thời:
+- **`payment`** là service stateful (connection pool, transaction context) — nguy cơ OOMKill cao nhất.
+- **`product-reviews`** gọi LLM tạo tóm tắt review — response buffer có thể tích lũy nếu stream chưa đóng.
+- **INC-2:** pod reschedule do memory pressure → state in-memory bị mất.
 
-- **`payment` là service stateful** xử lý giao dịch tài chính. Đặc tính stateful (giữ session, connection pool, transaction context trong memory) đặt ra nguy cơ OOMKill cao hơn các service stateless — khi memory đạt giới hạn, Kubernetes buộc phải kill pod, gây gián đoạn giao dịch đột ngột.
-- **INC-2** ghi nhận: "lớp lưu giỏ hàng chạy đơn lẻ, khi pod bị lên lịch lại thì state trong bộ nhớ mất theo" — memory pressure dẫn đến rescheduling là một trong các trigger. Bài học còn treo: "bản sao/độ bền dữ liệu chưa làm dứt điểm".
-- **`product-reviews`** gọi LLM để tạo tóm tắt review; response từ model AI có thể tích lũy trong bộ nhớ nếu không được giải phóng đúng cách (memory leak do stream chưa đóng, buffer response lớn không được flush).
-- Memory leak thường biểu hiện qua **xu hướng tăng đều đặn** qua nhiều chu kỳ, không phải spike — feature `memory_growth` được thiết kế đặc biệt để bắt pattern này.
+#### Baseline Thực Tế (EKS 14–17/07/2026)
 
-#### 2.4.2 Baseline "Bình Thường"
+| Service | MEM median | MEM mean | MEM max | Ngưỡng WARNING |
+|---|---|---|---|---|
+| `frontend` | **0.348 (34.8%)** | 0.356 | 1.022* | > 0.75 hoặc `memory_growth > 0.05/30 phút` |
+| `checkout` | **0.203 (20.3%)** | 0.207 | 0.332 | > 0.70 |
+| `payment` | **0.345 (34.5%)** | 0.404 | 0.651 | > 0.80 ← stateful service |
+| `product-catalog` | **0.210 (21.0%)** | 0.244 | 0.578 | > 0.75 |
+| `product-reviews` | **0.532 (53.2%)** | 0.562 | 1.317* | > 0.85 ← LLM buffer risk |
+| `recommendation` | **0.088 (8.8%)** | 0.086 | 0.190 | > 0.60 |
+| `shipping` | **0.071 (7.1%)** | 0.092 | 0.156 | > 0.60 |
 
-Baseline được suy luận từ đặc tính kiến trúc của từng service — chưa có telemetry production để định lượng chính xác:
+> **(*) Memory > 1.0:** `frontend` (max 1.022) và `product-reviews` (max 1.317) vượt 100% — đây là dấu hiệu memory limit chưa được set đúng trên cluster staging. **Cần kiểm tra và set lại resource limits trước khi deploy production.**
+>
+> **`payment` median thấp hơn snapshot Baseline_metric.md (53.7% → 34.5%):** Snapshot ngày 14/7 bắt được lúc memory cao sau warm-up. Median 3.5 ngày thực tế thấp hơn và đại diện hơn.
 
-| Service | Đặc tính memory dự kiến | Ngưỡng cảnh báo suy luận |
-|---|---|---|
-| `checkout` | Thấp đến vừa (stateless handler) | > 70% memory limit; `memory_growth > 0.05` trong 30 phút |
-| `payment` | Vừa đến cao (stateful, connection pool, transaction context) | > 85% memory limit — ngưỡng cao hơn do stateful; nhưng `memory_growth` phải được bắt từ sớm |
-| `product-reviews` | Vừa, biến động theo LLM batch size | > 80% memory limit; cần theo dõi đặc biệt sau khi LLM feature go-live |
+#### Ngưỡng Bất Thường
 
-> **Lưu ý:** Ngưỡng tuyệt đối (% memory limit) cần được hiệu chỉnh sau khi có telemetry production. Tốc độ tăng (`memory_growth`) là chỉ số quan trọng hơn giá trị tức thời trong giai đoạn chưa có đủ data.
+| Điều kiện | Mức độ |
+|---|---|
+| `memory_growth = mem_t - mem_{t-6} > 0.05` trong 30 phút | **WARNING** (dấu hiệu leak sớm) |
+| `memory_growth > 0.05` liên tục ≥ 3 lần (90 phút) | **CRITICAL** (leak xác nhận) |
+| `memory_usage > 0.80` trên `payment` | **CRITICAL** (nguy cơ OOMKill) |
+| `memory_usage > 0.85` trên `product-reviews` | **CRITICAL** (LLM buffer accumulation) |
+| Memory tăng đơn điệu qua ≥ 6 chu kỳ liên tiếp | **WARNING (Trend)** |
 
-- **Derived feature:** `memory_growth = memory_t - memory_{t-6}` (delta 30 phút) — baseline bình thường: **< 0.02** (tăng không quá 2 điểm phần trăm trong 30 phút); GC oscillation ngắn hạn (±0.01 trong 1–2 chu kỳ) là bình thường.
+#### Phương Pháp Phát Hiện
 
-#### 2.4.3 Ngưỡng Bất Thường
+- **Primary:** Isolation Forest — features `memory_usage` + `memory_growth`
+- **Trend Detection:** Monotonic increase check qua ≥ 6 chu kỳ
+- **Fallback:** Z-Score trên `memory_growth`
 
-| Điều kiện | Mức độ | Lý giải |
-|---|---|---|
-| `memory_usage > 0.85` trên `payment` | **CRITICAL** | Nguy cơ OOMKill cao; giao dịch đang xử lý có thể bị hủy đột ngột |
-| `memory_usage > 0.80` trên `product-reviews` | **WARNING** | LLM response tích lũy; cần kiểm tra stream/buffer cleanup |
-| `memory_usage > 0.75` trên `checkout` | **WARNING** | Service stateless nên không cần nhiều memory — vượt 75% là bất thường, nghi ngờ session leak |
-| `memory_growth > 0.05` trong 30 phút (6 chu kỳ) | **WARNING** | Tốc độ tích lũy bất thường — dấu hiệu memory leak sớm |
-| `memory_growth > 0.05` liên tục ≥ 3 lần (90 phút) | **CRITICAL** | Memory leak xác nhận — cần intervention trước khi OOMKill |
-| Memory tăng đều đặn qua ≥ 6 chu kỳ mà không giảm | **WARNING (Trend)** | Pattern memory leak kinh điển — phát hiện sớm nhất qua trend, không phải threshold |
-
-#### 2.4.4 Phương Pháp Phát Hiện
-
-| Layer | Phương pháp | Chi tiết |
-|---|---|---|
-| **Primary (Proactive)** | Isolation Forest | Features: `memory_usage` + `memory_growth`; IF học đặc trưng memory tăng dần (pattern bất thường so với normal có GC oscillation) |
-| **Trend Detection** | Monotonic Increase Check | Kiểm tra `memory_usage` tăng đơn điệu qua ≥ 6 chu kỳ liên tiếp (30 phút) → đặc trưng của memory leak, không thể phát hiện bằng ngưỡng tĩnh |
-| **Static Threshold** | Hard cutoff | `memory_usage > 0.85` trên `payment` → alert ngay lập tức, không chờ IF model |
-| **Fallback** | Z-Score trên `memory_growth` | `Z = (growth_t - μ_24h) / σ_24h`; kích hoạt khi `|Z| ≥ 3.0` |
-
-**Tại sao `memory_growth` quan trọng hơn `memory_usage` tuyệt đối:** Với service stateful như `payment`, memory baseline khi production có thể ở mức vừa phải do connection pool và transaction context thường trực. Nếu chỉ dùng ngưỡng tĩnh, có thể phải đợi hệ thống tăng rất nhiều mới biết có vấn đề. `memory_growth` phát hiện xu hướng bất thường sớm hơn, cho đủ thời gian can thiệp trước khi đạt ngưỡng nguy hiểm.
 
 ---
 
-### Metric 5 — `rps` · Request Rate (Lưu Lượng Yêu Cầu)
+### Metric 5 — `rps` · Request Rate (req/s)
 
 **Service áp dụng chính:** `checkout`, `product-catalog`, `frontend`
 
-#### 2.5.1 Lý Do Lựa Chọn
+#### Lý Do Lựa Chọn
 
-`rps` (Requests Per Second) là **Traffic Signal** — đo lưu lượng vào hệ thống. Không phải Golden Signal user-visible như error_rate hay latency, nhưng là **điều kiện tiên quyết** để hiểu mọi metric khác đúng ngữ cảnh:
+RPS là Traffic Signal — điều kiện tiên quyết để hiểu mọi metric khác đúng ngữ cảnh:
+- RPS spike → dấu hiệu sớm nhất của INC-1 (trước khi CPU/latency/error tăng).
+- RPS sụt về 0 đột ngột → service crash hoặc mất kết nối network.
+- `error_ratio`, `cpu_per_rps`, `latency_deviation` đều dùng RPS làm mẫu số — nếu RPS anomaly không được phát hiện, các derived features bị sai lệch.
 
-- **INC-1** ghi nhận: "tải tăng đột biến" vào giờ cao điểm khuyến mãi là nguyên nhân gốc gây DB connection exhaustion → checkout chậm. RPS spike là **dấu hiệu sớm nhất**, xuất hiện trước khi CPU/latency/error tăng.
-- **Phát hiện service down:** RPS sụt về 0 đột ngột trong khi upstream service vẫn hoạt động = service đã crash hoặc mất kết nối network. Không có metric nào khác phát hiện nhanh hơn.
-- **Điều kiện hóa các metric khác:** `error_ratio`, `cpu_per_rps`, `latency_deviation` đều dùng RPS làm mẫu số — nếu RPS = 0 hoặc bất thường, các derived feature này sẽ cho kết quả sai lệch mà IF model cần biết ngữ cảnh.
-- **INC-1 pattern — giờ cao điểm:** Spike RPS tại 11h–13h và 19h–22h (is_high_traffic_period) kết hợp với CPU/latency tăng theo là pattern bình thường; cùng spike đó lúc 3h sáng là anomaly. Feature `rps_delta` + context flags giúp IF phân biệt.
+#### Baseline Thực Tế (EKS 14–17/07/2026)
 
-#### 2.5.2 Baseline "Bình Thường"
+| Service | RPS median | RPS mean | RPS max | RPS p90 | RPS p95 |
+|---|---|---|---|---|---|
+| `frontend` | **4.587** | 6.927 | 89.74 | 10.70 | 24.05 |
+| `checkout` | **0.246** | 0.328 | 2.68 | 0.384 | 1.139 |
+| `payment` | **0.088** | 0.171 | 2.31 | 0.533 | 0.968 |
+| `product-catalog` | **2.625** | 3.918 | 44.30 | 11.483 | 16.204 |
+| `product-reviews` | **0.354** | 0.415 | 3.71 | 0.417 | 1.669 |
+| `recommendation` | **0.304** | 0.364 | 3.65 | 0.929 | 1.600 |
+| `shipping` | **0.100** | 0.291 | 4.88 | 0.503 | 1.897 |
 
-Baseline RPS được suy luận từ vị trí của service trong luồng xử lý — chưa có telemetry production để định lượng chính xác:
+> **`is_high_traffic_period` — LỖI CẦN SỬA:** Condition hiện tại `rps > 100` không bao giờ được trigger trên EKS thật (RPS max toàn hệ thống là 89.74 req/s ở `frontend`). Feature này đang là dead code. Ngưỡng đúng cần dùng là **relative threshold**: `rps > 2.0 × rolling_median_rps_1h` thay vì hard threshold tuyệt đối.
 
-| Service | Vị trí trong luồng & đặc tính tải | Khoảng RPS dự kiến production |
-|---|---|---|
-| `checkout` | Cuối funnel — chỉ user đã thêm giỏ và muốn đặt hàng mới gọi | Thấp hơn `product-catalog` và `frontend` đáng kể; tăng đột biến lúc giờ cao điểm khuyến mãi |
-| `product-catalog` | Gần đầu funnel — mọi request duyệt/tìm sản phẩm đều đi qua | RPS cao trong hệ thống; ổn định theo giờ, tăng rõ giờ cao điểm |
-| `frontend` | Entry point — nhận toàn bộ traffic người dùng | RPS cao nhất hệ thống; biến động lớn nhất theo giờ |
+#### Ngưỡng Bất Thường
 
-> **Lưu ý:** Tỉ lệ tương đối giữa các service (frontend > product-catalog > checkout > payment) ổn định hơn con số tuyệt đối và được dùng làm tín hiệu sanity-check khi phân tích anomaly.
+| Điều kiện | Mức độ |
+|---|---|
+| `rps` sụt > 80% so với rolling_median_1h trong 1 chu kỳ | **CRITICAL** (service có thể down) |
+| `rps = 0` liên tục ≥ 2 chu kỳ trong giờ kinh doanh | **CRITICAL** |
+| `rps_delta > 3× rps_{t-1}` ngoài giờ cao điểm | **WARNING** (spike bất thường) |
+| `rps_delta > 5×` bất kể thời điểm | **CRITICAL** |
+| RPS tăng đồng thời với `cpu_per_rps > 3× median` VÀ `latency_deviation > 2.0` | **CRITICAL** (INC-1 pattern) |
 
-- **Derived feature:** `rps_delta = rps_t - rps_{t-1}` — bất thường khi `|rps_delta| > 50% của rps_{t-1}` trong một chu kỳ 5 phút, ngoài cửa sổ `is_high_traffic_period`.
-- Baseline tuyệt đối sẽ được model IF học từ telemetry production thực tế qua các chu kỳ re-training.
+#### Phương Pháp Phát Hiện
 
-#### 2.5.3 Ngưỡng Bất Thường
+- **Primary:** Isolation Forest — features `rps` + `rps_delta` + context flags
+- **Drop Detection:** `rps < 20% median_1h` liên tục ≥ 2 chu kỳ → immediate alert
+- **Fallback:** Z-Score `|Z| ≥ 3.0` trên `rps_delta`
 
-| Điều kiện | Mức độ | Lý giải |
-|---|---|---|
-| `rps` sụt > 80% so với rolling median 1h trong 1 chu kỳ | **CRITICAL** | Service ngừng nhận traffic — nghi ngờ crash, network partition, hoặc upstream timeout |
-| `rps` = 0 liên tục ≥ 2 chu kỳ (10 phút) trong giờ kinh doanh | **CRITICAL** | Service down — không còn phục vụ request nào |
-| `rps_delta > 3×` của `rps_{t-1}` ngoài `is_high_traffic_period` | **WARNING** | Traffic spike bất thường — nghi ngờ retry storm, bot scan, hoặc upstream misbehavior |
-| `rps_delta > 5×` bất kể thời điểm | **CRITICAL** | Spike cực lớn — nguy cơ DDoS hoặc cascading retry |
-| `rps` tăng đồng thời với `cpu_per_rps > 3× median` VÀ `latency_deviation > 2.0` | **CRITICAL** | INC-1 pattern: overload dẫn đến DB connection exhaustion |
-
-#### 2.5.4 Phương Pháp Phát Hiện
-
-| Layer | Phương pháp | Chi tiết |
-|---|---|---|
-| **Primary (Proactive)** | Isolation Forest | Features: `rps` + `rps_delta` + context flags (`hour_of_day`, `is_high_traffic_period`); IF học rằng spike lúc 11h trưa là bình thường, cùng spike lúc 3h sáng là anomaly |
-| **Drop Detection** | Threshold + Duration | `rps < 20% median_1h` liên tục ≥ 2 chu kỳ → immediate alert, không chờ IF |
-| **Correlation Rule** | Multi-metric | `rps_delta > 3×` VÀ `cpu_per_rps > 3× median` → escalate thành CRITICAL (INC-1 pattern) |
-| **Fallback** | Z-Score trên `rps_delta` | `|Z| ≥ 3.0` trên delta → phát hiện spike/drop bất thường khi model chưa available |
-
-**Tại sao `rps_delta` quan trọng hơn `rps` tuyệt đối:** Cùng một mức RPS có thể bình thường lúc cao điểm nhưng bất thường lúc 2h sáng. `rps_delta` đo tốc độ thay đổi — một spike tăng 10× trong một chu kỳ 5 phút là bất thường bất kể giá trị tuyệt đối. Kết hợp `rps_delta` với context flags (`hour_of_day`, `is_high_traffic_period`) giúp IF phân biệt được tăng tải bình thường theo giờ với spike bất thường.
 
 ---
 
-## 3. Tổng Hợp Ma Trận Metric × Service
+## 4. Tổng Hợp Ma Trận Metric × Service
 
 | Metric | `checkout` | `payment` | `product-catalog` | `product-reviews` | `frontend` | Mức ưu tiên |
 |---|---|---|---|---|---|---|
-| `error_rate` *(Metric 1)* | ✅ CRITICAL | ✅ CRITICAL | ✅ HIGH | ⚠️ MEDIUM | ✅ HIGH | **P0** |
-| `latency_p90` *(Metric 2)* | ✅ CRITICAL | ✅ HIGH | ✅ CRITICAL | ⚠️ MEDIUM | ✅ HIGH | **P0** |
-| `cpu_usage` *(Metric 3)* | ✅ HIGH | ✅ HIGH | ✅ HIGH | ⚠️ MEDIUM | ✅ HIGH | **P1** |
-| `memory_usage` *(Metric 4)* | ✅ HIGH | ✅ CRITICAL (stateful) | ⚠️ MEDIUM | ✅ HIGH (LLM buffer) | ⚠️ MEDIUM | **P1** |
-| `rps` *(Metric 5)* | ✅ CRITICAL | ✅ HIGH | ✅ CRITICAL | ⚠️ MEDIUM | ✅ CRITICAL | **P1** |
-| `kafka_lag`† | ✅ HIGH | — | — | — | — | **P2** |
-
-> †`kafka_lag` không thuộc 5 metrics chính của document này nhưng được đưa vào full feature set của Isolation Forest (18 features theo `datametric_schema.md`). Phân tích đầy đủ dự kiến bổ sung trong phiên bản tiếp theo.
+| `error_rate` | ✅ CRITICAL | ✅ CRITICAL | ✅ HIGH | ⚠️ MEDIUM | ✅ HIGH | **P0** |
+| `latency_p90` | ✅ CRITICAL | ✅ HIGH | ✅ CRITICAL | ⚠️ MEDIUM | ✅ HIGH | **P0** |
+| `cpu_usage` | ✅ HIGH | ✅ HIGH | ✅ HIGH | ⚠️ MEDIUM | ✅ HIGH | **P1** |
+| `memory_usage` | ✅ HIGH | ✅ CRITICAL (stateful) | ⚠️ MEDIUM | ✅ HIGH (LLM buffer) | ⚠️ MEDIUM | **P1** |
+| `rps` | ✅ CRITICAL | ✅ HIGH | ✅ CRITICAL | ⚠️ MEDIUM | ✅ CRITICAL | **P1** |
 
 ---
 
-## 4. Phương Pháp Phát Hiện Tổng Hợp
-
-### 4.1 Kiến Trúc Hai Tầng
-
-```
-                    ┌─────────────────────────────────────────────┐
-                    │           TẦNG 1: PROACTIVE (ML)            │
-                    │                                             │
-                    │   Isolation Forest — 18 features           │
-                    │   ┌──────────────────────────────────────┐  │
-                    │   │  Raw: rps, error_rate, latency_p90,  │  │
-                    │   │       cpu_usage, memory_usage,        │  │
-                    │   │       client_error_rate, kafka_lag    │  │
-                    │   │  Derived: error_ratio, latency_dev,  │  │
-                    │   │       cpu_per_rps, memory_growth...  │  │
-                    │   │  Context: hour, dow, biz_hrs, peak   │  │
-                    │   └──────────────────────────────────────┘  │
-                    │         Output: prediction = -1 → Anomaly   │
-                    │         Confidence: score < -0.3 → HIGH     │
-                    └─────────────────────────────────────────────┘
-                                         │
-                                         ▼ (khi SLO bắt đầu bị ăn mòn)
-                    ┌─────────────────────────────────────────────┐
-                    │           TẦNG 2: REACTIVE (SLO)            │
-                    │                                             │
-                    │   SLO Burn Rate Multi-Window                │
-                    │   BurnRate ≥ 14.4× trên CẢ 5m VÀ 1h        │
-                    │   Output: Immediate Alert → Slack           │
-                    └─────────────────────────────────────────────┘
-```
-
-### 4.2 Lý Do Chọn Isolation Forest
-
-| Tiêu chí | Lý do |
-|---|---|
-| **Unsupervised** | Không cần nhãn lịch sử — chưa có đủ postmortem thực tế để làm supervised learning; IF học phân phối bình thường từ telemetry thu thập được |
-| **Hiệu quả đa chiều** | Hoạt động tốt trên 18 features mà không cần giảm chiều thủ công |
-| **Phát hiện correlation** | Nhận ra tổ hợp bất thường (CPU cao + latency cao + RPS ổn định) mà rule đơn lẻ bỏ sót |
-| **Tốc độ suy luận** | O(n log n) — phù hợp chu kỳ quét 30 giây của Engine |
-| **Baseline tự thích nghi** | CronJob re-train mỗi thứ Hai 2h sáng cập nhật baseline tuần; không cần tune ngưỡng thủ công |
-
-### 4.3 Derived Features Quan Trọng Nhất
+## 5. Derived Features & Context Flags
 
 | Feature | Công thức | Tác dụng |
 |---|---|---|
-| `error_ratio` | `error_rate / (rps + ε)` | Chuẩn hóa lỗi theo tải — tránh false negative khi RPS cao |
+| `error_ratio` | `error_rate / (rps + ε)` | Chuẩn hóa lỗi theo tải |
 | `latency_deviation` | `latency_p90 / (rolling_median_1h + ε)` | Baseline động — tự thích nghi với tải theo giờ |
-| `cpu_per_rps` | `cpu_usage / (rps + ε)` | Phát hiện tăng chi phí xử lý nội bộ không giải thích được |
-| `memory_growth` | `memory_t - memory_{t-6}` (delta 30 phút) | Phát hiện xu hướng leak sớm — quan trọng hơn giá trị tuyệt đối với `payment` |
-| `rps_delta` | `rps_t - rps_{t-1}` (delta 5 phút) | Phát hiện spike/drop đột ngột — điều kiện tiên quyết của INC-1 pattern |
+| `cpu_per_rps` | `cpu_usage / (rps + ε)` | Phát hiện tăng chi phí xử lý nội bộ |
+| `memory_growth` | `mem_t - mem_{t-6}` (delta 30 phút) | Phát hiện xu hướng leak sớm |
+| `rps_delta` | `rps_t - rps_{t-1}` (delta 5 phút) | Phát hiện spike/drop đột ngột |
+| `hour_of_day` | 0–23 | Phân biệt pattern ngày/đêm |
+| `day_of_week` | 0–6 | Phân biệt ngày thường/cuối tuần |
+| `is_business_hours` | 1 nếu 8h–18h ngày thường | Context flag giờ hành chính |
+| `is_high_traffic_period` | **`rps > 2.0 × rolling_median_rps_1h`** *(đã sửa)* | Context flag giờ cao điểm — bỏ hard threshold 100 req/s vì không bao giờ đạt trên EKS thực tế |
 
 ---
 
-## 5. Căn Cứ Quyết Định & Liên Kết Sự Cố
+## 6. Kiến Trúc Phát Hiện Hai Tầng
 
-| Metric | Căn cứ SLO | Căn cứ Incident | Rủi ro nếu bỏ qua |
+```
+TẦNG 1: PROACTIVE (ML)
+  Isolation Forest — 18 features
+  Raw: rps, error_rate, latency_p90, cpu_usage, memory_usage,
+       client_error_rate, kafka_lag
+  Derived: error_ratio, latency_deviation, cpu_per_rps,
+           memory_growth, rps_delta, ...
+  Context: hour_of_day, day_of_week, is_business_hours,
+           is_high_traffic_period
+  → prediction == -1: Anomaly | score < -0.3: HIGH confidence
+
+TẦNG 2: REACTIVE (SLO Burn Rate)
+  BurnRate >= 14.4× trên CẢ cửa sổ 5m VÀ 1h
+  → Immediate Alert → Slack
+  (Chỉ kích hoạt khi SLO đang bị ăn mòn — không proactive)
+```
+
+---
+
+## 7. Lý Do Chọn Isolation Forest
+
+| Tiêu chí | Lý do |
+|---|---|
+| **Unsupervised** | Không cần nhãn lịch sử — EKS chỉ có data từ 14/07/2026 |
+| **Đa chiều 18 features** | Hoạt động tốt không cần giảm chiều thủ công |
+| **Phát hiện correlation** | Nhận ra tổ hợp bất thường mà rule đơn lẻ bỏ sót |
+| **Tốc độ O(n log n)** | Phù hợp chu kỳ quét 30 giây |
+| **Baseline tự thích nghi** | CronJob re-train mỗi thứ Hai 2h sáng — không tune ngưỡng thủ công |
+
+---
+
+## 8. Vấn Đề Đã Xác Nhận & Cần Xử Lý
+
+| # | Vấn đề | Mức độ | Hành động |
 |---|---|---|---|
-| `error_rate` | Checkout SLO ≥ 99.0%; non-5xx ≥ 99.5% | INC-1 (checkout lỗi ~5%), INC-3 (payment lỗi lúc deploy) | Không biết SLO đang bị tiêu cho đến khi khách hàng phàn nàn |
-| `latency_p90` | Storefront p95 < 1s | INC-1 (p95 checkout vọt vài giây) | Phát hiện suy giảm muộn sau khi khách đã bỏ giỏ |
-| `cpu_usage` | Không có SLO trực tiếp | INC-1 (DB exhaustion do overload), INC-3 (deploy spike) | Bỏ sót dấu hiệu cảnh báo sớm 5–15 phút trước khi latency/error rate tăng |
-| `memory_usage` | Không có SLO trực tiếp | INC-2 (pod reschedule → state loss); `payment` là service stateful có rủi ro OOMKill cao nhất | OOMKill gây gián đoạn giao dịch đột ngột; memory leak phát hiện quá muộn nếu chỉ dùng threshold tĩnh |
-| `rps` | Gián tiếp: mọi SLO đều tính trên số request | INC-1 (traffic spike giờ cao điểm là trigger gốc) | Bỏ sót trigger gốc của sự cố; derived features (error_ratio, cpu_per_rps) sai lệch nếu RPS anomaly không được phát hiện |
+| 1 | `is_high_traffic_period` hard threshold `rps > 100` — dead code trên EKS thực tế (max RPS chỉ 89.74) | **HIGH** | Đổi thành `rps > 2.0 × rolling_median_rps_1h` trong `anomaly_detector.py` và `train_anomaly_model_local.py` |
+| 2 | `frontend` memory_usage max = 1.022, `product-reviews` max = 1.317 — vượt 100% | **MEDIUM** | Kiểm tra và set lại `resources.limits.memory` trong Kubernetes manifest |
+| 3 | `checkout` latency_p90 mean = 486 ms nhưng median = 41 ms — outlier spike rất lớn (max 15s) | **MEDIUM** | Điều tra nguyên nhân spike 15s — có thể là cold start hay DB timeout cần investigate thêm |
+| 4 | Baseline CPU trong `Baseline_metric.md` lấy từ instant snapshot một thời điểm — không đại diện cho 3.5 ngày thực tế | **LOW** | `Baseline_metric.md` đã được ghi chú, dùng `datametric/*_train.csv` làm nguồn baseline chính thức |
 
 ---
 
-## 6. Ghi Chú & Ràng Buộc
-
-1. **Baseline trong tài liệu này là ước tính, không phải ground truth:** Tất cả khoảng giá trị baseline được suy luận từ SLO, lịch sử sự cố (INC-1, INC-2, INC-3) và đặc tính kiến trúc từng service. Chưa có đủ telemetry production để đo baseline chính xác. Các con số sẽ được hiệu chỉnh sau khi tích lũy đủ dữ liệu vận hành thực tế và qua các postmortem tiếp theo.
-
-2. **Ưu tiên ngưỡng tương đối hơn tuyệt đối:** Do baseline chưa đo được từ production, các điều kiện phát hiện dựa trên tỉ lệ (`latency_deviation`, `cpu_per_rps`, `rps_delta`, `memory_growth`) bền vững hơn ngưỡng tuyệt đối và không bị lỗi thời khi tải thay đổi theo mùa. Các hard threshold tuyệt đối (ví dụ `latency > 1s`, `memory > 0.85`) chỉ đóng vai trò fallback.
-
-3. **`payment` là service cần ưu tiên theo dõi memory:** Đây là service stateful duy nhất trong nhóm trọng yếu — giữ connection pool, transaction context và session state trong bộ nhớ. Rủi ro OOMKill cao hơn hẳn các service stateless. Cần thiết lập alert riêng cho `memory_growth` trên service này ngay khi có telemetry production.
-
-4. **`product-reviews` cần theo dõi sau LLM go-live:** Đặc tính gọi LLM để tạo tóm tắt review tạo ra rủi ro memory tích lũy (response buffer, stream chưa đóng) không có trên các service khác. Cần baseline riêng sau khi feature AI đi vào production.
-
-5. **SLO Burn Rate là tầng reactive, không proactive:** Burn Rate chỉ kích hoạt khi SLO **đã đang bị vi phạm**. Isolation Forest là tầng chính phát hiện **trước khi** SLO bị vỡ. Mục tiêu dài hạn là phần lớn sự cố được phát hiện bởi IF trước khi Burn Rate alert được kích hoạt.
-
-6. **Kafka lag sẽ được bổ sung ở phiên bản tiếp theo:** `checkout` và `shipping` sử dụng Kafka. `kafka_lag` là metric quan trọng cho `shipping` (backlog xử lý đơn hàng) và cần phân tích riêng khi có đủ ngữ cảnh về topology Kafka của hệ thống.
-
----
-
-*Tài liệu tham chiếu: `datametric_schema.md`, `SLO.md`, `INCIDENT_HISTORY.md`*
-*Phiên bản v2 dự kiến: bổ sung phân tích `kafka_lag`; hiệu chỉnh baseline sau khi có telemetry production và postmortem thực tế (target: tuần 3)*
+*Tài liệu tham chiếu: `datametric/*_train.csv`, `Baseline_metric.md`, `SLO.md`, `INCIDENT_HISTORY.md`, `ADR-008-anomaly-detection-baseline.md`*
+*Nguồn baseline v2: EKS Prometheus, pull qua `pull_live_prometheus_data.py`, giai đoạn 14/07/2026 – 17/07/2026*
