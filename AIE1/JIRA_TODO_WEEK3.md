@@ -120,7 +120,7 @@ Triển khai thiết kế bộ nhớ đệm 2 tầng (LLM response cache bằng 
 - Viết module `guardrails/cache.py` dùng băm `SHA256` của input làm cache key. Thiết lập cơ chế Fail-Open (Redis sập, dịch vụ vẫn gọi LLM bình thường).
 - Dành riêng Redis key `product_reviews:fallback_override` làm cổng điều phối Closed-loop cho Kiên.
 
-#### Sub-task 2.3: Tích hợp Cache vào server.py [Thứ 3] — Priority: High
+#### Sub-task 2.3: Tích hợp Cache vào product_reviews_server.py [Thứ 3] — Priority: High
 - Tích hợp kiểm tra cache ở đầu hàm `AskProductAIAssistant` (Cache Hit -> trả kết quả trong < 10ms).
 - Lưu kết quả vào Redis sau khi LLM Judge duyệt thành công (`approved == True`).
 
@@ -158,7 +158,7 @@ Không tự xây dựng AIOps Engine (detector độc lập). Nhiệm vụ của
 - Họp sync với Khoa thống nhất schema Redis key điều khiển: `product_reviews:fallback_override` (String, `"true"` hoặc `"false"`).
 - Thống nhất các metric sẽ xuất ra cho Prometheus và viết tài liệu thiết kế ADR 0007.
 
-#### Sub-task 3.2: Triển khai Cổng nhận lệnh (Actuator) trong server.py [Thứ 3] — Priority: Highest
+#### Sub-task 3.2: Triển khai Cổng nhận lệnh (Actuator) trong product_reviews_server.py [Thứ 3] — Priority: Highest
 > Trái tim của cơ chế tự dập sự cố.
 - Sửa hàm `get_ai_assistant_response` để kiểm tra Redis key `product_reviews:fallback_override` trước khi gọi Bedrock.
 - Nếu key là `"true"` hoặc `"1"` -> lập tức kích hoạt luồng fallback PostgreSQL Cache (hoặc Static summary), bypass hoàn toàn cuộc gọi Bedrock.
@@ -225,7 +225,7 @@ Cả nhóm nghiên cứu tài liệu `D:\AI\Book\LLM-as-a-Judge.pdf` với mục
 | Ngày | Khoa (Leader) | Thịnh | Kiên |
 |------|------|-------|------|
 | **T2 21/07** | - Đo baseline Before (2.0)<br>- DB Migration `is_safe` (2.1)<br>- Đọc tài liệu LLM Judge (4.1)<br>- Họp sync rubrics & gán nhãn (4.2) | - Thiết kế cấu hình harness (1.1)<br>- Thêm surface field vào dataset (1.2)<br>- Đọc tài liệu LLM Judge (4.1)<br>- Họp sync rubrics & gán nhãn (4.2) | - Thống nhất Redis key schema với Khoa (3.1)<br>- Thiết kế & viết ADR 0007 (3.1)<br>- Đọc tài liệu LLM Judge (4.1)<br>- Họp sync rubrics & gán nhãn (4.2) |
-| **T3 22/07** | - Viết module `cache.py` (2.2)<br>- Đồng bộ Redis key cho Closed-Loop | - Bổ sung PII-in-review cases (1.2)<br>- Viết script `eval_judge_agreement.py` (1.3) | - Triển khai Redis Actuator trong server.py (3.2)<br>- Thêm Failure Injection Mode (3.3) |
+| **T3 22/07** | - Viết module `cache.py` (2.2)<br>- Đồng bộ Redis key cho Closed-Loop | - Bổ sung PII-in-review cases (1.2)<br>- Viết script `eval_judge_agreement.py` (1.3) | - Triển khai Redis Actuator trong product_reviews_server.py (3.2)<br>- Thêm Failure Injection Mode (3.3) |
 | **T4 23/07** | - Đo After + So sánh before/after (2.4)<br>- Viết ADR 0006 (2.5) | - Fix timeout & UNVERIFIED pass rate (1.4)<br>- Đóng gói Makefile (1.5) | - Tích hợp Custom Prometheus Metrics (3.4)<br>- Graceful Shutdown & Reconnect (3.6)<br>- Viết logic log kiểm toán (3.5) |
 | **T5 24/07** | - Đóng gói ticket #14 (2.5)<br>- Nộp Jira ticket #14 | - Chạy thử nghiệm e2e harness (1.6)<br>- Chụp terminal, xuất results.json gửi Khoa | - Phối hợp test E2E với AIOps (3.5)<br>- Đóng gói ticket #22 & Nộp Jira |
 | **T6 25/07** | Kiểm tra chéo các ticket của nhóm, chuẩn bị môi trường chạy thật trước hạn | Hỗ trợ review, kiểm định chéo | Hỗ trợ review, kiểm định chéo |
