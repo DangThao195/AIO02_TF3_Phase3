@@ -2,6 +2,7 @@ import time
 import logging
 import asyncio
 import json
+import subprocess
 from fastapi import FastAPI, Request, BackgroundTasks
 from pydantic import BaseModel
 from anomaly_detector import AnomalyDetector
@@ -215,6 +216,8 @@ async def active_metrics_polling_loop():
                     if is_anomalous:
                         logger.warning(f"ML Isolation Forest proactively detected ANOMALY on service: {service}!")
                         anomalous_services.add(service)
+
+
                             
                 # Dọn dẹp các proactive warning cũ của các service đã trở lại bình thường
                 for inc_id, inc_data in list(active_incidents.items()):
@@ -225,10 +228,12 @@ async def active_metrics_polling_loop():
                             active_incidents.pop(inc_id, None)
                         
                 if anomalous_services:
+                    now_ts = time.time()
                     # Chuyển đổi anomalous_services thành danh sách mock alerts để chạy qua correlator
                     # Ghi lại thời điểm phát hiện riêng cho từng service để correlator tính first-drift đúng
                     mock_alerts = []
                     for service in anomalous_services:
+
                         if simulation_state["scenario"].startswith("inc"):
                             trace_id = f"mock-{simulation_state['scenario']}"
                         else:
@@ -277,11 +282,89 @@ async def active_metrics_polling_loop():
         await asyncio.sleep(POLLING_INTERVAL_SECONDS)
 
 async def periodic_graph_reload_loop():
-    """Tự động reload đồ thị services.json mỗi 5 phút để giữ đồ thị luôn mới (Graph Freshness)."""
+    """
+    Tự động rebuild topology từ Jaeger mỗi 24 giờ, rồi hot-reload vào correlator.
+
+    Chu kỳ:
+      - Mỗi 24h: chạy rebuild_topology_from_jaeger() để cập nhật services.json
+        từ trace thực tế — bắt được các dependency mới hoặc thay đổi kiến trúc.
+      - Mỗi 5 phút: reload services.json vào RAM (hot-reload, không query Jaeger).
+
+    Nếu Jaeger không accessible, giữ nguyên services.json hiện tại.
+    """
+    REBUILD_INTERVAL_SECONDS = 86400   # 24 giờ
+    RELOAD_INTERVAL_SECONDS  = 300     # 5 phút
+    last_rebuild_time = 0.0
+
     while True:
-        await asyncio.sleep(300)
-        logger.info("Periodic Graph Reload: Checking and reloading service graph...")
+        await asyncio.sleep(RELOAD_INTERVAL_SECONDS)
+        now = time.time()
+
+        # Rebuild topology từ Jaeger mỗi 24h
+        if now - last_rebuild_time >= REBUILD_INTERVAL_SECONDS:
+            logger.info("Periodic Topology Rebuild: querying Jaeger to rebuild services.json...")
+            try:
+                # Import và chạy builder trong executor để không block event loop
+                loop = asyncio.get_running_loop()
+                await loop.run_in_executor(None, _rebuild_topology_background)
+                last_rebuild_time = now
+                logger.info("Topology rebuild complete.")
+            except Exception as e:
+                logger.error(f"Topology rebuild failed: {e}. Keeping existing services.json.")
+
+        # Hot-reload services.json vào RAM mỗi 5 phút
+        logger.info("Periodic Graph Reload: reloading service graph from disk...")
         correlator.reload_graph()
+
+
+def _rebuild_topology_background():
+    """
+    Wrapper chạy trong ThreadPoolExecutor để rebuild topology từ Jaeger và upload S3.
+    Quy trình:
+      1. Query Jaeger lấy traces của tất cả services
+      2. Extract edges từ CHILD_OF span relationships
+      3. Merge với services.json hiện tại
+      4. Ghi local (services.json) + upload S3 (topology/services.json)
+    Khi hoàn thành, correlator.reload_graph() sẽ pick up từ S3 trong chu kỳ 5 phút tiếp theo.
+    """
+    script_path = os.path.join(os.path.dirname(__file__), "scripts", "rebuild_topology_from_jaeger.py")
+    services_json_path = os.path.join(os.path.dirname(__file__), "services.json")
+
+    if not os.path.exists(script_path):
+        logger.warning(f"Topology rebuild script not found: {script_path}")
+        return
+
+    result = subprocess.run(
+        ["python", script_path,
+         "--output", services_json_path,
+         "--limit", "30"],   # 30 traces/service để nhẹ nhàng với Jaeger
+        capture_output=True,
+        text=True,
+        timeout=120   # tối đa 2 phút
+    )
+    if result.returncode == 0:
+        logger.info(f"Topology rebuild success:\n{result.stdout[-800:]}")
+    else:
+        logger.error(f"Topology rebuild failed (returncode={result.returncode}):\n{result.stderr[-500:]}")
+
+
+@app.post("/topology/rebuild")
+async def trigger_topology_rebuild():
+    """
+    Endpoint kích hoạt thủ công việc rebuild topology từ Jaeger traces.
+    Hữu ích sau khi deploy service mới hoặc thay đổi kiến trúc.
+    """
+    try:
+        loop = asyncio.get_running_loop()
+        loop.run_in_executor(None, _rebuild_topology_background)
+        return {
+            "status": "triggered",
+            "message": "Topology rebuild from Jaeger started in background. "
+                       "Check logs for progress. Graph will hot-reload within 5 minutes."
+        }
+    except Exception as e:
+        logger.error(f"Failed to trigger topology rebuild: {e}")
+        return {"status": "error", "message": str(e)}
 
 @app.on_event("startup")
 async def startup_event():
@@ -892,6 +975,10 @@ async def simulate_replay(payload: ReplayPayload):
         else:
             pred = 1
             score = 0.0
+
+
+
+
         
         predictions.append(pred)
         scores.append(score)
@@ -905,16 +992,24 @@ async def simulate_replay(payload: ReplayPayload):
     df["rolling_error_ratio_1h"] = df["rolling_error_rate_1h"] / (df["rolling_rps_1h"] + 1e-5)
     df["burn_rate_1h"] = df["rolling_error_ratio_1h"] * 1000.0
     df["slo_breached"] = (df["burn_rate_5m"] >= 14.4) & (df["burn_rate_1h"] >= 14.4)
-    
-    # 4. Metrics evaluation
-    # 4. Metrics evaluation (excludign warmup rows to let sliding window features stabilize)
+    # 2-Layer AIOps Incident Classifier:
+    # Layer 1: ML Isolation Forest Anomaly Detection (prediction == -1)
+    # Layer 2: Multi-Window Multi-Burn-Rate SLO Breached OR High Latency/Kafka Lag (slo_breached | latency_p90 > 0.05 | kafka_lag > 10)
+    # Combined: Incident Alert is triggered when ML Anomaly aligns with SLO Burn Rate breach or latency degradation
+    df["has_health_degradation"] = df["slo_breached"] | (df["latency_p90"] > 0.05) | (df["kafka_lag"] > 10)
+    df["incident_alert"] = ((df["prediction"] == -1) & df["has_health_degradation"]).map({True: -1, False: 1})
+
+
+
+    # 4. Metrics evaluation (excluding warmup rows to let sliding window features stabilize)
     warmup = 12
     eval_df = df.iloc[warmup:] if len(df) > warmup else df
     
-    tp = int(((eval_df["prediction"] == -1) & (eval_df["label"] == -1)).sum())
-    fp = int(((eval_df["prediction"] == -1) & (eval_df["label"] == 1)).sum())
-    fn = int(((eval_df["prediction"] == 1) & (eval_df["label"] == -1)).sum())
-    tn = int(((eval_df["prediction"] == 1) & (eval_df["label"] == 1)).sum())
+    tp = int(((eval_df["incident_alert"] == -1) & (eval_df["label"] == -1)).sum())
+    fp = int(((eval_df["incident_alert"] == -1) & (eval_df["label"] == 1)).sum())
+    fn = int(((eval_df["incident_alert"] == 1) & (eval_df["label"] == -1)).sum())
+    tn = int(((eval_df["incident_alert"] == 1) & (eval_df["label"] == 1)).sum())
+
     
     precision = float(tp) / (tp + fp) if (tp + fp) > 0 else 1.0
     recall = float(tp) / (tp + fn) if (tp + fn) > 0 else 1.0
@@ -929,8 +1024,9 @@ async def simulate_replay(payload: ReplayPayload):
         row = df.iloc[idx]
         if row["label"] == -1 and first_label_idx is None:
             first_label_idx = idx
-        if row["prediction"] == -1 and first_pred_idx is None:
+        if row["incident_alert"] == -1 and first_pred_idx is None:
             first_pred_idx = idx
+
             
     lead_time_seconds = 0.0
     lead_time_cycles = 0
@@ -1196,4 +1292,31 @@ async def reload_models():
             "status": "error",
             "message": f"Failed to reload models: {str(e)}"
         }
+
+
+def run_retrain_and_hot_reload():
+    """Chạy tiến trình huấn luyện mô hình thực tế và hot-reload sau khi hoàn tất."""
+    logger.info(">>> [API TRIGGER] Starting background model retraining pipeline...")
+    try:
+        import train_anomaly_model_eks as trainer
+        trainer.main()
+        logger.info(">>> [API TRIGGER] Retraining completed. Hot-reloading models from S3...")
+        detector._load_models_from_s3()
+        logger.info(">>> [API TRIGGER] Models successfully retrained and hot-reloaded into memory!")
+    except Exception as e:
+        logger.error(f">>> [API TRIGGER] Retraining background task failed: {e}")
+
+
+@app.post("/retrain")
+async def trigger_retrain(background_tasks: BackgroundTasks):
+    """
+    Kích hoạt tiến trình retrain mô hình ML từ Prometheus trên cụm EKS
+    và tự động hot-reload model mới vào RAM sau khi hoàn tất.
+    """
+    background_tasks.add_task(run_retrain_and_hot_reload)
+    return {
+        "status": "started",
+        "message": "Automated ML retraining pipeline triggered in background. Models will hot-reload upon completion."
+    }
+
 

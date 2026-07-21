@@ -104,8 +104,20 @@ class AnomalyDetector:
 
     def extract_features_realtime(self, service: str) -> pd.DataFrame:
         """Thu thập dữ liệu 1 giờ gần nhất của service để sinh 13 features."""
+        # Kiểm tra và nạp tệp dữ liệu giả lập cục bộ nếu được cấu hình (phục vụ demo/testing)
+        fake_path = f"datametric/fake_{service}.csv"
+        if os.path.exists(fake_path):
+            try:
+                df = pd.read_csv(fake_path)
+                df["timestamp"] = pd.to_datetime(df["timestamp"])
+                logger.info(f"[SIMULATION] Loaded fake metric file for {service} from local disk: {fake_path}")
+                return df
+            except Exception as e:
+                logger.error(f"[SIMULATION] Failed to read fake metric file {fake_path}: {e}")
+
         end_time = time.time()
         start_time = end_time - 3600  # 1 giờ trước
+        
         
         # PromQL
         queries = {
@@ -147,6 +159,8 @@ class AnomalyDetector:
         df["cpu_per_rps"] = df["cpu_usage"] / (df["rps"] + 1e-5)
         df["memory_growth"] = df["memory_usage"] - df["memory_usage"].shift(6).fillna(0)
         df["kafka_lag_growth"] = df["kafka_lag"] - df["kafka_lag"].shift(1).fillna(0)
+
+
         
         df["hour_of_day"] = df["timestamp"].dt.hour
         df["day_of_week"] = df["timestamp"].dt.weekday
@@ -229,6 +243,8 @@ class AnomalyDetector:
         model = self.models[service]
         prediction = int(model.predict(X_t)[0])  # 1 hoặc -1
         score = float(model.decision_function(X_t)[0])  # Càng âm càng bất thường
+
+
         
         # Xác định mức độ tin cậy
         if score < -0.3:
