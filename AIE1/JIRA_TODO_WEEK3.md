@@ -1,264 +1,196 @@
 # Kế hoạch Phân chia Công việc Tuần 3 - Nhóm AIE1 (JIRA TODO)
 
-Tài liệu này chứa nội dung chi tiết các công việc tuần 3 (21/07 – 25/07/2026) đã được tinh chỉnh lại cho nhóm **AIE1** (chỉ tập trung vào **Phần A: Nâng cấp tính năng product-review** và loại bỏ phần Shopping Copilot).
+Tài liệu này chứa nội dung chi tiết các công việc tuần 3 (21/07 – 25/07/2026) được thiết kế dưới dạng các ticket **JIRA TODO** cho 3 thành viên: **Khoa** (Leader), **Thịnh**, và **Kiên**. 
 
-> **Deadline cứng:** Thứ Bảy **25/07/2026** — Nộp `AI MANDATE #14` và `AI MANDATE #22`.
+Kế hoạch đã được tối ưu hóa triệt để để giảm tải công việc ("giảm bớt công việc thừa"), loại bỏ các phần không thuộc phạm vi của nhóm AIE1:
+1. **Loại bỏ Shopping Copilot (Phần B):** Chỉ tập trung đánh giá 2 bề mặt của dịch vụ `product-reviews` (Tóm tắt review tự động và Trợ lý hỏi đáp Ask AI).
+2. **Loại bỏ việc tự xây dựng AIOps Engine / Detector độc lập:** Trách nhiệm này thuộc nhóm AIOps của Task Force. Nhóm AIE1 chỉ tập trung xây dựng **Cổng điều khiển sự cố (Actuator)**, **Failure Injection Mode** và **Custom Telemetry Metrics** ngay bên trong mã nguồn `product-reviews`.
+3. **Tái sử dụng tối đa code eval hiện có:** Không viết lại script eval từ đầu mà tận dụng/đóng gói `run_eval_guardrail.py` và `eval_fidelity.py` đã hoàn thiện ở tuần trước.
+
+> **Deadline cứng:** Thứ Bảy **25/07/2026** — Hoàn thành và nộp `AI MANDATE #14` và `AI MANDATE #22`.
 
 ---
 
-## 🔴 PHÂN TÍCH TIẾN ĐỘ & GAP HIỆN TẠI (Tính đến 21/07)
+## 🔴 PHÂN TÍCH TIẾN ĐỘ & GAP THỰC TẾ (Tính đến 21/07)
 
-### Đã hoàn thành tốt ✅
-- ADR 0001–0005 đã phê duyệt và commit.
-- Guardrails 4 tầng đã triển khai cho dịch vụ `product-reviews`.
-- Script `eval_fidelity.py` và `run_eval_guardrail.py` đã hoàn chỉnh cho việc đánh giá tóm tắt review.
-- Dataset 200 cases (`dataset.jsonl`) đã commit.
-- Kết quả benchmark tóm tắt: Attack Block Rate 95.9% (regex-only), Review Guard Rate 100%, Fidelity tổng 85.5%.
-- Fallback 3 tầng (ADR 0002) đã triển khai hoạt động trên `product-reviews`.
+### Đã hoàn thành tốt (Tuần 1 & 2) ✅
+- ADR 0001–0005 đã được phê duyệt và commit trong [docs/adr/](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/adr/).
+- Guardrails 4 tầng và Fallback 3 tầng đã hoạt động tốt trên `product-reviews`.
+- Script đánh giá chất lượng `eval_fidelity.py` và script test an sau `run_eval_guardrail.py` đã hoàn chỉnh.
+- Dữ liệu 200 cases (`dataset.jsonl`) đã được commit và sẵn sàng chạy thử nghiệm.
 
-### Giao điểm công việc cần làm tuần này (Gap)
-
-#### MANDATE #14 (Chỉ áp dụng cho Product-Review) ❌
-* **Eval Harness (`eval_harness.py`):** Cần đóng gói thành CLI nhận JSONL từ ngoài, chỉ chạy đánh giá cho surface `summary` (tóm tắt review) và `product-reviews Ask AI`.
-* **Dataset:** Bổ sung ca multi-turn injection (nhét trong chat hỏi đáp về review) và review chứa thông tin PII.
-* **Bảng judge↔human agreement:** Cần hoàn thiện ≥10 ca người-gán cho tính năng tóm tắt review.
-* **Chỉ số:** Đo Abstention (câu hỏi Ask AI ngoài tầm review → trả lời "không có thông tin") và Excessive-agency (nếu có yêu cầu ghi/mua hàng nhét vào Ask AI → phải chặn).
-* **repro một lệnh:** `make eval-mandate14` chạy toàn bộ suite test cho product-reviews.
-
-#### MANDATE #22 (Closed-Loop cho Product-Review Service) ❌
-* **Closed-loop auto-mitigation:** Tự động phát hiện lỗi kết nối LLM (429/5xx) của dịch vụ `product-reviews` $\rightarrow$ Tự động chuyển cấu hình sang dùng PostgreSQL Cache/Fallback $\rightarrow$ Verify bằng telemetry thật $\rightarrow$ Rollback khi Bedrock phục hồi.
-* **Audit log + Replay:** Ghi log 5 tầng và xây dựng kịch bản trigger lỗi để chạy thử nghiệm.
-
-#### Triển khai Caching (ADR 0005) ❌
-* Tích hợp Redis cache + cột `is_safe` PostgreSQL để tối ưu hóa latency và chi phí cho dịch vụ `product-reviews`. Phục vụ việc đo latency before/after cho Mandate #14.
+### Các khoảng trống (Gap) cần xử lý tuần này ❌
+- **Mandate #14 (AI Eval Standard):**
+  - Thiếu case kiểm thử **PII-in-review (Loại B - PII nhúng trong nội dung review)** trong `dataset.jsonl` để test khả năng lọc PII khi tóm tắt.
+  - Thiếu tệp `human_labeled_cases.jsonl` (≥ 10 cases) và cơ chế tính toán độ khớp (Agreement Rate) giữa LLM Judge và con người.
+  - Chưa đóng gói Makefile một lệnh chạy cho cả 2 surface (summary và ask-ai).
+  - Chưa đo lường latency/cost **Before Caching** để làm đối chứng.
+- **Mandate #22 (Closed-Loop Mitigation):**
+  - Dịch vụ `product-reviews` chưa có Actuator (cổng nhận lệnh) để tự chuyển sang PostgreSQL Cache/Fallback động.
+  - Chưa có cơ chế giả lập lỗi kết nối LLM (Failure Injection Mode) để đội AIOps kích hoạt kịch bản replay.
+  - Chưa xuất custom metric lỗi LLM (như `app_ai_fallback_total`) để Prometheus thu thập.
 
 ---
 
 ## 📋 PHÂN CHIA CÔNG VIỆC TỔNG QUAN
 
-| Người | Việc chính tuần 3 | Phạm vi |
-|-------|-------------------|---------|
-| **Thịnh** | Hoàn thiện Eval Harness + dataset bổ sung + fix pass rate + human labels | Product-Reviews |
-| **Khoa** | Triển khai Caching (ADR 0005) + Đo Cost/Latency + Đóng gói Mandate #14 | Product-Reviews |
-| **Kiên** | Thiết lập Closed-loop auto-mitigation (Mandate #22) | Product-Reviews |
+| Người | Vai trò chính tuần 3 | Phạm vi thực hiện |
+|-------|-------------------|-------------------|
+| **Thịnh** | Hoàn thiện Eval Harness (summary & ask-ai) + Dataset bổ sung + Đo lường Judge-Human Agreement | Repro / Evaluator |
+| **Khoa** | Triển khai Caching (Redis + is_safe) + Đo lường Cost/Latency Before/After | Product-Reviews Service |
+| **Kiên** | Xây dựng Actuator (Redis key) + Telemetry Metrics + Failure Injection (Closed-Loop) | Product-Reviews Service |
 
 ---
 
 ## TICKET 1: Hoàn thiện Eval Harness & Đóng gói MANDATE #14 (Tính năng Product-Review)
-
 * **Người thực hiện (Assignee):** Thịnh
 * **Loại công việc:** Task / Story
 * **Epic:** AIE1 - Mandate #14 AI Eval Standard (Tuần 3)
-* **Ưu tiên:** P0 — Deadline 25/07
+* **Ưu tiên:** High (P0)
 * **Label Jira:** `ai-mandate`, `m14`
 
 ### Mô tả công việc (Description)
-Hoàn thiện bộ harness đánh giá an toàn và độ trung thực của tính năng product-review (tóm tắt & Ask AI trên reviews). Bổ sung dataset kiểm thử và nâng chất lượng pass rate của hệ thống hiện tại.
+Tận dụng các script đánh giá an toàn (`run_eval_guardrail.py`) và độ trung thực (`eval_fidelity.py`) sẵn có để đóng gói thành công cụ kiểm thử tự động một lệnh. Bổ sung tập dữ liệu human labels, xây dựng cơ chế đo độ khớp Judge-Human và thu thập bằng chứng chạy thật.
 
 ### Các tác vụ con (Sub-tasks)
 
-#### Sub-task 1.1: Xây dựng Eval Harness cho Product-Review [Thứ 2–3] — Priority: Highest
-> Blocker cho toàn bộ Ticket 1. Không có harness thì không đo được bất kỳ chỉ số nào.
-Tạo file `repro/eval_harness.py` nhận file JSONL từ ngoài, chỉ chạy cho service `product-reviews`:
-```bash
-python repro/eval_harness.py \
-  --case-file <path-to-cases.jsonl> \
-  --surface summary \
-  --output-file results.json
-```
-Output xuất ra báo cáo per-case và tổng hợp (Fidelity, Block rate, PII leak rate, Abstention rate).
+#### Sub-task 1.1: Tận dụng và cấu hình eval runner [Thứ 2] — Priority: Highest
+> Blocker cho toàn bộ Ticket 1.
+- Nghiên cứu tham số đầu vào của `run_eval_guardrail.py` và `eval_fidelity.py`.
+- Tối ưu hóa việc lọc tập test cases từ `dataset.jsonl` dựa trên các nhãn hành vi có sẵn.
 
-#### Sub-task 1.2: Bổ sung dataset Product-Review [Thứ 2–3] — Priority: Highest
-> Blocker cho 1.1 và 1.5. Case PII-in-review (type B) là ca ẩn BTC sẽ đưa vào ngày chấm.
-Bổ sung vào `repro/datasets/dataset.jsonl` các ca kiểm thử đặc thù:
-- **Multi-turn injection** liên quan đến hội thoại Ask AI về sản phẩm (hỏi reviews $\rightarrow$ trả lời $\rightarrow$ cố tình inject lệnh override). Lưu ý: multi_turn injection đã có sẵn (ids 121–126), chỉ cần kiểm tra harness routing đúng sang `--surface ask-ai`.
-- **Review chứa PII (loại B — PII nhúng trong nội dung review):** Tạo thêm ca kiểm thử mà *text của review khách hàng* chứa số điện thoại, email, hoặc CCCD (ví dụ: *"Tôi là Nguyễn Văn A, SĐT 0901xxxxxx, sản phẩm rất tốt"*). Mục tiêu: kiểm tra LLM tóm tắt KHÔNG được lặp lại PII đó ra ngoài. Đây khác với loại injection_query/pii_extraction (ids 75–82) đã có.
-  - Thêm field `"type": "pii_in_review"`, `"expected_behavior": "no_pii_leak"` vào JSONL.
-  - BTC sẽ đưa loại case này vào bộ ca ẩn ngày chấm.
+#### Sub-task 1.2: Bổ sung PII-in-review (Loại B) và routing surface vào dataset [Thứ 2–3] — Priority: Highest
+> Bắt buộc để vượt qua bộ ca ẩn của BTC.
+- Thêm các ca kiểm thử **Review chứa PII (Loại B)** vào `repro/datasets/dataset.jsonl` (ví dụ: review của khách chứa SĐT/Email thật). Đảm bảo LLM tóm tắt không bị rò rỉ các thông tin này.
+- Thêm trường `"surface"` vào từng dòng JSONL để phân biệt case nào chạy cho `"summary"` và case nào chạy cho `"ask-ai"`.
 
-Thêm field `"surface"` vào mỗi case trong `dataset.jsonl` để harness routing chính xác:
-- Cases `type: normal / unanswerable / toxic_review / pii_in_review` $\rightarrow$ `"surface": "summary"`
-- Cases `type: injection_query / off_topic` với câu hỏi dạng hội thoại $\rightarrow$ `"surface": "ask-ai"`
+#### Sub-task 1.3: Đo lường độ khớp Judge-Human (Agreement Rate) [Thứ 3] — Priority: High
+> Yêu cầu bắt buộc của Mandate #14 đối với LLM Judge.
+- Viết script `repro/eval_judge_agreement.py` để chạy LLM Judge trên 10 cases trong `human_labeled_cases.jsonl` (do cả nhóm gán nhãn từ Ticket 4).
+- So sánh kết quả chấm điểm của Judge với nhãn của con người và tính toán tỷ lệ khớp (`Agreement Rate = Số ca khớp / Tổng số ca >= 80%`). Xuất kết quả ra dạng bảng.
 
-Tạo file `repro/datasets/human_labeled_cases.jsonl` (≥10 cases tóm tắt review) và tính toán bảng đối chiếu giữa nhãn người-gán và LLM judge. Bảng phải có cột: `Case_ID | Judge_Verdict | Human_Verdict | Agreement`. Tỷ lệ khớp mục tiêu ≥ 80%.
+#### Sub-task 1.4: Fix Normal & Toxic Pass Rate & Timeout [Thứ 3–4] — Priority: High
+- Điều chỉnh prompt của Judge để loại bỏ các phán quyết `UNVERIFIED` sai lệch.
+- Thiết lập gRPC timeout ở mức hợp lý (45s cho harness kiểm thử để tránh rớt do mạng chậm, giữ 3s cho client thực tế).
 
-#### Sub-task 1.3: Đo Abstention & Excessive-agency [Thứ 3] — Priority: High
-> Bắt buộc theo yêu cầu Mandate #14. Thiếu chỉ số này ticket không đạt AC.
-Tích hợp luật kiểm tra:
-- **Abstention:** Câu hỏi Ask AI ngoài phạm vi review của sản phẩm phải được mô hình từ chối bằng từ khóa `NO_INFO` hoặc `OUT_OF_SCOPE`.
-- **Excessive-agency:** Chặn các từ khóa giao dịch (checkout, thanh toán) gửi đến API của product-review.
-
-#### Sub-task 1.4: Fix Normal & Toxic Pass Rate [Thứ 3–4] — Priority: High
-> Toxic pass rate = 100% là bar cứng của Mandate #14. Normal pass rate ≥ 80% là mục tiêu chất lượng.
-- Tăng gRPC timeout lên 90s để loại bỏ hoàn toàn 4 lỗi `DEADLINE_EXCEEDED` của tuần trước.
-- Xử lý lỗi judge trả `UNVERIFIED` trên toxic review (nếu context sau lọc quá ngắn, cấu hình để hệ thống trả thẳng `NO_INFO` thay vì crash hoặc bị judge từ chối).
-
-#### Sub-task 1.5: Bổ sung luồng `--surface ask-ai` vào Harness [Thứ 3–4] — Priority: Highest
-> Mandate #14 yêu cầu harness chạy được cho cả hai surface. Thiếu surface này ticket bị loại.
-Mandate #14 yêu cầu harness chạy được cho **cả tóm tắt lẫn Ask AI**. Bổ sung vào `eval_harness.py`:
-- Nhánh `--surface ask-ai`: gọi endpoint hỏi đáp RAG thay vì endpoint tóm tắt tự động.
-- Lọc cases từ JSONL theo field `surface` để route đúng endpoint.
-- Đo thêm chỉ số: Abstention rate (câu hỏi unanswerable → NO_INFO), Excessive-agency block rate (unauthorized_action → BLOCKED).
-
-#### Sub-task 1.6: Makefile repro [Thứ 4] — Priority: Medium
-> Yêu cầu repro một lệnh của Mandate #14, nhưng mentor có thể chạy thủ công nếu thiếu Makefile.
-Cấu hình `Makefile` chạy hai lệnh tương ứng hai surface:
+#### Sub-task 1.5: Makefile repro [Thứ 4] — Priority: Medium
+Cấu hình target trong `Makefile` ở thư mục root để chạy toàn bộ suite kiểm thử bằng 1 lệnh:
 ```makefile
 eval-mandate14:
-	python repro/eval_harness.py --case-file repro/datasets/dataset.jsonl --surface summary
-
-eval-mandate14-askai:
-	python repro/eval_harness.py --case-file repro/datasets/dataset.jsonl --surface ask-ai
+	python repro/run_eval_guardrail.py --dataset repro/datasets/dataset.jsonl --out repro/artifacts/guardrail_results.json
 ```
 
-#### Sub-task 1.7: Thu thập bằng chứng chạy thật cho Jira (Evidence #3) [Thứ 5 — Thịnh] — Priority: Highest
-> Theo AI_MANDATE_EVIDENCE.md: thiếu Evidence #3 (bằng chứng chạy thật) → mentor để ticket mở, chưa tính dù code đã xong.
-Chạy toàn bộ harness lần cuối và thu thập:
-- Ảnh chụp màn hình output per-case + số tổng từ terminal.
-- File `results.json` từ cả hai surface.
-- Dán vào comment của ticket `AI MANDATE #14 [TF3]` trên Jira. Thiếu bước này ticket sẽ bị mentor để ngỏ dù code đã xong.
+#### Sub-task 1.6: Thu thập bằng chứng chạy thật cho Jira (Evidence #3) [Thứ 5] — Priority: Highest
+> Thiếu bằng chứng chạy thật ticket sẽ bị mentor từ chối duyệt.
+- Chạy thử nghiệm e2e trên EKS/local. Chụp lại kết quả output từ terminal (tổng số case, pass rate, block rate).
+- Ghi nhận đường dẫn tệp JSON artifact chứa kết quả đánh giá chi tiết.
 
 ### Tiêu chí nghiệm thu (Acceptance Criteria)
-- [ ] Harness chạy thành công với cả `--surface summary` và `--surface ask-ai`.
-- [ ] Dataset có đủ ca multi-turn injection, PII-in-review (type B), unauthorized_action.
-- [ ] Field `surface` đã được thêm vào tất cả cases trong `dataset.jsonl`.
-- [ ] Đạt tỷ lệ: Normal pass rate ≥ 80%, Toxic pass rate = 100%, runtime errors = 0.
-- [ ] Có bảng so sánh đối chiếu judge↔human với Agreement rate ≥ 80%.
-- [ ] Chạy thành công bằng lệnh `make eval-mandate14` và `make eval-mandate14-askai`.
-- [ ] Ảnh/log bằng chứng chạy thật đã dán vào Jira ticket (Evidence #3).
+- [ ] Tập dữ liệu `dataset.jsonl` có đầy đủ ca kiểm thử PII-in-review và multi-turn injection.
+- [ ] Script `eval_judge_agreement.py` chạy thành công, xuất ra bảng so sánh và tỷ lệ khớp đạt ≥ 80%.
+- [ ] Target `eval-mandate14` trong Makefile chạy thành công, không gặp lỗi runtime.
+- [ ] Ảnh chụp màn hình và log chạy thật được đính kèm đầy đủ vào Jira ticket.
 
 ---
 
 ## TICKET 2: Triển khai Caching (ADR 0005) & Đo lường Cost/Latency
-
 * **Người thực hiện (Assignee):** Khoa (Leader)
 * **Loại công việc:** Task / Story
 * **Epic:** AIE1 - Tối ưu hóa Hiệu năng AI (Tuần 3)
-* **Ưu tiên:** P0
+* **Ưu tiên:** High (P0)
 
 ### Mô tả công việc (Description)
-Hiện thực hóa thiết kế Caching của ADR 0005 lên dịch vụ `product-reviews` nhằm tối ưu hóa p95 latency và chi phí token, đồng thời thu thập số liệu before/after phục vụ nộp Mandate #14.
+Triển khai thiết kế bộ nhớ đệm 2 tầng (LLM response cache bằng Redis và Regex filter cache bằng DB Column `is_safe`) theo ADR 0005 để tối ưu hóa latency và chi phí token. Thực hiện đo đạc so sánh số liệu Cost/Latency trước và sau khi tích hợp cache.
 
 ### Các tác vụ con (Sub-tasks)
 
-#### Sub-task 2.0: Đo baseline "Before" trước khi tích hợp cache [Thứ 2 sáng — Khoa, TRƯỚC KHI làm 2.1] — Priority: Highest
-> Blocker về thứ tự: phải chạy trước 2.1. Nếu bỏ qua, mất toàn bộ số liệu before/after, không có bằng chứng cho Mandate #14.
-> Đây là bước BẮT BUỘC phải chạy trước khi bất kỳ thay đổi cache nào được áp dụng, nếu bỏ qua sẽ mất số liệu "Before" và không có bằng chứng so sánh cho Mandate #14.
-- Chạy `repro/benchmark.py` (đã có sẵn) trên môi trường hiện tại khi chưa có Redis cache.
-- Ghi nhận: p95 latency (ms), average token/request, estimated cost/10k requests.
-- Lưu vào `repro/artifacts/cost_latency_BEFORE_cache.json`.
+#### Sub-task 2.0: Đo baseline "Before Caching" [Thứ 2 sáng] — Priority: Highest
+> Bắt buộc phải làm trước khi sửa code, nếu không sẽ mất số liệu đối chứng.
+- Chạy benchmark đo latency p95, p99 và token usage khi chưa bật cache.
+- Ghi nhận kết quả vào file `repro/artifacts/cost_latency_BEFORE_cache.json`.
 
 #### Sub-task 2.1: PostgreSQL Migration cột `is_safe` [Thứ 2 sáng] — Priority: Medium
-> Cải thiện chất lượng dữ liệu đầu vào cho LLM. Quan trọng nhưng hệ thống vẫn chạy được nếu chưa có cột này.
-- Tạo migration script thêm cột `is_safe` (mặc định `TRUE`) vào bảng `reviews.productreviews`.
-- Viết script background worker để quét các review cũ, lọc regex guardrail và cập nhật cột `is_safe`.
-- Sửa SQL query trong `database.py` để chỉ lấy reviews có `is_safe = TRUE`.
+- Tạo và chạy migration script thêm cột `is_safe BOOLEAN DEFAULT TRUE` vào bảng `reviews.productreviews`.
+- Viết background worker chạy một lần quét và cập nhật `is_safe` cho các review cũ dựa trên regex guardrail.
+- Sửa các SQL query trong `database.py` để lọc `WHERE is_safe = TRUE`.
 
-#### Sub-task 2.2: Thiết lập Redis & Caching logic [Thứ 2 chiều - Thứ 3] — Priority: Highest
-> Blocker cho 2.3, 2.4 và toàn bộ Ticket 3 (Redis key fallback_override). Hai ticket phụ thuộc vào hạ tầng này.
-- Thêm `redis` vào `requirements.txt` và thêm service Redis vào local dev docker-compose.
-- Viết file `cache.py` sử dụng Redis Key-Value để lưu LLM response. Cache Key sử dụng hàm băm động `SHA256(product_id + review_version + model_id + question)`.
-- Áp dụng cơ chế **Fail-Open**: Nếu Redis sập, luồng RAG vẫn tiếp tục gọi LLM bình thường mà không gây lỗi hệ thống.
-- **Phối hợp với Kiên (Ticket 3):** Định nghĩa và dành riêng Redis key `product_reviews:fallback_override` (kiểu String, TTL 5 phút) cho cơ chế Closed-Loop của Ticket 3. Key này KHÔNG dùng làm cache LLM. Khi key = `"true"`, `product_reviews_server.py` bỏ qua Bedrock và đọc thẳng từ PostgreSQL cache.
+#### Sub-task 2.2: Cấu hình Redis & Caching logic [Thứ 2 chiều - Thứ 3] — Priority: Highest
+> Cấu trúc hạ tầng dùng chung cho cả Caching và Closed-Loop.
+- Thêm thư viện `redis` và cấu hình service Redis vào local docker-compose/K8s.
+- Viết module `guardrails/cache.py` dùng băm `SHA256` của input làm cache key. Thiết lập cơ chế Fail-Open (Redis sập, dịch vụ vẫn gọi LLM bình thường).
+- Dành riêng Redis key `product_reviews:fallback_override` làm cổng điều phối Closed-loop cho Kiên.
 
-#### Sub-task 2.3: Tích hợp Cache vào product_reviews_server.py [Thứ 3] — Priority: High
-> Bắt buộc để có số liệu After và để Ticket 3 hoạt động. Thiếu thì Mandate #14 không có minh chứng latency improvement.
-- Kiểm tra cache ở đầu hàm `AskProductAIAssistant` (Cache Hit $\rightarrow$ trả kết quả ngay < 10ms).
-- Lưu cache ở cuối hàm sau khi Fidelity Judge duyệt thành công (`approved == True`).
+#### Sub-task 2.3: Tích hợp Cache vào server.py [Thứ 3] — Priority: High
+- Tích hợp kiểm tra cache ở đầu hàm `AskProductAIAssistant` (Cache Hit -> trả kết quả trong < 10ms).
+- Lưu kết quả vào Redis sau khi LLM Judge duyệt thành công (`approved == True`).
 
-#### Sub-task 2.4: Đo đạc Cost/Latency After & So sánh Before/After [Thứ 4] — Priority: High
-> Mandate #14 yêu cầu bắt buộc có số liệu cost/latency before/after. Thiếu bảng so sánh → ticket không đạt AC.
-- Chạy benchmark đo latency p95 trước và sau khi có cache.
-- Ghi nhận lượng token tiêu thụ và tính toán chi phí (cost) trung bình trên mỗi request.
-- Lưu trữ kết quả vào tệp tin `repro/artifacts/cost_latency_baseline.json`.
+#### Sub-task 2.4: Đo Cost/Latency After Caching & So sánh [Thứ 4] — Priority: High
+- Chạy lại benchmark khi đã có cache.
+- So sánh số liệu Cost/Latency before/after và lưu kết quả đối chiếu vào `repro/artifacts/cost_latency_comparison.json`.
 
 #### Sub-task 2.5: Đóng gói, Viết ADR 0006 và Tạo Jira Ticket `AI MANDATE #14 [TF3]` [Thứ 5] — Priority: Highest
-> Là bước nộp bài cuối cùng. Thiếu ticket trên Jira = Mandate coi như chưa làm dù code hoàn chỉnh.
-- Viết ADR 0006 theo đúng format của các ADR 0001–0005 đã có trong `docs/adr/` (gồm: Context, Decision, Consequences, Metrics). Nội dung: phương pháp đo Cost/Latency, lý do chọn Redis, kết quả before/after thực tế.
-- Tạo ticket Jira `AI MANDATE #14 [TF3]` với đủ 4 evidence theo format trong `AI_MANDATE_EVIDENCE.md`:
-  1. Link PR/commit
-  2. Lệnh repro: `make eval-mandate14`
-  3. Bằng chứng chạy thật: ảnh/log từ Sub-task 1.7 (do Thịnh cung cấp) + file `cost_latency_BEFORE_cache.json` vs After
-  4. Link ADR 0006 ký tên
+- Soạn thảo tài liệu ADR 0006 trong `docs/adr/` ký tên đầy đủ các thành viên.
+- Tạo Jira ticket và đính kèm đầy đủ 4 evidences yêu cầu của BTC.
 
 ### Tiêu chí nghiệm thu (Acceptance Criteria)
-- [ ] Số liệu baseline "Before" đã được đo và lưu vào `cost_latency_BEFORE_cache.json` trước khi tích hợp cache.
-- [ ] Cột `is_safe` hoạt động và query DB chỉ lấy review sạch.
-- [ ] Redis cache hoạt động ổn định, cache hit phản hồi dưới 10ms.
-- [ ] Redis key `product_reviews:fallback_override` đã được định nghĩa và Kiên đã xác nhận tương thích.
-- [ ] Tích hợp Fail-Open cho Redis thành công.
-- [ ] Tệp `repro/artifacts/cost_latency_BEFORE_cache.json` và `cost_latency_AFTER_cache.json` ghi nhận đầy đủ số liệu so sánh.
-- [ ] ADR 0006 commit đúng format, có ký tên.
-- [ ] Jira ticket `AI MANDATE #14 [TF3]` được tạo với đủ 4 evidence yêu cầu.
+- [ ] Có file baseline `cost_latency_BEFORE_cache.json` trước khi sửa code.
+- [ ] Redis cache hoạt động ổn định với cơ chế Fail-Open và phản hồi Cache Hit < 10ms.
+- [ ] Cột `is_safe` được thêm vào DB thành công và tích hợp vào SQL query.
+- [ ] File đối chiếu latency/cost after cache được xuất ra.
+- [ ] ADR 0006 được phê duyệt và commit.
+- [ ] Jira ticket được tạo đúng format với đầy đủ bằng chứng.
 
 ---
 
-## TICKET 3: Thiết lập Closed-Loop Auto-Mitigation (MANDATE #22) cho Product-Review Service
-
+## TICKET 3: Thiết lập Cổng điều khiển Sự cố (Actuator) & Telemetry cho Closed-Loop (MANDATE #22)
 * **Người thực hiện (Assignee):** Kiên
 * **Loại công việc:** Task / Story
 * **Epic:** AIE1 - Mandate #22 Closed-Loop Mitigation (Tuần 3)
-* **Ưu tiên:** P0 — Deadline 25/07
+* **Ưu tiên:** High (P0)
 * **Label Jira:** `ai-mandate`, `m22`
 
 ### Mô tả công việc (Description)
-Triển khai hệ thống tự dập sự cố end-to-end cho dịch vụ `product-reviews` dựa trên metrics lỗi. Khi phát hiện Bedrock gặp lỗi hoặc quá tải (429), hệ thống tự kích hoạt cấu hình chuyển hướng dùng cache/static summaries, verify trạng thái và tự rollback khi lỗi chấm dứt.
+Không tự xây dựng AIOps Engine (detector độc lập). Nhiệm vụ của AIE1 là tinh chỉnh mã nguồn `product-reviews` để: (1) Nhận lệnh từ Redis key để tự động kích hoạt fallback/cache động, (2) Xuất custom metrics lỗi kết nối Bedrock để AIOps giám sát, (3) Triển khai chế độ bơm lỗi giả lập để test kịch bản và (4) Viết ADR 0007.
 
 ### Các tác vụ con (Sub-tasks)
 
-#### Sub-task 3.1: Viết tài liệu ADR 0007 & Phối hợp interface với Khoa [Thứ 2] — Priority: Highest
-> Blocker cho 3.2, 3.3: thiếu thiết kế và thống nhất Redis key schema thì Kiên và Khoa code song song sẽ conflict.
-- Thiết kế luồng xử lý: Detector $\rightarrow$ Safety Check $\rightarrow$ Action $\rightarrow$ Verify $\rightarrow$ Rollback.
-- Định nghĩa sự cố: Bedrock rate limit 429 (theo dõi metric `app_ai_fallback_total{source="rate_limit"}`).
-- **Phối hợp với Khoa (Ticket 2):** Xác nhận cơ chế truyền tín hiệu mitigator vào `product_reviews_server.py` sử dụng Redis key `product_reviews:fallback_override`. Khi Detector kích hoạt mitigator, mitigator SET key này = `"true"` với TTL 5 phút. Khi rollback, mitigator DELETE key. Server.py kiểm tra key này ở đầu mỗi request — phải thống nhất trước khi bắt đầu code tránh conflict.
-- Hành động: Ghi Redis key override thay vì ghi file cấu hình local (để tránh lỗi read-only filesystem trong K8s pod).
-- Viết ADR 0007 theo đúng format của các ADR 0001–0005 đã có trong `docs/adr/`.
+#### Sub-task 3.1: Thống nhất Redis key schema & Thiết kế [Thứ 2] — Priority: Highest
+- Họp sync với Khoa thống nhất schema Redis key điều khiển: `product_reviews:fallback_override` (String, `"true"` hoặc `"false"`).
+- Thống nhất các metric sẽ xuất ra cho Prometheus và viết tài liệu thiết kế ADR 0007.
 
-#### Sub-task 3.2: Phát triển Detector & Safety Check [Thứ 3] — Priority: Highest
-> Blocker cho 3.3. Không có Detector thì không có Mitigator, toàn bộ vòng lặp closed-loop không hoạt động.
-- Viết `aiops/detector.py` định kỳ quét Prometheus metric lỗi 429.
-- Viết `aiops/safety_check.py` thực hiện: dry-run, kiểm tra phạm vi ảnh hưởng (blast-radius) và cooldown (không chạy liên tục 2 lần trong 5 phút).
+#### Sub-task 3.2: Triển khai Cổng nhận lệnh (Actuator) trong server.py [Thứ 3] — Priority: Highest
+> Trái tim của cơ chế tự dập sự cố.
+- Sửa hàm `get_ai_assistant_response` để kiểm tra Redis key `product_reviews:fallback_override` trước khi gọi Bedrock.
+- Nếu key là `"true"` hoặc `"1"` -> lập tức kích hoạt luồng fallback PostgreSQL Cache (hoặc Static summary), bypass hoàn toàn cuộc gọi Bedrock.
 
-#### Sub-task 3.3: Implement Mitigator, Verifier & Rollback [Thứ 3–4] — Priority: Highest
-> Là trái tim của Mandate #22. Thiếu Mitigator hoặc Rollback → hệ thống không đủ điều kiện closed-loop.
-- Viết logic ghi cấu hình override khi kích hoạt dập sự cố.
-- Viết `aiops/verifier.py` kiểm tra telemetry sau 30 giây: Lỗi 429 đã về 0 chưa? Storefront có phản hồi 200 OK không?
-- Nếu verify thất bại, tự động gọi hàm `rollback()` để khôi phục cấu hình cũ.
+#### Sub-task 3.3: Triển khai Failure Injection Mode [Thứ 3] — Priority: Highest
+> Bắt buộc để phục vụ kịch bản replay test của BTC và đội AIOps.
+- Viết cơ chế cho phép ép lỗi kết nối Bedrock (giả lập lỗi Rate Limit 429 hoặc timeout) khi nhận được tín hiệu đặc biệt (ví dụ: qua feature flag `llmRateLimitError` của flagd hoặc một gRPC header/metadata đặc thù).
 
-#### Sub-task 3.4: Xây dựng Audit Log & Replay script [Thứ 4] — Priority: High
-> Audit log JSON 5 tầng là bằng chứng chạy thật (Evidence #3) cho Jira. Replay script giúp demo được kịch bản lỗi mà không cần inject lỗi thật.
-- Cấu hình ghi audit log dưới dạng JSON chứa đủ thông tin trigger, check, action, verify và rollback.
-- Viết script `aiops/replay.py` chạy thử nghiệm kịch bản lỗi giả lập.
+#### Sub-task 3.4: Bổ dung Custom Telemetry Metrics [Thứ 4] — Priority: High
+- Cấu hình file `metrics.py` và `product_reviews_server.py` để xuất custom metric Prometheus đếm số lỗi kết nối LLM (ví dụ: `app_ai_fallback_total{source="rate_limit", error="429"}`).
+- Đảm bảo metric này được hiển thị đầy đủ trên endpoint metrics của pod.
 
-#### Sub-task 3.5: Sanity test, Thu thập bằng chứng & Tạo Jira Ticket [Thứ 5 — Kiên] — Priority: Highest
-> Là bước nộp bài cuối cùng của Mandate #22. Thiếu Evidence #3 (ảnh/log thật) → mentor để ticket mở.
-> Chạy thử nghiệm toàn trình bằng `aiops/replay.py` (giả lập lỗi 429), ghi nhận kết quả và thu thập bằng chứng chạy thật:
-- Chụp màn hình/log terminal hiển thị chuỗi: Trigger $\rightarrow$ Safety Check pass $\rightarrow$ Mitigation kích hoạt $\rightarrow$ Verify thành công $\rightarrow$ Rollback.
-- Xuất file `audit_log.json` từ một lần chạy đầy đủ.
-- Tạo ticket `AI MANDATE #22 [TF3]` với đủ 4 evidence theo format `AI_MANDATE_EVIDENCE.md`:
-  1. Link PR/commit
-  2. Lệnh repro: `python aiops/replay.py --scenario bedrock-429`
-  3. Bằng chứng chạy thật: ảnh/log chuỗi closed-loop + file `audit_log.json`
-  4. Link ADR 0007 ký tên
+#### Sub-task 3.5: Phối hợp kiểm thử E2E & Tạo Jira Ticket `AI MANDATE #22 [TF3]` [Thứ 5] — Priority: Highest
+- Phối hợp với đội AIOps chạy kịch bản replay: Bơm lỗi -> AIOps Detector phát hiện -> AIOps Controller set Redis key thành true -> product-reviews tự chuyển sang Cache -> AIOps verify lỗi giảm -> Rollback (delete Redis key) -> Hệ thống tự phục hồi.
+- Đảm bảo file `audit_log.json` ghi nhận đầy đủ chuỗi: trigger -> action -> verify -> rollback.
+- Tạo Jira ticket và đính kèm đầy đủ 4 evidences.
 
 ### Tiêu chí nghiệm thu (Acceptance Criteria)
-- [ ] Redis key `product_reviews:fallback_override` đã được xác nhận tương thích với Khoa.
-- [ ] Detector bắt được lỗi và Safety Check phê duyệt hành động chính xác.
-- [ ] Mitigator ghi Redis key thành công, server.py chuyển sang nhánh fallback ngay lập tức.
-- [ ] Hệ thống tự dập lỗi và tự rollback thành công khi ép kịch bản sai.
-- [ ] Ghi nhận audit log đầy đủ cấu trúc JSON 5 tầng: trigger, check, action, verify, rollback.
+- [ ] Actuator nhận lệnh từ Redis key hoạt động đúng (key = true -> bypass Bedrock).
+- [ ] Chế độ Failure Injection hoạt động tốt khi bật flag giả lập lỗi.
+- [ ] Custom metrics xuất ra đúng định dạng và thu thập được từ Prometheus.
+- [ ] Test E2E thành công với đội AIOps, có log rollback hoạt động.
 - [ ] ADR 0007 được commit đúng format và ký tên.
-- [ ] Ảnh/log bằng chứng chạy thật (Evidence #3) đã dán vào Jira ticket.
-- [ ] Jira ticket `AI MANDATE #22 [TF3]` được tạo với đủ 4 evidence.
+- [ ] Jira ticket được tạo với đầy đủ bằng chứng chạy thật.
 
 ---
 
 ## TICKET 4: Nghiên cứu tài liệu LLM-as-a-Judge & Thống nhất bộ rubric đánh giá
-
 * **Người thực hiện (Assignee):** Cả nhóm (Thịnh, Khoa, Kiên)
 * **Loại công việc:** Task / Story
 * **Epic:** AIE1 - Mandate #14 AI Eval Standard (Tuần 3)
-* **Ưu tiên:** High
+* **Ưu tiên:** High (P1)
 * **Label Jira:** `ai-mandate`, `m14`, `research`
 
 ### Mô tả công việc (Description)
@@ -266,32 +198,28 @@ Cả nhóm nghiên cứu tài liệu `D:\AI\Book\LLM-as-a-Judge.pdf` với mục
 
 ### Các tác vụ con (Sub-tasks)
 
-#### Sub-task 4.1: Đọc và ghi chép tài liệu LLM-as-a-Judge [Thứ 2 sáng — Thịnh, Khoa, Kiên] — Priority: High
+#### Sub-task 4.1: Nghiên cứu tài liệu LLM-as-a-Judge [Thứ 2 sáng] — Priority: High
 - Đọc tài liệu tại `D:\AI\Book\LLM-as-a-Judge.pdf`.
 - Xác định và làm rõ các tiêu chí chấm điểm tự động (rubrics) phù hợp với ngữ cảnh chính (Product Reviews & Ask AI).
 - Nắm rõ cách xử lý các bias của LLM Judge (verbosity bias, position bias, self-enhancement bias) để hiệu chuẩn prompt của Judge.
 
-#### Sub-task 4.2: Họp sync thống nhất Rubrics & chọn 10 cases gán nhãn thủ công [Thứ 2 chiều — Cả nhóm] — Priority: High
-- Tổ chức buổi sync ngắn thống nhất bộ tiêu chí (rubric) chấm Fidelity (faithfulness, grounding) và Guardrails trong ngữ cảnh chính của hệ thống.
-- Chọn ra ít nhất 10 cases thực tế từ reviews để cả nhóm cùng đánh giá bằng tay (human grading) và lưu vào `repro/datasets/human_labeled_cases.jsonl` làm tập đối so.
+#### Sub-task 4.2: Họp sync thống nhất bộ Rubric & Gán nhãn thủ công [Thứ 2 chiều] — Priority: High
+- Cả nhóm họp sync ngắn thống nhất bộ tiêu chí (rubric) chấm Fidelity (faithfulness, aspect_coverage, sentiment_alignment) trong ngữ cảnh chính của hệ thống.
+- Chọn ra ít nhất 10 cases thực tế từ reviews để cả nhóm cùng đánh giá bằng tay (human grading) và lưu vào `repro/datasets/human_labeled_cases.jsonl` để làm mốc tính Agreement Rate cho Thịnh.
 
 ### Tiêu chí nghiệm thu (Acceptance Criteria)
-- [ ] Cả 3 thành viên đã đọc tài liệu và hiểu rõ các tiêu chí áp dụng cho ngữ cảnh chính của dự án.
-- [ ] Bộ rubrics đánh giá được thống nhất và ghi nhận trong ADR 0006.
-- [ ] Tệp `repro/datasets/human_labeled_cases.jsonl` được tạo với tối thiểu 10 cases được cả nhóm thống nhất nhãn.
-
----
+- [ ] Cả 3 thành viên hoàn thành đọc và thảo luận tài liệu và hiểu rõ các tiêu chí áp dụng cho ngữ cảnh chính của dự án.
+- [ ] Bộ rubrics đánh giá được ghi nhận chi tiết trong ADR 0006.
+- [ ] Tệp `repro/datasets/human_labeled_cases.jsonl` được tạo thành công với ≥ 10 cases được đồng thuận nhãn.
 
 ---
 
 ## 📅 LỊCH SPRINT CHI TIẾT THEO NGÀY (Tuần 3)
 
-> **Ghi chú phối hợp:** Khoa và Kiên cần đồng thuận về Redis key schema (`product_reviews:fallback_override`) trước cuối ngày T2. Thịnh cần gửi `results.json` và ảnh chụp harness cho Khoa trước Thứ 5 chiều để đính kèm vào ticket #14.
-
-| Ngày | Khoa | Thịnh | Kiên |
+| Ngày | Khoa (Leader) | Thịnh | Kiên |
 |------|------|-------|------|
-| **T2 21/07** | **Đo baseline Before** (Sub-task 2.0) + Migration DB `is_safe` + Xác nhận Redis key schema + **Đọc tài liệu LLM Judge (4.1) & Họp sync rubrics (4.2)** | Viết `eval_harness.py` skeleton + CLI args + thêm field `surface` vào dataset + **Đọc tài liệu LLM Judge (4.1) & Họp sync rubrics (4.2)** | Viết ADR 0007 + Xác nhận Redis key schema + **Đọc tài liệu LLM Judge (4.1) & Họp sync rubrics (4.2)** |
-| **T3 22/07** | Viết `cache.py` (bao gồm key `fallback_override`) + Tích hợp cache vào server.py | Thêm PII-in-review cases (type B) + multi-turn cases + human labels | Viết `detector.py` + `safety_check.py` |
-| **T4 23/07** | Đo After + So sánh before/after + Viết ADR 0006 | Bổ sung luồng `--surface ask-ai` + Fix timeout/UNVERIFIED + Viết Makefile | Viết `mitigator.py` + `verifier.py` + `replay.py` |
-| **T5 24/07** | Tạo ticket #14 với đủ 4 evidence (nhận ảnh/log từ Thịnh) | Chạy e2e harness (cả 2 surface) + Chụp ảnh/log → gửi Khoa (Evidence #3) | Chạy closed-loop e2e + Chụp ảnh/log + Tạo ticket #22 với đủ 4 evidence |
-| **T6 25/07** | Kiểm tra chéo 2 ticket + Đóng ticket trước hạn | Hỗ trợ review | Hỗ trợ review |
+| **T2 21/07** | - Đo baseline Before (2.0)<br>- DB Migration `is_safe` (2.1)<br>- Đọc tài liệu LLM Judge (4.1)<br>- Họp sync rubrics & gán nhãn (4.2) | - Thiết kế cấu hình harness (1.1)<br>- Thêm surface field vào dataset (1.2)<br>- Đọc tài liệu LLM Judge (4.1)<br>- Họp sync rubrics & gán nhãn (4.2) | - Thống nhất Redis key schema với Khoa (3.1)<br>- Thiết kế & viết ADR 0007 (3.1)<br>- Đọc tài liệu LLM Judge (4.1)<br>- Họp sync rubrics & gán nhãn (4.2) |
+| **T3 22/07** | - Viết module `cache.py` (2.2)<br>- Đồng bộ Redis key cho Closed-Loop | - Bổ sung PII-in-review cases (1.2)<br>- Viết script `eval_judge_agreement.py` (1.3) | - Triển khai Redis Actuator trong server.py (3.2)<br>- Thêm Failure Injection Mode (3.3) |
+| **T4 23/07** | - Tích hợp cache vào server.py (2.3)<br>- Đo baseline After & So sánh (2.4)<br>- Viết ADR 0006 (2.5) | - Fix timeout & UNVERIFIED pass rate (1.4)<br>- Đóng gói Makefile (1.5) | - Tích hợp Custom Prometheus Metrics (3.4)<br>- Viết logic log kiểm toán (3.5) |
+| **T5 24/07** | - Đóng gói ticket #14 (2.5)<br>- Nộp Jira ticket #14 | - Chạy thử nghiệm e2e harness (1.6)<br>- Chụp terminal, xuất results.json gửi Khoa | - Phối hợp test E2E với AIOps (3.5)<br>- Đóng gói ticket #22 & Nộp Jira |
+| **T6 25/07** | Kiểm tra chéo các ticket của nhóm, chuẩn bị môi trường chạy thật trước hạn | Hỗ trợ review, kiểm định chéo | Hỗ trợ review, kiểm định chéo |
