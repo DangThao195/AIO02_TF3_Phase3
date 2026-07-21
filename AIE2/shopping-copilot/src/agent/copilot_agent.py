@@ -20,6 +20,7 @@ from src.guardrails import (
     rate_limiter,
     check_input,
     check_input_bedrock,
+    sanitize_pii_from_input,
     validate_tool_call,
     request_confirmation,
     verify_confirmation_token,
@@ -143,15 +144,24 @@ class CopilotAgent:
             logger.error(f"Intent parse failed: {e}")
             return {"task_type": "search", "target_entity": "product", "product_query": user_message}
 
-    # Structured context resolution — trusts LLM's context_reference, no hardcoded word lists
+    # Structured context resolution — trusts LLM's context_reference & ordinal_index
     def _resolve_context_references(self, intent: dict, session: dict) -> dict:
         context = session.get("context", {})
         context_ref = intent.get("context_reference", "none")
+        ordinal = intent.get("ordinal_index")
+
+        # Check ordinal reference first (e.g., thứ 1, thứ 2, 2nd, etc.)
+        last_results = context.get("last_search_results", [])
+        if ordinal and isinstance(ordinal, int) and 1 <= ordinal <= len(last_results):
+            target_p = last_results[ordinal - 1]
+            intent["product_id"] = target_p.get("id")
+            intent["product_name"] = target_p.get("name")
+            return intent
 
         # Try to fuzzy match product_name against last_search_results
         pname = intent.get("product_name", "").lower()
         if pname and not intent.get("product_id"):
-            for p in context.get("last_search_results", []):
+            for p in last_results:
                 db_name = p.get("name", "").lower()
                 # If db_name is a substring of pname or vice-versa
                 if db_name in pname or pname in db_name:
@@ -166,7 +176,50 @@ class CopilotAgent:
                 intent["product_id"] = context["last_product_id"]
         return intent
 
-    # LAYER 2: Generic Planner
+    # LAYER 2: LLM-driven Planner with Rule-based Fallback
+    async def _build_plan_with_llm(self, intent: dict, user_id: str, session: dict) -> List[dict]:
+        task_type = intent.get("task_type", "unknown")
+        if task_type in ["greeting", "unknown", "unsupported_cart_action", "clarify"]:
+            return []
+
+        # Try LLM Planner
+        if self.llm:
+            try:
+                from src.llm.prompt import LLM_PLANNER_PROMPT
+                ctx_dict = session.get("context", {})
+                # Lightweight context summary
+                ctx_summary = {
+                    "last_product_id": ctx_dict.get("last_product_id"),
+                    "last_product_name": ctx_dict.get("last_product_name"),
+                    "last_search_count": len(ctx_dict.get("last_search_results", [])),
+                    "_display_list": ctx_dict.get("_display_list", [])
+                }
+                prompt = LLM_PLANNER_PROMPT.format(
+                    context_json=json.dumps(ctx_summary, ensure_ascii=False),
+                    intent_json=json.dumps(intent, ensure_ascii=False),
+                    user_id=user_id
+                )
+                response = await self.llm.ainvoke([HumanMessage(content=prompt)])
+                text = self._extract_text(response).strip()
+                if "```json" in text:
+                    text = text.split("```json")[1].split("```")[0]
+                elif "```" in text:
+                    text = text.split("```")[1].split("```")[0]
+                
+                plan = json.loads(text.strip())
+                if isinstance(plan, list) and len(plan) <= 6:
+                    # Validate tool names in plan
+                    valid_tools = set(TOOLS_MAP.keys()).union({"__fetch_reviews_for_context__"})
+                    if all(isinstance(step, dict) and step.get("name") in valid_tools for step in plan):
+                        logger.info(f"[PLANNER] LLM generated plan with {len(plan)} steps")
+                        return plan
+            except Exception as e:
+                logger.warning(f"[PLANNER] LLM plan generation failed ({e}), falling back to heuristic planner")
+
+        # Fallback Heuristic Planner
+        return self._build_plan_from_intent(intent, user_id)
+
+    # LAYER 2 (Fallback): Generic Rule-based Planner
     def _build_plan_from_intent(self, intent: dict, user_id: str) -> List[dict]:
         task_type = intent.get("task_type", "unknown")
         plan = []
@@ -175,7 +228,6 @@ class CopilotAgent:
             pid = intent.get("product_id")
             pname = intent.get("product_name")
             if pid:
-                # FIX #2: product_id already resolved via fuzzy match — skip get_product_id lookup
                 plan.append({"name": "add_to_cart_tool", "args": {"user_id": user_id, "product_id": pid, "quantity": intent.get("quantity", 1)}})
             elif pname:
                 plan.append({"name": "get_product_id", "args": {"product_name": pname}})
@@ -186,15 +238,13 @@ class CopilotAgent:
             plan.append({"name": "get_cart_tool", "args": {"user_id": user_id}})
         elif task_type == "get_reviews":
             pname = intent.get("product_name")
-            pid = intent.get("product_id")  # may be pre-resolved from context
+            pid = intent.get("product_id")
             if pid:
-                # Already resolved from context, call reviews directly
                 plan.append({"name": "get_product_reviews_tool", "args": {"product_id": pid}})
             elif pname:
                 plan.append({"name": "get_product_id", "args": {"product_name": pname}})
                 plan.append({"name": "get_product_reviews_tool", "args": {"product_id": "$PREV"}})
             else:
-                # Fallback: fetch reviews for whatever was last searched
                 plan.append({"name": "__fetch_reviews_for_context__", "args": {}})
         elif task_type == "lookup":
             pname = intent.get("product_name") or intent.get("product_query", "")
@@ -214,7 +264,6 @@ class CopilotAgent:
                 q += f" under {intent['constraints']['price_max']}"
             plan.append({"name": "search_products_v2", "args": {"query": q}})
         elif task_type == "convert_currency":
-            # Use Intent-parsed currencies — no hardcoded USD/VND defaults except as last resort
             plan.append({"name": "convert_currency_tool", "args": {
                 "from_currency": intent.get("from_currency", "USD"),
                 "to_currency": intent.get("to_currency", "VND"),
@@ -238,7 +287,6 @@ class CopilotAgent:
                 else:
                     plan.append({"name": "get_recommendations_tool", "args": {"product_id": "$CTX"}})
 
-        # Dynamic Modular Planner: append review block whenever LLM signals needs_reviews
         if intent.get("needs_reviews"):
             plan.append({"name": "__fetch_reviews_for_context__", "args": {}})
 
@@ -246,17 +294,17 @@ class CopilotAgent:
 
     # LAYER 3 & 4: Executor + Evidence Aggregator
     async def _execute_and_aggregate(self, plan: List[dict], user_id: str, session: dict) -> dict:
+        import asyncio
         evidence = {}
         prev_result = None
 
         for step in plan:
             tc_name = step["name"]
-            tc_args = dict(step["args"])
+            tc_args = dict(step.get("args", {}))
             
             # Resolve dependencies
             if tc_args.get("product_id") == "$PREV":
                 if isinstance(prev_result, dict) and prev_result.get("status") == "not_found":
-                    # FIX #1: Return a structured error that LLM can render in user's language
                     pname = prev_result.get('product_name', '')
                     return {"status": "error", "error": f"Xin lỗi, không tìm thấy sản phẩm '{pname}' trong hệ thống. Vui lòng kiểm tra lại tên sản phẩm hoặc thử tìm kiếm bằng từ khóa khác."}
                 if isinstance(prev_result, dict) and prev_result.get("product_id"):
@@ -276,7 +324,7 @@ class CopilotAgent:
                 if session.get("context", {}).get("last_product_id"):
                     tc_args["product_id"] = session["context"]["last_product_id"]
                 else:
-                    return {"status": "error", "error": "Cannot resolve product from context."}
+                    return {"status": "error", "error": "Xin lỗi, không thể xác định sản phẩm từ ngữ cảnh trước đó. Bạn vui lòng tìm kiếm hoặc chỉ định rõ sản phẩm nhé."}
 
             if tc_name == "__fetch_reviews_for_context__":
                 search_ids = session.get("context", {}).get("last_search_ids", [])
@@ -284,18 +332,20 @@ class CopilotAgent:
                     search_ids = [session["context"]["last_product_id"]]
                 
                 rev_tool = TOOLS_MAP.get("get_product_reviews_tool")
-                all_reviews = []
-                for pid in search_ids[:5]:  # Top 5 to provide enough reviews for lists
+                
+                async def fetch_one(pid):
                     try:
                         r_str = await rev_tool.ainvoke({"product_id": pid})
-                        all_reviews.append(json.loads(r_str))
+                        return json.loads(r_str)
                     except Exception as e:
-                        all_reviews.append({"product_id": pid, "status": "error", "error": str(e)})
+                        return {"product_id": pid, "status": "error", "error": str(e)}
+
+                all_reviews = await asyncio.gather(*[fetch_one(pid) for pid in search_ids[:5]])
                 
                 evidence[tc_name] = {
                     "status": "success", 
                     "products_context": session.get("context", {}).get("last_search_results", []),
-                    "results": all_reviews
+                    "results": list(all_reviews)
                 }
                 continue
 
@@ -349,6 +399,10 @@ class CopilotAgent:
 
             except Exception as e:
                 evidence[tc_name] = {"status": "error", "error": str(e)}
+
+        # Persist the updated context to SessionStore
+        if "session_id" in session:
+            self._sessions.save(session["session_id"], session)
 
         return {"status": "success", "evidence": evidence}
 
@@ -420,6 +474,11 @@ REPLY:
             return {"status": "error", "reply": detail, "session_id": session_id, "steps": list(self._steps), "intent": {}, "evidence": {}}
         self._end(s2, a2, "PASS", "Safety OK")
 
+        # Sanitize PII from user_message before any LLM call.
+        # This ensures the LLM never "sees" raw PII (SSN, credit card, email, phone)
+        # and therefore cannot accidentally summarize, mention, or echo it in outputs.
+        user_message = sanitize_pii_from_input(user_message)
+
         session = self._sessions.get_or_create(session_id, user_id)
         self._sessions.append_message(session_id, "user", user_message)
 
@@ -434,9 +493,31 @@ REPLY:
             self._sessions.append_message(session_id, "assistant", reply)
             return {"status": "ok", "reply": reply, "session_id": session_id, "steps": list(self._steps), "intent": intent, "evidence": {}}
 
+        # Short-circuit: task types that never require tool execution.
+        # Route them directly to answer generation with empty evidence so the LLM
+        # produces a principled refusal/greeting grounded in the intent meta,
+        # not an implementation detail (e.g. "cart is empty").
+        _NO_TOOL_TASKS = {"greeting", "unknown", "unsupported_cart_action", "clarify"}
+        if intent.get("task_type") in _NO_TOOL_TASKS:
+            s_skip, a_skip = self._time("AnswerGenerator")
+            reply = await self._generate_grounded_answer(user_message, {}, intent)
+            output_filtered = filter_output(reply)
+            reply = output_filtered.filtered_response
+            self._end(s_skip, a_skip, "OK", f"Direct answer for task_type={intent.get('task_type')}")
+            self._sessions.append_message(session_id, "assistant", reply)
+            self._sessions.touch(session_id)
+            return {
+                "status": "ok",
+                "reply": reply,
+                "session_id": session_id,
+                "steps": list(self._steps),
+                "intent": intent,
+                "evidence": {},
+            }
+
         # L2: Planner
         s4, a4 = self._time("Planner")
-        plan = self._build_plan_from_intent(intent, user_id)
+        plan = await self._build_plan_with_llm(intent, user_id, session)
         self._end(s4, a4, "OK", f"Plan steps: {len(plan)}")
 
         # L3 & L4: Execute and Aggregate

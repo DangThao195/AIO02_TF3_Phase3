@@ -6,7 +6,7 @@ Thành viên 2 (Agent) chỉ cần import:
 """
 
 # ── Lớp 2: Input Filter — chặn Prompt Injection (2 tầng: Regex + Bedrock) ──
-from src.guardrails.input_filter import check_input, check_input_bedrock, InputFilterResult
+from src.guardrails.input_filter import check_input, check_input_bedrock, InputFilterResult, sanitize_pii_from_input
 
 # ── Lớp 1: Confirmation Gate — chặn Excessive-Agency ──
 from src.guardrails.confirmation import (

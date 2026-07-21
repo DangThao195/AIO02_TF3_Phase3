@@ -22,6 +22,44 @@ from typing import List, Tuple, Optional
 logger = logging.getLogger("guardrails.input_filter")
 
 
+# ─── PII Patterns dùng để redact khỏi input user ───────────────
+# Được áp dụng TRƯỚC khi input tới LLM, giúp LLM không "thấy" PII
+# và do đó không thể tóm tắt, đề cập hay lặp lại thông tin nhạy cảm.
+_INPUT_PII_PATTERNS: List[Tuple[re.Pattern, str]] = [
+    # SSN (US Social Security Number: XXX-XX-XXXX)
+    (re.compile(r"\b\d{3}-\d{2}-\d{4}\b"), "SSN"),
+    # Số thẻ tín dụng (16 chữ số, có thể phân cách bằng - hoặc khoảng trắng)
+    (re.compile(r"\b(?:\d{4}[-\s]?){3}\d{4}\b"), "CREDIT_CARD"),
+    # Email
+    (re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"), "EMAIL"),
+    # Số điện thoại Việt Nam (+84 hoặc 0 + 9-10 chữ số)
+    (re.compile(r"(?:\+?84|0)\d{9,10}"), "PHONE_VN"),
+    # Số điện thoại Mỹ / quốc tế
+    (re.compile(r"\+?1?[-.\s]?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}"), "PHONE_US"),
+]
+
+
+def sanitize_pii_from_input(user_message: str) -> str:
+    """
+    Redact mọi PII ra khỏi tin nhắn của người dùng TRƯỚC khi đưa cho LLM.
+
+    Mục tiêu tổng quát: LLM không bao giờ "thấy" dữ liệu nhạy cảm thực
+    nên không thể vô tình tóm tắt, đề cập, hay lặp lại trong output.
+
+    Returns:
+        Chuỗi đã được thay thế PII bằng [<TYPE>_REDACTED].
+    """
+    sanitized = user_message
+    for pattern, pii_type in _INPUT_PII_PATTERNS:
+        if pattern.search(sanitized):
+            sanitized = pattern.sub(f"[{pii_type}_REDACTED]", sanitized)
+            logger.info(
+                f"[INPUT_FILTER] PII sanitized from input | type={pii_type} | "
+                f"preview={user_message[:60]!r}"
+            )
+    return sanitized
+
+
 @dataclass
 class InputFilterResult:
     """Kết quả kiểm tra đầu vào."""

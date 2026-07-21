@@ -246,10 +246,19 @@ class SessionStore:
     def clear_pending(self, session_id: str) -> None:
         """Xóa trạng thái pending sau khi user xác nhận hoặc huỷ."""
         session = self._vget(session_id)
+    def clear_pending(self, session_id: str) -> None:
+        """Xóa trạng thái pending sau khi user xác nhận hoặc huỷ."""
+        session = self._vget(session_id)
         if session:
             session["pending_confirmation"] = {}
             self._vset(session_id, session)
             logger.info("[SESSION] Pending cleared | id=%s", session_id)
+
+    def save(self, session_id: str, session: dict) -> None:
+        """Lưu lại toàn bộ session (thường dùng để cập nhật context)."""
+        session["metadata"]["last_active_ts"] = _now_ts()
+        session["last_active"] = _now_iso()
+        self._vset(session_id, session)
 
     def dump(self, session_id: str) -> Optional[dict]:
         """Trả về snapshot JSON-serializable của một session (dùng để debug)."""

@@ -79,14 +79,19 @@ def run_evaluation(
         }
 
         # ── Setup Context for Contextual Cases ──
-        if case_kind == "contextual":
+        setup_evidence = None
+        setup_query = case.get("setup_query")
+        
+        if setup_query:
             setup_req = {
-                "message": "Tìm một vài sản phẩm kính thiên văn giúp tôi",
+                "message": setup_query,
                 "session_id": req_body["session_id"],
                 "user_id": req_body["user_id"],
             }
             try:
-                requests.post(API_URL, json=setup_req, timeout=45)
+                setup_res = requests.post(API_URL, json=setup_req, timeout=45)
+                if setup_res.status_code == 200:
+                    setup_evidence = setup_res.json().get("evidence")
             except Exception as e:
                 logger.error(f"Setup context failed for {case['id']}: {e}")
 
@@ -102,6 +107,10 @@ def run_evaluation(
         status = data.get("status", "error")
         intent = data.get("intent")
         evidence = data.get("evidence")
+
+        # Combine setup_evidence into evidence if available so Judge has ground truth of prior turn
+        if setup_evidence and isinstance(evidence, dict):
+            evidence = {**setup_evidence, **evidence}
 
         # ── Đánh giá bằng LLM Judge ──
         if judge:
