@@ -262,21 +262,21 @@ Triển khai hệ thống tự dập sự cố end-to-end cho dịch vụ `produ
 * **Label Jira:** `ai-mandate`, `m14`, `research`
 
 ### Mô tả công việc (Description)
-Cả nhóm nghiên cứu tài liệu `D:\AI\Book\LLM-as-a-Judge.pdf` để thống nhất phương pháp thiết kế prompt cho LLM Judge, rubric chấm điểm và cơ chế gán nhãn của con người (human labels) để kiểm chứng độ chính xác của judge (Agreement Rate).
+Cả nhóm nghiên cứu tài liệu `D:\AI\Book\LLM-as-a-Judge.pdf` với mục tiêu hiểu rõ được các tiêu chí, nguyên tắc khi xây dựng và tích hợp LLM-as-a-judge vào trong **ngữ cảnh chính** của hệ thống (đánh giá chất lượng tóm tắt reviews và trợ lý hỏi đáp Ask AI). Từ đó thống nhất phương pháp thiết kế prompt cho LLM Judge, rubric chấm điểm và cơ chế gán nhãn của con người (human labels) để kiểm chứng độ chính xác của judge (Agreement Rate).
 
 ### Các tác vụ con (Sub-tasks)
 
 #### Sub-task 4.1: Đọc và ghi chép tài liệu LLM-as-a-Judge [Thứ 2 sáng — Thịnh, Khoa, Kiên] — Priority: High
 - Đọc tài liệu tại `D:\AI\Book\LLM-as-a-Judge.pdf`.
-- Tìm hiểu cách thiết kế rubrics chấm điểm tự động.
-- Nắm rõ cách xử lý các bias của LLM Judge (verbosity bias, position bias, self-enhancement bias).
+- Xác định và làm rõ các tiêu chí chấm điểm tự động (rubrics) phù hợp với ngữ cảnh chính (Product Reviews & Ask AI).
+- Nắm rõ cách xử lý các bias của LLM Judge (verbosity bias, position bias, self-enhancement bias) để hiệu chuẩn prompt của Judge.
 
 #### Sub-task 4.2: Họp sync thống nhất Rubrics & chọn 10 cases gán nhãn thủ công [Thứ 2 chiều — Cả nhóm] — Priority: High
-- Tổ chức buổi sync ngắn thống nhất bộ tiêu chí (rubric) chấm Fidelity (faithfulness, grounding) và Guardrails.
+- Tổ chức buổi sync ngắn thống nhất bộ tiêu chí (rubric) chấm Fidelity (faithfulness, grounding) và Guardrails trong ngữ cảnh chính của hệ thống.
 - Chọn ra ít nhất 10 cases thực tế từ reviews để cả nhóm cùng đánh giá bằng tay (human grading) và lưu vào `repro/datasets/human_labeled_cases.jsonl` làm tập đối so.
 
 ### Tiêu chí nghiệm thu (Acceptance Criteria)
-- [ ] Cả 3 thành viên đã đọc tài liệu.
+- [ ] Cả 3 thành viên đã đọc tài liệu và hiểu rõ các tiêu chí áp dụng cho ngữ cảnh chính của dự án.
 - [ ] Bộ rubrics đánh giá được thống nhất và ghi nhận trong ADR 0006.
 - [ ] Tệp `repro/datasets/human_labeled_cases.jsonl` được tạo với tối thiểu 10 cases được cả nhóm thống nhất nhãn.
 
