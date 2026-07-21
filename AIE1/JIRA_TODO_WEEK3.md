@@ -176,10 +176,16 @@ Không tự xây dựng AIOps Engine (detector độc lập). Nhiệm vụ của
 - Đảm bảo file `audit_log.json` ghi nhận đầy đủ chuỗi: trigger -> action -> verify -> rollback.
 - Tạo Jira ticket và đính kèm đầy đủ 4 evidences.
 
+#### Sub-task 3.6: Triển khai Graceful Shutdown & Reconnection Logic [Thứ 4] — Priority: High
+- Thiết lập gRPC Health Check status thành `NOT_SERVING` và bắt tín hiệu hệ thống (như SIGTERM/SIGINT) để kích hoạt `server.stop(grace=5.0)` cho phép gRPC server đóng kết nối một cách êm ái khi AIOps Engine yêu cầu hạ tải hoặc bảo trì.
+- Viết logic tự động kết nối lại (auto-reconnection) với các phụ thuộc (PostgreSQL, Redis, Product Catalog) khi khởi động lại dịch vụ để tránh crash pod lúc startup.
+
 ### Tiêu chí nghiệm thu (Acceptance Criteria)
 - [ ] Actuator nhận lệnh từ Redis key hoạt động đúng (key = true -> bypass Bedrock).
 - [ ] Chế độ Failure Injection hoạt động tốt khi bật flag giả lập lỗi.
 - [ ] Custom metrics xuất ra đúng định dạng và thu thập được từ Prometheus.
+- [ ] Cơ chế Graceful Shutdown đóng kết nối êm ái khi nhận tín hiệu tắt; gRPC Health Check báo đúng trạng thái.
+- [ ] Hệ thống tự động kết nối lại cơ sở dữ liệu và Redis khi restart dịch vụ.
 - [ ] Test E2E thành công với đội AIOps, có log rollback hoạt động.
 - [ ] ADR 0007 được commit đúng format và ký tên.
 - [ ] Jira ticket được tạo với đầy đủ bằng chứng chạy thật.
@@ -220,6 +226,6 @@ Cả nhóm nghiên cứu tài liệu `D:\AI\Book\LLM-as-a-Judge.pdf` với mục
 |------|------|-------|------|
 | **T2 21/07** | - Đo baseline Before (2.0)<br>- DB Migration `is_safe` (2.1)<br>- Đọc tài liệu LLM Judge (4.1)<br>- Họp sync rubrics & gán nhãn (4.2) | - Thiết kế cấu hình harness (1.1)<br>- Thêm surface field vào dataset (1.2)<br>- Đọc tài liệu LLM Judge (4.1)<br>- Họp sync rubrics & gán nhãn (4.2) | - Thống nhất Redis key schema với Khoa (3.1)<br>- Thiết kế & viết ADR 0007 (3.1)<br>- Đọc tài liệu LLM Judge (4.1)<br>- Họp sync rubrics & gán nhãn (4.2) |
 | **T3 22/07** | - Viết module `cache.py` (2.2)<br>- Đồng bộ Redis key cho Closed-Loop | - Bổ sung PII-in-review cases (1.2)<br>- Viết script `eval_judge_agreement.py` (1.3) | - Triển khai Redis Actuator trong server.py (3.2)<br>- Thêm Failure Injection Mode (3.3) |
-| **T4 23/07** | - Tích hợp cache vào server.py (2.3)<br>- Đo baseline After & So sánh (2.4)<br>- Viết ADR 0006 (2.5) | - Fix timeout & UNVERIFIED pass rate (1.4)<br>- Đóng gói Makefile (1.5) | - Tích hợp Custom Prometheus Metrics (3.4)<br>- Viết logic log kiểm toán (3.5) |
+| **T4 23/07** | - Đo After + So sánh before/after (2.4)<br>- Viết ADR 0006 (2.5) | - Fix timeout & UNVERIFIED pass rate (1.4)<br>- Đóng gói Makefile (1.5) | - Tích hợp Custom Prometheus Metrics (3.4)<br>- Graceful Shutdown & Reconnect (3.6)<br>- Viết logic log kiểm toán (3.5) |
 | **T5 24/07** | - Đóng gói ticket #14 (2.5)<br>- Nộp Jira ticket #14 | - Chạy thử nghiệm e2e harness (1.6)<br>- Chụp terminal, xuất results.json gửi Khoa | - Phối hợp test E2E với AIOps (3.5)<br>- Đóng gói ticket #22 & Nộp Jira |
 | **T6 25/07** | Kiểm tra chéo các ticket của nhóm, chuẩn bị môi trường chạy thật trước hạn | Hỗ trợ review, kiểm định chéo | Hỗ trợ review, kiểm định chéo |
