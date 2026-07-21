@@ -21,10 +21,14 @@ ALLOWED_TOOLS = frozenset([
     "search_products_v2",            # multi-strategy search (EN + VI)
     "get_categories",                # lấy danh sách danh mục
     "get_all_products",              # lấy toàn bộ sản phẩm
+    "get_top_rated_products",        # sản phẩm đánh giá cao theo catalog (không cần reviews)
+    "get_products_by_price_range",   # lọc sản phẩm theo khoảng giá (Phase 1 fix)
     "get_product_id",                # tra product_id từ tên sản phẩm
     "add_to_cart_tool",              # thêm vào giỏ hàng (write — cần L4 confirm)
     "get_cart_tool",                 # xem giỏ hàng
     "get_product_reviews_tool",      # xem đánh giá sản phẩm
+    "get_best_reviewed_products_tool",   # top sản phẩm review tốt nhất (Phase 1 fix)
+    "get_worst_reviewed_products_tool",  # top sản phẩm review tệ nhất (Phase 1 fix)
     "get_recommendations_tool",      # gợi ý sản phẩm
     "convert_currency_tool",         # quy đổi tiền tệ
     "get_shipping_quote_tool",       # phí vận chuyển

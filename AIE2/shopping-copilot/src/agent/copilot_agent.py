@@ -31,6 +31,7 @@ from src.guardrails import (
 )
 from src.memory import SessionStore, CacheStore
 from src.tools import all_shopping_tools
+from src.tools.catalog_tool import get_all_products, get_categories, get_top_rated_products
 from src.llm.prompt import SYSTEM_PROMPT, INTENT_PARSE_PROMPT, EVIDENCE_SYNTHESIS_PROMPT
 
 logger = logging.getLogger("agent.copilot_agent")
@@ -251,18 +252,40 @@ class CopilotAgent:
             if pname:
                 plan.append({"name": "search_products_v2", "args": {"query": pname}})
         elif task_type in ["rank", "compare"]:
-            if intent.get("product_query"):
+            # PRIORITY: Check for review ranking first (most specific)
+            if intent.get("ranking_by") == "review_score":
+                category = intent.get("constraints", {}).get("category")
+                if category:
+                    plan.append({"name": "get_best_reviewed_products_tool", "args": {"limit": 10, "category": category}})
+                else:
+                    plan.append({"name": "get_best_reviewed_products_tool", "args": {"limit": 10}})
+            elif intent.get("product_query"):
                 plan.append({"name": "search_products_v2", "args": {"query": intent.get("product_query")}})
-            plan.append({"name": "__fetch_reviews_for_context__", "args": {}})
+                plan.append({"name": "__fetch_reviews_for_context__", "args": {}})
+            else:
+                plan.append({"name": "__fetch_reviews_for_context__", "args": {}})
         elif task_type == "list_categories":
             plan.append({"name": "get_categories", "args": {}})
         elif task_type == "list_products":
             plan.append({"name": "get_all_products", "args": {}})
         elif task_type == "search":
-            q = intent.get("product_query", "")
-            if intent.get("constraints", {}).get("price_max"):
-                q += f" under {intent['constraints']['price_max']}"
-            plan.append({"name": "search_products_v2", "args": {"query": q}})
+            # PRIORITY: Check for price constraints first
+            constraints = intent.get("constraints", {})
+            price_max = constraints.get("price_max")
+            price_min = constraints.get("price_min")
+            
+            if price_max is not None or price_min is not None:
+                # Use price filter tool
+                args = {"limit": 20}
+                if price_max is not None:
+                    args["max_price"] = price_max
+                if price_min is not None:
+                    args["min_price"] = price_min
+                plan.append({"name": "get_products_by_price_range", "args": args})
+            else:
+                # Regular search
+                q = intent.get("product_query", "")
+                plan.append({"name": "search_products_v2", "args": {"query": q}})
         elif task_type == "convert_currency":
             plan.append({"name": "convert_currency_tool", "args": {
                 "from_currency": intent.get("from_currency", "USD"),
@@ -441,6 +464,32 @@ REPLY:
             "task_type": intent.get("task_type"),
             "target_entity": intent.get("target_entity"),
         }
+
+        # ── Attribute mismatch detection ──────────────────────────────────────
+        # If the user searched with a specific attribute/subtype (product_query),
+        # check whether any returned product's name actually contains that attribute.
+        # If none match, inject a flag so the synthesis LLM can reliably report
+        # "no matching products" rather than mislabeling mismatched results.
+        # This is a pre-validation step so the LLM doesn't need to reason about it.
+        product_query = intent.get("product_query", "")
+        if product_query and intent.get("task_type") in ["list_products", "search"]:
+            # Collect all product names returned in evidence
+            all_product_names: list[str] = []
+            for tool_result in evidence.values():
+                if isinstance(tool_result, dict):
+                    for p in tool_result.get("products", []):
+                        if isinstance(p, dict) and p.get("name"):
+                            all_product_names.append(p["name"].lower())
+
+            if all_product_names:
+                query_terms = [t.strip().lower() for t in product_query.split() if len(t.strip()) > 2]
+                any_match = any(
+                    any(term in name for name in all_product_names)
+                    for term in query_terms
+                )
+                if not any_match:
+                    evidence["__intent_meta__"]["attribute_unmatched"] = True
+                    evidence["__intent_meta__"]["requested_attribute"] = product_query
 
         ev_str = json.dumps(evidence, ensure_ascii=False)
         prompt = EVIDENCE_SYNTHESIS_PROMPT.format(user_message=user_message, evidence=ev_str)
