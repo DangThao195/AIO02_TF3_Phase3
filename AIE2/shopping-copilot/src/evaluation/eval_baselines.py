@@ -78,6 +78,18 @@ def run_evaluation(
             "user_id": f"eval_user_{case['id']}",
         }
 
+        # ── Setup Context for Contextual Cases ──
+        if case_kind == "contextual":
+            setup_req = {
+                "message": "Tìm một vài sản phẩm kính thiên văn giúp tôi",
+                "session_id": req_body["session_id"],
+                "user_id": req_body["user_id"],
+            }
+            try:
+                requests.post(API_URL, json=setup_req, timeout=45)
+            except Exception as e:
+                logger.error(f"Setup context failed for {case['id']}: {e}")
+
         t0 = time.time()
         try:
             res = requests.post(API_URL, json=req_body, timeout=45)

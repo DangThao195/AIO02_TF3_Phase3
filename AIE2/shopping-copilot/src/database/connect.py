@@ -3,6 +3,9 @@ import logging
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Optional
+from dotenv import load_dotenv
+
+load_dotenv(override=True)
 
 try:
     import psycopg2

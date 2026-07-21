@@ -294,8 +294,8 @@ class CopilotAgent:
                 
                 evidence[tc_name] = {
                     "status": "success", 
-                    "results": all_reviews,
-                    "products_context": session.get("context", {}).get("last_search_results", [])
+                    "products_context": session.get("context", {}).get("last_search_results", []),
+                    "results": all_reviews
                 }
                 continue
 
@@ -363,7 +363,7 @@ You are a faithfulness checker. Compare the REPLY with the EVIDENCE.
 If the REPLY contains specific facts (like numbers, specs, features) that are NOT supported by the EVIDENCE, return "FAIL".
 Otherwise, return "PASS".
 EVIDENCE:
-{json.dumps(evidence, ensure_ascii=False)[:8000]}
+{json.dumps(evidence, ensure_ascii=False)[:32000]}
 REPLY:
 {reply}
 """
@@ -466,7 +466,7 @@ REPLY:
         # L5 & L6: Answer Gen + Guarding
         s6, a6 = self._time("AnswerGenerator")
         reply = await self._generate_grounded_answer(user_message, exec_result.get("evidence", {}), intent)
-        print(f"=== DEBUG RAW REPLY ===\n{reply}\n=======================")
+        logger.info(f"=== DEBUG RAW REPLY ===\n{reply}\n=======================")
         
         # Faithfulness Guard (skip for exact SQL DB queries like list_products and list_categories)
         if intent.get("task_type") not in ["greeting", "unsupported_cart_action", "unknown", "list_products", "list_categories"]:
