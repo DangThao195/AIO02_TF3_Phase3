@@ -1,0 +1,47 @@
+[
+  {
+    "name": "real-incident-INC1",
+    "tick_seconds": 30,
+    "windows": [
+      {"tick": 1, "label": "real",
+       "anomalies": [{"service": "product-catalog", "sli": "latency_p95", "z": 8, "confidence": 0.85, "note": "pool wait spike"}]},
+      {"tick": 2, "label": "real",
+       "burns": [{"service": "checkout", "burn_rate": 14.4, "severity": "critical"}],
+       "anomalies": [{"service": "product-catalog", "sli": "latency_p95", "z": 9, "confidence": 0.9, "note": "pool exhausted"}]}
+    ],
+    "ground_truth": [
+      {"service": "product-catalog", "starts_tick": 1, "kind": "real"}
+    ]
+  },
+  {
+    "name": "masking-noise-hides-mild",
+    "tick_seconds": 30,
+    "windows": [
+      {"tick": 1, "label": "masking-noise",
+       "anomalies": [
+         {"service": "ad", "sli": "cpu", "z": 12, "confidence": 0.95, "note": "spike nhiễu lớn (không phải sự cố thật)"},
+         {"service": "kafka", "sli": "consumer_lag", "z": 5, "confidence": 0.8, "note": "lag nhẹ nhưng THẬT"}
+       ]},
+      {"tick": 2, "label": "masking-real",
+       "burns": [{"service": "accounting", "burn_rate": 6.0, "severity": "warning"}],
+       "anomalies": [{"service": "kafka", "sli": "consumer_lag", "z": 6, "confidence": 0.85, "note": "lag tiếp tục"}]}
+    ],
+    "ground_truth": [
+      {"service": "kafka", "starts_tick": 1, "kind": "masking-real"},
+      {"service": "ad", "kind": "masking-noise"}
+    ]
+  },
+  {
+    "name": "busy-but-healthy",
+    "tick_seconds": 30,
+    "windows": [
+      {"tick": 1, "label": "busy-healthy",
+       "anomalies": [{"service": "frontend", "sli": "latency_p95", "z": 2.5, "confidence": 0.5, "note": "tải cao giờ cao điểm — vẫn dưới ngưỡng, KHÔNG được kêu"}]},
+      {"tick": 2, "label": "busy-healthy",
+       "anomalies": [{"service": "frontend", "sli": "latency_p95", "z": 2.8, "confidence": 0.55, "note": "tải cao ổn định"}]}
+    ],
+    "ground_truth": [
+      {"service": "frontend", "starts_tick": 1, "kind": "busy-healthy"}
+    ]
+  }
+]

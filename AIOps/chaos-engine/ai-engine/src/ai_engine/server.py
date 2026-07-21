@@ -30,10 +30,18 @@ from .aiops.approval import parse_callback
 from .aiops.correlator import Correlator
 from .aiops.detector_anomaly import AnomalyDetector, AnomalySignal, default_anomaly_metrics
 from .aiops.detector_burnrate import BurnRateDetector, default_slos
+from .aiops.detector_drift import DriftDetector, default_drift_metrics
 from .aiops.detector_iforest import MultiFeatureIForestDetector
 from .aiops.detector_latency import MultiWindowLatencyDetector, default_latency_metrics
 from .aiops.detector_logtemplate import LogTemplateDetector
-from .aiops.action_policy import RemediationRoute, propose_for, route_for_confidence
+from .aiops.forecast import CapacityForecaster, default_capacity_metrics
+from .aiops.action_policy import (
+    RemediationRoute,
+    RiskDecision,
+    assess_risk,
+    propose_for,
+    route_for_confidence,
+)
 from .aiops.audit_log import AuditLog
 from .aiops.kb_retriever import BedrockKBRetriever
 from .aiops.rca_assistant import RCAAssistant
@@ -45,6 +53,10 @@ from .common.schemas import ApprovalDecision
 from .common.telemetry import JaegerClient, OpenSearchClient, PrometheusClient, TelemetryError
 
 log = logging.getLogger("ai_engine.server")
+
+# Forecast/drift chạy mỗi N tick (tick=30s → 20 tick = 10 phút). Xu hướng cạn tài nguyên và
+# dịch phân phối không đổi trong 30s; chạy thưa giữ query nhẹ (ràng buộc Directive #7).
+FORECAST_EVERY_N_TICKS = 20
 
 
 def k8s_executor(record: RemediationRecord, mode) -> str:
@@ -133,6 +145,12 @@ class AIOpsEngine:
         # log template miner (new-template / spike / silence từ OpenSearch error logs).
         self._iforest = MultiFeatureIForestDetector(prom, default_anomaly_metrics())
         self._logtpl = LogTemplateDetector()
+        # AIOps mở rộng: dự báo cạn tài nguyên + drift phân phối. Cả hai WARNING-max,
+        # chạy thưa hơn detector thường (mỗi FORECAST_EVERY_N_TICKS tick) vì xu hướng/
+        # phân phối không đổi trong 30s — đỡ tốn query, đúng ràng buộc "đo phải nhẹ".
+        self._forecaster = CapacityForecaster(prom, default_capacity_metrics())
+        self._drift = DriftDetector(prom, default_drift_metrics())
+        self._tick_count = 0
         self._correlator = Correlator()
         self._emitter = AlertEmitter(cfg.alert, slack_cfg=cfg.slack)
         self._os = OpenSearchClient(cfg.telemetry)
@@ -198,6 +216,20 @@ class AIOpsEngine:
             anomalies += await self._log_template_signals()
         except Exception:
             log.exception("log template evaluate failed — metric layers vẫn chạy")
+
+        # Layer-2 mở rộng chạy thưa (forecast/drift): xu hướng + phân phối không đổi trong
+        # 30s, chạy mỗi tick chỉ tốn query vô ích.
+        self._tick_count += 1
+        if self._tick_count % FORECAST_EVERY_N_TICKS == 0:
+            try:
+                anomalies += await self._forecaster.evaluate()
+            except Exception:
+                log.exception("capacity forecast failed — các layer khác vẫn chạy")
+            try:
+                anomalies += await self._drift.evaluate()
+            except Exception:
+                log.exception("drift detect failed — các layer khác vẫn chạy")
+
         incidents = self._correlator.correlate(signals, anomalies)
         for incident in incidents:
             alert = await self._emitter.emit(incident)
@@ -236,7 +268,7 @@ class AIOpsEngine:
                         self.pending_remediations[record.action_id] = record
                         log.info("Proposed remediation %s for %s (%s)",
                                  record.action_id, incident.primary.service, proposal.action.value)
-                        await self.send_slack_card(record)
+                        await self._route_by_risk(record, proposal, incident, confidence)
                     except Exception:
                         log.exception("Auto-proposal failed for %s", incident.primary.service)
 
@@ -248,6 +280,55 @@ class AIOpsEngine:
         except Exception:
             log.exception("resolve reconciliation failed")
         return len(incidents)
+
+    async def _route_by_risk(self, record, proposal, incident, confidence: float) -> None:
+        """Sơ đồ closed-loop: Dry-run → Risk Assessment → Low/Medium/High.
+
+          - Low    → auto_execute (engine tự chạy) + verify 5 phút + rollback nếu không hồi phục.
+          - Medium → Slack approval card (người duyệt 1 chạm, rồi verify+rollback như cũ).
+          - High   → reject: chỉ alert, không mutate.
+
+        Dry-run chạy TRƯỚC risk assessment (dry-run fail → risk HIGH → reject) — đúng thứ tự
+        sơ đồ. Mọi nhánh vẫn qua safety gate (đã chạy ở propose) + audit append-only.
+        """
+        # Dry-run "ok/not?" — hỏi executor thử apply server-side, không mutate thật.
+        try:
+            await asyncio.to_thread(k8s_executor, record, True)
+            dry_run_ok = True
+        except Exception as exc:
+            dry_run_ok = False
+            log.warning("dry-run failed for %s: %s", record.action_id, exc)
+
+        risk = assess_risk(
+            proposal, blast_radius=incident.blast_radius,
+            dry_run_ok=dry_run_ok, confidence=confidence,
+        )
+        record.risk_note = f"{record.risk_note} [risk={risk.level.value}: {'; '.join(risk.reasons)}]"
+        log.info("risk assessment %s → %s/%s (%s)",
+                 record.action_id, risk.level.value, risk.decision.value, "; ".join(risk.reasons))
+
+        if risk.decision is RiskDecision.EXECUTE:
+            # Nhánh Low: tự phục hồi hoàn toàn. auto_execute → verify → rollback nếu cần.
+            log.info("auto-executing low-risk remediation %s (self-healing)", record.action_id)
+            try:
+                await asyncio.to_thread(self._remediation.auto_execute, record)
+                if record.execution and record.execution.result == "success":
+                    asyncio.get_event_loop().create_task(self.verify_and_maybe_rollback(record))
+                await self._post_slack_text(
+                    f"🤖 *Auto-remediation (low-risk)* `{record.action_id}` đã chạy cho "
+                    f"`{record.target}`. Đang verify 5 phút, tự rollback nếu không hồi phục.")
+            except Exception:
+                log.exception("auto-execute failed for %s; falling back to approval", record.action_id)
+                await self.send_slack_card(record)
+        elif risk.decision is RiskDecision.APPROVAL:
+            await self.send_slack_card(record)
+        else:  # REJECT
+            self.pending_remediations.pop(record.action_id, None)
+            log.warning("remediation %s REJECTED by risk gate (%s) — chỉ alert, không mutate",
+                        record.action_id, "; ".join(risk.reasons))
+            await self._post_slack_text(
+                f"⛔ *Remediation từ chối tự động* cho `{record.target}` "
+                f"(risk=HIGH: {'; '.join(risk.reasons)}). Cần điều tra thủ công.")
 
     async def _log_template_signals(self) -> list[AnomalySignal]:
         """Kéo error log 5 phút gần nhất từ OpenSearch, gom theo service, đưa qua
@@ -296,6 +377,17 @@ class AIOpsEngine:
         if result.recovered:
             record.execution.verification += f"; VERIFIED {result.detail}"
             log.info("remediation %s verified recovered", record.action_id)
+        elif result.blind:
+            # G4 — KHÔNG đo được mẫu nào (recording-rule thiếu / Prometheus mù). Rollback mù
+            # ở đây có thể phá một action ĐÃ thành công. Không đoán: giao cho người.
+            record.execution.verification += f"; VERIFY BLIND {result.detail} — ESCALATED (không rollback mù)"
+            log.error("remediation %s: verify BLIND — escalating instead of blind rollback",
+                      record.action_id)
+            self._escalate_rollback_failure(
+                record,
+                f"verify blind ({result.detail}). Action VẪN ĐANG áp dụng — người cần xác minh "
+                f"thủ công rồi quyết giữ hay rollback: {record.execution.rollback_plan}",
+            )
         else:
             record.execution.verification += f"; VERIFY FAILED {result.detail} — rolling back"
             log.warning("remediation %s did not recover; auto-rollback", record.action_id)
