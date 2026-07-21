@@ -253,13 +253,44 @@ Triển khai hệ thống tự dập sự cố end-to-end cho dịch vụ `produ
 
 ---
 
+## TICKET 4: Nghiên cứu tài liệu LLM-as-a-Judge & Thống nhất bộ rubric đánh giá
+
+* **Người thực hiện (Assignee):** Cả nhóm (Thịnh, Khoa, Kiên)
+* **Loại công việc:** Task / Story
+* **Epic:** AIE1 - Mandate #14 AI Eval Standard (Tuần 3)
+* **Ưu tiên:** High
+* **Label Jira:** `ai-mandate`, `m14`, `research`
+
+### Mô tả công việc (Description)
+Cả nhóm nghiên cứu tài liệu `D:\AI\Book\LLM-as-a-Judge.pdf` để thống nhất phương pháp thiết kế prompt cho LLM Judge, rubric chấm điểm và cơ chế gán nhãn của con người (human labels) để kiểm chứng độ chính xác của judge (Agreement Rate).
+
+### Các tác vụ con (Sub-tasks)
+
+#### Sub-task 4.1: Đọc và ghi chép tài liệu LLM-as-a-Judge [Thứ 2 sáng — Thịnh, Khoa, Kiên] — Priority: High
+- Đọc tài liệu tại `D:\AI\Book\LLM-as-a-Judge.pdf`.
+- Tìm hiểu cách thiết kế rubrics chấm điểm tự động.
+- Nắm rõ cách xử lý các bias của LLM Judge (verbosity bias, position bias, self-enhancement bias).
+
+#### Sub-task 4.2: Họp sync thống nhất Rubrics & chọn 10 cases gán nhãn thủ công [Thứ 2 chiều — Cả nhóm] — Priority: High
+- Tổ chức buổi sync ngắn thống nhất bộ tiêu chí (rubric) chấm Fidelity (faithfulness, grounding) và Guardrails.
+- Chọn ra ít nhất 10 cases thực tế từ reviews để cả nhóm cùng đánh giá bằng tay (human grading) và lưu vào `repro/datasets/human_labeled_cases.jsonl` làm tập đối so.
+
+### Tiêu chí nghiệm thu (Acceptance Criteria)
+- [ ] Cả 3 thành viên đã đọc tài liệu.
+- [ ] Bộ rubrics đánh giá được thống nhất và ghi nhận trong ADR 0006.
+- [ ] Tệp `repro/datasets/human_labeled_cases.jsonl` được tạo với tối thiểu 10 cases được cả nhóm thống nhất nhãn.
+
+---
+
+---
+
 ## 📅 LỊCH SPRINT CHI TIẾT THEO NGÀY (Tuần 3)
 
 > **Ghi chú phối hợp:** Khoa và Kiên cần đồng thuận về Redis key schema (`product_reviews:fallback_override`) trước cuối ngày T2. Thịnh cần gửi `results.json` và ảnh chụp harness cho Khoa trước Thứ 5 chiều để đính kèm vào ticket #14.
 
 | Ngày | Khoa | Thịnh | Kiên |
 |------|------|-------|------|
-| **T2 21/07** | **Đo baseline Before** (Sub-task 2.0) + Migration DB `is_safe` + Xác nhận Redis key schema với Kiên | Viết `eval_harness.py` skeleton + CLI args + thêm field `surface` vào dataset | Viết ADR 0007 + Xác nhận Redis key schema với Khoa |
+| **T2 21/07** | **Đo baseline Before** (Sub-task 2.0) + Migration DB `is_safe` + Xác nhận Redis key schema + **Đọc tài liệu LLM Judge (4.1) & Họp sync rubrics (4.2)** | Viết `eval_harness.py` skeleton + CLI args + thêm field `surface` vào dataset + **Đọc tài liệu LLM Judge (4.1) & Họp sync rubrics (4.2)** | Viết ADR 0007 + Xác nhận Redis key schema + **Đọc tài liệu LLM Judge (4.1) & Họp sync rubrics (4.2)** |
 | **T3 22/07** | Viết `cache.py` (bao gồm key `fallback_override`) + Tích hợp cache vào server.py | Thêm PII-in-review cases (type B) + multi-turn cases + human labels | Viết `detector.py` + `safety_check.py` |
 | **T4 23/07** | Đo After + So sánh before/after + Viết ADR 0006 | Bổ sung luồng `--surface ask-ai` + Fix timeout/UNVERIFIED + Viết Makefile | Viết `mitigator.py` + `verifier.py` + `replay.py` |
 | **T5 24/07** | Tạo ticket #14 với đủ 4 evidence (nhận ảnh/log từ Thịnh) | Chạy e2e harness (cả 2 surface) + Chụp ảnh/log → gửi Khoa (Evidence #3) | Chạy closed-loop e2e + Chụp ảnh/log + Tạo ticket #22 với đủ 4 evidence |
