@@ -1,0 +1,35 @@
+title = "TF3 gitleaks config"
+
+# Start from gitleaks' maintained default ruleset (AWS keys, private keys,
+# generic API keys/tokens, bearer tokens, etc.) and layer TF-specific rules
+# + allowlist on top.
+[extend]
+useDefault = true
+
+[[rules]]
+id = "flagd-sync-bearer-token"
+description = "flagd central sync bearer token filled into a values file"
+regex = '''authHeader"\s*:\s*"Bearer\s+[A-Za-z0-9\-_\.]{10,}''' # RE2 has no lookahead; the char class already excludes the literal "<TOKEN>" placeholder
+tags = ["token", "flagd"]
+
+[[rules]]
+id = "kubeconfig-embedded-cert"
+description = "Embedded client-certificate-data/client-key-data from a kubeconfig"
+regex = '''(client-certificate-data|client-key-data|certificate-authority-data):\s*[A-Za-z0-9+/=]{40,}'''
+tags = ["kubeconfig", "k8s"]
+
+[allowlist]
+description = "Known placeholders from the BTC-provided reference docs, not real secrets"
+regexes = [
+  '''Bearer <TOKEN>''',
+  '''<ACCOUNT>''',
+  '''<REGION>''',
+  '''<REAL_KEY>''',
+  '''nghiadaulau/techx-corp''', # public seed image name, not a credential
+]
+paths = [
+  '''phase3 - information/.*\.md$''',
+]
+
+# Specific known-safe findings (upstream vendor sample secrets, not ours) are
+# suppressed by fingerprint in .gitleaksignore, not here - see that file.

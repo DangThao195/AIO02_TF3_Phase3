@@ -167,3 +167,67 @@ prometheus/PROMPT-WRITE-RECORDING-RULES.md
 # nội bộ CDO handoff (sau consolidate — path đầy đủ)
 TF3/ai-engine/prometheus/CDO-HANDOFF-RECORDING-RULES.md
 TF3/ai-engine/prometheus/PROMPT-WRITE-RECORDING-RULES.md
+
+# === Merged: secrets + terraform rules (từ nhánh mandate) ===
+# --- Secrets / credentials: never commit real values ---
+*.local.yaml
+*.secret.yaml
+values-flagd-sync.local.yaml
+kubeconfig*
+*.kubeconfig
+.aws/
+.env.local
+.env.*.local
+*.pem
+*.key
+*id_rsa*
+*.pfx
+*.p12
+llm-api-key*
+
+# --- Terraform: state and local overrides ---
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+infra/backend.hcl
+infra/terraform.tfvars
+!infra/terraform.tfvars.example
+
+# --- Helm dependency artifacts ---
+**/charts/*.tgz
+**/Chart.lock
+
+# --- OS / editor noise ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+.venv/
+venv/
+env/
+.env*
+*.egg-info/
+dist/
+build/
+
+# --- AIE1 Specific Rules ---
+/AIE1/docs/private/
+/AIE1/techx-corp-platform/*
+!/AIE1/techx-corp-platform/src/
+/AIE1/techx-corp-platform/src/*
+!/AIE1/techx-corp-platform/src/llm/
+!/AIE1/techx-corp-platform/src/product-reviews/
+!/AIE1/techx-corp-platform/src/frontend/
+!/AIE1/techx-corp-platform/src/frontend-proxy/
+.pytest_cache/
+AIE1/repro/artifacts/*.json

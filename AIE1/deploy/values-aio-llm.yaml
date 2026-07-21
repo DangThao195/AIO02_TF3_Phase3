@@ -1,0 +1,41 @@
+# AIO: cắm LLM thật thay mock (envOverrides = upsert, không xoá env khác).
+# Secret llm-api-key tạo trước: kubectl -n techx-<aio> create secret generic llm-api-key --from-literal=key=<REAL_KEY>
+components:
+  product-reviews:
+    envOverrides:
+      # Lựa chọn LLM Provider: 'openai' hoặc 'bedrock'
+      - name: LLM_PROVIDER
+        value: bedrock
+      
+      # Model ID của AWS Bedrock hoặc OpenAI tương ứng
+      - name: LLM_MODEL
+        value: amazon.nova-lite-v1:0
+
+      # Judge model is intentionally different from Candidate:
+      # Candidate = Nova Lite, Judge = Nova Micro.
+      - name: JUDGE_PROVIDER
+        value: bedrock
+      - name: JUDGE_MODEL
+        value: amazon.nova-micro-v1:0
+      - name: JUDGE_REGION
+        value: us-east-1
+      
+      # Khu vực AWS Bedrock (chỉ dùng cho Provider 'bedrock')
+      - name: AWS_REGION
+        value: us-east-1
+
+      # Bedrock Guardrail
+      - name: BEDROCK_GUARDRAIL_ID
+        value: 3ab7r29x59x4
+      - name: BEDROCK_GUARDRAIL_VERSION
+        value: DRAFT
+      - name: BEDROCK_GUARDRAIL_REGION
+        value: us-east-1
+
+      # Cấu hình API Key (chỉ dùng cho Provider 'openai' hoặc mock)
+      - name: OPENAI_API_KEY
+        valueFrom: { secretKeyRef: { name: llm-api-key, key: key } }
+      
+      # Địa chỉ LiteLLM/OpenAI Gateway (chỉ dùng cho Provider 'openai')
+      # - name: LLM_BASE_URL
+      #   value: http://litellm-service:4000/v1

@@ -1,0 +1,402 @@
+[
+  {
+    "body": "INFO: [RequestID: req-558589] HTTP GET /products/details success. Processed in 14ms.",
+    "timestamp": 1783930596838
+  },
+  {
+    "body": "INFO: [RequestID: req-435581] HTTP GET /products/details success. Processed in 16ms.",
+    "timestamp": 1783930572838
+  },
+  {
+    "body": "INFO: [RequestID: req-817642] HTTP GET /products/details success. Processed in 16ms.",
+    "timestamp": 1783930545838
+  },
+  {
+    "body": "INFO: [RequestID: req-225086] HTTP GET /products/details success. Processed in 27ms.",
+    "timestamp": 1783930620838
+  },
+  {
+    "body": "INFO: [RequestID: req-121606] HTTP GET /products/details success. Processed in 9ms.",
+    "timestamp": 1783930518838
+  },
+  {
+    "body": "INFO: [RequestID: req-195192] HTTP GET /products/details success. Processed in 44ms.",
+    "timestamp": 1783930692838
+  },
+  {
+    "body": "INFO: [RequestID: req-707237] HTTP GET /products/details success. Processed in 27ms.",
+    "timestamp": 1783930629838
+  },
+  {
+    "body": "INFO: [RequestID: req-534535] HTTP GET /products/details success. Processed in 31ms.",
+    "timestamp": 1783930677838
+  },
+  {
+    "body": "ERROR: [LLM_Call: err-765578] Bedrock API rate limit reached. HTTP 429 Too Many Requests. Timeout after 102ms.",
+    "timestamp": 1783930764838
+  },
+  {
+    "body": "INFO: [RequestID: req-975130] HTTP GET /products/details success. Processed in 17ms.",
+    "timestamp": 1783930671838
+  },
+  {
+    "body": "INFO: [RequestID: req-661223] HTTP GET /products/details success. Processed in 12ms.",
+    "timestamp": 1783930611838
+  },
+  {
+    "body": "INFO: [RequestID: req-737639] HTTP GET /products/details success. Processed in 26ms.",
+    "timestamp": 1783930581838
+  },
+  {
+    "body": "INFO: [RequestID: req-722692] HTTP GET /products/details success. Processed in 20ms.",
+    "timestamp": 1783930497838
+  },
+  {
+    "body": "INFO: [RequestID: req-710476] HTTP GET /products/details success. Processed in 40ms.",
+    "timestamp": 1783930515838
+  },
+  {
+    "body": "INFO: [RequestID: req-461943] HTTP GET /products/details success. Processed in 10ms.",
+    "timestamp": 1783930674838
+  },
+  {
+    "body": "INFO: [RequestID: req-509114] HTTP GET /products/details success. Processed in 26ms.",
+    "timestamp": 1783930557838
+  },
+  {
+    "body": "ERROR: [LLM_Call: err-425559] Bedrock API rate limit reached. HTTP 429 Too Many Requests. Timeout after 94ms.",
+    "timestamp": 1783930719838
+  },
+  {
+    "body": "INFO: [RequestID: req-181369] HTTP GET /products/details success. Processed in 6ms.",
+    "timestamp": 1783930485838
+  },
+  {
+    "body": "INFO: [RequestID: req-975362] HTTP GET /products/details success. Processed in 22ms.",
+    "timestamp": 1783930602838
+  },
+  {
+    "body": "INFO: [RequestID: req-989832] HTTP GET /products/details success. Processed in 30ms.",
+    "timestamp": 1783930623838
+  },
+  {
+    "body": "ERROR: [LLM_Call: err-270741] Bedrock API rate limit reached. HTTP 429 Too Many Requests. Timeout after 101ms.",
+    "timestamp": 1783930758838
+  },
+  {
+    "body": "INFO: [RequestID: req-510870] HTTP GET /products/details success. Processed in 6ms.",
+    "timestamp": 1783930683838
+  },
+  {
+    "body": "INFO: [RequestID: req-480790] HTTP GET /products/details success. Processed in 13ms.",
+    "timestamp": 1783930644838
+  },
+  {
+    "body": "INFO: [RequestID: req-787560] HTTP GET /products/details success. Processed in 15ms.",
+    "timestamp": 1783930695838
+  },
+  {
+    "body": "INFO: [RequestID: req-525575] HTTP GET /products/details success. Processed in 5ms.",
+    "timestamp": 1783930635838
+  },
+  {
+    "body": "ERROR: [LLM_Call: err-681257] Bedrock API rate limit reached. HTTP 429 Too Many Requests. Timeout after 95ms.",
+    "timestamp": 1783930716838
+  },
+  {
+    "body": "ERROR: [LLM_Call: err-637297] Bedrock API rate limit reached. HTTP 429 Too Many Requests. Timeout after 103ms.",
+    "timestamp": 1783930737838
+  },
+  {
+    "body": "INFO: [RequestID: req-830527] HTTP GET /products/details success. Processed in 40ms.",
+    "timestamp": 1783930539838
+  },
+  {
+    "body": "INFO: [RequestID: req-628268] HTTP GET /products/details success. Processed in 45ms.",
+    "timestamp": 1783930638838
+  },
+  {
+    "body": "ERROR: [LLM_Call: err-830994] Bedrock API rate limit reached. HTTP 429 Too Many Requests. Timeout after 94ms.",
+    "timestamp": 1783930728838
+  },
+  {
+    "body": "ERROR: [LLM_Call: err-332492] Bedrock API rate limit reached. HTTP 429 Too Many Requests. Timeout after 104ms.",
+    "timestamp": 1783930761838
+  },
+  {
+    "body": "INFO: [RequestID: req-137190] HTTP GET /products/details success. Processed in 13ms.",
+    "timestamp": 1783930554838
+  },
+  {
+    "body": "INFO: [RequestID: req-697599] HTTP GET /products/details success. Processed in 43ms.",
+    "timestamp": 1783930710838
+  },
+  {
+    "body": "INFO: [RequestID: req-193026] HTTP GET /products/details success. Processed in 13ms.",
+    "timestamp": 1783930707838
+  },
+  {
+    "body": "INFO: [RequestID: req-967527] HTTP GET /products/details success. Processed in 8ms.",
+    "timestamp": 1783930689838
+  },
+  {
+    "body": "INFO: [RequestID: req-158342] HTTP GET /products/details success. Processed in 44ms.",
+    "timestamp": 1783930575838
+  },
+  {
+    "body": "ERROR: [LLM_Call: err-601541] Bedrock API rate limit reached. HTTP 429 Too Many Requests. Timeout after 101ms.",
+    "timestamp": 1783930740838
+  },
+  {
+    "body": "ERROR: [LLM_Call: err-579686] Bedrock API rate limit reached. HTTP 429 Too Many Requests. Timeout after 93ms.",
+    "timestamp": 1783930752838
+  },
+  {
+    "body": "INFO: [RequestID: req-111502] HTTP GET /products/details success. Processed in 28ms.",
+    "timestamp": 1783930641838
+  },
+  {
+    "body": "INFO: [RequestID: req-838679] HTTP GET /products/details success. Processed in 28ms.",
+    "timestamp": 1783930614838
+  },
+  {
+    "body": "INFO: [RequestID: req-797241] HTTP GET /products/details success. Processed in 43ms.",
+    "timestamp": 1783930617838
+  },
+  {
+    "body": "INFO: [RequestID: req-166199] HTTP GET /products/details success. Processed in 29ms.",
+    "timestamp": 1783930578838
+  },
+  {
+    "body": "INFO: [RequestID: req-741960] HTTP GET /products/details success. Processed in 12ms.",
+    "timestamp": 1783930590838
+  },
+  {
+    "body": "INFO: [RequestID: req-541881] HTTP GET /products/details success. Processed in 21ms.",
+    "timestamp": 1783930551838
+  },
+  {
+    "body": "INFO: [RequestID: req-565556] HTTP GET /products/details success. Processed in 20ms.",
+    "timestamp": 1783930668838
+  },
+  {
+    "body": "INFO: [RequestID: req-199380] HTTP GET /products/details success. Processed in 7ms.",
+    "timestamp": 1783930632838
+  },
+  {
+    "body": "ERROR: [LLM_Call: err-405801] Bedrock API rate limit reached. HTTP 429 Too Many Requests. Timeout after 103ms.",
+    "timestamp": 1783930767838
+  },
+  {
+    "body": "INFO: [RequestID: req-687923] HTTP GET /products/details success. Processed in 27ms.",
+    "timestamp": 1783930503838
+  },
+  {
+    "body": "INFO: [RequestID: req-268003] HTTP GET /products/details success. Processed in 9ms.",
+    "timestamp": 1783930494838
+  },
+  {
+    "body": "ERROR: [LLM_Call: err-319809] Bedrock API rate limit reached. HTTP 429 Too Many Requests. Timeout after 100ms.",
+    "timestamp": 1783930755838
+  },
+  {
+    "body": "INFO: [RequestID: req-759507] HTTP GET /products/details success. Processed in 15ms.",
+    "timestamp": 1783930701838
+  },
+  {
+    "body": "INFO: [RequestID: req-709540] HTTP GET /products/details success. Processed in 35ms.",
+    "timestamp": 1783930584838
+  },
+  {
+    "body": "INFO: [RequestID: req-997841] HTTP GET /products/details success. Processed in 26ms.",
+    "timestamp": 1783930599838
+  },
+  {
+    "body": "INFO: [RequestID: req-972333] HTTP GET /products/details success. Processed in 7ms.",
+    "timestamp": 1783930542838
+  },
+  {
+    "body": "INFO: [RequestID: req-790713] HTTP GET /products/details success. Processed in 12ms.",
+    "timestamp": 1783930569838
+  },
+  {
+    "body": "INFO: [RequestID: req-679416] HTTP GET /products/details success. Processed in 14ms.",
+    "timestamp": 1783930527838
+  },
+  {
+    "body": "INFO: [RequestID: req-475053] HTTP GET /products/details success. Processed in 5ms.",
+    "timestamp": 1783930587838
+  },
+  {
+    "body": "INFO: [RequestID: req-953297] HTTP GET /products/details success. Processed in 39ms.",
+    "timestamp": 1783930605838
+  },
+  {
+    "body": "INFO: [RequestID: req-790564] HTTP GET /products/details success. Processed in 34ms.",
+    "timestamp": 1783930479838
+  },
+  {
+    "body": "INFO: [RequestID: req-983487] HTTP GET /products/details success. Processed in 32ms.",
+    "timestamp": 1783930608838
+  },
+  {
+    "body": "INFO: [RequestID: req-447057] HTTP GET /products/details success. Processed in 9ms.",
+    "timestamp": 1783930560838
+  },
+  {
+    "body": "INFO: [RequestID: req-255401] HTTP GET /products/details success. Processed in 38ms.",
+    "timestamp": 1783930524838
+  },
+  {
+    "body": "ERROR: [LLM_Call: err-312509] Bedrock API rate limit reached. HTTP 429 Too Many Requests. Timeout after 96ms.",
+    "timestamp": 1783930722838
+  },
+  {
+    "body": "INFO: [RequestID: req-576693] HTTP GET /products/details success. Processed in 28ms.",
+    "timestamp": 1783930482838
+  },
+  {
+    "body": "INFO: [RequestID: req-615214] HTTP GET /products/details success. Processed in 34ms.",
+    "timestamp": 1783930698838
+  },
+  {
+    "body": "ERROR: [LLM_Call: err-309836] Bedrock API rate limit reached. HTTP 429 Too Many Requests. Timeout after 97ms.",
+    "timestamp": 1783930770838
+  },
+  {
+    "body": "ERROR: [LLM_Call: err-347290] Bedrock API rate limit reached. HTTP 429 Too Many Requests. Timeout after 101ms.",
+    "timestamp": 1783930743838
+  },
+  {
+    "body": "INFO: [RequestID: req-783320] HTTP GET /products/details success. Processed in 24ms.",
+    "timestamp": 1783930704838
+  },
+  {
+    "body": "INFO: [RequestID: req-495833] HTTP GET /products/details success. Processed in 12ms.",
+    "timestamp": 1783930509838
+  },
+  {
+    "body": "INFO: [RequestID: req-545712] HTTP GET /products/details success. Processed in 45ms.",
+    "timestamp": 1783930662838
+  },
+  {
+    "body": "INFO: [RequestID: req-311936] HTTP GET /products/details success. Processed in 31ms.",
+    "timestamp": 1783930656838
+  },
+  {
+    "body": "INFO: [RequestID: req-443387] HTTP GET /products/details success. Processed in 35ms.",
+    "timestamp": 1783930500838
+  },
+  {
+    "body": "INFO: [RequestID: req-487206] HTTP GET /products/details success. Processed in 35ms.",
+    "timestamp": 1783930647838
+  },
+  {
+    "body": "INFO: [RequestID: req-978225] HTTP GET /products/details success. Processed in 40ms.",
+    "timestamp": 1783930512838
+  },
+  {
+    "body": "INFO: [RequestID: req-265743] HTTP GET /products/details success. Processed in 28ms.",
+    "timestamp": 1783930653838
+  },
+  {
+    "body": "INFO: [RequestID: req-972561] HTTP GET /products/details success. Processed in 12ms.",
+    "timestamp": 1783930680838
+  },
+  {
+    "body": "INFO: [RequestID: req-131823] HTTP GET /products/details success. Processed in 20ms.",
+    "timestamp": 1783930563838
+  },
+  {
+    "body": "INFO: [RequestID: req-554187] HTTP GET /products/details success. Processed in 23ms.",
+    "timestamp": 1783930491838
+  },
+  {
+    "body": "ERROR: [LLM_Call: err-837766] Bedrock API rate limit reached. HTTP 429 Too Many Requests. Timeout after 92ms.",
+    "timestamp": 1783930749838
+  },
+  {
+    "body": "INFO: [RequestID: req-729658] HTTP GET /products/details success. Processed in 8ms.",
+    "timestamp": 1783930650838
+  },
+  {
+    "body": "INFO: [RequestID: req-772850] HTTP GET /products/details success. Processed in 23ms.",
+    "timestamp": 1783930626838
+  },
+  {
+    "body": "INFO: [RequestID: req-341663] HTTP GET /products/details success. Processed in 12ms.",
+    "timestamp": 1783930713838
+  },
+  {
+    "body": "ERROR: [LLM_Call: err-609490] Bedrock API rate limit reached. HTTP 429 Too Many Requests. Timeout after 92ms.",
+    "timestamp": 1783930734838
+  },
+  {
+    "body": "ERROR: [LLM_Call: err-648726] Bedrock API rate limit reached. HTTP 429 Too Many Requests. Timeout after 101ms.",
+    "timestamp": 1783930773838
+  },
+  {
+    "body": "ERROR: [LLM_Call: err-391003] Bedrock API rate limit reached. HTTP 429 Too Many Requests. Timeout after 101ms.",
+    "timestamp": 1783930731838
+  },
+  {
+    "body": "ERROR: [LLM_Call: err-658949] Bedrock API rate limit reached. HTTP 429 Too Many Requests. Timeout after 99ms.",
+    "timestamp": 1783930746838
+  },
+  {
+    "body": "INFO: [RequestID: req-441948] HTTP GET /products/details success. Processed in 7ms.",
+    "timestamp": 1783930533838
+  },
+  {
+    "body": "INFO: [RequestID: req-606498] HTTP GET /products/details success. Processed in 27ms.",
+    "timestamp": 1783930659838
+  },
+  {
+    "body": "INFO: [RequestID: req-975096] HTTP GET /products/details success. Processed in 15ms.",
+    "timestamp": 1783930686838
+  },
+  {
+    "body": "INFO: [RequestID: req-794074] HTTP GET /products/details success. Processed in 8ms.",
+    "timestamp": 1783930593838
+  },
+  {
+    "body": "INFO: [RequestID: req-269269] HTTP GET /products/details success. Processed in 36ms.",
+    "timestamp": 1783930548838
+  },
+  {
+    "body": "ERROR: [LLM_Call: err-603346] Bedrock API rate limit reached. HTTP 429 Too Many Requests. Timeout after 91ms.",
+    "timestamp": 1783930725838
+  },
+  {
+    "body": "INFO: [RequestID: req-670008] HTTP GET /products/details success. Processed in 41ms.",
+    "timestamp": 1783930536838
+  },
+  {
+    "body": "INFO: [RequestID: req-840756] HTTP GET /products/details success. Processed in 22ms.",
+    "timestamp": 1783930506838
+  },
+  {
+    "body": "INFO: [RequestID: req-745309] HTTP GET /products/details success. Processed in 39ms.",
+    "timestamp": 1783930521838
+  },
+  {
+    "body": "INFO: [RequestID: req-485640] HTTP GET /products/details success. Processed in 5ms.",
+    "timestamp": 1783930476838
+  },
+  {
+    "body": "INFO: [RequestID: req-727382] HTTP GET /products/details success. Processed in 38ms.",
+    "timestamp": 1783930530838
+  },
+  {
+    "body": "INFO: [RequestID: req-697880] HTTP GET /products/details success. Processed in 15ms.",
+    "timestamp": 1783930566838
+  },
+  {
+    "body": "INFO: [RequestID: req-647768] HTTP GET /products/details success. Processed in 17ms.",
+    "timestamp": 1783930488838
+  },
+  {
+    "body": "INFO: [RequestID: req-138252] HTTP GET /products/details success. Processed in 29ms.",
+    "timestamp": 1783930665838
+  }
+]

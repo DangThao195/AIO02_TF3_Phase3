@@ -1,0 +1,402 @@
+[
+  {
+    "body": "INFO: [RequestID: req-624482] HTTP GET /products/details success. Processed in 28ms.",
+    "timestamp": 1783930485845
+  },
+  {
+    "body": "INFO: [RequestID: req-922427] HTTP GET /products/details success. Processed in 7ms.",
+    "timestamp": 1783930491845
+  },
+  {
+    "body": "INFO: [RequestID: req-784910] HTTP GET /products/details success. Processed in 44ms.",
+    "timestamp": 1783930596845
+  },
+  {
+    "body": "INFO: [RequestID: req-231705] HTTP GET /products/details success. Processed in 33ms.",
+    "timestamp": 1783930626845
+  },
+  {
+    "body": "INFO: [Cache_Warmer: err-829664] Warming exchange rates cache from external API. Elapsed time: 3200ms.",
+    "timestamp": 1783930719845
+  },
+  {
+    "body": "INFO: [RequestID: req-637240] HTTP GET /products/details success. Processed in 32ms.",
+    "timestamp": 1783930635845
+  },
+  {
+    "body": "INFO: [Cache_Warmer: err-581962] Warming exchange rates cache from external API. Elapsed time: 3200ms.",
+    "timestamp": 1783930752846
+  },
+  {
+    "body": "INFO: [RequestID: req-754109] HTTP GET /products/details success. Processed in 31ms.",
+    "timestamp": 1783930680845
+  },
+  {
+    "body": "INFO: [RequestID: req-304086] HTTP GET /products/details success. Processed in 9ms.",
+    "timestamp": 1783930713845
+  },
+  {
+    "body": "INFO: [RequestID: req-566790] HTTP GET /products/details success. Processed in 43ms.",
+    "timestamp": 1783930704845
+  },
+  {
+    "body": "INFO: [RequestID: req-198901] HTTP GET /products/details success. Processed in 37ms.",
+    "timestamp": 1783930512845
+  },
+  {
+    "body": "INFO: [RequestID: req-636537] HTTP GET /products/details success. Processed in 26ms.",
+    "timestamp": 1783930551845
+  },
+  {
+    "body": "INFO: [RequestID: req-426390] HTTP GET /products/details success. Processed in 18ms.",
+    "timestamp": 1783930611845
+  },
+  {
+    "body": "INFO: [Cache_Warmer: err-367151] Warming exchange rates cache from external API. Elapsed time: 3200ms.",
+    "timestamp": 1783930728846
+  },
+  {
+    "body": "INFO: [RequestID: req-774301] HTTP GET /products/details success. Processed in 39ms.",
+    "timestamp": 1783930575845
+  },
+  {
+    "body": "INFO: [RequestID: req-192589] HTTP GET /products/details success. Processed in 32ms.",
+    "timestamp": 1783930482845
+  },
+  {
+    "body": "INFO: [RequestID: req-597312] HTTP GET /products/details success. Processed in 12ms.",
+    "timestamp": 1783930608845
+  },
+  {
+    "body": "INFO: [Cache_Warmer: err-827191] Warming exchange rates cache from external API. Elapsed time: 3200ms.",
+    "timestamp": 1783930770846
+  },
+  {
+    "body": "INFO: [RequestID: req-779627] HTTP GET /products/details success. Processed in 13ms.",
+    "timestamp": 1783930521845
+  },
+  {
+    "body": "INFO: [Cache_Warmer: err-313538] Warming exchange rates cache from external API. Elapsed time: 3200ms.",
+    "timestamp": 1783930761846
+  },
+  {
+    "body": "INFO: [RequestID: req-433965] HTTP GET /products/details success. Processed in 25ms.",
+    "timestamp": 1783930620845
+  },
+  {
+    "body": "INFO: [RequestID: req-713416] HTTP GET /products/details success. Processed in 28ms.",
+    "timestamp": 1783930554845
+  },
+  {
+    "body": "INFO: [RequestID: req-788900] HTTP GET /products/details success. Processed in 27ms.",
+    "timestamp": 1783930599845
+  },
+  {
+    "body": "INFO: [RequestID: req-825465] HTTP GET /products/details success. Processed in 43ms.",
+    "timestamp": 1783930686845
+  },
+  {
+    "body": "INFO: [RequestID: req-597462] HTTP GET /products/details success. Processed in 41ms.",
+    "timestamp": 1783930650845
+  },
+  {
+    "body": "INFO: [RequestID: req-310578] HTTP GET /products/details success. Processed in 16ms.",
+    "timestamp": 1783930662845
+  },
+  {
+    "body": "INFO: [RequestID: req-466612] HTTP GET /products/details success. Processed in 18ms.",
+    "timestamp": 1783930569845
+  },
+  {
+    "body": "INFO: [Cache_Warmer: err-661623] Warming exchange rates cache from external API. Elapsed time: 3200ms.",
+    "timestamp": 1783930716845
+  },
+  {
+    "body": "INFO: [RequestID: req-456063] HTTP GET /products/details success. Processed in 26ms.",
+    "timestamp": 1783930584845
+  },
+  {
+    "body": "INFO: [RequestID: req-664489] HTTP GET /products/details success. Processed in 5ms.",
+    "timestamp": 1783930668845
+  },
+  {
+    "body": "INFO: [RequestID: req-879644] HTTP GET /products/details success. Processed in 6ms.",
+    "timestamp": 1783930653845
+  },
+  {
+    "body": "INFO: [RequestID: req-869844] HTTP GET /products/details success. Processed in 36ms.",
+    "timestamp": 1783930701845
+  },
+  {
+    "body": "INFO: [RequestID: req-327884] HTTP GET /products/details success. Processed in 20ms.",
+    "timestamp": 1783930500845
+  },
+  {
+    "body": "INFO: [RequestID: req-874383] HTTP GET /products/details success. Processed in 42ms.",
+    "timestamp": 1783930593845
+  },
+  {
+    "body": "INFO: [RequestID: req-589974] HTTP GET /products/details success. Processed in 27ms.",
+    "timestamp": 1783930515845
+  },
+  {
+    "body": "INFO: [Cache_Warmer: err-745348] Warming exchange rates cache from external API. Elapsed time: 3200ms.",
+    "timestamp": 1783930740846
+  },
+  {
+    "body": "INFO: [RequestID: req-401898] HTTP GET /products/details success. Processed in 5ms.",
+    "timestamp": 1783930476845
+  },
+  {
+    "body": "INFO: [RequestID: req-501024] HTTP GET /products/details success. Processed in 17ms.",
+    "timestamp": 1783930683845
+  },
+  {
+    "body": "INFO: [RequestID: req-881219] HTTP GET /products/details success. Processed in 32ms.",
+    "timestamp": 1783930503845
+  },
+  {
+    "body": "INFO: [RequestID: req-858513] HTTP GET /products/details success. Processed in 7ms.",
+    "timestamp": 1783930488845
+  },
+  {
+    "body": "INFO: [RequestID: req-933558] HTTP GET /products/details success. Processed in 23ms.",
+    "timestamp": 1783930689845
+  },
+  {
+    "body": "INFO: [Cache_Warmer: err-728787] Warming exchange rates cache from external API. Elapsed time: 3200ms.",
+    "timestamp": 1783930767846
+  },
+  {
+    "body": "INFO: [RequestID: req-365805] HTTP GET /products/details success. Processed in 33ms.",
+    "timestamp": 1783930656845
+  },
+  {
+    "body": "INFO: [RequestID: req-471628] HTTP GET /products/details success. Processed in 14ms.",
+    "timestamp": 1783930560845
+  },
+  {
+    "body": "INFO: [RequestID: req-508961] HTTP GET /products/details success. Processed in 11ms.",
+    "timestamp": 1783930530845
+  },
+  {
+    "body": "INFO: [Cache_Warmer: err-212252] Warming exchange rates cache from external API. Elapsed time: 3200ms.",
+    "timestamp": 1783930773846
+  },
+  {
+    "body": "INFO: [Cache_Warmer: err-251379] Warming exchange rates cache from external API. Elapsed time: 3200ms.",
+    "timestamp": 1783930722845
+  },
+  {
+    "body": "INFO: [RequestID: req-851039] HTTP GET /products/details success. Processed in 9ms.",
+    "timestamp": 1783930674845
+  },
+  {
+    "body": "INFO: [Cache_Warmer: err-246326] Warming exchange rates cache from external API. Elapsed time: 3200ms.",
+    "timestamp": 1783930764846
+  },
+  {
+    "body": "INFO: [RequestID: req-325533] HTTP GET /products/details success. Processed in 45ms.",
+    "timestamp": 1783930614845
+  },
+  {
+    "body": "INFO: [RequestID: req-407503] HTTP GET /products/details success. Processed in 17ms.",
+    "timestamp": 1783930638845
+  },
+  {
+    "body": "INFO: [RequestID: req-149707] HTTP GET /products/details success. Processed in 33ms.",
+    "timestamp": 1783930671845
+  },
+  {
+    "body": "INFO: [RequestID: req-619137] HTTP GET /products/details success. Processed in 17ms.",
+    "timestamp": 1783930602845
+  },
+  {
+    "body": "INFO: [Cache_Warmer: err-355404] Warming exchange rates cache from external API. Elapsed time: 3200ms.",
+    "timestamp": 1783930734846
+  },
+  {
+    "body": "INFO: [RequestID: req-180823] HTTP GET /products/details success. Processed in 40ms.",
+    "timestamp": 1783930617845
+  },
+  {
+    "body": "INFO: [RequestID: req-957209] HTTP GET /products/details success. Processed in 19ms.",
+    "timestamp": 1783930548845
+  },
+  {
+    "body": "INFO: [RequestID: req-248567] HTTP GET /products/details success. Processed in 33ms.",
+    "timestamp": 1783930557845
+  },
+  {
+    "body": "INFO: [RequestID: req-641060] HTTP GET /products/details success. Processed in 42ms.",
+    "timestamp": 1783930710845
+  },
+  {
+    "body": "INFO: [RequestID: req-120245] HTTP GET /products/details success. Processed in 39ms.",
+    "timestamp": 1783930566845
+  },
+  {
+    "body": "INFO: [RequestID: req-714097] HTTP GET /products/details success. Processed in 12ms.",
+    "timestamp": 1783930659845
+  },
+  {
+    "body": "INFO: [Cache_Warmer: err-753076] Warming exchange rates cache from external API. Elapsed time: 3200ms.",
+    "timestamp": 1783930746846
+  },
+  {
+    "body": "INFO: [RequestID: req-761255] HTTP GET /products/details success. Processed in 37ms.",
+    "timestamp": 1783930578845
+  },
+  {
+    "body": "INFO: [Cache_Warmer: err-679540] Warming exchange rates cache from external API. Elapsed time: 3200ms.",
+    "timestamp": 1783930725845
+  },
+  {
+    "body": "INFO: [RequestID: req-754005] HTTP GET /products/details success. Processed in 29ms.",
+    "timestamp": 1783930527845
+  },
+  {
+    "body": "INFO: [RequestID: req-267114] HTTP GET /products/details success. Processed in 43ms.",
+    "timestamp": 1783930533845
+  },
+  {
+    "body": "INFO: [RequestID: req-354658] HTTP GET /products/details success. Processed in 36ms.",
+    "timestamp": 1783930572845
+  },
+  {
+    "body": "INFO: [RequestID: req-498235] HTTP GET /products/details success. Processed in 37ms.",
+    "timestamp": 1783930695845
+  },
+  {
+    "body": "INFO: [RequestID: req-316796] HTTP GET /products/details success. Processed in 35ms.",
+    "timestamp": 1783930536845
+  },
+  {
+    "body": "INFO: [Cache_Warmer: err-544395] Warming exchange rates cache from external API. Elapsed time: 3200ms.",
+    "timestamp": 1783930731846
+  },
+  {
+    "body": "INFO: [RequestID: req-474948] HTTP GET /products/details success. Processed in 20ms.",
+    "timestamp": 1783930524845
+  },
+  {
+    "body": "INFO: [RequestID: req-263894] HTTP GET /products/details success. Processed in 40ms.",
+    "timestamp": 1783930563845
+  },
+  {
+    "body": "INFO: [RequestID: req-433110] HTTP GET /products/details success. Processed in 17ms.",
+    "timestamp": 1783930545845
+  },
+  {
+    "body": "INFO: [RequestID: req-203272] HTTP GET /products/details success. Processed in 30ms.",
+    "timestamp": 1783930632845
+  },
+  {
+    "body": "INFO: [RequestID: req-168608] HTTP GET /products/details success. Processed in 41ms.",
+    "timestamp": 1783930629845
+  },
+  {
+    "body": "INFO: [RequestID: req-510829] HTTP GET /products/details success. Processed in 8ms.",
+    "timestamp": 1783930692845
+  },
+  {
+    "body": "INFO: [RequestID: req-194736] HTTP GET /products/details success. Processed in 25ms.",
+    "timestamp": 1783930677845
+  },
+  {
+    "body": "INFO: [Cache_Warmer: err-571498] Warming exchange rates cache from external API. Elapsed time: 3200ms.",
+    "timestamp": 1783930758846
+  },
+  {
+    "body": "INFO: [RequestID: req-545297] HTTP GET /products/details success. Processed in 20ms.",
+    "timestamp": 1783930509845
+  },
+  {
+    "body": "INFO: [Cache_Warmer: err-800229] Warming exchange rates cache from external API. Elapsed time: 3200ms.",
+    "timestamp": 1783930737846
+  },
+  {
+    "body": "INFO: [RequestID: req-123288] HTTP GET /products/details success. Processed in 21ms.",
+    "timestamp": 1783930518845
+  },
+  {
+    "body": "INFO: [RequestID: req-304980] HTTP GET /products/details success. Processed in 45ms.",
+    "timestamp": 1783930665845
+  },
+  {
+    "body": "INFO: [RequestID: req-732979] HTTP GET /products/details success. Processed in 5ms.",
+    "timestamp": 1783930647845
+  },
+  {
+    "body": "INFO: [RequestID: req-145447] HTTP GET /products/details success. Processed in 12ms.",
+    "timestamp": 1783930605845
+  },
+  {
+    "body": "INFO: [RequestID: req-335610] HTTP GET /products/details success. Processed in 44ms.",
+    "timestamp": 1783930623845
+  },
+  {
+    "body": "INFO: [RequestID: req-965826] HTTP GET /products/details success. Processed in 36ms.",
+    "timestamp": 1783930707845
+  },
+  {
+    "body": "INFO: [RequestID: req-520247] HTTP GET /products/details success. Processed in 16ms.",
+    "timestamp": 1783930581845
+  },
+  {
+    "body": "INFO: [RequestID: req-645049] HTTP GET /products/details success. Processed in 43ms.",
+    "timestamp": 1783930497845
+  },
+  {
+    "body": "INFO: [RequestID: req-410604] HTTP GET /products/details success. Processed in 32ms.",
+    "timestamp": 1783930644845
+  },
+  {
+    "body": "INFO: [RequestID: req-882574] HTTP GET /products/details success. Processed in 14ms.",
+    "timestamp": 1783930587845
+  },
+  {
+    "body": "INFO: [RequestID: req-526329] HTTP GET /products/details success. Processed in 40ms.",
+    "timestamp": 1783930539845
+  },
+  {
+    "body": "INFO: [RequestID: req-401803] HTTP GET /products/details success. Processed in 41ms.",
+    "timestamp": 1783930479845
+  },
+  {
+    "body": "INFO: [RequestID: req-343501] HTTP GET /products/details success. Processed in 21ms.",
+    "timestamp": 1783930542845
+  },
+  {
+    "body": "INFO: [RequestID: req-790638] HTTP GET /products/details success. Processed in 41ms.",
+    "timestamp": 1783930494845
+  },
+  {
+    "body": "INFO: [RequestID: req-551058] HTTP GET /products/details success. Processed in 7ms.",
+    "timestamp": 1783930641845
+  },
+  {
+    "body": "INFO: [RequestID: req-182821] HTTP GET /products/details success. Processed in 44ms.",
+    "timestamp": 1783930590845
+  },
+  {
+    "body": "INFO: [RequestID: req-263456] HTTP GET /products/details success. Processed in 15ms.",
+    "timestamp": 1783930506845
+  },
+  {
+    "body": "INFO: [Cache_Warmer: err-304093] Warming exchange rates cache from external API. Elapsed time: 3200ms.",
+    "timestamp": 1783930743846
+  },
+  {
+    "body": "INFO: [Cache_Warmer: err-218307] Warming exchange rates cache from external API. Elapsed time: 3200ms.",
+    "timestamp": 1783930749846
+  },
+  {
+    "body": "INFO: [RequestID: req-678272] HTTP GET /products/details success. Processed in 14ms.",
+    "timestamp": 1783930698845
+  },
+  {
+    "body": "INFO: [Cache_Warmer: err-765366] Warming exchange rates cache from external API. Elapsed time: 3200ms.",
+    "timestamp": 1783930755846
+  }
+]

@@ -1,0 +1,11 @@
+# Fingerprints of findings reviewed and confirmed NOT to be real secrets.
+# Format: <file>:<rule-id>:<line> (one per line, no comments on the same line).
+# These 5 are sample dev secrets vendored as-is from the upstream
+# OpenTelemetry Demo project (Phoenix secret_key_base, Grafana signing key,
+# docker-compose sample secret) inside the read-only BTC reference copy -
+# not credentials belonging to this team's real infrastructure.
+phase3 - information/techx-corp-platform/.env:generic-api-key:21
+phase3 - information/techx-corp-platform/src/flagd-ui/config/dev.exs:generic-api-key:20
+phase3 - information/techx-corp-platform/src/flagd-ui/config/test.exs:generic-api-key:11
+phase3 - information/techx-corp-platform/docker-compose.yml:generic-api-key:707
+phase3 - information/techx-corp-platform/src/grafana/grafana.ini:generic-api-key:253
