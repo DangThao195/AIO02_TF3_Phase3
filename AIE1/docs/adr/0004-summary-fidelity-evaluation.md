@@ -634,6 +634,24 @@ Service tại `localhost:18085` phải được khởi động với đúng imag
 
 ---
 
+### 4.7. Cập nhật nghiệm thu AI-86 ngày 2026-07-22
+
+Mục này ghi trạng thái nghiệm thu hiện tại cho Jira AI-86. Các mục 4.4 và 4.5 phía trên được giữ lại như lịch sử điều tra; khi có mâu thuẫn, dùng cập nhật ngày 2026-07-22 làm trạng thái nghiệm thu mới nhất.
+
+Tóm tắt nghiệm thu AI-86:
+
+- Bộ chạy mới đã bao phủ các nhóm chính: runtime guardrail, claim-level fidelity, hallucination probe, judge-human agreement và PII-in-review.
+- Dataset đã được chuẩn hóa thêm routing surface và nhãn hành vi để runner lọc đúng phạm vi test.
+- LLM-as-a-judge được kiểm tra theo hai hướng: chặn candidate bịa ở runtime và so khớp với nhãn human ở bộ audit nhỏ.
+- Các quality gate chính của AI-86 đã đạt trong lần chạy mới nhất.
+
+Giới hạn còn lại:
+
+- Runtime core và hallucination probe vẫn chạy thành hai job riêng vì probe bịa cần bật flag cưỡng bức riêng.
+- PII-in-review đã có sanitizer/local guardrail, nhưng chưa phải row-level DB transaction trace.
+- Makefile target đã có, nhưng phiên local Windows chưa chạy trực tiếp bằng `make`; các command tương đương đã được chạy trực tiếp.
+- Judge-human agreement là audit sample có kiểm soát, không phải benchmark thống kê lớn.
+
 ## 5. Hệ quả
 
 - **Chất lượng:** Runtime judge giảm xác suất hiển thị hallucination nhưng không thể bảo đảm 100%. Kết quả judge là tín hiệu xác suất và phải được kiểm chứng bằng eval độc lập, rule-based checks và regression gate.
@@ -645,6 +663,8 @@ Service tại `localhost:18085` phải được khởi động với đúng imag
 ---
 
 ## 6. Implementation gaps chặn nghiệm thu
+
+**Cập nhật 2026-07-22:** các gap runtime/normal/toxic/timeout trong danh sách dưới đây là trạng thái lịch sử trước AI-86. Cập nhật nghiệm thu ở mục 4.7 đã chạy lại runtime core, fidelity, hallucination probe, PII local sanitizer và judge-human agreement. Kết quả mới nhất đạt quality gate cho các job đó; các bullet lịch sử được giữ lại để truy nguyên quá trình điều tra.
 
 Các yêu cầu trust-boundary và runtime gate chính đã được triển khai: judge mặc định chạy cho grounded answer có evidence, hỗ trợ summary đa ngôn ngữ; JSON judge sai schema được retry hữu hạn rồi fail closed; approval và claim metrics được tính từ `claims[]`; review/product info được redact PII và prompt injection; acceptance artifact dùng Candidate Nova Lite và Judge Nova Micro.
 
@@ -697,6 +717,8 @@ Các vấn đề còn lại trước khi đổi trạng thái ADR thành “Đã
 - Versioned claim-level gate đạt `37/43 = 86,05%` với exit code 0; dataset/product contract đều khớp, format 43/43, invalid/rule failure 0, contradicted claim 0, unsupported-answer claim 0 và trust score 92,19/100.
 
 ### 8.2. Điều chưa được chấp nhận
+
+**Cập nhật 2026-07-22:** các mục dưới đây phản ánh artifact cũ trước AI-86. Với evidence package mới, các gate chính của runtime core, fidelity, toxic/PII local, hallucination probe và judge-human agreement đã đạt. Các giới hạn hiện còn lại là: Makefile chưa được chạy trực tiếp bằng `make` trên máy Windows không có make trong PATH, PII-in-review chưa có row-level DB transaction trace, và runtime core + hallucination probe được tách job do cần flag khác nhau.
 
 - Runtime E2E artifact 200 case có `quality_gate_passed=false`; build/runtime tổng thể chưa đủ điều kiện nghiệm thu dù claim-level 80% gate đã pass.
 - Normal thiếu một pass để đạt rate 80% và còn bốn runtime errors.
