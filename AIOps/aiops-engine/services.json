@@ -1,10 +1,60 @@
 {
-  "frontend": ["checkout", "product-catalog", "cart", "recommendation"],
-  "checkout": ["payment", "shipping", "currency"],
-  "payment": ["payments-db"],
-  "product-catalog": ["postgresql"],
-  "cart": ["valkey-cart"],
-  "product-reviews": ["llm"],
-  "accounting": ["kafka"],
-  "fraud-detection": ["flagd"]
+  "accounting": [
+    "kafka"
+  ],
+  "cart": [
+    "flagd",
+    "valkey-cart"
+  ],
+  "checkout": [
+    "cart",
+    "currency",
+    "email",
+    "payment",
+    "product-catalog",
+    "shipping"
+  ],
+  "fraud-detection": [
+    "flagd"
+  ],
+  "frontend": [
+    "ad",
+    "cart",
+    "checkout",
+    "currency",
+    "product-catalog",
+    "product-reviews",
+    "recommendation",
+    "shipping"
+  ],
+  "frontend-proxy": [
+    "frontend",
+    "image-provider"
+  ],
+  "frontend-web": [
+    "frontend-proxy"
+  ],
+  "load-generator": [
+    "flagd",
+    "frontend-proxy"
+  ],
+  "payment": [
+    "flagd",
+    "payments-db"
+  ],
+  "product-catalog": [
+    "postgresql"
+  ],
+  "product-reviews": [
+    "flagd",
+    "llm",
+    "product-catalog"
+  ],
+  "recommendation": [
+    "flagd",
+    "product-catalog"
+  ],
+  "shipping": [
+    "quote"
+  ]
 }

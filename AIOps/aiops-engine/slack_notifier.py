@@ -59,6 +59,12 @@ class SlackNotifier:
             return True
 
 
+        trace_id = diagnosis.get('trace_id') or 'unknown-trace-id'
+        culprit_service = diagnosis.get('culprit_service') or 'unknown-service'
+        trace_analysis = diagnosis.get('trace_analysis') or culprit_service
+        chain_block = f"\n```{trace_analysis}```" if trace_analysis and " -> " in trace_analysis else ""
+        rca_mrkdwn = f"*Phân tích đường đi lỗi (RCA):* Phát hiện bất thường bắt nguồn từ dịch vụ `{culprit_service}`.\n`traceId`: `{trace_id}`{chain_block}"
+
         # Slack Block Kit payload structure
         if incident_id.startswith("INC-ML-") and not diagnosis.get("action_command"):
             # Thẻ cảnh báo sớm máy học dạng thông tin thuần túy
@@ -76,7 +82,14 @@ class SlackNotifier:
                         "type": "section",
                         "text": {
                             "type": "mrkdwn",
-                            "text": f"{analysis_str}"
+                            "text": rca_mrkdwn
+                        }
+                    },
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": f"*Phân tích chi tiết chẩn đoán AI:*\n{analysis_str}"
                         }
                     }
                 ]
@@ -97,7 +110,14 @@ class SlackNotifier:
                         "type": "section",
                         "text": {
                             "type": "mrkdwn",
-                            "text": f"*Nguyên nhân gốc (RCA):*\n{analysis_str}\n\n*Đối chiếu sự cố lịch sử:* `{diagnosis.get('matched_incident')}` | *Độ tự tin quyết định AI:* `{float(diagnosis.get('confidence_score', 1.0)) * 100}%`"
+                            "text": rca_mrkdwn
+                        }
+                    },
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": f"*Phân tích chi tiết chẩn đoán AI:*\n{analysis_str}\n\n*Đối chiếu sự cố lịch sử:* `{diagnosis.get('matched_incident')}` | *Độ tự tin quyết định AI:* `{float(diagnosis.get('confidence_score', 1.0)) * 100}%`"
                         }
                     },
                     {

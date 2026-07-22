@@ -12,7 +12,9 @@ class LLMDiagnostician:
         self.region = AWS_REGION
         self.model_id = BEDROCK_MODEL_ID
         self.kb_id = BEDROCK_KB_ID
-        self.bedrock_client = boto3.client("bedrock-runtime", region_name=self.region)
+        # Bedrock Nova models are typically available in us-east-1, default to us-east-1 if AWS_REGION is ap-southeast-1
+        bedrock_region = os.getenv("BEDROCK_AWS_REGION", "us-east-1" if self.region == "ap-southeast-1" else self.region)
+        self.bedrock_client = boto3.client("bedrock-runtime", region_name=bedrock_region)
         
         # Nạp chỉ số vector index của playbooks nếu tồn tại phục vụ RAG cục bộ
         self.vector_index_path = os.path.join(os.path.dirname(__file__), "playbooks_vector_index.json")
