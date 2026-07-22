@@ -34,7 +34,8 @@ import demo_pb2
 import demo_pb2_grpc
 from grpc_health.v1 import health_pb2
 from grpc_health.v1 import health_pb2_grpc
-from database import fetch_product_reviews, fetch_product_reviews_from_db, fetch_avg_product_review_score_from_db
+from database import fetch_product_reviews, fetch_product_reviews_from_db, fetch_avg_product_review_score_from_db, get_review_version
+from guardrails.cache import generate_cache_key, get_cached_response, set_cached_response, should_cache, acquire_lock, release_lock
 
 from openfeature import api
 from openfeature.contrib.provider.flagd import FlagdProvider
@@ -447,6 +448,7 @@ def apply_runtime_fidelity_gate(product_id, question, product_info, safe_reviews
             judge_model,
             judge_result,
         )
+        log_fidelity_audit_async(product_id, judge_model, False, 0, 0, f"ERROR: {judge_result}")
         return judge_result, "error"
     if not judge_result.get("approved", False):
         logger.warning(
@@ -458,6 +460,7 @@ def apply_runtime_fidelity_gate(product_id, question, product_info, safe_reviews
             judge_result.get("contradicted_claims"),
             judge_result.get("reason"),
         )
+        log_fidelity_audit_async(product_id, judge_model, False, 0, 0, candidate_result)
         return UNVERIFIED_SUMMARY_MESSAGE, "rejected"
 
     logger.info(
@@ -467,6 +470,7 @@ def apply_runtime_fidelity_gate(product_id, question, product_info, safe_reviews
         judge_model,
         judge_result.get("claim_count"),
     )
+    log_fidelity_audit_async(product_id, judge_model, True, 0, 0, candidate_result)
     return candidate_result, "approved"
 
 
@@ -507,6 +511,42 @@ tools = [
         }
     }
 ]
+# ThreadPoolExecutor for background DB writes (asynchronous logging)
+db_write_executor = futures.ThreadPoolExecutor(max_workers=5, thread_name_prefix="db_audit_worker")
+
+def insert_audit_log_to_db(product_id, model, approved, input_tokens, output_tokens, response_text):
+    """Ghi log kiểm toán vào RDS qua PgBouncer."""
+    from database import db_pool
+    connection = None
+    try:
+        connection = db_pool.getconn()
+        with connection.cursor() as cursor:
+            query = """
+                INSERT INTO reviews.fidelity_audit (product_id, model, approved, input_tokens, output_tokens, response, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, NOW())
+            """
+            cursor.execute(query, (product_id, model, approved, input_tokens, output_tokens, response_text))
+        connection.commit()
+        logger.info(f"Audit log saved to DB for product_id: {product_id}, approved: {approved}")
+    except Exception as e:
+        if connection is not None:
+            connection.rollback()
+        logger.error(f"Failed to write audit log to RDS: {e}")
+    finally:
+        if connection is not None:
+            db_pool.putconn(connection)
+
+def log_fidelity_audit_async(product_id, model, approved, input_tokens, output_tokens, response_text):
+    """Submit DB write task to the thread pool to execute asynchronously."""
+    db_write_executor.submit(
+        insert_audit_log_to_db,
+        product_id,
+        model,
+        approved,
+        input_tokens,
+        output_tokens,
+        response_text
+    )
 
 
 class ProductReviewService(demo_pb2_grpc.ProductReviewServiceServicer):
@@ -587,264 +627,321 @@ def get_ai_assistant_response(request_product_id, question):
             logger.info("Returning deterministic OUT_OF_SCOPE response for product_id:%s", request_product_id)
             return ai_assistant_response
 
-        user_prompt, accurate_prompt, inaccurate_prompt = build_runtime_prompts(request_product_id, safe_question)
-        system_prompt = build_system_prompt()
-
-        if llm_provider == "bedrock":
-            raw_reviews_for_judge = []
-            reviews_json = fetch_product_reviews(request_product_id)
-            try:
-                safe_reviews_json, raw_reviews_for_judge = normalize_reviews_for_context(reviews_json)
-            except Exception as review_filter_error:
-                logger.error(f"Error filtering reviews for Bedrock path: {review_filter_error}")
-                span.set_status(Status(StatusCode.ERROR, description="review_sanitization_failed"))
-                ai_assistant_response.response = FALLBACK_SUMMARY_MESSAGE
-                return ai_assistant_response
-            deterministic_answer = answer_deterministic_rating_question(
-                safe_question,
-                raw_reviews_for_judge,
+        # --- LLM Caching Layer 1: Cache Lookup ---
+        cache_key = None
+        review_version = ""
+        try:
+            review_version = get_review_version(request_product_id)
+            cache_key = generate_cache_key(
+                product_id=request_product_id,
+                review_version=review_version,
+                model_id=llm_model,
+                question=safe_question
             )
-            if deterministic_answer is not None:
-                ai_assistant_response.response = deterministic_answer
-                product_review_svc_metrics["app_ai_assistant_counter"].add(
-                    1,
-                    {'product.id': request_product_id},
-                )
-                logger.info(
-                    "AI_OUTCOME product_id=%s stage=deterministic_rating outcome=answered",
-                    request_product_id,
-                )
+            cached_data = get_cached_response(cache_key)
+            if cached_data:
+                logger.info(f"[CACHE] Hit for product_id: {request_product_id}")
+                ai_assistant_response.response = cached_data["answer"]
+                span.set_attribute("app.cache.hit", True)
+                product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
                 return ai_assistant_response
-            product_info_json = fetch_product_info(request_product_id)
-            llm_inaccurate_response = check_feature_flag("llmInaccurateResponse")
-            logger.info(f"llmInaccurateResponse feature flag: {llm_inaccurate_response}")
-            make_inaccurate = llm_inaccurate_response and request_product_id == "L9ECAV7KIM"
-            if make_inaccurate:
-                logger.info(f"Returning an inaccurate response for product_id: {request_product_id}")
+            span.set_attribute("app.cache.hit", False)
+        except Exception as cache_err:
+            logger.warning(f"[CACHE] Error checking cache: {cache_err}")
 
-            grounded_prompt = build_bedrock_user_prompt(
-                question=safe_question,
-                product_info_json=product_info_json,
-                safe_reviews_json=safe_reviews_json,
-                make_inaccurate=make_inaccurate,
-            )
-            if make_inaccurate and request_product_id in INACCURATE_SUMMARY_FIXTURES:
-                final_text = INACCURATE_SUMMARY_FIXTURES[request_product_id]
-                logger.info(f"Using inaccurate summary fixture for product_id: {request_product_id}")
-            else:
-                final_text = call_candidate_bedrock(system_prompt, grounded_prompt)
-                if isinstance(final_text, str) and final_text == FALLBACK_SUMMARY_MESSAGE:
-                    span.set_status(Status(StatusCode.ERROR, description="candidate_bedrock_failed"))
-                    logger.error(
-                        "AI_OUTCOME product_id=%s stage=candidate outcome=fallback provider=%s model=%s",
-                        request_product_id,
-                        llm_provider,
-                        llm_model,
+        # --- Cache Stampede Lock ---
+        lock_key = f"lock:{cache_key}" if cache_key else None
+        acquired_lock = False
+        if lock_key:
+            acquired_lock = acquire_lock(lock_key, expire=10)
+            if not acquired_lock:
+                logger.info(f"[CACHE] Lock active for key {cache_key}, polling for cached response...")
+                for _ in range(20):
+                    time.sleep(0.5)
+                    cached_data = get_cached_response(cache_key)
+                    if cached_data:
+                        logger.info(f"[CACHE] Lock poll Hit for product_id: {request_product_id}")
+                        ai_assistant_response.response = cached_data["answer"]
+                        product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
+                        return ai_assistant_response
+                logger.warning(f"[CACHE] Lock timeout for key {cache_key}, proceeding to call LLM directly.")
+
+        # Wrap generation pipeline in try-finally to ensure lock release and cache save
+        result = None
+        judge_status = None
+        try:
+            user_prompt, accurate_prompt, inaccurate_prompt = build_runtime_prompts(request_product_id, safe_question)
+            system_prompt = build_system_prompt()
+
+            if llm_provider == "bedrock":
+                raw_reviews_for_judge = []
+                reviews_json = fetch_product_reviews(request_product_id)
+                try:
+                    safe_reviews_json, raw_reviews_for_judge = normalize_reviews_for_context(reviews_json)
+                except Exception as review_filter_error:
+                    logger.error(f"Error filtering reviews for Bedrock path: {review_filter_error}")
+                    span.set_status(Status(StatusCode.ERROR, description="review_sanitization_failed"))
+                    ai_assistant_response.response = FALLBACK_SUMMARY_MESSAGE
+                    return ai_assistant_response
+                deterministic_answer = answer_deterministic_rating_question(
+                    safe_question,
+                    raw_reviews_for_judge,
+                )
+                if deterministic_answer is not None:
+                    ai_assistant_response.response = deterministic_answer
+                    product_review_svc_metrics["app_ai_assistant_counter"].add(
+                        1,
+                        {'product.id': request_product_id},
                     )
-                    ai_assistant_response.response = final_text
+                    logger.info(
+                        "AI_OUTCOME product_id=%s stage=deterministic_rating outcome=answered",
+                        request_product_id,
+                    )
+                    return ai_assistant_response
+                product_info_json = fetch_product_info(request_product_id)
+                llm_inaccurate_response = check_feature_flag("llmInaccurateResponse")
+                logger.info(f"llmInaccurateResponse feature flag: {llm_inaccurate_response}")
+                make_inaccurate = llm_inaccurate_response and request_product_id == "L9ECAV7KIM"
+                if make_inaccurate:
+                    logger.info(f"Returning an inaccurate response for product_id: {request_product_id}")
+
+                grounded_prompt = build_bedrock_user_prompt(
+                    question=safe_question,
+                    product_info_json=product_info_json,
+                    safe_reviews_json=safe_reviews_json,
+                    make_inaccurate=make_inaccurate,
+                )
+                if make_inaccurate and request_product_id in INACCURATE_SUMMARY_FIXTURES:
+                    final_text = INACCURATE_SUMMARY_FIXTURES[request_product_id]
+                    logger.info(f"Using inaccurate summary fixture for product_id: {request_product_id}")
+                else:
+                    final_text = call_candidate_bedrock(system_prompt, grounded_prompt)
+                    if isinstance(final_text, str) and final_text == FALLBACK_SUMMARY_MESSAGE:
+                        span.set_status(Status(StatusCode.ERROR, description="candidate_bedrock_failed"))
+                        logger.error(
+                            "AI_OUTCOME product_id=%s stage=candidate outcome=fallback provider=%s model=%s",
+                            request_product_id,
+                            llm_provider,
+                            llm_model,
+                        )
+                        ai_assistant_response.response = final_text
+                        return ai_assistant_response
+
+                result = post_process_output(final_text, safe_question)
+                if result == NO_INFO_MESSAGE and is_summary_request(safe_question) and raw_reviews_for_judge:
+                    retry_prompt = (
+                        grounded_prompt
+                        + "\nThe reviews are present. Re-check them once and summarize only directly supported "
+                        "positive or negative aspects requested by the question. Return NO_INFO only if no review "
+                        "contains any relevant aspect."
+                    )
+                    retry_text = call_candidate_bedrock(system_prompt, retry_prompt)
+                    if retry_text != FALLBACK_SUMMARY_MESSAGE:
+                        result = post_process_output(retry_text, safe_question)
+                    logger.info(
+                        "AI_OUTCOME product_id=%s stage=candidate_semantic_retry outcome=%s",
+                        request_product_id,
+                        "answered" if result != NO_INFO_MESSAGE else "no_info",
+                    )
+                result, judge_status = apply_runtime_fidelity_gate(
+                    request_product_id,
+                    safe_question,
+                    product_info_json,
+                    raw_reviews_for_judge,
+                    result,
+                )
+                if judge_status == "error":
+                    span.set_status(Status(StatusCode.ERROR, description="judge_call_failed"))
+                logger.info(
+                    "AI_OUTCOME product_id=%s stage=runtime_judge outcome=%s provider=%s model=%s",
+                    request_product_id,
+                    judge_status,
+                    judge_provider,
+                    judge_model,
+                )
+
+                ai_assistant_response.response = result
+                product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
+                logger.info("Returning AI assistant response class=%s", result if result in {
+                    OUT_OF_SCOPE_MESSAGE, NO_INFO_MESSAGE, FALLBACK_SUMMARY_MESSAGE, UNVERIFIED_SUMMARY_MESSAGE
+                } else "grounded_answer")
+                return ai_assistant_response
+
+            llm_rate_limit_error = check_feature_flag("llmRateLimitError")
+            logger.info(f"llmRateLimitError feature flag: {llm_rate_limit_error}")
+            if llm_rate_limit_error and random.random() < 0.5:
+                mock_client = OpenAI(base_url=f"{llm_mock_url}", api_key=f"{llm_api_key}")
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ]
+                rate_limit_response = call_candidate_chat(
+                    mock_client,
+                    model="techx-llm-rate-limit",
+                    messages=messages,
+                    tools=tools,
+                    tool_choice="auto",
+                    timeout=3.0,
+                )
+                if isinstance(rate_limit_response, str):
+                    span.set_status(Status(StatusCode.ERROR, description="rate_limit_mock_failed"))
+                    ai_assistant_response.response = rate_limit_response
                     return ai_assistant_response
 
-            result = post_process_output(final_text, safe_question)
-            if result == NO_INFO_MESSAGE and is_summary_request(safe_question) and raw_reviews_for_judge:
-                retry_prompt = (
-                    grounded_prompt
-                    + "\nThe reviews are present. Re-check them once and summarize only directly supported "
-                    "positive or negative aspects requested by the question. Return NO_INFO only if no review "
-                    "contains any relevant aspect."
-                )
-                retry_text = call_candidate_bedrock(system_prompt, retry_prompt)
-                if retry_text != FALLBACK_SUMMARY_MESSAGE:
-                    result = post_process_output(retry_text, safe_question)
-                logger.info(
-                    "AI_OUTCOME product_id=%s stage=candidate_semantic_retry outcome=%s",
-                    request_product_id,
-                    "answered" if result != NO_INFO_MESSAGE else "no_info",
-                )
-            result, judge_status = apply_runtime_fidelity_gate(
-                request_product_id,
-                safe_question,
-                product_info_json,
-                raw_reviews_for_judge,
-                result,
-            )
-            if judge_status == "error":
-                span.set_status(Status(StatusCode.ERROR, description="judge_call_failed"))
-            logger.info(
-                "AI_OUTCOME product_id=%s stage=runtime_judge outcome=%s provider=%s model=%s",
-                request_product_id,
-                judge_status,
-                judge_provider,
-                judge_model,
-            )
-
-            ai_assistant_response.response = result
-            product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
-            logger.info("Returning AI assistant response class=%s", result if result in {
-                OUT_OF_SCOPE_MESSAGE, NO_INFO_MESSAGE, FALLBACK_SUMMARY_MESSAGE, UNVERIFIED_SUMMARY_MESSAGE
-            } else "grounded_answer")
-            return ai_assistant_response
-
-        llm_rate_limit_error = check_feature_flag("llmRateLimitError")
-        logger.info(f"llmRateLimitError feature flag: {llm_rate_limit_error}")
-        if llm_rate_limit_error and random.random() < 0.5:
-            mock_client = OpenAI(base_url=f"{llm_mock_url}", api_key=f"{llm_api_key}")
+            client = OpenAI(base_url=f"{llm_base_url}", api_key=f"{llm_api_key}")
             messages = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ]
-            rate_limit_response = call_candidate_chat(
-                mock_client,
-                model="techx-llm-rate-limit",
+
+            initial_response = call_candidate_chat(
+                client,
+                model=llm_model,
                 messages=messages,
                 tools=tools,
                 tool_choice="auto",
                 timeout=3.0,
             )
-            if isinstance(rate_limit_response, str):
-                span.set_status(Status(StatusCode.ERROR, description="rate_limit_mock_failed"))
-                ai_assistant_response.response = rate_limit_response
-                return ai_assistant_response
-
-        client = OpenAI(base_url=f"{llm_base_url}", api_key=f"{llm_api_key}")
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ]
-
-        initial_response = call_candidate_chat(
-            client,
-            model=llm_model,
-            messages=messages,
-            tools=tools,
-            tool_choice="auto",
-            timeout=3.0,
-        )
-        if isinstance(initial_response, str):
-            span.set_status(Status(StatusCode.ERROR, description="candidate_call_1_failed"))
-            logger.error(
-                "AI_OUTCOME product_id=%s stage=candidate_initial outcome=fallback provider=%s model=%s",
-                request_product_id,
-                llm_provider,
-                llm_model,
-            )
-            ai_assistant_response.response = initial_response
-            return ai_assistant_response
-
-        response_message = initial_response.choices[0].message
-        tool_calls = response_message.tool_calls
-        logger.info(f"Response message: {response_message}")
-
-        if tool_calls:
-            logger.info(f"Model wants to call {len(tool_calls)} tool(s)")
-            messages.append(response_message)
-            raw_reviews_for_judge = []
-            product_info_for_judge = ""
-
-            futures_list = []
-            with futures.ThreadPoolExecutor(max_workers=len(tool_calls)) as executor:
-                for tool_call in tool_calls:
-                    function_name = tool_call.function.name
-                    function_args = json.loads(tool_call.function.arguments)
-                    logger.info(f"Scheduling tool call: '{function_name}' with arguments: {function_args}")
-
-                    if function_name == "fetch_product_reviews":
-                        future = executor.submit(fetch_product_reviews, product_id=function_args.get("product_id"))
-                    elif function_name == "fetch_product_info":
-                        future = executor.submit(fetch_product_info, product_id=function_args.get("product_id"))
-                    else:
-                        raise Exception(f"Received unexpected tool call request: {function_name}")
-                    futures_list.append((tool_call, future))
-
-            for tool_call, future in futures_list:
-                function_name = tool_call.function.name
-                try:
-                    result_raw = future.result()
-                except Exception as e:
-                    logger.error(f"Tool call '{function_name}' raised exception: {e}")
-                    result_raw = json.dumps({"error": str(e)})
-
-                if function_name == "fetch_product_reviews":
-                    try:
-                        function_response, raw_reviews_for_judge = normalize_reviews_for_context(result_raw)
-                    except Exception as e:
-                        logger.error(f"Error filtering reviews: {e}")
-                        function_response = json.dumps({"error": "review_sanitization_failed"})
-                        raw_reviews_for_judge = []
-                elif function_name == "fetch_product_info":
-                    function_response = result_raw
-                    product_info_for_judge = result_raw
-
-                messages.append(
-                    {
-                        "tool_call_id": tool_call.id,
-                        "role": "tool",
-                        "name": function_name,
-                        "content": function_response,
-                    }
-                )
-
-            llm_inaccurate_response = check_feature_flag("llmInaccurateResponse")
-            logger.info(f"llmInaccurateResponse feature flag: {llm_inaccurate_response}")
-            if llm_inaccurate_response and request_product_id == "L9ECAV7KIM":
-                logger.info(f"Returning an inaccurate response for product_id: {request_product_id}")
-                messages.append({"role": "user", "content": inaccurate_prompt})
-            else:
-                messages.append({"role": "user", "content": accurate_prompt})
-
-            logger.info("Invoking the LLM with %s messages after tool sanitization", len(messages))
-            final_response = call_candidate_chat(
-                client,
-                model=llm_model,
-                messages=messages,
-                timeout=3.0,
-            )
-            if isinstance(final_response, str):
-                span.set_status(Status(StatusCode.ERROR, description="candidate_call_2_failed"))
+            if isinstance(initial_response, str):
+                span.set_status(Status(StatusCode.ERROR, description="candidate_call_1_failed"))
                 logger.error(
-                    "AI_OUTCOME product_id=%s stage=candidate_grounded outcome=fallback provider=%s model=%s",
+                    "AI_OUTCOME product_id=%s stage=candidate_initial outcome=fallback provider=%s model=%s",
                     request_product_id,
                     llm_provider,
                     llm_model,
                 )
-                ai_assistant_response.response = final_response
+                ai_assistant_response.response = initial_response
                 return ai_assistant_response
 
-            result = final_response.choices[0].message.content or ""
-            result = post_process_output(result, safe_question)
-            result, judge_status = apply_runtime_fidelity_gate(
-                request_product_id,
-                safe_question,
-                product_info_for_judge,
-                raw_reviews_for_judge,
-                result,
-            )
-            if judge_status == "error":
-                span.set_status(Status(StatusCode.ERROR, description="judge_call_failed"))
-            logger.info(
-                "AI_OUTCOME product_id=%s stage=runtime_judge outcome=%s provider=%s model=%s",
-                request_product_id,
-                judge_status,
-                judge_provider,
-                judge_model,
-            )
+            response_message = initial_response.choices[0].message
+            tool_calls = response_message.tool_calls
+            logger.info(f"Response message: {response_message}")
 
-            ai_assistant_response.response = result
-            logger.info("Returning AI assistant response class=%s", result if result in {
-                OUT_OF_SCOPE_MESSAGE, NO_INFO_MESSAGE, FALLBACK_SUMMARY_MESSAGE, UNVERIFIED_SUMMARY_MESSAGE
-            } else "grounded_answer")
-        else:
-            result = post_process_output(response_message.content or "", safe_question)
-            # A response without tool evidence is never a grounded answer.
-            # Convert model guesses into the contractually correct sentinel;
-            # this is especially important for product questions whose answer
-            # is absent from the database.
-            if result not in (OUT_OF_SCOPE_MESSAGE, NO_INFO_MESSAGE):
-                result = NO_INFO_MESSAGE if is_product_related_question(safe_question) else OUT_OF_SCOPE_MESSAGE
-            ai_assistant_response.response = result
-            logger.info(f"Returning an AI assistant response: '{result}'")
+            if tool_calls:
+                logger.info(f"Model wants to call {len(tool_calls)} tool(s)")
+                messages.append(response_message)
+                raw_reviews_for_judge = []
+                product_info_for_judge = ""
 
-        product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
-        return ai_assistant_response
+                futures_list = []
+                with futures.ThreadPoolExecutor(max_workers=len(tool_calls)) as executor:
+                    for tool_call in tool_calls:
+                        function_name = tool_call.function.name
+                        function_args = json.loads(tool_call.function.arguments)
+                        logger.info(f"Scheduling tool call: '{function_name}' with arguments: {function_args}")
+
+                        if function_name == "fetch_product_reviews":
+                            future = executor.submit(fetch_product_reviews, product_id=function_args.get("product_id"))
+                        elif function_name == "fetch_product_info":
+                            future = executor.submit(fetch_product_info, product_id=function_args.get("product_id"))
+                        else:
+                            raise Exception(f"Received unexpected tool call request: {function_name}")
+                        futures_list.append((tool_call, future))
+
+                for tool_call, future in futures_list:
+                    function_name = tool_call.function.name
+                    try:
+                        result_raw = future.result()
+                    except Exception as e:
+                        logger.error(f"Tool call '{function_name}' raised exception: {e}")
+                        result_raw = json.dumps({"error": str(e)})
+
+                    if function_name == "fetch_product_reviews":
+                        try:
+                            function_response, raw_reviews_for_judge = normalize_reviews_for_context(result_raw)
+                        except Exception as e:
+                            logger.error(f"Error filtering reviews: {e}")
+                            function_response = json.dumps({"error": "review_sanitization_failed"})
+                            raw_reviews_for_judge = []
+                    elif function_name == "fetch_product_info":
+                        function_response = result_raw
+                        product_info_for_judge = result_raw
+
+                    messages.append(
+                        {
+                            "tool_call_id": tool_call.id,
+                            "role": "tool",
+                            "name": function_name,
+                            "content": function_response,
+                        }
+                    )
+
+                llm_inaccurate_response = check_feature_flag("llmInaccurateResponse")
+                logger.info(f"llmInaccurateResponse feature flag: {llm_inaccurate_response}")
+                if llm_inaccurate_response and request_product_id == "L9ECAV7KIM":
+                    logger.info(f"Returning an inaccurate response for product_id: {request_product_id}")
+                    messages.append({"role": "user", "content": inaccurate_prompt})
+                else:
+                    messages.append({"role": "user", "content": accurate_prompt})
+
+                logger.info("Invoking the LLM with %s messages after tool sanitization", len(messages))
+                final_response = call_candidate_chat(
+                    client,
+                    model=llm_model,
+                    messages=messages,
+                    timeout=3.0,
+                )
+                if isinstance(final_response, str):
+                    span.set_status(Status(StatusCode.ERROR, description="candidate_call_2_failed"))
+                    logger.error(
+                        "AI_OUTCOME product_id=%s stage=candidate_grounded outcome=fallback provider=%s model=%s",
+                        request_product_id,
+                        llm_provider,
+                        llm_model,
+                    )
+                    ai_assistant_response.response = final_response
+                    return ai_assistant_response
+
+                result = final_response.choices[0].message.content or ""
+                result = post_process_output(result, safe_question)
+                result, judge_status = apply_runtime_fidelity_gate(
+                    request_product_id,
+                    safe_question,
+                    product_info_for_judge,
+                    raw_reviews_for_judge,
+                    result,
+                )
+                if judge_status == "error":
+                    span.set_status(Status(StatusCode.ERROR, description="judge_call_failed"))
+                logger.info(
+                    "AI_OUTCOME product_id=%s stage=runtime_judge outcome=%s provider=%s model=%s",
+                    request_product_id,
+                    judge_status,
+                    judge_provider,
+                    judge_model,
+                )
+
+                ai_assistant_response.response = result
+                logger.info("Returning AI assistant response class=%s", result if result in {
+                    OUT_OF_SCOPE_MESSAGE, NO_INFO_MESSAGE, FALLBACK_SUMMARY_MESSAGE, UNVERIFIED_SUMMARY_MESSAGE
+                } else "grounded_answer")
+            else:
+                result = post_process_output(response_message.content or "", safe_question)
+                # A response without tool evidence is never a grounded answer.
+                # Convert model guesses into the contractually correct sentinel;
+                # this is especially important for product questions whose answer
+                # is absent from the database.
+                if result not in (OUT_OF_SCOPE_MESSAGE, NO_INFO_MESSAGE):
+                    result = NO_INFO_MESSAGE if is_product_related_question(safe_question) else OUT_OF_SCOPE_MESSAGE
+                ai_assistant_response.response = result
+                logger.info(f"Returning an AI assistant response: '{result}'")
+
+            product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
+            return ai_assistant_response
+        finally:
+            # --- LOCK RELEASE & CACHE SAVE ON SUCCESS ---
+            if lock_key and acquired_lock:
+                release_lock(lock_key)
+            if cache_key and result is not None and should_cache(result, judge_status == "approved"):
+                cache_data = {
+                    "answer": result,
+                    "provider": llm_provider,
+                    "model": llm_model,
+                    "created_at": int(time.time()),
+                    "review_version": review_version,
+                    "token_usage": {"input_tokens": 0, "output_tokens": 0}
+                }
+                set_cached_response(cache_key, cache_data)
 
 
 def fetch_product_info(product_id):

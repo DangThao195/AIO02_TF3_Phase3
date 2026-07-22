@@ -136,7 +136,7 @@ Triển khai thiết kế bộ nhớ đệm 2 tầng (LLM response cache bằng 
 - Tạo Jira ticket và đính kèm đầy đủ 4 evidences yêu cầu của BTC.
 
 ### Tiêu chí nghiệm thu (Acceptance Criteria)
-- [ ] Có file baseline `cost_latency_BEFORE_cache.json` trước khi sửa code.
+- [x] Có file baseline `cost_latency_BEFORE_cache.json` trước khi sửa code.
 - [ ] Redis cache hoạt động với cơ chế Fail-Open, TLS bảo mật (`rediss://`) và phản hồi Cache Hit < 10ms.
 - [ ] Logic sinh Cache Key chứa `review_version` (tự động invalidate) và `model_id`.
 - [ ] Triển khai thành công khóa phân tán chống Cache Stampede.
