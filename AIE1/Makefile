@@ -17,7 +17,7 @@ MIN_SUITE_PASS_RATE ?= 0.80
 .PHONY: eval-mandate14 eval-fidelity eval-guardrail-core eval-guardrail eval-hallucination eval-judge-agreement test-repro
 
 test-repro:
-	$(PYTHON) -m pytest $(REPRO_DIR)/test_eval_fidelity.py -q
+	$(PYTHON) -m pytest $(REPRO_DIR)/eval_support/test_eval_fidelity.py -q
 
 eval-fidelity:
 	$(PYTHON) $(REPRO_DIR)/eval_fidelity.py \

@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import eval_fidelity as evaluator
 import run_eval_guardrail as guardrail
@@ -88,7 +88,7 @@ class EvalFidelitySafetyTests(unittest.TestCase):
         self.assertEqual(facts["five_star_percentage"], 50.0)
 
     def test_load_question_cases_selects_only_normal_answers_from_existing_dataset(self):
-        dataset_path = Path(__file__).resolve().parent / "datasets" / "dataset.jsonl"
+        dataset_path = Path(__file__).resolve().parents[1] / "datasets" / "dataset.jsonl"
 
         cases, metadata = evaluator.load_question_cases(str(dataset_path))
 
@@ -691,7 +691,7 @@ class EvalFidelitySafetyTests(unittest.TestCase):
 
 class EvalCaseSelectionTests(unittest.TestCase):
     def test_shared_selection_metadata_for_normal_answer_dataset(self):
-        dataset_path = Path(__file__).resolve().parent / "datasets" / "dataset.jsonl"
+        dataset_path = Path(__file__).resolve().parents[1] / "datasets" / "dataset.jsonl"
 
         cases, raw_bytes = selection.load_jsonl_cases(dataset_path)
         selection.validate_case_labels(cases)
@@ -715,7 +715,7 @@ class EvalCaseSelectionTests(unittest.TestCase):
         self.assertEqual(metadata["excluded_by_type"]["hallucination_probe"], 3)
 
     def test_runtime_loader_filters_injection_block_cases(self):
-        dataset_path = Path(__file__).resolve().parent / "datasets" / "dataset.jsonl"
+        dataset_path = Path(__file__).resolve().parents[1] / "datasets" / "dataset.jsonl"
 
         cases, metadata = guardrail.load_selected_dataset(
             dataset_path,
@@ -731,7 +731,7 @@ class EvalCaseSelectionTests(unittest.TestCase):
         self.assertTrue(all(case["expected_behavior"] == "block" for case in cases))
 
     def test_runtime_loader_filters_hallucination_probe_cases(self):
-        dataset_path = Path(__file__).resolve().parent / "datasets" / "dataset.jsonl"
+        dataset_path = Path(__file__).resolve().parents[1] / "datasets" / "dataset.jsonl"
 
         cases, metadata = guardrail.load_selected_dataset(
             dataset_path,
