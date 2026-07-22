@@ -1,6 +1,6 @@
 # Hướng Dẫn Chạy Thực Tế Sub-task 2.4: Đo Lường Cost/Latency Caching
 
-Tài liệu này hướng dẫn chi tiết từng bước để chạy migration database, khởi chạy server và thực hiện đo đạc các chỉ số Cost và Latency của cache (Cold Cache vs Hot Cache) trên máy local.
+Tài liệu này hướng dẫn chi tiết từng bước để chạy migration database, khởi chạy server và thực hiện đo đạc các chỉ số Cost và Latency của cache (Cold Cache vs Hot Cache) trên máy local sử dụng các Terminal khác nhau (WSL/Git Bash, PowerShell hoặc CMD).
 
 ---
 
@@ -15,11 +15,21 @@ Tài liệu này hướng dẫn chi tiết từng bước để chạy migration
 
 ### Bước 1: Khởi động Database Migration & Quét dữ liệu cũ
 
-Mở một cửa sổ Terminal (PowerShell hoặc Bash) tại thư mục gốc của dự án `AIE1` và chạy lệnh sau:
+Mở cửa sổ Terminal tại thư mục gốc của dự án `AIE1`. Tùy thuộc vào loại Terminal bạn đang sử dụng, hãy chạy lệnh tương ứng dưới đây:
 
+#### 💻 Lựa chọn A: Nếu dùng Git Bash / WSL (Khuyến nghị)
 ```bash
-# Thực thi migration.sql và chạy batch quét dữ liệu reviews cũ bằng Regex Guardrails
 techx-corp-platform/.venv/bin/python techx-corp-platform/src/product-reviews/db_migration_worker.py
+```
+
+#### 💻 Lựa chọn B: Nếu dùng Windows PowerShell
+```powershell
+& .\techx-corp-platform\.venv\bin\python.exe techx-corp-platform\src\product-reviews\db_migration_worker.py
+```
+
+#### 💻 Lựa chọn C: Nếu dùng Windows Command Prompt (CMD)
+```cmd
+techx-corp-platform\.venv\bin\python.exe techx-corp-platform\src\product-reviews\db_migration_worker.py
 ```
 
 > [!NOTE]
@@ -29,15 +39,25 @@ techx-corp-platform/.venv/bin/python techx-corp-platform/src/product-reviews/db_
 
 ### Bước 2: Khởi chạy Product Reviews Server
 
-Trong chính terminal ở **Bước 1**, chạy lệnh sau để khởi động gRPC server:
+Trong chính terminal ở **Bước 1**, chạy lệnh tương ứng để khởi động gRPC server:
 
+#### 💻 Lựa chọn A: Nếu dùng Git Bash / WSL (Khuyến nghị)
 ```bash
-# Khởi chạy gRPC Server (Lắng nghe cổng 8085)
 techx-corp-platform/.venv/bin/python techx-corp-platform/src/product-reviews/product_reviews_server.py
 ```
 
+#### 💻 Lựa chọn B: Nếu dùng Windows PowerShell
+```powershell
+& .\techx-corp-platform\.venv\bin\python.exe techx-corp-platform\src\product-reviews\product_reviews_server.py
+```
+
+#### 💻 Lựa chọn C: Nếu dùng Windows Command Prompt (CMD)
+```cmd
+techx-corp-platform\.venv\bin\python.exe techx-corp-platform\src\product-reviews\product_reviews_server.py
+```
+
 > [!IMPORTANT]
-> Hãy giữ nguyên terminal này hoạt động để duy trì dịch vụ gRPC của server.
+> Hãy giữ nguyên terminal này hoạt động để duy trì dịch vụ gRPC của server (lắng nghe cổng 8085).
 
 ---
 
@@ -45,6 +65,7 @@ techx-corp-platform/.venv/bin/python techx-corp-platform/src/product-reviews/pro
 
 Mở một **cửa sổ Terminal thứ hai** tại thư mục gốc `AIE1` và chạy lệnh benchmark đo lường lần thứ nhất:
 
+#### 💻 Lựa chọn A: Nếu dùng Git Bash / WSL (Khuyến nghị)
 ```bash
 python repro/run_eval_guardrail.py \
   --dataset repro/datasets/dataset.jsonl \
@@ -62,6 +83,24 @@ python repro/run_eval_guardrail.py \
   --out repro/artifacts/cost_latency_cold_cache.json
 ```
 
+#### 💻 Lựa chọn B: Nếu dùng Windows PowerShell hoặc CMD
+```powershell
+python repro\run_eval_guardrail.py `
+  --dataset repro\datasets\dataset.jsonl `
+  --case-types normal `
+  --max-cases 6 `
+  --grpc-addr localhost:8085 `
+  --grpc-timeout-seconds 60 `
+  --workers 1 `
+  --candidate-provider bedrock `
+  --candidate-model amazon.nova-lite-v1:0 `
+  --judge-provider bedrock `
+  --judge-model amazon.nova-micro-v1:0 `
+  --expected-cases 6 `
+  --min-products 3 `
+  --out repro\artifacts\cost_latency_cold_cache.json
+```
+
 > [!NOTE]
 > Lần chạy này đo lường trường hợp **Cache Miss** (Cold Cache), hệ thống sẽ tốn chi phí gọi LLM và ghi kết quả audit log.
 
@@ -71,6 +110,7 @@ python repro/run_eval_guardrail.py \
 
 Trong **Terminal thứ hai**, tiếp tục chạy lại lệnh đo đạc lần thứ hai để ghi nhận hiệu quả khi có Cache Hit:
 
+#### 💻 Lựa chọn A: Nếu dùng Git Bash / WSL (Khuyến nghị)
 ```bash
 python repro/run_eval_guardrail.py \
   --dataset repro/datasets/dataset.jsonl \
@@ -86,6 +126,24 @@ python repro/run_eval_guardrail.py \
   --expected-cases 6 \
   --min-products 3 \
   --out repro/artifacts/cost_latency_hot_cache.json
+```
+
+#### 💻 Lựa chọn B: Nếu dùng Windows PowerShell hoặc CMD
+```powershell
+python repro\run_eval_guardrail.py `
+  --dataset repro\datasets\dataset.jsonl `
+  --case-types normal `
+  --max-cases 6 `
+  --grpc-addr localhost:8085 `
+  --grpc-timeout-seconds 60 `
+  --workers 1 `
+  --candidate-provider bedrock `
+  --candidate-model amazon.nova-lite-v1:0 `
+  --judge-provider bedrock `
+  --judge-model amazon.nova-micro-v1:0 `
+  --expected-cases 6 `
+  --min-products 3 `
+  --out repro\artifacts\cost_latency_hot_cache.json
 ```
 
 > [!TIP]
