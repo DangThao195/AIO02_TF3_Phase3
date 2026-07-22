@@ -82,27 +82,48 @@ Dưới đây là bảng phân tích trade-off chi tiết giữa hai lựa chọ
 | **Triển khai ở môi trường Local & Docker** | **Đơn giản tối đa**<br>- Chỉ cần viết thêm script khởi tạo Schema cho bảng cache trên DB PostgreSQL đang có sẵn. Không cần sửa đổi file `docker-compose.yaml`. | **Cần thêm cấu hình**<br>- Cần thêm service Redis vào file `docker-compose.yaml` (thêm container mới).<br>- Code Python phải import thư viện `redis` (thêm vào `requirements.txt`). | **PostgreSQL Thắng**:<br>- Giúp giữ cho môi trường Local cực kỳ tinh gọn, ít thành phần phụ thuộc. |
 | **Deploy & Vận hành trên AWS Cloud** | **Amazon RDS / Aurora Serverless**<br>- Tái sử dụng Instance RDS hiện tại, chỉ tăng nhẹ tải đọc/ghi. Vận hành tập trung trên một DB duy nhất. | **Amazon ElastiCache / MemoryDB**<br>- Cần quản lý thêm một dịch vụ chuyên biệt (ElastiCache). Có cơ chế Cluster / Replication tự động phân mảnh và sao lưu.<br>- Giảm tải hoàn toàn truy vấn đọc/ghi cache cho PostgreSQL chính để dành tài nguyên cho các nghiệp vụ ACID quan trọng khác. | **Redis Thắng về mặt kiến trúc**:<br>- Giúp tách biệt rõ ràng lớp lưu trữ chính (Database) và lớp bộ đệm (Caching), tăng độ bền vững và khả năng scale cho hệ thống lớn. |
 
-#### Quyết Định Cuối Cùng: Chọn Redis + Hybrid Audit (PostgreSQL)
+#### Quyết Định Cuối Cùng: Chọn AWS ElastiCache (Redis) + Hybrid Audit AWS RDS (PostgreSQL)
 
 > [!IMPORTANT]
-> **Bối cảnh quyết định:** CDO xác nhận hạ tầng hiện tại thoải mái cả về RAM lẫn dung lượng Database, do đó rào cản chi phí Redis không còn là yếu tố quyết định.
+> **Cập nhật theo MANDATE-08 (Managed Services Migration):** 
+> Toàn bộ các kho lưu trữ tự host trong cluster đã được yêu cầu gỡ bỏ hoàn toàn. PostgreSQL chuyển dịch sang **AWS RDS PostgreSQL (Multi-AZ)**, và Redis/Valkey chuyển dịch sang **AWS ElastiCache**. Rào cản chi phí phát sinh cho ElastiCache và RDS không còn là yếu tố cần cân nhắc ở cấp độ ứng dụng vì đây là các dịch vụ bắt buộc đã được Platform Team cấp ngân sách và cấu hình.
 
-**Hạ tầng chính:** **Redis** — phục vụ cache LLM Response thời gian thực.
+**Hạ tầng chính:** **AWS ElastiCache (Redis/Valkey)** — phục vụ cache LLM Response thời gian thực.
 
-| Lý do chọn Redis | Chi tiết |
+| Lý do chọn AWS ElastiCache | Chi tiết |
 | :--- | :--- |
-| **Latency < 1ms** vs Postgres 5-15ms | Trải nghiệm người dùng tốt hơn rõ rệt, đáp ứng SLO p95 |
-| **TTL tự động** (SETEX/EXPIRE) | Không cần cronjob dọn cache, code ứng dụng sạch hơn |
-| **Tách biệt tải** khỏi DB nghiệp vụ | Tránh nghẽn Postgres khi tải cao — đáp ứng Mandate-06 Resilience: *"không để treo trang sản phẩm"* |
-| **Eviction Policy LRU** tự động | Bộ nhớ tự quản lý khi đầy, không cần can thiệp thủ công |
+| **Độ trễ tối ưu (< 1ms)** | Đáp ứng SLO p95 cho trải nghiệm người dùng cuối tốt hơn rõ rệt so với RDS (5-15ms). |
+| **TTL tự động & LRU Eviction** | Tự quản lý vòng đời và bộ nhớ đệm tự động mà không cần xây dựng cơ chế dọn dẹp thủ công. |
+| **Tách biệt tải khỏi RDS DB** | Ngăn chặn việc làm quá tải kết nối và tài nguyên I/O của database chính (AWS RDS) khi lưu lượng đọc cache tăng cao. |
 
-**Hạ tầng bổ trợ (Hybrid Audit):** **PostgreSQL** — ghi audit log kiểm toán song song.
+**Hạ tầng bổ trợ (Hybrid Audit):** **AWS RDS PostgreSQL (Multi-AZ)** — ghi audit log kiểm toán song song.
 
-| Lý do giữ PostgreSQL cho Audit | Chi tiết |
+| Lý do giữ AWS RDS cho Audit | Chi tiết |
 | :--- | :--- |
-| **Truy vấn SQL phân tích cấu trúc** | Kiểu `JSONB` hỗ trợ thống kê phức tạp: *Bao nhiêu request bị Fidelity Judge từ chối? Tổng token tiêu tốn?* |
-| **Đáp ứng Mandate-06 Auditability** | Báo cáo số đo kiểm định chất lượng cho Mentor hoặc Ban giám khảo trực quan và khả thi hơn Key-Value của Redis |
-| **Không tốn thêm chi phí** | Tái sử dụng instance Postgres sẵn có, chỉ thêm 1 bảng audit log |
+| **Truy vấn SQL phân tích cấu trúc** | Sử dụng kiểu dữ liệu `JSONB` của Postgres hỗ trợ thống kê dữ liệu Fidelity Judge, kiểm toán token tiêu hao. |
+| **Đáp ứng yêu cầu Auditability** | Đảm bảo tính toàn vẹn cao, chống mất mát thông tin lịch sử nhờ cơ chế Multi-AZ và backup tự động của RDS. |
+| **Không tốn thêm chi phí phát sinh** | Tái sử dụng instance RDS PostgreSQL sẵn có dùng chung giữa các dịch vụ. |
+
+---
+
+## 2.6. Đặc Tả Tích Hợp Managed Services & Tách Biệt Kết Nối (Security & Connection Scaling)
+
+Nhằm tuân thủ các quy tắc bảo mật và quản lý tài nguyên của hệ thống sau khi migrate lên RDS và ElastiCache, thiết kế tích hợp bắt buộc tuân thủ 3 nguyên tắc sau:
+
+### 1. Bảo mật Kết nối (TLS/SSL & Secrets Manager)
+* **Không lưu Plaintext Credentials:** Địa chỉ endpoints, username, password hoặc auth tokens của RDS và ElastiCache **tuyệt đối không** được khai báo trực tiếp trong Helm values hoặc biến môi trường. Chúng được quản lý tập trung trong **AWS Secrets Manager**, sau đó sync qua Kubernetes Secrets.
+* **TLS in-transit:** Mọi kết nối đến RDS và ElastiCache đều bắt buộc phải kích hoạt mã hóa TLS.
+  * *RDS PostgreSQL:* Sử dụng connection string chứa tham số `sslmode=require`.
+  * *ElastiCache (Redis):* Sử dụng giao thức `rediss://` (thay vì `redis://`) và cấu hình client với `ssl=True, ssl_cert_reqs='required'`.
+* **Private Endpoints:** Toàn bộ kết nối I/O đi qua các Private VPC Subnets. Egress Network Policies của pod `product-reviews` phải được cấu hình để cho phép đi đến Security Group của RDS (port 5432/6432) và ElastiCache (port 6379).
+
+### 2. Connection Pooling với PgBouncer (Tránh Cạn Kiệt Kết Nối RDS)
+* Với việc tăng số lượng replicas của `product-reviews` lên 2 (và có thể tự động scale tiếp qua HPA), nếu mỗi pod tự giữ một pool kết nối PostgreSQL lớn, tổng số lượng kết nối đồng thời từ các pod có thể dễ dàng vượt qua `max_connections` của RDS (~100 kết nối ở các size nhỏ).
+* **Giải pháp:** Route toàn bộ lưu lượng ghi audit và đọc DB qua **PgBouncer** (được triển khai tại port `6432` ở chế độ transaction pooling). PgBouncer giữ số kết nối đến RDS ổn định ở mức thấp (mặc định $\le 25$) bất kể số lượng pod replicas tăng lên bao nhiêu, giúp tăng độ tin cậy kết nối (Reliability) và tối ưu hóa chi phí RDS.
+
+### 3. Ghi Audit Log Bất Đồng Bộ (Asynchronous Audit Writes)
+* Kết nối đến RDS qua mạng có độ trễ I/O cao hơn so với Postgres tự host trong cluster.
+* Để không kéo dài thời gian phản hồi (API Latency) của luồng RAG chính, hành vi ghi log kiểm toán Fidelity Judge xuống RDS phải được thực hiện **bất đồng bộ (Asynchronous)**. Ứng dụng sẽ sử dụng một thread pool hoặc background worker để đẩy tác vụ ghi xuống DB ngoài request path chính của gRPC.
 
 ---
 
@@ -294,6 +315,60 @@ def get_review_version(product_id: str) -> str:
 
 ---
 
+### 4.6. Độ trễ ghi Audit Log vào AWS RDS (Mức độ: 🟡 Trung bình)
+
+**Vấn đề:** Việc ghi log kiểm toán Fidelity Judge (độ trung thực của kết quả LLM) đồng bộ (synchronous) vào database Postgres sẽ tạo thêm một lượt I/O qua mạng đến AWS RDS. Mặc dù RDS chạy trong cùng VPC với EKS, độ trễ ghi (Write Latency) mạng này có thể lên tới 5-15ms, làm tăng tổng thời gian phản hồi (API Latency) của gRPC `AskProductAIAssistant` đối với các trường hợp cache miss.
+
+**Giải pháp: Asynchronous Logging bằng ThreadPoolExecutor**
+
+Áp dụng cơ chế đẩy việc ghi database xuống một luồng chạy nền (background thread), giải phóng ngay lập tức luồng xử lý chính của gRPC để trả kết quả cho client:
+
+```python
+from concurrent.futures import ThreadPoolExecutor
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Khởi tạo ThreadPoolExecutor với số worker giới hạn để tránh quá tải kết nối PgBouncer
+db_write_executor = ThreadPoolExecutor(max_workers=5, thread_name_prefix="db_audit_worker")
+
+def insert_audit_log_to_db(product_id, model, approved, input_tokens, output_tokens, response_text):
+    """Thực thi ghi log kiểm toán vào RDS qua PgBouncer."""
+    connection = None
+    try:
+        connection = db_pool.getconn()
+        with connection.cursor() as cursor:
+            query = """
+                INSERT INTO reviews.fidelity_audit (product_id, model, approved, input_tokens, output_tokens, response, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, NOW())
+            """
+            cursor.execute(query, (product_id, model, approved, input_tokens, output_tokens, response_text))
+        connection.commit()
+    except Exception as e:
+        if connection is not None:
+            connection.rollback()
+        logger.error(f"Failed to write audit log to RDS: {e}")
+    finally:
+        if connection is not None:
+            db_pool.putconn(connection)
+
+def log_fidelity_audit_async(product_id, model, approved, input_tokens, output_tokens, response_text):
+    """Gọi bất đồng bộ hàm ghi log, trả kết quả ngay lập tức cho main thread."""
+    db_write_executor.submit(
+        insert_audit_log_to_db,
+        product_id,
+        model,
+        approved,
+        input_tokens,
+        output_tokens,
+        response_text
+    )
+```
+
+**Hiệu quả:** Triệt tiêu hoàn toàn độ trễ I/O của database RDS trên request path chính. Trải nghiệm người dùng cuối được giữ ổn định ở mức tối đa.
+
+---
+
 ## 5. Minh Họa Logic Mã Nguồn Python
 
 ### 5.1. Hàm sinh Cache Key và Cache Policy cho LLM Cache
@@ -365,16 +440,28 @@ def ask_product_ai_assistant(product_id, question):
 
 ## 6. Lộ Trình Triển Khai Kỹ Thuật (Implementation Roadmap)
 
-### Giai đoạn 1: Chuẩn bị hạ tầng & Database Migration
-* **Database Schema Update:** Cập nhật cơ sở dữ liệu PostgreSQL để hỗ trợ lọc bảo mật ở tầng lưu trữ:
+### Giai đoạn 1: Chuẩn bị hạ tầng & Database Migration (Managed RDS)
+* **Database Schema Update (RDS):** Cập nhật cơ sở dữ liệu AWS RDS PostgreSQL để hỗ trợ lọc bảo mật và lưu kết quả Fidelity Judge:
   ```sql
   ALTER TABLE reviews.productreviews ADD COLUMN is_safe BOOLEAN DEFAULT TRUE;
   CREATE INDEX idx_reviews_product_safe ON reviews.productreviews (product_id, is_safe);
+  
+  CREATE TABLE IF NOT EXISTS reviews.fidelity_audit (
+      id SERIAL PRIMARY KEY,
+      product_id VARCHAR(50) NOT NULL,
+      model VARCHAR(100) NOT NULL,
+      approved BOOLEAN NOT NULL,
+      input_tokens INT NOT NULL,
+      output_tokens INT NOT NULL,
+      response TEXT NOT NULL,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+  );
   ```
-* **Background Worker Migration:** Khởi tạo job chạy một lần để cập nhật cột `is_safe` cho toàn bộ các reviews cũ có sẵn trong DB thông qua hàm `check_input()`.
-* **Thêm dependency Redis (`requirements.txt`):**
+* **Background Worker Migration:** Khởi chạy một background job chạy một lần từ EKS pod để quét và cập nhật cột `is_safe` cho toàn bộ các reviews cũ có sẵn trong RDS thông qua hàm `check_input()`.
+* **Thêm dependency Redis & Connection Pooler (`requirements.txt`):**
   ```text
   redis>=5.0.0
+  psycopg2-binary>=2.9.0
   ```
 
 ### Giai đoạn 2: Cấu hình Môi trường Phát triển (Local & Production Helm)
@@ -390,17 +477,39 @@ def ask_product_ai_assistant(product_id, question):
       restart: always
   ```
 * **Production Helm configuration (`values-aio-llm.yaml`):**
+  Trỏ kết nối DB sang PgBouncer (cổng 6432) để bảo vệ kết nối RDS, và kết nối Cache sang AWS ElastiCache Endpoint (giao thức bảo mật `rediss://` và port 6379). Toàn bộ credentials và endpoints được ánh xạ từ Kubernetes Secrets được đồng bộ từ AWS Secrets Manager:
   ```yaml
   env:
     - name: REDIS_HOST
-      value: "redis-service.default.svc.cluster.local"
+      valueFrom:
+        secretKeyRef:
+          name: elasticache-secrets
+          key: host
     - name: REDIS_PORT
       value: "6379"
+    - name: REDIS_USE_TLS
+      value: "true"
+    - name: REDIS_AUTH_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: elasticache-secrets
+          key: auth_token
+    - name: DB_CONNECTION_STRING
+      valueFrom:
+        secretKeyRef:
+          name: rds-pgbouncer-secrets
+          key: connection_string
     - name: CACHE_TYPE
       value: "redis"
   ```
 
 ### Giai đoạn 3: Cấu trúc hóa mã nguồn ứng dụng
-* Cập nhật hàm ghi review mới: chạy quét regex trước khi insert vào DB để lưu giá trị `is_safe` chính xác.
-* Cập nhật câu SQL trong [database.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/database.py) để chỉ lấy reviews có `is_safe = TRUE`.
-* Tích hợp code kiểm tra cache ở đầu hàm `AskProductAIAssistant` và lưu cache ở cuối hàm trong [product_reviews_server.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/product_reviews_server.py).
+* **Tích hợp TLS/SSL cho Client Connection:**
+  * Cấu hình trong `database.py` để kết nối qua PgBouncer tại cổng `6432` bằng connection string chứa `sslmode=require`.
+  * Cấu hình khởi tạo `redis_client` trong `product_reviews_server.py` sử dụng `rediss://` nếu `REDIS_USE_TLS = true` và truyền token xác thực từ AWS Secrets Manager.
+* **Ghi Audit Log Bất Đồng Bộ:**
+  * Triển khai hàm `log_fidelity_audit_async` sử dụng `ThreadPoolExecutor` để tránh block gRPC thread khi ghi log kiểm toán sang RDS.
+* **Cập nhật luồng nghiệp vụ:**
+  * Cập nhật hàm ghi review mới: chạy quét regex trước khi insert vào DB để lưu giá trị `is_safe` chính xác.
+  * Cập nhật câu SQL trong [database.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/database.py) để chỉ lấy reviews có `is_safe = TRUE`.
+  * Tích hợp code kiểm tra cache ở đầu hàm `AskProductAIAssistant` và lưu cache ở cuối hàm trong [product_reviews_server.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/product_reviews_server.py).

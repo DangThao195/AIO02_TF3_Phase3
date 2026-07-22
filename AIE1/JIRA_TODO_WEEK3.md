@@ -100,33 +100,36 @@ eval-mandate14:
 * **Ưu tiên:** High (P0)
 
 ### Mô tả công việc (Description)
-Triển khai thiết kế bộ nhớ đệm 2 tầng (LLM response cache bằng Redis và Regex filter cache bằng DB Column `is_safe`) theo ADR 0005 để tối ưu hóa latency và chi phí token. Thực hiện đo đạc so sánh số liệu Cost/Latency trước và sau khi tích hợp cache.
+Triển khai thiết kế bộ nhớ đệm 2 tầng (LLM response cache bằng Redis và Regex filter cache bằng DB Column `is_safe`) theo ADR 0005 để tối ưu hóa latency và chi phí token. Tích hợp các giải pháp chống thừng nghẽn Cache Stampede và Asynchronous Logging cho AWS RDS theo tài liệu [PRODUCT_REVIEW_SERVER_CACHING_DESIGN.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/analysis/PRODUCT_REVIEW_SERVER_CACHING_DESIGN.md). Thực hiện đo đạc đối chứng Cost/Latency trước và sau khi có cache.
 
 ### Các tác vụ con (Sub-tasks)
 
 #### Sub-task 2.0: Đo baseline "Before Caching" [Thứ 2 sáng] — Priority: Highest
 > Bắt buộc phải làm trước khi sửa code, nếu không sẽ mất số liệu đối chứng.
-- Chạy benchmark đo latency p95, p99 và token usage khi chưa bật cache.
-- Ghi nhận kết quả vào file `repro/artifacts/cost_latency_BEFORE_cache.json`.
+- Ghi nhận kết quả đo benchmark latency p95, p99 và token usage khi chưa bật cache.
+- Lưu trữ kết quả chính xác vào file `repro/artifacts/cost_latency_BEFORE_cache.json` (Đã hoàn thành và push lên Git).
 
-#### Sub-task 2.1: PostgreSQL Migration cột `is_safe` [Thứ 2 sáng] — Priority: Medium
-- Tạo và chạy migration script thêm cột `is_safe BOOLEAN DEFAULT TRUE` vào bảng `reviews.productreviews`.
-- Viết background worker chạy một lần quét và cập nhật `is_safe` cho các review cũ dựa trên regex guardrail.
-- Sửa các SQL query trong `database.py` để lọc `WHERE is_safe = TRUE`.
+#### Sub-task 2.1: PostgreSQL Migration cột `is_safe` & Background Worker [Thứ 2 sáng] — Priority: Medium
+- Tạo file script SQL di dân `migration.sql` thêm cột `is_safe BOOLEAN DEFAULT TRUE` và index `productreviews_prod_safe_idx` vào bảng `reviews.productreviews`.
+- Tạo background worker script `db_migration_worker.py` chạy theo batch (kèm sleep) để quét toàn bộ review cũ và cập nhật `is_safe = FALSE` nếu vi phạm bộ lọc Regex Guardrail.
+- Cập nhật các SQL query trong `database.py` để chỉ đọc các review sạch (`WHERE is_safe = TRUE`).
 
-#### Sub-task 2.2: Cấu hình Redis & Caching logic [Thứ 2 chiều - Thứ 3] — Priority: Highest
+#### Sub-task 2.2: Cấu hình Redis & logic Cache Key / Invalidation / Lock [Thứ 2 chiều - Thứ 3] — Priority: Highest
 > Cấu trúc hạ tầng dùng chung cho cả Caching và Closed-Loop.
-- Thêm thư viện `redis` và cấu hình service Redis vào local docker-compose/K8s.
-- Viết module `guardrails/cache.py` dùng băm `SHA256` của input làm cache key. Thiết lập cơ chế Fail-Open (Redis sập, dịch vụ vẫn gọi LLM bình thường).
-- Dành riêng Redis key `product_reviews:fallback_override` làm cổng điều phối Closed-loop cho Kiên.
+- Thêm thư viện `redis` và cấu hình service Redis/Valkey kết nối bảo mật bằng SSL/TLS (`rediss://`).
+- Viết module `guardrails/cache.py` định nghĩa Cache Key động: `SHA256(product_id + review_version + model_id + question)`.
+- Triển khai hàm `get_review_version(product_id)` trong `database.py` dựa trên `COUNT(*)` và `MAX(id)` để tự động invalidation khi có review mới hoặc thay đổi trạng thái an toàn.
+- Triển khai cơ chế **chống Cache Stampede (Thundering Herd)** bằng khóa phân tán Redis `SET NX EX 10` để chỉ 1 request đồng thời gọi LLM khi cache miss.
+- Thiết lập cơ chế **Fail-Open** (Redis sập, dịch vụ vẫn gọi LLM bình thường).
 
-#### Sub-task 2.3: Tích hợp Cache vào product_reviews_server.py [Thứ 3] — Priority: High
+#### Sub-task 2.3: Tích hợp Cache & Asynchronous Logging vào server [Thứ 3] — Priority: High
 - Tích hợp kiểm tra cache ở đầu hàm `AskProductAIAssistant` (Cache Hit -> trả kết quả trong < 10ms).
-- Lưu kết quả vào Redis sau khi LLM Judge duyệt thành công (`approved == True`).
+- Áp dụng Cache Policy (Chỉ cache khi Judge duyệt thành công `approved == True`, không cache thông báo lỗi/lạc đề/thiếu thông tin).
+- Triển khai **Asynchronous Logging** bằng `ThreadPoolExecutor` để thực hiện ghi log kiểm toán Fidelity Audit xuống PostgreSQL (AWS RDS) chạy nền, tránh nghẽn I/O trên luồng gRPC chính.
 
 #### Sub-task 2.4: Đo Cost/Latency After Caching & So sánh [Thứ 4] — Priority: High
-- Chạy lại benchmark khi đã có cache.
-- So sánh số liệu Cost/Latency before/after và lưu kết quả đối chiếu vào `repro/artifacts/cost_latency_comparison.json`.
+- Chạy lại benchmark đo lường sau khi tích hợp cache.
+- So sánh số liệu trước/sau và lưu kết quả đối chiếu vào `repro/artifacts/cost_latency_comparison.json`.
 
 #### Sub-task 2.5: Đóng gói, Viết ADR 0006 và Tạo Jira Ticket `AI MANDATE #14 [TF3]` [Thứ 5] — Priority: Highest
 - Soạn thảo tài liệu ADR 0006 trong `docs/adr/` ký tên đầy đủ các thành viên.
@@ -134,8 +137,11 @@ Triển khai thiết kế bộ nhớ đệm 2 tầng (LLM response cache bằng 
 
 ### Tiêu chí nghiệm thu (Acceptance Criteria)
 - [ ] Có file baseline `cost_latency_BEFORE_cache.json` trước khi sửa code.
-- [ ] Redis cache hoạt động ổn định với cơ chế Fail-Open và phản hồi Cache Hit < 10ms.
-- [ ] Cột `is_safe` được thêm vào DB thành công và tích hợp vào SQL query.
+- [ ] Redis cache hoạt động với cơ chế Fail-Open, TLS bảo mật (`rediss://`) và phản hồi Cache Hit < 10ms.
+- [ ] Logic sinh Cache Key chứa `review_version` (tự động invalidate) và `model_id`.
+- [ ] Triển khai thành công khóa phân tán chống Cache Stampede.
+- [ ] Cột `is_safe` và index được thêm vào DB thành công; queries lọc review sạch hoàn tất.
+- [ ] Tích hợp Asynchronous Logging ghi audit log xuống RDS chạy nền.
 - [ ] File đối chiếu latency/cost after cache được xuất ra.
 - [ ] ADR 0006 được phê duyệt và commit.
 - [ ] Jira ticket được tạo đúng format với đầy đủ bằng chứng.
