@@ -12,6 +12,8 @@ import random
 import re
 import time
 import unicodedata
+import signal       
+import threading
 
 # Pip
 import boto3
@@ -876,6 +878,39 @@ def check_feature_flag(flag_name: str):
     client = api.get_client()
     return client.get_boolean_value(flag_name, False)
 
+shutdown_event = threading.Event()
+
+def handle_shutdown_signal(signum, frame):
+    logger.info(f"Received signal {signum}, initiating graceful shutdown...")
+    shutdown_event.set()
+    
+def connect_to_product_catalog_with_retry(catalog_addr, max_retries=5, initial_backoff=2.0):
+    """Kết nối sang Product Catalog Service với Exponential Backoff Retry."""
+    backoff = initial_backoff
+    for attempt in range(1, max_retries + 1):
+        try:
+            logger.info(f"Connecting to Product Catalog at {catalog_addr} (Attempt {attempt}/{max_retries})...")
+            channel = grpc.insecure_channel(catalog_addr)
+            # Kiểm tra kết nối nhanh trong vòng 2 giây
+            grpc.channel_ready_future(channel).result(timeout=2.0)
+            logger.info("Successfully connected to Product Catalog Service.")
+            return channel
+        except grpc.FutureTimeoutError:
+            logger.warning(f"Connection attempt {attempt} failed (timeout).")
+            if attempt < max_retries:
+                logger.info(f"Retrying in {backoff} seconds...")
+                time.sleep(backoff)
+                backoff *= 2
+            else:
+                logger.error("Max retries reached for Product Catalog connection. Proceeding with unverified channel.")
+                return channel
+        except Exception as e:
+            logger.error(f"Unexpected error connecting to Product Catalog: {e}")
+            if attempt < max_retries:
+                time.sleep(backoff)
+                backoff *= 2
+            else:
+                return channel
 
 if __name__ == "__main__":
     load_dotenv()
@@ -908,7 +943,11 @@ if __name__ == "__main__":
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=50))
     service = ProductReviewService()
     demo_pb2_grpc.add_ProductReviewServiceServicer_to_server(service, server)
-    health_pb2_grpc.add_HealthServicer_to_server(service, server)
+    
+    health_servicer = health.HealthServicer()
+    health_pb2_grpc.add_HealthServicer_to_server(health_servicer, server)
+    # Set trạng thái ban đầu là SERVING
+    health_servicer.set("", health_pb2.HealthCheckResponse.SERVING)
 
     llm_host = must_map_env('LLM_HOST')
     llm_port = must_map_env('LLM_PORT')
@@ -945,14 +984,45 @@ if __name__ == "__main__":
     }
 
     catalog_addr = must_map_env('PRODUCT_CATALOG_ADDR')
-    pc_channel = grpc.insecure_channel(catalog_addr)
+    pc_channel = connect_to_product_catalog_with_retry(catalog_addr, max_retries=5, initial_backoff=2.0)
     product_catalog_stub = demo_pb2_grpc.ProductCatalogServiceStub(pc_channel)
+
+    signal.signal(signal.SIGTERM, handle_shutdown_signal)
+    signal.signal(signal.SIGINT, handle_shutdown_signal)
 
     port = must_map_env('PRODUCT_REVIEWS_PORT')
     server.add_insecure_port(f'[::]:{port}')
     server.start()
     logger.info(f'Product reviews service started, listening on port {port}')
-    server.wait_for_termination()
 
+    # Main thread sẽ dừng tại đây chờ tín hiệu SIGTERM/SIGINT từ Kubernetes/OS
+    shutdown_event.wait()
 
+    # ---------------------------------------------------------
+    # QUY TRÌNH DỌN DẸP KHI NHẬN TÍN HIỆU SHUTDOWN
+    # ---------------------------------------------------------
+    # Bước A: Chuyển Health Check về NOT_SERVING để K8s rút Traffic
+    logger.info("Setting gRPC Health status to NOT_SERVING...")
+    health_servicer.set("", health_pb2.HealthCheckResponse.NOT_SERVING)
+    time.sleep(1.0)  # Dành 1 giây cho Load Balancer cập nhật trạng thái
 
+    # Bước B: Dừng gRPC Server với grace period đúng 5.0 giây theo yêu cầu
+    logger.info("Shutting down gRPC server gracefully (grace period: 5.0s)...")
+    grpc_stop_event = server.stop(grace=5.0)
+    grpc_stop_event.wait()
+    logger.info("gRPC server stopped.")
+
+    # Bước C: Cleanup tài nguyên
+    try:
+        logger.info("Closing outbound gRPC channels...")
+        pc_channel.close()
+    except Exception as e:
+        logger.error(f"Error closing pc_channel: {e}")
+
+    try:
+        logger.info("Flushing OpenTelemetry logs and traces...")
+        logger_provider.shutdown()
+    except Exception as e:
+        logger.error(f"Error shutting down logger provider: {e}")
+
+    logger.info("Service shutdown completed gracefully.")
