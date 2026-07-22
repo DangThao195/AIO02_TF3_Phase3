@@ -51,6 +51,13 @@ except ImportError as exc:
         "Unable to import demo_pb2/demo_pb2_grpc. Run protobuf generation first."
     ) from exc
 
+from eval_support.case_selection import (
+    build_selection_metadata,
+    load_jsonl_cases,
+    select_cases_by_labels,
+    validate_case_labels,
+)
+
 DB_CONN = os.environ.get(
     "DB_CONNECTION_STRING",
     "Host=localhost;Username=otelu;Password=otelp;Database=otel;Port=5432",
@@ -82,7 +89,7 @@ EXPECTED_MENTOR_PRODUCT_IDS = frozenset(
         "6E92ZMYYFZ",
     }
 )
-APPROVED_QUESTION_DATASET_SHA256 = "7bae593703a4110aa41864044692f299156c0cc914f12c190e2ff15c39b116c1"
+APPROVED_QUESTION_DATASET_SHA256 = "5fe93cd58dadddfdd17a1490e3463ee92507835e810bb1fd6092a1ad0db286fe"
 EXPECTED_QUESTION_SOURCE_CASES = 200
 EXPECTED_QUESTION_SELECTED_CASES = 43
 MAX_SUMMARY_SENTENCES = 2
@@ -321,32 +328,22 @@ def parse_args() -> argparse.Namespace:
 def load_question_cases(case_file: str) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """Load answer-intended questions while keeping DB reviews as the only ground truth."""
     path = Path(case_file)
-    raw_bytes = path.read_bytes()
+    source_rows, raw_bytes = load_jsonl_cases(path)
+    validate_case_labels(source_rows)
+    selected_rows = select_cases_by_labels(
+        source_rows,
+        case_types=["normal"],
+        expected_behaviors=["answer"],
+    )
     rows: List[Dict[str, Any]] = []
     seen_ids = set()
-    excluded_types: Counter[str] = Counter()
 
-    for line_number, line in enumerate(raw_bytes.decode("utf-8").splitlines(), start=1):
-        if not line.strip():
-            continue
-        try:
-            row = json.loads(line)
-        except json.JSONDecodeError as exc:
-            raise ValueError(f"Invalid JSONL at line {line_number}: {exc}") from exc
-        if not isinstance(row, dict):
-            raise ValueError(f"Question dataset line {line_number} must be a JSON object.")
-
-        case_type = str(row.get("type", "")).strip()
-        expected_behavior = str(row.get("expected_behavior", "")).strip()
-        if case_type != "normal" or expected_behavior != "answer":
-            excluded_types[case_type or "missing_type"] += 1
-            continue
-
+    for row in selected_rows:
         case_id = str(row.get("id", "")).strip()
         product_id = str(row.get("product_id", "")).strip()
         question = str(row.get("question", "")).strip()
         if not case_id or not product_id or not question:
-            raise ValueError(f"Normal case at line {line_number} requires id, product_id, and question.")
+            raise ValueError(f"Normal case {case_id or '<missing_id>'} requires id, product_id, and question.")
         if case_id in seen_ids:
             raise ValueError(f"Duplicate selected case id: {case_id}")
         if redact_sensitive_text(question) != question:
@@ -359,23 +356,23 @@ def load_question_cases(case_file: str) -> tuple[List[Dict[str, Any]], Dict[str,
                 "case_id": case_id,
                 "product_id": product_id,
                 "question": question,
-                "case_type": case_type,
-                "expected_behavior": expected_behavior,
+                "case_type": str(row.get("type", "")).strip(),
+                "expected_behavior": str(row.get("expected_behavior", "")).strip(),
             }
         )
 
     if not rows:
         raise ValueError("Question dataset contains no type=normal, expected_behavior=answer cases.")
 
-    return rows, {
-        "case_file": str(path),
-        "dataset_sha256": hashlib.sha256(raw_bytes).hexdigest(),
-        "source_case_count": len(rows) + sum(excluded_types.values()),
-        "selected_case_count": len(rows),
-        "excluded_case_count": sum(excluded_types.values()),
-        "excluded_by_type": dict(sorted(excluded_types.items())),
-        "selection_rule": "type=normal AND expected_behavior=answer",
-    }
+    metadata = build_selection_metadata(
+        path,
+        raw_bytes,
+        source_rows,
+        selected_rows,
+        case_types=["normal"],
+        expected_behaviors=["answer"],
+    )
+    return rows, metadata
 
 
 def parse_db_conn_string(conn_str: str) -> Dict[str, str]:
