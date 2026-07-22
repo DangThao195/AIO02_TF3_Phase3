@@ -221,7 +221,9 @@ def run_evaluation(
         ][:20],
     }
 
-    out_file = file_path.with_name(file_path.stem + "_report.json")
+    reports_dir = file_path.parent.parent / "reports" if file_path.parent.name == "datasets" else file_path.parent / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    out_file = reports_dir / (file_path.stem + "_report.json")
     with open(out_file, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2, ensure_ascii=False)
 
@@ -253,15 +255,17 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     base_dir = Path(__file__).parent
+    datasets_dir = base_dir / "datasets"
     use_llm = True  # Luôn dùng LLM Judge theo yêu cầu
 
     if args.file:
-        files = [base_dir / args.file]
+        files = [Path(args.file) if Path(args.file).exists() else datasets_dir / args.file]
     else:
         files = [
-            base_dir / "baseline_guardrails.json",
-            base_dir / "baseline_response.json",
+            datasets_dir / "baseline_guardrails.json",
+            datasets_dir / "labeled_testcases.json",
         ]
+
 
     for fp in files:
         if fp.exists():
