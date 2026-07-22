@@ -5,6 +5,7 @@
 
 # Python
 import os
+import hashlib
 import simplejson as json
 
 # Postgres
@@ -82,6 +83,32 @@ def fetch_avg_product_review_score_from_db(request_product_id):
         connection.commit()
         return result
 
+    except Exception as e:
+        if connection is not None:
+            connection.rollback()
+        raise e
+    finally:
+        if connection is not None:
+            db_pool.putconn(connection)
+
+def get_review_version(product_id: str) -> str:
+    """Tính mã phiên bản review dựa trên count + max id.
+    Khi có review mới hoặc review bị đánh dấu unsafe → version thay đổi → Cache Miss tự động.
+    """
+    connection = None
+    try:
+        connection = db_pool.getconn()
+        with connection.cursor() as cursor:
+            query = """
+                SELECT COUNT(*), COALESCE(MAX(id), 0)
+                FROM reviews.productreviews
+                WHERE product_id = %s AND is_safe = TRUE
+            """
+            cursor.execute(query, (product_id,))
+            count, max_id = cursor.fetchone()
+        connection.commit()
+        raw = f"{product_id}:{count}:{max_id}"
+        return hashlib.sha256(raw.encode('utf-8')).hexdigest()[:12]
     except Exception as e:
         if connection is not None:
             connection.rollback()
