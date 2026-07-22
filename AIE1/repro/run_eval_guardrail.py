@@ -14,6 +14,7 @@ import statistics
 import sys
 import time
 import uuid
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
@@ -95,6 +96,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--grpc-addr", default="localhost:8085")
     parser.add_argument("--grpc-timeout-seconds", type=float, default=45.0)
     parser.add_argument("--workers", type=int, default=2)
+    parser.add_argument(
+        "--max-cases",
+        type=int,
+        default=0,
+        help=(
+            "Optional cap after label selection, for low-cost telemetry probes. "
+            "Acceptance runs should leave this unset."
+        ),
+    )
     parser.add_argument("--out", default="")
     parser.add_argument("--candidate-provider", default=os.getenv("LLM_PROVIDER", "unknown"))
     parser.add_argument("--candidate-model", default=os.getenv("LLM_MODEL", "unknown"))
@@ -595,6 +605,24 @@ def main() -> int:
     case_types = parse_csv_labels(args.case_types)
     expected_behaviors = parse_csv_labels(args.expected_behaviors)
     cases, selection_metadata = load_selected_dataset(dataset_path, case_types, expected_behaviors)
+    if args.max_cases:
+        if args.max_cases <= 0:
+            raise ValueError("--max-cases must be a positive integer when set.")
+        original_selected_count = len(cases)
+        cases = cases[: args.max_cases]
+        capped_counts = Counter(str(case.get("type", "missing_type")) for case in cases)
+        source_counts = Counter(selection_metadata["source_by_type"])
+        excluded_counts = source_counts - capped_counts
+        selection_metadata = {
+            **selection_metadata,
+            "max_cases": args.max_cases,
+            "uncapped_selected_case_count": original_selected_count,
+            "selected_case_count": len(cases),
+            "excluded_case_count": selection_metadata["source_case_count"] - len(cases),
+            "selected_by_type": dict(sorted(capped_counts.items())),
+            "excluded_by_type": dict(sorted(excluded_counts.items())),
+            "selection_rule": f"{selection_metadata['selection_rule']} + first {len(cases)} cases",
+        }
     if args.expected_cases is None:
         args.expected_cases = len(cases) if case_types or expected_behaviors else 200
     needs_runtime = any(case["type"] != "toxic_review" for case in cases) or args.enable_toxic_db_e2e

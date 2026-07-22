@@ -879,7 +879,15 @@ def check_feature_flag(flag_name: str):
 
 if __name__ == "__main__":
     load_dotenv()
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    log_handlers = [logging.StreamHandler()]
+    usage_log_path = os.environ.get('AI_USAGE_LOG_PATH', '').strip()
+    if usage_log_path:
+        log_handlers.append(logging.FileHandler(usage_log_path, encoding='utf-8'))
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=log_handlers,
+    )
     service_name = must_map_env('OTEL_SERVICE_NAME')
 
     api.set_provider(FlagdProvider(host=os.environ.get('FLAGD_HOST', 'flagd'), port=os.environ.get('FLAGD_PORT', 8013)))

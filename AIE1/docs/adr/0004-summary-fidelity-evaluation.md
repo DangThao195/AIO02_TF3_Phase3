@@ -643,6 +643,7 @@ Tóm tắt nghiệm thu AI-86:
 - Bộ chạy mới đã bao phủ các nhóm chính: runtime guardrail, claim-level fidelity, hallucination probe, judge-human agreement và PII-in-review.
 - Dataset đã được chuẩn hóa thêm routing surface và nhãn hành vi để runner lọc đúng phạm vi test.
 - LLM-as-a-judge được kiểm tra theo hai hướng: chặn candidate bịa ở runtime và so khớp với nhãn human ở bộ audit nhỏ.
+- Cost/token đã được đo bằng telemetry `AI_USAGE` trên một probe nhỏ có kiểm soát, so sánh candidate-only ablation với runtime hiện tại có judge.
 - Các quality gate chính của AI-86 đã đạt trong lần chạy mới nhất.
 
 Giới hạn còn lại:
@@ -651,6 +652,7 @@ Giới hạn còn lại:
 - PII-in-review đã có sanitizer/local guardrail, nhưng chưa phải row-level DB transaction trace.
 - Makefile target đã có, nhưng phiên local Windows chưa chạy trực tiếp bằng `make`; các command tương đương đã được chạy trực tiếp.
 - Judge-human agreement là audit sample có kiểm soát, không phải benchmark thống kê lớn.
+- Cost/token before là ablation từ cùng request population, không phải một deployment lịch sử riêng.
 
 ## 5. Hệ quả
 
@@ -664,7 +666,7 @@ Giới hạn còn lại:
 
 ## 6. Implementation gaps chặn nghiệm thu
 
-**Cập nhật 2026-07-22:** các gap runtime/normal/toxic/timeout trong danh sách dưới đây là trạng thái lịch sử trước AI-86. Cập nhật nghiệm thu ở mục 4.7 đã chạy lại runtime core, fidelity, hallucination probe, PII local sanitizer và judge-human agreement. Kết quả mới nhất đạt quality gate cho các job đó; các bullet lịch sử được giữ lại để truy nguyên quá trình điều tra.
+**Cập nhật 2026-07-22:** các gap runtime/normal/toxic/timeout trong danh sách dưới đây là trạng thái lịch sử trước AI-86. Cập nhật nghiệm thu ở mục 4.7 đã chạy lại runtime core, fidelity, hallucination probe, PII local sanitizer, judge-human agreement và cost/token probe. Kết quả mới nhất đạt quality gate cho các job đó; các bullet lịch sử được giữ lại để truy nguyên quá trình điều tra.
 
 Các yêu cầu trust-boundary và runtime gate chính đã được triển khai: judge mặc định chạy cho grounded answer có evidence, hỗ trợ summary đa ngôn ngữ; JSON judge sai schema được retry hữu hạn rồi fail closed; approval và claim metrics được tính từ `claims[]`; review/product info được redact PII và prompt injection; acceptance artifact dùng Candidate Nova Lite và Judge Nova Micro.
 
@@ -675,7 +677,7 @@ Các vấn đề còn lại trước khi đổi trạng thái ADR thành “Đã
 3. **Chất lượng toxic-review path:** Năm toxic DB E2E case trả `UNVERIFIED`; artifact không phân biệt output guardrail với fidelity-judge rejection. Cần log status không nhạy cảm, chứng minh review bị loại khỏi runtime prompt và cải thiện utility mà không nới fail-closed policy.
 4. **Security oracle và detector alignment:** 13 injection case nhận known block trong khi local detector phân loại input safe; hai case không nhận explicit block. Toàn bộ 121 injection case thiếu forbidden target nên attack-success metric vô hiệu. Phải bổ sung oracle versioned và thống nhất classification giữa runner/runtime trước khi dùng security gate để nghiệm thu.
 5. **CI/CD chưa được tích hợp:** Repository có `repro/run_eval_guardrail.py`, nhưng chưa có GitHub Actions/protected evaluation workflow để tự động chạy strict gate với AWS credentials phù hợp và chặn merge.
-6. **Đo SLO và chi phí:** p50/p95 hiện là số liệu mixed acceptance traffic; artifact mới không có usage log. Cần đo riêng grounded summary traffic và đính kèm usage log để chứng minh token, retry, throttling và chi phí theo model.
+6. **Đo SLO và chi phí:** Gap lịch sử này đã được giảm bằng cost/token probe có `AI_USAGE` cho candidate và judge. Probe hiện là mẫu nhỏ có kiểm soát, nên đủ làm evidence chi phí cho Mandate 14 nhưng chưa thay thế load/SLO benchmark production.
 7. **Kiểm thử lỗi hạ tầng:** Đã có regression test cơ bản cho malformed JSON và timeout config, nhưng cần bổ sung integration test cho retry-budget vượt deadline, throttling, thiếu quyền Bedrock và lỗi guardrail.
 8. **Xác nhận artifact và cấu hình:** Duy trì kiểm tra tự động rằng artifact không chứa raw review/username/PII. Production deployment phải luôn khai báo provider/model rõ ràng, không phụ thuộc vào fallback mặc định của biến môi trường.
 9. **Runner có đường pass local-only:** `quality_gate()` chưa bắt buộc `toxic_review_db_e2e_enabled=true`; strict run có thể đạt toxic 16/16 chỉ bằng local filter. Phải enforce DB flag, DB identity/cleanup evidence và minimum forbidden-oracle coverage trong code, không chỉ bằng quy ước command.
