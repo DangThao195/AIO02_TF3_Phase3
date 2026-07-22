@@ -54,6 +54,44 @@ apply_runtime_fidelity_gate(...)
                 -> judge error    -> trả fallback/error và mark span error
 ```
 
+## Appendix: Hallucination runtime probe
+
+Phần này là negative-control test cho runtime LLM-as-a-judge: harness cố tình bật fixture để candidate sinh câu trả lời không grounded, sau đó kiểm tra runtime có fail-close bằng judge hay không.
+
+| Dòng | File Python / dataset | Vai trò |
+|---:|---|---|
+| 181-183 | `AIE1/repro/datasets/dataset.jsonl` | Thêm 3 case `type=hallucination_probe`, `expected_behavior=reject_unsupported`, vẫn giữ tổng dataset 200 case. |
+| 17 | `AIE1/repro/eval_support/case_selection.py` | Khai báo label hợp lệ `hallucination_probe -> reject_unsupported` để harness lọc được case theo nhãn hành vi. |
+| 125 | `AIE1/repro/run_eval_guardrail.py` | Thêm threshold `--min-hallucination-rejection-rate`, mặc định 1.0. |
+| 391-405 | `AIE1/repro/run_eval_guardrail.py` | Case chỉ pass khi runtime trả `UNVERIFIED` và không leak substring hallucinated ra user. |
+| 538 | `AIE1/repro/run_eval_guardrail.py` | Đưa `hallucination_probe` vào quality gate. |
+| 649 | `AIE1/repro/run_eval_guardrail.py` | Ghi acceptance label `hallucination_probe: reject_unsupported` vào artifact. |
+
+Artifact live đã sinh:
+
+```text
+AIE1/repro/artifacts/hallucination_runtime_probe_bedrock_20260722T144333.json
+```
+
+Kết quả artifact:
+
+```text
+total=3
+passed=3
+failed=0
+pass_rate=1.0
+quality_gate_passed=true
+selection_rule=type=hallucination_probe AND expected_behavior=reject_unsupported
+candidate_model=amazon.nova-lite-v1:0
+judge_model=amazon.nova-micro-v1:0
+```
+
+Ý nghĩa audit:
+
+- Đây không claim rằng model tự nhiên luôn bịa; nó chứng minh cơ chế runtime judge gate bắt được output bịa đã biết.
+- Runtime log xác nhận candidate dùng inaccurate fixture, judge Bedrock Nova Micro reject, và response cuối cùng trả cho user là `The summary cannot be verified. Please try again later.`
+- Đây là bằng chứng end-to-end cho câu hỏi: nếu candidate sinh unsupported/contradicted claims, LLM-as-a-judge có chặn trước khi trả user không?
+
 Điểm quan trọng: runtime không để một answer có claim chưa được kiểm tra đi thẳng ra ngoài nếu gate đang bật. Với `JUDGE_ALL_GROUNDED_ANSWERS=true`, các grounded answer đều phải qua judge, không chỉ câu hỏi summary.
 
 ### 1.3 Wrapper gọi judge từ runtime
@@ -253,7 +291,7 @@ Note audit:
 - `guardrails/evaluator.py` mới là nơi có runtime judge prompt/schema/normalization.
 - Nếu judge trả lỗi, runtime trả fallback lỗi và đánh dấu span `judge_call_failed`.
 - Nếu judge trả `approved=false`, candidate answer bị thay bằng `UNVERIFIED_SUMMARY_MESSAGE`.
-- Hiện phần runtime gate đúng pattern LLM-as-a-judge cơ bản, nhưng chưa tự chứng minh human agreement. Phần đó cần script/evidence riêng như `eval_judge_agreement.py`.
+- `eval_support/judge_agreement.py` đã được thêm để đo judge-human agreement trên benchmark human-labeled riêng.
 
 ## 2. Offline fidelity evaluator / external LLM judge
 
@@ -337,7 +375,7 @@ Note audit:
 
 - `run_eval_guardrail.py` không trực tiếp chấm claim bằng LLM judge.
 - Vai trò của file này là chạy black-box runtime eval, ghi metadata candidate/judge, phát hiện self-evaluation bias, và tổng hợp token/latency/cost từ log.
-- Nếu cần chứng minh LLM-as-a-judge agreement với human labels, cần thêm script riêng như `eval_judge_agreement.py`; file này hiện chưa làm phần đó.
+- `eval_support/judge_agreement.py` đã được thêm để đo judge-human agreement trên benchmark human-labeled riêng.
 
 ## 4. Luồng tổng thể
 
@@ -389,3 +427,30 @@ run_eval_guardrail.py
 | `product_reviews_server.py` | Có, ở mức runtime gate | Gọi judge sau candidate answer và quyết định approve/reject response. |
 | `eval_fidelity.py` | Có, ở mức offline evaluator | Định nghĩa rubric/schema, gọi judge, normalize output, tính fidelity/trust score. |
 | `run_eval_guardrail.py` | Không trực tiếp chấm bằng judge | Ghi metadata judge/candidate, chống self-evaluation bias, tổng hợp runtime artifact. |
+## Appendix: Judge-human agreement benchmark
+
+Phần này tách riêng khỏi runtime probe để trả lời câu hỏi: LLM judge có chấm giống human label không?
+
+| Dòng / file | Vai trò |
+|---|---|
+| `AIE1/repro/datasets/judge_benchmark.jsonl` | 10 case human-labeled gồm 5 pass và 5 fail, dùng `candidate_answer` override và evidence `product_info/raw_reviews`. |
+| `AIE1/repro/eval_support/judge_agreement.py` | Gọi trực tiếp `guardrails.evaluator.evaluate_summary_fidelity(...)` bằng judge thật, so `judge_label` với `human_label`, sinh confusion matrix và agreement rate. |
+| `AIE1/repro/artifacts/judge_human_agreement_bedrock_20260722T143444.json` | Artifact live với Bedrock Nova Micro. |
+
+Kết quả live:
+
+```text
+total_cases=10
+human_labeled_cases=10
+agreement_rate=1.0
+true_pass=5
+true_fail=5
+quality_gate_passed=true
+judge_model=amazon.nova-micro-v1:0
+```
+
+Ý nghĩa audit:
+
+- Runtime probe chứng minh gate chặn output bịa trước khi trả user.
+- Judge-human agreement chứng minh judge chấm khớp human labels trên benchmark nhỏ.
+- Hai artifact này bổ sung cho `fidelity_eval_*.json`, vốn đo grounded answer trên normal/answer cases.

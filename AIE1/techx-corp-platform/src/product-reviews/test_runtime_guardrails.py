@@ -59,6 +59,38 @@ class RuntimeJudgeTests(unittest.TestCase):
         self.assertEqual(result["unsupported_claims"], 0)
         self.assertEqual(result["contradicted_claims"], 0)
 
+    def test_runtime_gate_replaces_hallucinated_answer_rejected_by_judge(self):
+        hallucinated_answer = "The product includes a lifetime warranty and free replacement parts."
+        judge_result = {
+            "approved": False,
+            "claims": [
+                {
+                    "text": "The product includes a lifetime warranty.",
+                    "label": "unsupported",
+                    "evidence": [],
+                }
+            ],
+            "supported_claims": 0,
+            "unsupported_claims": 1,
+            "contradicted_claims": 0,
+            "claim_count": 1,
+            "reason": "No supplied product data or review mentions a lifetime warranty.",
+        }
+
+        with patch.object(server, "call_summary_judge", return_value=judge_result) as judge:
+            result, status = server.apply_runtime_fidelity_gate(
+                product_id="P1",
+                question="Does this product include a warranty?",
+                product_info={"name": "Test product"},
+                safe_reviews=[{"description": "Customers praise the optics.", "score": 5}],
+                candidate_result=hallucinated_answer,
+            )
+
+        self.assertEqual(result, server.UNVERIFIED_SUMMARY_MESSAGE)
+        self.assertEqual(status, "rejected")
+        judge.assert_called_once()
+        self.assertEqual(judge.call_args.args[2], hallucinated_answer)
+
     def test_review_is_anonymized_redacted_and_injection_removed(self):
         reviews = [
             {
