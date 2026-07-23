@@ -36,27 +36,30 @@ Tài liệu này hướng dẫn chi tiết từng bước để chạy migration
 > [!IMPORTANT]
 > Vì script migration chạy các lệnh `ALTER TABLE` và `CREATE TABLE` trên schema `reviews`, bạn cần kết nối bằng tài khoản quản trị (**user=root**) để tránh lỗi `must be owner of table productreviews`. Lịch sử thực thi sau đó sẽ tự động phân quyền truy cập cho user thường (`otelu`).
 
-Mở cửa sổ Terminal tại thư mục gốc của dự án `AIE1` và chạy lệnh tương ứng:
+Mở cửa sổ Terminal tại thư mục gốc của dự án `AIE1` và chạy các lệnh dưới đây để di chuyển vào thư mục dịch vụ, kích hoạt môi trường ảo và chạy migration:
 
 #### 💻 Lựa chọn A: Nếu dùng Git Bash / WSL (Khuyến nghị)
 ```bash
 cd techx-corp-platform/src/product-reviews/
 source .venv/bin/activate
-DB_CONNECTION_STRING="host=localhost user=root password=otel dbname=otel port=5432" \
-python db_migration_worker.py
+DB_CONNECTION_STRING="host=localhost user=root password=otel dbname=otel port=5432" python db_migration_worker.py
 ```
 
 #### 💻 Lựa chọn B: Nếu dùng Windows PowerShell
 ```powershell
+cd techx-corp-platform\src\product-reviews\
+.\.venv\Scripts\Activate.ps1
 $env:DB_CONNECTION_STRING="host=localhost user=root password=otel dbname=otel port=5432"
-& .\techx-corp-platform\src\product-reviews\.venv\bin\python.exe techx-corp-platform\src\product-reviews\db_migration_worker.py
+python db_migration_worker.py
 Remove-Item Env:\DB_CONNECTION_STRING
 ```
 
 #### 💻 Lựa chọn C: Nếu dùng Windows Command Prompt (CMD)
 ```cmd
+cd techx-corp-platform\src\product-reviews\
+.\.venv\Scripts\activate.bat
 set DB_CONNECTION_STRING=host=localhost user=root password=otel dbname=otel port=5432
-techx-corp-platform\src\product-reviews\.venv\bin\python.exe techx-corp-platform\src\product-reviews\db_migration_worker.py
+python db_migration_worker.py
 set DB_CONNECTION_STRING=
 ```
 
@@ -67,21 +70,10 @@ set DB_CONNECTION_STRING=
 
 ### Bước 2: Khởi chạy Product Reviews Server
 
-Trong chính terminal ở **Bước 1**, chạy lệnh tương ứng để khởi động gRPC server:
+Trong chính terminal ở **Bước 1** (nơi môi trường ảo đã được kích hoạt sẵn), chạy lệnh sau để khởi động gRPC server:
 
-#### 💻 Lựa chọn A: Nếu dùng Git Bash / WSL (Khuyến nghị)
 ```bash
-techx-corp-platform/src/product-reviews/.venv/bin/python techx-corp-platform/src/product-reviews/product_reviews_server.py
-```
-
-#### 💻 Lựa chọn B: Nếu dùng Windows PowerShell
-```powershell
-& .\techx-corp-platform\src\product-reviews\.venv\bin\python.exe techx-corp-platform\src\product-reviews\product_reviews_server.py
-```
-
-#### 💻 Lựa chọn C: Nếu dùng Windows Command Prompt (CMD)
-```cmd
-techx-corp-platform\src\product-reviews\.venv\bin\python.exe techx-corp-platform\src\product-reviews\product_reviews_server.py
+python product_reviews_server.py
 ```
 
 > [!IMPORTANT]
