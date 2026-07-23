@@ -567,7 +567,8 @@ class ProductReviewService(demo_pb2_grpc.ProductReviewServiceServicer):
             question_hash,
             len(request.question or ""),
         )
-        return get_ai_assistant_response(request.product_id, request.question)
+        return get_ai_assistant_response(request.product_id, request.question, context)
+
 
     def Check(self, request, context):
         return health_pb2.HealthCheckResponse(status=health_pb2.HealthCheckResponse.SERVING)
@@ -606,7 +607,8 @@ def get_average_product_review_score(request_product_id):
         return product_review_score
 
 
-def get_ai_assistant_response(request_product_id, question):
+def get_ai_assistant_response(request_product_id, question, context=None):
+
     with tracer.start_as_current_span("get_ai_assistant_response") as span:
         ai_assistant_response = demo_pb2.AskProductAIAssistantResponse()
         span.set_attribute("app.product.id", request_product_id)
