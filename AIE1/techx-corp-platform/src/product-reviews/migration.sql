@@ -16,3 +16,7 @@ CREATE TABLE IF NOT EXISTS reviews.fidelity_audit (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Step 4: Grant permissions to otelu user
+GRANT SELECT, INSERT, UPDATE ON reviews.fidelity_audit TO otelu;
+
+

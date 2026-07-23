@@ -29,25 +29,33 @@ Tài liệu này hướng dẫn chi tiết từng bước để chạy migration
 
 ### Bước 1: Khởi động Database Migration & Quét dữ liệu cũ
 
-Mở cửa sổ Terminal tại thư mục gốc của dự án `AIE1`. Tùy thuộc vào loại Terminal bạn đang sử dụng, hãy chạy lệnh tương ứng dưới đây:
+> [!IMPORTANT]
+> Vì script migration chạy các lệnh `ALTER TABLE` và `CREATE TABLE` trên schema `reviews`, bạn cần kết nối bằng tài khoản quản trị (**user=root**) để tránh lỗi `must be owner of table productreviews`. Lịch sử thực thi sau đó sẽ tự động phân quyền truy cập cho user thường (`otelu`).
+
+Mở cửa sổ Terminal tại thư mục gốc của dự án `AIE1` và chạy lệnh tương ứng:
 
 #### 💻 Lựa chọn A: Nếu dùng Git Bash / WSL (Khuyến nghị)
 ```bash
+DB_CONNECTION_STRING="host=localhost user=root password=otel dbname=otel port=5432" \
 techx-corp-platform/.venv/bin/python techx-corp-platform/src/product-reviews/db_migration_worker.py
 ```
 
 #### 💻 Lựa chọn B: Nếu dùng Windows PowerShell
 ```powershell
+$env:DB_CONNECTION_STRING="host=localhost user=root password=otel dbname=otel port=5432"
 & .\techx-corp-platform\.venv\bin\python.exe techx-corp-platform\src\product-reviews\db_migration_worker.py
+Remove-Item Env:\DB_CONNECTION_STRING
 ```
 
 #### 💻 Lựa chọn C: Nếu dùng Windows Command Prompt (CMD)
 ```cmd
+set DB_CONNECTION_STRING=host=localhost user=root password=otel dbname=otel port=5432
 techx-corp-platform\.venv\bin\python.exe techx-corp-platform\src\product-reviews\db_migration_worker.py
+set DB_CONNECTION_STRING=
 ```
 
 > [!NOTE]
-> Khi có thông báo `Migration scan completed!`, cột bảo mật `is_safe` và bảng log kiểm toán `reviews.fidelity_audit` đã được khởi tạo và cập nhật dữ liệu thành công trong database.
+> Khi có thông báo `Migration scan completed!`, cột bảo mật `is_safe` và bảng log kiểm toán `reviews.fidelity_audit` đã được khởi tạo, phân quyền và quét dữ liệu cũ thành công trong database.
 
 ---
 
