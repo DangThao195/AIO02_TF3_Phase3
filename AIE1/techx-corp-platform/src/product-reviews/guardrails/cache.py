@@ -42,6 +42,22 @@ except Exception as e:
     redis_client = None
 
 
+def is_fallback_override_active() -> bool:
+    """Kiểm tra Redis key product_reviews:fallback_override ("true" / "1" / "false" / "0")."""
+    global redis_client
+    if not redis_client:
+        return False
+    try:
+        val = redis_client.get("product_reviews:fallback_override")
+        if val and str(val).strip().lower() in ("true", "1", "yes", "on"):
+            logger.warning("[FALLBACK_OVERRIDE] Active via Redis key product_reviews:fallback_override")
+            return True
+    except Exception as e:
+        logger.warning(f"[FALLBACK_OVERRIDE] Redis read failed: {e}")
+    return False
+
+
+
 def generate_cache_key(product_id: str, review_version: str, model_id: str, question: str) -> str:
     """Sinh cache key dưới dạng SHA256 để đảm bảo độ dài cố định và tránh ký tự đặc biệt."""
     normalized_q = " ".join(question.lower().strip().split())

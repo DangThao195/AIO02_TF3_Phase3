@@ -34,8 +34,9 @@ import demo_pb2
 import demo_pb2_grpc
 from grpc_health.v1 import health_pb2
 from grpc_health.v1 import health_pb2_grpc
+from grpc_health.v1 import health
 from database import fetch_product_reviews, fetch_product_reviews_from_db, fetch_avg_product_review_score_from_db, get_review_version
-from guardrails.cache import generate_cache_key, get_cached_response, set_cached_response, should_cache, acquire_lock, release_lock
+from guardrails.cache import generate_cache_key, get_cached_response, set_cached_response, should_cache, acquire_lock, release_lock, is_fallback_override_active
 
 from openfeature import api
 from openfeature.contrib.provider.flagd import FlagdProvider
@@ -666,7 +667,44 @@ def get_ai_assistant_response(request_product_id, question):
                         return ai_assistant_response
                 logger.warning(f"[CACHE] Lock timeout for key {cache_key}, proceeding to call LLM directly.")
 
+        # --- Redis Fallback Override Check (Task 1 & 2) ---
+        if is_fallback_override_active():
+            logger.warning(f"[FALLBACK_OVERRIDE] Key active, bypassing LLM for product_id: {request_product_id}")
+            span.set_attribute("app.fallback.triggered", True)
+            span.set_attribute("app.fallback.source", "redis_override")
+            product_review_svc_metrics["app_ai_fallback_total"].add(1, {"source": "redis_override", "error": "forced"})
+            ai_assistant_response.response = FALLBACK_SUMMARY_MESSAGE
+            product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
+            return ai_assistant_response
+
+        # --- Forced Error Signal / Metadata Check (Task 3) ---
+        force_err_code = None
+        if context:
+            try:
+                meta = dict(context.invocation_metadata() or [])
+                force_err_code = meta.get("x-force-llm-error")
+            except Exception:
+                pass
+
+        if force_err_code == "429":
+            logger.warning("[FORCED_ERROR] Metadata x-force-llm-error=429 received, triggering Rate Limit Fallback.")
+            span.set_attribute("app.fallback.triggered", True)
+            span.set_attribute("app.fallback.source", "rate_limit")
+            product_review_svc_metrics["app_ai_fallback_total"].add(1, {"source": "rate_limit", "error": "429"})
+            ai_assistant_response.response = FALLBACK_SUMMARY_MESSAGE
+            product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
+            return ai_assistant_response
+        elif force_err_code == "timeout":
+            logger.warning("[FORCED_ERROR] Metadata x-force-llm-error=timeout received, triggering Timeout Fallback.")
+            span.set_attribute("app.fallback.triggered", True)
+            span.set_attribute("app.fallback.source", "timeout")
+            product_review_svc_metrics["app_ai_fallback_total"].add(1, {"source": "timeout", "error": "timeout"})
+            ai_assistant_response.response = FALLBACK_SUMMARY_MESSAGE
+            product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
+            return ai_assistant_response
+
         # Wrap generation pipeline in try-finally to ensure lock release and cache save
+
         result = None
         judge_status = None
         try:
