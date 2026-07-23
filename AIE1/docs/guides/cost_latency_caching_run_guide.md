@@ -83,7 +83,21 @@ python product_reviews_server.py
 
 ### Bước 3: Đo đạc chỉ số Cold Cache (Cache Miss)
 
-Mở một **cửa sổ Terminal thứ hai** tại thư mục gốc `AIE1` và chạy lệnh benchmark đo lường lần thứ nhất:
+Mở một **cửa sổ Terminal thứ hai** tại thư mục gốc `AIE1`, **kích hoạt môi trường ảo** rồi mới chạy lệnh benchmark đo lường lần thứ nhất:
+
+#### 🔌 Kích hoạt môi trường ảo ở Terminal thứ hai:
+* **WSL / Git Bash**:
+  ```bash
+  source techx-corp-platform/src/product-reviews/.venv/bin/activate
+  ```
+* **Windows PowerShell**:
+  ```powershell
+  .\techx-corp-platform\src\product-reviews\.venv\Scripts\Activate.ps1
+  ```
+* **Windows CMD**:
+  ```cmd
+  .\techx-corp-platform\src\product-reviews\.venv\Scripts\activate.bat
+  ```
 
 #### 💻 Lựa chọn A: Nếu dùng Git Bash / WSL (Khuyến nghị)
 ```bash
