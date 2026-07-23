@@ -151,6 +151,26 @@ python repro\run_eval_guardrail.py `
 
 ---
 
+## 🔍 Giám Sát Traces Bằng Jaeger UI
+
+Để trực quan hóa các cuộc gọi API, luồng xử lý Cache (Hit/Miss) và kiểm toán Judge, bạn có thể sử dụng Jaeger UI để theo dõi bằng giao diện:
+
+### 1. Nếu chạy local bằng Docker Compose:
+* Truy cập địa chỉ: [http://localhost:16686](http://localhost:16686)
+* Chọn Service: `product-reviews` trong ô tìm kiếm.
+* Nhấn **Find Traces** để xem chi tiết timeline của các request. Bạn sẽ thấy rõ sự khác biệt:
+  - **Cold Cache (Cache Miss)**: Luồng xử lý gọi LLM dài vài giây, hiển thị đầy đủ các span con của `get_ai_assistant_response`, candidate call, và judge call.
+  - **Hot Cache (Cache Hit)**: Phản hồi siêu tốc trong vài mili-giây với thẻ tag `app.cache.hit = True` và không phát sinh bất kỳ cuộc gọi LLM/boto3 nào.
+
+### 2. Nếu chạy trên Kubernetes (K8s) Cluster:
+* Port-forward dịch vụ Jaeger hoặc truy cập qua `frontend-proxy`:
+  ```bash
+  kubectl -n <your-namespace> port-forward svc/jaeger 16686:16686
+  ```
+* Truy cập Jaeger UI tại: [http://localhost:16686](http://localhost:16686)
+
+---
+
 ## 📊 Báo cáo kết quả
 
 Sau khi chạy xong, hãy kiểm tra 2 tệp kết quả trong thư mục `repro/artifacts/`:
