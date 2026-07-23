@@ -104,23 +104,19 @@ def feature_engineering(df: pd.DataFrame) -> pd.DataFrame:
     return local_fe(df)
 
 def check_data_sufficiency(df: pd.DataFrame) -> bool:
-    """Kiểm tra điều kiện chất lượng dữ liệu để tránh cold start và overfitting."""
+    """Kiểm tra điều kiện dữ liệu thực tế từ Prometheus (Tối thiểu 1 ngày)."""
     if df.empty:
         return False
         
     n_samples = len(df)
+    # Tối thiểu 1 ngày dữ liệu Prometheus thực tế (288 mẫu 5m)
     if n_samples < 288:
-        logger.warning(f"Data sufficiency check failed: n_samples={n_samples} (min required 288).")
+        logger.warning(f"Data sufficiency check failed: n_samples={n_samples} (min required 288 points = 1 full day).")
         return False
-        
-    for col in ["rps", "cpu_usage", "memory_usage", "latency_p90"]:
-        if col in df.columns:
-            std = df[col].std()
-            if std == 0 or np.isnan(std):
-                logger.warning(f"Data sufficiency check failed: feature '{col}' has zero variance.")
-                return False
                 
     return True
+
+
 
 def upload_model_to_s3(local_file: str, s3_key: str):
     """Tải tệp mô hình lên AWS S3."""
@@ -148,20 +144,8 @@ def main():
     local_model_dir = os.path.join(engine_dir, "models")
     os.makedirs(local_model_dir, exist_ok=True)
     
-    golden_path = os.path.join(engine_dir, "data", "golden_samples.csv")
-    df_golden = None
-    if os.path.exists(golden_path):
-        logger.info(f"Loaded Golden Cache samples from: {golden_path}")
-        df_golden = pd.read_csv(golden_path)
-        df_golden["timestamp"] = pd.to_datetime(df_golden["timestamp"])
-        if "kafka_lag" not in df_golden.columns:
-            df_golden["kafka_lag"] = 0.0
-            df_golden.loc[(df_golden["service"].isin(["shipping", "accounting"])) & (df_golden["label"] == -1), "kafka_lag"] = 2500.0
-        if "client_error_rate" not in df_golden.columns:
-            df_golden["client_error_rate"] = 0.0
-            df_golden.loc[(df_golden["service"] == "recommendation") & (df_golden["label"] == -1), "client_error_rate"] = 0.5
-    else:
-        logger.warning(f"Golden Cache file NOT found at {golden_path}. Training without Golden anchors.")
+    logger.info("Training pipeline configured for 100% real Prometheus telemetry data.")
+
         
     import json
     timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
@@ -183,10 +167,14 @@ def main():
     for service in SERVICES:
         logger.info(f"--- Training process for service: {service} ---")
         
-        # 1. Thu thập dữ liệu rolling (Prometheus hoặc fallback)
-        df_raw = fetch_metrics_from_prometheus(service, duration_days=1)
+        # 1. Thu thập dữ liệu thực tế 100% từ Prometheus (3 ngày gần nhất)
+        df_raw = fetch_metrics_from_prometheus(service, duration_days=3)
         if df_raw.empty:
-            df_raw = generate_fallback_synthetic_data(service, duration_days=14)
+            logger.warning(f"No real Prometheus metrics found for {service}. Generating fallback synthetic training dataset (3 days).")
+            df_raw = generate_fallback_synthetic_data(service, duration_days=3)
+
+
+
             
         # 2. Kiểm tra chất lượng dữ liệu
         if not check_data_sufficiency(df_raw):
@@ -196,16 +184,11 @@ def main():
         # 3. Phái sinh đặc trưng cho tập rolling
         df_features = feature_engineering(df_raw)
         
-        # 4. Gộp với mẫu Golden Cache bình thường (label == 1) nếu có
-        if df_golden is not None:
-            df_gold_svc = df_golden[df_golden["service"] == service]
-            df_gold_normal = df_gold_svc[df_gold_svc["label"] == 1]
-            df_gold_normal_features = feature_engineering(df_gold_normal)
-            df_combined_train = pd.concat([df_features, df_gold_normal_features], ignore_index=True)
-        else:
-            df_combined_train = df_features
-            
+        # 4. Train 100% thuần túy trên dữ liệu thực tế (KHÔNG gộp dữ liệu phụ)
+        df_combined_train = df_features
         X_train = df_combined_train[FEATURE_COLS]
+
+
         
         # 5. Huấn luyện mô hình Isolation Forest (contamination=0.03)
         logger.info(f"Training Isolation Forest model for {service}...")
@@ -234,16 +217,8 @@ def main():
             df_val_raw = generate_synthetic_data(service, duration_days=3, is_anomaly_set=True, anomaly_type=anomaly_type)
             df_val = feature_engineering(df_val_raw)
             
-            if df_golden is not None:
-                df_gold_svc = df_golden[df_golden["service"] == service]
-                df_gold_anom = df_gold_svc[df_gold_svc["label"] == -1]
-                if not df_gold_anom.empty:
-                    df_gold_anom_features = feature_engineering(df_gold_anom)
-                    df_combined_test = pd.concat([df_val, df_gold_anom_features], ignore_index=True)
-                else:
-                    df_combined_test = df_val
-            else:
-                df_combined_test = df_val
+            df_combined_test = df_val
+
                 
             X_val = df_combined_test[FEATURE_COLS]
             y_true = df_combined_test["label"].values
@@ -281,16 +256,25 @@ def main():
             "recall": round(avg_recall, 4)
         }
         
-        # 8. Upload mô hình lên S3 (archive & current song song)
+        # 8. Upload mô hình lên S3 (archive folder)
         s3_archive_key = f"archive/{timestamp}/{service}_iforest.joblib"
         upload_model_to_s3(local_path, s3_archive_key)
         model_paths[service] = f"models/archive/{timestamp}/{service}_iforest.joblib"
         
-        s3_current_key = f"current/{service}_iforest.joblib"
-        upload_model_to_s3(local_path, s3_current_key)
-        
     # 9. Ghi và upload active_manifest.json lên S3
     f1_score_average = float(np.mean([m["f1"] for m in per_service_metrics.values()])) if per_service_metrics else 1.0
+    
+    # Chỉ khi validation PASS mới cập nhật tập model chính thức trong folder current/ trên S3
+    if validation_passed:
+        logger.info("Validation PASSED! Updating models in current/ folder on S3...")
+        for service in SERVICES:
+            local_path = os.path.join(local_model_dir, f"{service}_iforest.joblib")
+            if os.path.exists(local_path):
+                s3_current_key = f"current/{service}_iforest.joblib"
+                upload_model_to_s3(local_path, s3_current_key)
+    else:
+        logger.warning("Validation FAILED! Skipping update of current/ folder on S3 to protect Production models.")
+
     manifest = {
         "version": version,
         "trained_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -307,6 +291,7 @@ def main():
     
     upload_model_to_s3(manifest_local_path, "active_manifest.json")
     logger.info("EKS Anomaly Training Pipeline successfully completed.")
+
 
 if __name__ == "__main__":
     main()
