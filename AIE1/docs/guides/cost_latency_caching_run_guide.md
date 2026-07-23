@@ -70,11 +70,36 @@ set DB_CONNECTION_STRING=
 
 ### Bước 2: Khởi chạy Product Reviews Server
 
-Trong chính terminal ở **Bước 1** (nơi môi trường ảo đã được kích hoạt sẵn), chạy lệnh sau để khởi động gRPC server:
+Trong chính terminal ở **Bước 1** (nơi môi trường ảo đã được kích hoạt sẵn), chạy lệnh sau để khởi động gRPC server. 
 
-```bash
-python product_reviews_server.py
-```
+> [!IMPORTANT]
+> **Cấu hình Cổng Redis/Valkey (Tránh bị đơ/chậm do chờ timeout kết nối):**
+> 
+> Căn cứ vào file `docker-compose.yml`, dịch vụ `valkey-cart` được ánh xạ (map) ra một cổng ngẫu nhiên trên máy Host (ví dụ: `57215` như hiển thị trong `docker ps`).
+> Nếu không khai báo cổng thực tế này, server sẽ mặc định kết nối tới cổng `6379`, dẫn đến lỗi kết nối và kích hoạt vòng lặp chờ khóa (Lock Stampede polling) gây đơ/chậm tiến trình (mất khoảng 30s mỗi request).
+> 
+> 1. Kiểm tra cổng thực tế đang chạy của `valkey-cart` bằng lệnh:
+>    ```bash
+>    docker ps | grep valkey-cart
+>    ```
+>    *(Tìm phần cổng bên trái dấu `->6379/tcp`, ví dụ: `0.0.0.0:57215->6379/tcp` tức là cổng `57215`)*.
+> 
+> 2. Chạy server truyền kèm biến môi trường `REDIS_PORT` tương ứng:
+> 
+> * **WSL / Git Bash**:
+>   ```bash
+>   REDIS_PORT=<cổng_thực_tế> python product_reviews_server.py
+>   ```
+> * **Windows PowerShell**:
+>   ```powershell
+>   $env:REDIS_PORT="<cổng_thực_tế>"
+>   python product_reviews_server.py
+>   ```
+> * **Windows CMD**:
+>   ```cmd
+>   set REDIS_PORT=<cổng_thực_tế>
+>   python product_reviews_server.py
+>   ```
 
 > [!IMPORTANT]
 > Hãy giữ nguyên terminal này hoạt động để duy trì dịch vụ gRPC của server (lắng nghe cổng 8085).
