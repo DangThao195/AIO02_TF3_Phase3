@@ -7,7 +7,21 @@ Tài liệu này hướng dẫn chi tiết từng bước để chạy migration
 ## 📋 Yêu Cầu Chuẩn Bị Trước Khi Chạy
 
 1. **Docker Desktop** phải được bật và chạy bình thường.
-2. Đảm bảo các service phụ trợ (**PostgreSQL** và **Redis**) đã được start (thông thường chạy qua `docker compose` của hệ thống).
+2. Khởi động các dịch vụ phụ trợ (**PostgreSQL** và **Redis**) từ thư mục `techx-corp-platform`:
+   ```bash
+   cd techx-corp-platform
+   docker compose up -d postgres redis
+   cd ..
+   ```
+
+> [!CAUTION]
+> **Lỗi thường gặp: `Connection refused` đến cổng 5432 hoặc 6379 (đặc biệt khi dùng WSL)**
+> 
+> Nếu chạy lệnh ở Bước 1 gặp lỗi `Failed to connect to database: Connection refused`, có hai nguyên nhân chính:
+> 1. Dịch vụ Docker Postgres/Redis chưa khởi chạy (hãy chạy lệnh `docker compose up -d postgres redis` như trên).
+> 2. WSL 2 không phân giải được `localhost` tới Windows Host.
+>    * **Cách khắc phục nhanh nhất**: Mở terminal **PowerShell** hoặc **CMD** trực tiếp trên Windows để chạy thay vì WSL.
+>    * **Cách khắc phục triệt để trên WSL**: Mở **Docker Desktop Settings** -> **Resources** -> **WSL integration** -> Bật kích hoạt cho Distro WSL của bạn rồi restart Terminal.
 
 ---
 
