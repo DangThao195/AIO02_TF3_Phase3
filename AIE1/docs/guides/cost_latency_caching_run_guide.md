@@ -40,21 +40,23 @@ Mở cửa sổ Terminal tại thư mục gốc của dự án `AIE1` và chạy
 
 #### 💻 Lựa chọn A: Nếu dùng Git Bash / WSL (Khuyến nghị)
 ```bash
+cd techx-corp-platform/src/product-reviews/
+source .venv/bin/activate
 DB_CONNECTION_STRING="host=localhost user=root password=otel dbname=otel port=5432" \
-techx-corp-platform/.venv/bin/python techx-corp-platform/src/product-reviews/db_migration_worker.py
+python db_migration_worker.py
 ```
 
 #### 💻 Lựa chọn B: Nếu dùng Windows PowerShell
 ```powershell
 $env:DB_CONNECTION_STRING="host=localhost user=root password=otel dbname=otel port=5432"
-& .\techx-corp-platform\.venv\bin\python.exe techx-corp-platform\src\product-reviews\db_migration_worker.py
+& .\techx-corp-platform\src\product-reviews\.venv\bin\python.exe techx-corp-platform\src\product-reviews\db_migration_worker.py
 Remove-Item Env:\DB_CONNECTION_STRING
 ```
 
 #### 💻 Lựa chọn C: Nếu dùng Windows Command Prompt (CMD)
 ```cmd
 set DB_CONNECTION_STRING=host=localhost user=root password=otel dbname=otel port=5432
-techx-corp-platform\.venv\bin\python.exe techx-corp-platform\src\product-reviews\db_migration_worker.py
+techx-corp-platform\src\product-reviews\.venv\bin\python.exe techx-corp-platform\src\product-reviews\db_migration_worker.py
 set DB_CONNECTION_STRING=
 ```
 
@@ -69,17 +71,17 @@ Trong chính terminal ở **Bước 1**, chạy lệnh tương ứng để khở
 
 #### 💻 Lựa chọn A: Nếu dùng Git Bash / WSL (Khuyến nghị)
 ```bash
-techx-corp-platform/.venv/bin/python techx-corp-platform/src/product-reviews/product_reviews_server.py
+techx-corp-platform/src/product-reviews/.venv/bin/python techx-corp-platform/src/product-reviews/product_reviews_server.py
 ```
 
 #### 💻 Lựa chọn B: Nếu dùng Windows PowerShell
 ```powershell
-& .\techx-corp-platform\.venv\bin\python.exe techx-corp-platform\src\product-reviews\product_reviews_server.py
+& .\techx-corp-platform\src\product-reviews\.venv\bin\python.exe techx-corp-platform\src\product-reviews\product_reviews_server.py
 ```
 
 #### 💻 Lựa chọn C: Nếu dùng Windows Command Prompt (CMD)
 ```cmd
-techx-corp-platform\.venv\bin\python.exe techx-corp-platform\src\product-reviews\product_reviews_server.py
+techx-corp-platform\src\product-reviews\.venv\bin\python.exe techx-corp-platform\src\product-reviews\product_reviews_server.py
 ```
 
 > [!IMPORTANT]
