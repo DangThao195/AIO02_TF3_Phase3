@@ -6,20 +6,24 @@ Tài liệu này hướng dẫn chi tiết từng bước để chạy migration
 
 ## 📋 Yêu Cầu Chuẩn Bị Trước Khi Chạy
 
+> [!TIP]
+> Tài liệu này được thiết kế bổ trợ dựa trên tài liệu chuẩn [docs/guides/TEST_SERVICES_GUIDE.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/guides/TEST_SERVICES_GUIDE.md).
+
 1. **Docker Desktop** phải được bật và chạy bình thường.
-2. Khởi động các dịch vụ phụ trợ (**PostgreSQL** và **Valkey/Redis**) từ thư mục `techx-corp-platform`:
+2. Khởi động đầy đủ các dịch vụ phụ trợ nền (**PostgreSQL, Product Catalog, Flagd, OpenTelemetry Collector** và **Valkey/Redis**) từ thư mục `techx-corp-platform`:
    ```bash
    cd techx-corp-platform
-   docker compose up -d postgresql valkey-cart
+   docker compose up -d postgresql product-catalog flagd otel-collector valkey-cart
    cd ..
    ```
 
 > [!CAUTION]
 > **Lỗi thường gặp: `Connection refused` đến cổng 5432 hoặc 6379 (đặc biệt khi dùng WSL)**
 > 
-> Nếu chạy lệnh ở Bước 1 gặp lỗi `Failed to connect to database: Connection refused`, có hai nguyên nhân chính:
-> 1. Dịch vụ Docker Postgres/Valkey chưa khởi chạy (hãy chạy lệnh `docker compose up -d postgresql valkey-cart` như trên).
-> 2. WSL 2 không phân giải được `localhost` tới Windows Host.
+> Nếu chạy lệnh ở Bước 1 gặp lỗi `Failed to connect to database: Connection refused`, có các nguyên nhân chính:
+> 1. Dịch vụ Docker Postgresql/Valkey chưa khởi chạy (hãy chạy lệnh `docker compose up -d postgresql valkey-cart` như trên).
+> 2. Cổng dịch vụ bị thay đổi trên máy host: Hãy kiểm tra bằng `docker compose ps` để xem các container đang chạy trên cổng nào. Nếu chúng được map ra cổng ngẫu nhiên (ví dụ Postgres map ra `50319`, Catalog ra `50333`), bạn hãy cập nhật lại biến môi trường `DB_CONNECTION_STRING` với cổng tương ứng (Xem chi tiết tại [TEST_SERVICES_GUIDE.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/guides/TEST_SERVICES_GUIDE.md)).
+> 3. WSL 2 không phân giải được `localhost` tới Windows Host.
 >    * **Cách khắc phục nhanh nhất**: Mở terminal **PowerShell** hoặc **CMD** trực tiếp trên Windows để chạy thay vì WSL.
 >    * **Cách khắc phục triệt để trên WSL**: Mở **Docker Desktop Settings** -> **Resources** -> **WSL integration** -> Bật kích hoạt cho Distro WSL của bạn rồi restart Terminal.
 
