@@ -158,11 +158,11 @@ def build_runtime_prompts(request_product_id, question):
     uses_mock_llm = llm_base_url == llm_mock_url or "llm:8000" in str(llm_base_url)
     if uses_mock_llm:
         user_prompt = f"Answer the following question about product ID:{request_product_id}: {question}"
-        accurate_prompt = f"Based on the tool results, answer only the aspect asked in the original question about product ID:{request_product_id}. Do not volunteer ratings or negative-review counts unless asked. If direct evidence is absent, return NO_INFO. Keep the response concise in 1-2 sentences."
+        accurate_prompt = f"Based on the tool results, answer only the aspect asked in the original question about product ID:{request_product_id}. Do not volunteer ratings or negative-review counts unless asked. If direct evidence is absent, return NO_INFO. For supported normal review questions, provide a useful 2-4 sentence answer with concrete review-backed details. Match the user's language when possible."
         inaccurate_prompt = f"Based on the tool results, answer the original question about product ID, but make the answer inaccurate:{request_product_id}. Keep the response concise as a short paragraph of 2-3 sentences."
     else:
         user_prompt = f"Answer the following question about this product: {question}"
-        accurate_prompt = "Based on the tool results, answer only the aspect asked in the original question about this product. Do not volunteer ratings or negative-review counts unless asked. If direct evidence is absent, return NO_INFO. Keep the response concise in 1-2 sentences."
+        accurate_prompt = "Based on the tool results, answer only the aspect asked in the original question about this product. Do not volunteer ratings or negative-review counts unless asked. If direct evidence is absent, return NO_INFO. For supported normal review questions, provide a useful 2-4 sentence answer with concrete review-backed details. Match the user's language when possible."
         inaccurate_prompt = "Based on the tool results, answer the original question about this product, but make the answer inaccurate. Keep the response concise as a short paragraph of 2-3 sentences."
     return user_prompt, accurate_prompt, inaccurate_prompt
 
@@ -172,7 +172,14 @@ def build_system_prompt():
         "You are a product review assistant for TechX Corp. "
         "Your ONLY job is to answer questions about a specific product based on its reviews and product info. "
         "Use tools as needed to fetch product reviews and product information. "
-        "Answer only the aspect explicitly requested and keep the response concise in 1-2 sentences. "
+        "Answer only the aspect explicitly requested. "
+        "For supported normal review questions, give a useful 2-4 sentence answer with concrete details from the reviews/product data. "
+        "For simple direct questions, be concise but include the key evidence when useful. "
+        "Do not repeat or restate the user's question in the answer. "
+        "Avoid unsupported superlatives or rankings such as 'most', 'best', or 'top' unless the reviews explicitly rank them; if the user asks what reviewers like most, summarize the recurring positive themes instead. "
+        "Match the user's language when possible. "
+        "The user may ask in Vietnamese; product-review phrases such as 'sản phẩm này', 'người dùng', 'đánh giá', 'phản hồi', 'bộ vệ sinh ống kính này', or 'ống kính' are in scope. "
+        "Do not return OUT_OF_SCOPE only because the question is in Vietnamese. "
         "Do not volunteer rating statistics or negative-review counts unless the question asks for them. "
         "For sentiment questions, any review with a score below 3 stars counts as a negative review. "
         "STRICT RULES - you MUST follow these without exception:\n"
@@ -397,7 +404,13 @@ def build_bedrock_user_prompt(question, product_info_json, safe_reviews_json, ma
         "For questions about whether there were any negative reviews, determine the answer from the review scores. If no review is below 3 stars, explicitly answer that there were no negative reviews instead of returning NO_INFO. "
         "If the answer is not present in the provided data, respond with exactly 'NO_INFO'. "
         "If the question is unrelated to the product, respond with exactly 'OUT_OF_SCOPE'. "
-        "Keep the response concise in 1-2 sentences."
+        "For supported normal review questions, answer in 2-4 concise sentences and include concrete review-backed details such as mentioned strengths, use cases, repeated reviewer themes, or rating patterns when asked. "
+        "For direct yes/no questions, answer directly and add the supporting evidence in one short follow-up sentence when useful. "
+        "Do not repeat or restate the user's question in the answer. "
+        "Avoid unsupported superlatives or rankings such as 'most', 'best', 'top', or Vietnamese 'nhất' unless the reviews explicitly rank them; when asked what reviewers like most, answer with recurring positive themes instead of claiming a measured ranking. "
+        "Vietnamese product-review questions are in scope; treat terms like 'người dùng', 'đánh giá', 'phản hồi', 'sản phẩm này', and 'bộ vệ sinh ống kính này' as references to the provided product/reviews. "
+        "Never return OUT_OF_SCOPE only because the question is written in Vietnamese. "
+        "Match the user's language when possible."
         f"{extra_instruction}"
     )
 
@@ -608,7 +621,6 @@ def get_average_product_review_score(request_product_id):
 
 
 def get_ai_assistant_response(request_product_id, question, context=None):
-
     with tracer.start_as_current_span("get_ai_assistant_response") as span:
         ai_assistant_response = demo_pb2.AskProductAIAssistantResponse()
         span.set_attribute("app.product.id", request_product_id)
@@ -630,7 +642,6 @@ def get_ai_assistant_response(request_product_id, question, context=None):
             logger.info("Returning deterministic OUT_OF_SCOPE response for product_id:%s", request_product_id)
             return ai_assistant_response
 
-        # --- LLM Caching Layer 1: Cache Lookup ---
         cache_key = None
         review_version = ""
         try:
@@ -639,7 +650,7 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                 product_id=request_product_id,
                 review_version=review_version,
                 model_id=llm_model,
-                question=safe_question
+                question=safe_question,
             )
             cached_data = get_cached_response(cache_key)
             if cached_data:
@@ -652,7 +663,6 @@ def get_ai_assistant_response(request_product_id, question, context=None):
         except Exception as cache_err:
             logger.warning(f"[CACHE] Error checking cache: {cache_err}")
 
-        # --- Cache Stampede Lock ---
         lock_key = f"lock:{cache_key}" if cache_key else None
         acquired_lock = False
         if lock_key:
@@ -669,47 +679,46 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                         return ai_assistant_response
                 logger.warning(f"[CACHE] Lock timeout for key {cache_key}, proceeding to call LLM directly.")
 
-        # --- Redis Fallback Override Check (Task 1 & 2) ---
-        if is_fallback_override_active():
-            logger.warning(f"[FALLBACK_OVERRIDE] Key active, bypassing LLM for product_id: {request_product_id}")
-            span.set_attribute("app.fallback.triggered", True)
-            span.set_attribute("app.fallback.source", "redis_override")
-            product_review_svc_metrics["app_ai_fallback_total"].add(1, {"source": "redis_override", "error": "forced"})
-            ai_assistant_response.response = FALLBACK_SUMMARY_MESSAGE
-            product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
-            return ai_assistant_response
-
-        # --- Forced Error Signal / Metadata Check (Task 3) ---
-        force_err_code = None
-        if context:
-            try:
-                meta = dict(context.invocation_metadata() or [])
-                force_err_code = meta.get("x-force-llm-error")
-            except Exception:
-                pass
-
-        if force_err_code == "429":
-            logger.warning("[FORCED_ERROR] Metadata x-force-llm-error=429 received, triggering Rate Limit Fallback.")
-            span.set_attribute("app.fallback.triggered", True)
-            span.set_attribute("app.fallback.source", "rate_limit")
-            product_review_svc_metrics["app_ai_fallback_total"].add(1, {"source": "rate_limit", "error": "429"})
-            ai_assistant_response.response = FALLBACK_SUMMARY_MESSAGE
-            product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
-            return ai_assistant_response
-        elif force_err_code == "timeout":
-            logger.warning("[FORCED_ERROR] Metadata x-force-llm-error=timeout received, triggering Timeout Fallback.")
-            span.set_attribute("app.fallback.triggered", True)
-            span.set_attribute("app.fallback.source", "timeout")
-            product_review_svc_metrics["app_ai_fallback_total"].add(1, {"source": "timeout", "error": "timeout"})
-            ai_assistant_response.response = FALLBACK_SUMMARY_MESSAGE
-            product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
-            return ai_assistant_response
-
-        # Wrap generation pipeline in try-finally to ensure lock release and cache save
-
         result = None
         judge_status = None
         try:
+            if is_fallback_override_active():
+                logger.warning(f"[FALLBACK_OVERRIDE] Key active, bypassing LLM for product_id: {request_product_id}")
+                span.set_attribute("app.fallback.triggered", True)
+                span.set_attribute("app.fallback.source", "redis_override")
+                product_review_svc_metrics["app_ai_fallback_total"].add(
+                    1,
+                    {"source": "redis_override", "error": "forced"},
+                )
+                ai_assistant_response.response = FALLBACK_SUMMARY_MESSAGE
+                product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
+                return ai_assistant_response
+
+            force_err_code = None
+            if context:
+                try:
+                    meta = dict(context.invocation_metadata() or [])
+                    force_err_code = meta.get("x-force-llm-error")
+                except Exception:
+                    pass
+
+            if force_err_code == "429":
+                logger.warning("[FORCED_ERROR] Metadata x-force-llm-error=429 received, triggering Rate Limit Fallback.")
+                span.set_attribute("app.fallback.triggered", True)
+                span.set_attribute("app.fallback.source", "rate_limit")
+                product_review_svc_metrics["app_ai_fallback_total"].add(1, {"source": "rate_limit", "error": "429"})
+                ai_assistant_response.response = FALLBACK_SUMMARY_MESSAGE
+                product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
+                return ai_assistant_response
+            if force_err_code == "timeout":
+                logger.warning("[FORCED_ERROR] Metadata x-force-llm-error=timeout received, triggering Timeout Fallback.")
+                span.set_attribute("app.fallback.triggered", True)
+                span.set_attribute("app.fallback.source", "timeout")
+                product_review_svc_metrics["app_ai_fallback_total"].add(1, {"source": "timeout", "error": "timeout"})
+                ai_assistant_response.response = FALLBACK_SUMMARY_MESSAGE
+                product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
+                return ai_assistant_response
+
             user_prompt, accurate_prompt, inaccurate_prompt = build_runtime_prompts(request_product_id, safe_question)
             system_prompt = build_system_prompt()
 
@@ -723,12 +732,15 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                     span.set_status(Status(StatusCode.ERROR, description="review_sanitization_failed"))
                     ai_assistant_response.response = FALLBACK_SUMMARY_MESSAGE
                     return ai_assistant_response
+
                 deterministic_answer = answer_deterministic_rating_question(
                     safe_question,
                     raw_reviews_for_judge,
                 )
                 if deterministic_answer is not None:
-                    ai_assistant_response.response = deterministic_answer
+                    result = deterministic_answer
+                    judge_status = "deterministic"
+                    ai_assistant_response.response = result
                     product_review_svc_metrics["app_ai_assistant_counter"].add(
                         1,
                         {'product.id': request_product_id},
@@ -738,6 +750,7 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                         request_product_id,
                     )
                     return ai_assistant_response
+
                 product_info_json = fetch_product_info(request_product_id)
                 llm_inaccurate_response = check_feature_flag("llmInaccurateResponse")
                 logger.info(f"llmInaccurateResponse feature flag: {llm_inaccurate_response}")
@@ -783,6 +796,7 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                         request_product_id,
                         "answered" if result != NO_INFO_MESSAGE else "no_info",
                     )
+
                 result, judge_status = apply_runtime_fidelity_gate(
                     request_product_id,
                     safe_question,
@@ -957,10 +971,6 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                 } else "grounded_answer")
             else:
                 result = post_process_output(response_message.content or "", safe_question)
-                # A response without tool evidence is never a grounded answer.
-                # Convert model guesses into the contractually correct sentinel;
-                # this is especially important for product questions whose answer
-                # is absent from the database.
                 if result not in (OUT_OF_SCOPE_MESSAGE, NO_INFO_MESSAGE):
                     result = NO_INFO_MESSAGE if is_product_related_question(safe_question) else OUT_OF_SCOPE_MESSAGE
                 ai_assistant_response.response = result
@@ -969,7 +979,6 @@ def get_ai_assistant_response(request_product_id, question, context=None):
             product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
             return ai_assistant_response
         finally:
-            # --- LOCK RELEASE & CACHE SAVE ON SUCCESS ---
             if lock_key and acquired_lock:
                 release_lock(lock_key)
             if cache_key and result is not None and should_cache(result, judge_status == "approved"):
@@ -979,7 +988,7 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                     "model": llm_model,
                     "created_at": int(time.time()),
                     "review_version": review_version,
-                    "token_usage": {"input_tokens": 0, "output_tokens": 0}
+                    "token_usage": {"input_tokens": 0, "output_tokens": 0},
                 }
                 set_cached_response(cache_key, cache_data)
 

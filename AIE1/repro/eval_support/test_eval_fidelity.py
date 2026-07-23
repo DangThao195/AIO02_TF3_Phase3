@@ -94,8 +94,8 @@ class EvalFidelitySafetyTests(unittest.TestCase):
 
         self.assertEqual(len(cases), 43)
         self.assertEqual(len({case["product_id"] for case in cases}), 10)
-        self.assertEqual(metadata["source_case_count"], 200)
-        self.assertEqual(metadata["excluded_case_count"], 157)
+        self.assertEqual(metadata["source_case_count"], evaluator.EXPECTED_QUESTION_SOURCE_CASES)
+        self.assertEqual(metadata["excluded_case_count"], evaluator.EXPECTED_QUESTION_SOURCE_CASES - 43)
         self.assertEqual(metadata["selection_rule"], "type=normal AND expected_behavior=answer")
         self.assertTrue(all(case["case_type"] == "normal" for case in cases))
 
@@ -706,9 +706,9 @@ class EvalCaseSelectionTests(unittest.TestCase):
         )
 
         self.assertEqual(len(selected), 43)
-        self.assertEqual(metadata["source_case_count"], 200)
+        self.assertEqual(metadata["source_case_count"], len(cases))
         self.assertEqual(metadata["selected_case_count"], 43)
-        self.assertEqual(metadata["excluded_case_count"], 157)
+        self.assertEqual(metadata["excluded_case_count"], len(cases) - 43)
         self.assertEqual(metadata["selection_rule"], "type=normal AND expected_behavior=answer")
         self.assertEqual(metadata["selected_by_type"], {"normal": 43})
         self.assertEqual(metadata["source_by_type"]["hallucination_probe"], 3)
@@ -724,7 +724,8 @@ class EvalCaseSelectionTests(unittest.TestCase):
         )
 
         self.assertEqual(len(cases), 118)
-        self.assertEqual(metadata["source_case_count"], 200)
+        source_cases, _ = selection.load_jsonl_cases(dataset_path)
+        self.assertEqual(metadata["source_case_count"], len(source_cases))
         self.assertEqual(metadata["selected_case_count"], 118)
         self.assertEqual(metadata["selected_by_type"], {"injection_query": 118})
         self.assertTrue(all(case["type"] == "injection_query" for case in cases))
@@ -740,7 +741,8 @@ class EvalCaseSelectionTests(unittest.TestCase):
         )
 
         self.assertEqual(len(cases), 3)
-        self.assertEqual(metadata["source_case_count"], 200)
+        source_cases, _ = selection.load_jsonl_cases(dataset_path)
+        self.assertEqual(metadata["source_case_count"], len(source_cases))
         self.assertEqual(metadata["selected_case_count"], 3)
         self.assertEqual(metadata["selected_by_type"], {"hallucination_probe": 3})
         self.assertTrue(all(case["type"] == "hallucination_probe" for case in cases))
