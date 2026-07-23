@@ -109,10 +109,10 @@ Triển khai thiết kế bộ nhớ đệm 2 tầng (LLM response cache bằng 
 - Ghi nhận kết quả đo benchmark latency p95, p99 và token usage khi chưa bật cache.
 - Lưu trữ kết quả chính xác vào file `repro/artifacts/cost_latency_BEFORE_cache.json` (Đã hoàn thành và push lên Git).
 
-#### Sub-task 2.1: PostgreSQL Migration cột `is_safe` & Background Worker [Thứ 2 sáng] — Priority: Medium
-- Tạo file script SQL di dân `migration.sql` thêm cột `is_safe BOOLEAN DEFAULT TRUE` và index `productreviews_prod_safe_idx` vào bảng `reviews.productreviews`.
-- Tạo background worker script `db_migration_worker.py` chạy theo batch (kèm sleep) để quét toàn bộ review cũ và cập nhật `is_safe = FALSE` nếu vi phạm bộ lọc Regex Guardrail.
-- Cập nhật các SQL query trong `database.py` để chỉ đọc các review sạch (`WHERE is_safe = TRUE`).
+#### Sub-task 2.1: PostgreSQL Migration cột `is_safe` & Background Worker [Thứ 2 sáng] — Priority: Medium (Đã hoàn thành)
+- [x] Tạo file script SQL di dân `migration.sql` thêm cột `is_safe BOOLEAN DEFAULT TRUE` và index `productreviews_prod_safe_idx` vào bảng `reviews.productreviews`.
+- [x] Tạo background worker script `db_migration_worker.py` chạy theo batch (kèm sleep) để quét toàn bộ review cũ và cập nhật `is_safe = FALSE` nếu vi phạm bộ lọc Regex Guardrail.
+- [x] Cập nhật các SQL query trong `database.py` để chỉ đọc các review sạch (`WHERE is_safe = TRUE`).
 
 #### Sub-task 2.2: Cấu hình Redis & logic Cache Key / Invalidation / Lock [Thứ 2 chiều - Thứ 3] — Priority: Highest
 > Cấu trúc hạ tầng dùng chung cho cả Caching và Closed-Loop.
@@ -140,7 +140,7 @@ Triển khai thiết kế bộ nhớ đệm 2 tầng (LLM response cache bằng 
 - [ ] Redis cache hoạt động với cơ chế Fail-Open, TLS bảo mật (`rediss://`) và phản hồi Cache Hit < 10ms.
 - [ ] Logic sinh Cache Key chứa `review_version` (tự động invalidate) và `model_id`.
 - [ ] Triển khai thành công khóa phân tán chống Cache Stampede.
-- [ ] Cột `is_safe` và index được thêm vào DB thành công; queries lọc review sạch hoàn tất.
+- [x] Cột `is_safe` và index được thêm vào DB thành công; queries lọc review sạch hoàn tất.
 - [ ] Tích hợp Asynchronous Logging ghi audit log xuống RDS chạy nền.
 - [ ] File đối chiếu latency/cost after cache được xuất ra.
 - [ ] ADR 0006 được phê duyệt và commit.
