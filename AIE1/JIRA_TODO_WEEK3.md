@@ -143,7 +143,7 @@ Triển khai thiết kế bộ nhớ đệm 2 tầng (LLM response cache bằng 
 - [x] Cột `is_safe` và index được thêm vào DB thành công; queries lọc review sạch hoàn tất.
 - [x] Tích hợp Asynchronous Logging ghi audit log xuống RDS chạy nền.
 - [x] File đối chiếu latency/cost after cache được xuất ra.
-- [ ] ADR 0006 được phê duyệt và commit.
+- [x] ADR 0006 được phê duyệt và commit.
 - [ ] Jira ticket được tạo đúng format với đầy đủ bằng chứng.
 
 ---
@@ -220,9 +220,9 @@ Cả nhóm nghiên cứu tài liệu `D:\AI\Book\LLM-as-a-Judge.pdf` với mục
 - Chọn ra ít nhất 10 cases thực tế từ reviews để cả nhóm cùng đánh giá bằng tay (human grading) và lưu vào `repro/datasets/human_labeled_cases.jsonl` để làm mốc tính Agreement Rate cho Thịnh.
 
 ### Tiêu chí nghiệm thu (Acceptance Criteria)
-- [ ] Cả 3 thành viên hoàn thành đọc và thảo luận tài liệu và hiểu rõ các tiêu chí áp dụng cho ngữ cảnh chính của dự án.
-- [ ] Bộ rubrics đánh giá được ghi nhận chi tiết trong ADR 0006.
-- [ ] Tệp `repro/datasets/human_labeled_cases.jsonl` được tạo thành công với ≥ 10 cases được đồng thuận nhãn.
+- [x] Cả 3 thành viên hoàn thành đọc và thảo luận tài liệu và hiểu rõ các tiêu chí áp dụng cho ngữ cảnh chính của dự án.
+- [x] Bộ rubrics đánh giá được ghi nhận chi tiết trong ADR 0006.
+- [x] Tệp `repro/datasets/human_labeled_cases.jsonl` được tạo thành công với ≥ 10 cases được đồng thuận nhãn.
 
 ---
 
