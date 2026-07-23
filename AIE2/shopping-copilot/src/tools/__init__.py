@@ -9,6 +9,7 @@ from src.tools.currency_tool import convert_currency_tool
 from src.tools.shipping_tool import get_shipping_quote_tool
 from src.tools.catalog_tool import get_categories, get_all_products
 from src.tools.product_id_tool import get_product_id
+from src.tools.out_of_scope_tool import respond_out_of_scope_tool
 
 # Danh sách đầy đủ tất cả các công cụ bàn giao cho AI Agent
 # ⚠️ LƯỚI: search_products_v2 thay thế search_products_tool (multi-strategy, hỗ trợ tiếng Việt)

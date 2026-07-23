@@ -53,23 +53,29 @@ while len(done) < len(plan.nodes):
 
 ### `execute_node` Steps
 1. **Resolve variable references** — thay `$steps[x].path`, `$session.*`, `$input.entities.*`, `$memory.*`, `$first(...)`, `$exists(...)`, `$safe_index(...)`
-2. **L3 Validate** — `validate_tool_call(tool_name, resolved_args, user_id)`
-3. **Cache check** — read tool + cache hit → return cached
-4. **Execute with retry** — gọi `ToolRegistry.get_fn(tool).ainvoke(args)`
-5. **Normalize output** — price units/nanos → string
-6. **Cache set** — if read tool
-7. **Return** `(normalized_dict, source)`
+2. **Skip if unresolved** — nếu bất kỳ arg là `None` (array OOB, memory rỗng), skip tool với lỗi rõ ràng
+3. **L3 Validate** — `validate_tool_call(tool_name, resolved_args, user_id)`
+4. **Cache check** — read tool + cache hit → return cached
+5. **Execute with retry** — gọi `ToolRegistry.get_fn(tool).ainvoke(args)`
+6. **Normalize output** — price units/nanos → string
+7. **Cache set** — if read tool
+8. **Return** `(node_id, result, error, resolved_args)` — resolved args được truyền ra ngoài để dùng cho `pending_action`
+
+### Pending Action
+Khi tool trả về `status == "pending"` hoặc `condition == "ask_user"`, executor lưu `pending_action` với **resolved args** (đã thay template variables), không phải raw args từ plan DAG. Điều này đảm bảo confirmation node nhận được giá trị thực tế (ví dụ `product_id="OLJCESPC7Z"`) thay vì literal template (`$steps[n0].product_id`).
 
 ### Variable Reference Resolver
 | Syntax | Resolve | Fail → |
 |---|---|---|
-| `$steps[N].path` | `node_outputs[N]` → JSON path | node fail |
-| `$session.field` | `state.get(field)` | node fail |
-| `$input.entities.field` | `state.entities.get(field)` | node fail |
-| `$memory.field` | `state.planner_memory.get(field)` | node fail |
+| `$steps[N].path` | `node_outputs[N]` → JSON path | `None` (skip tool) |
+| `$session.field` | `state.get(field)` | `None` (skip tool) |
+| `$input.entities.field` | `state.entities.get(field)` | `None` (skip tool) |
+| `$memory.field` | `state.planner_memory.get(field)` | `None` (skip tool) |
 | `$first(path, default)` | `path[0]` nếu list, else default | default |
 | `$exists(path)` | Boolean: path tồn tại | False |
 | `$safe_index(path, i, default)` | `path[i]` nếu i hợp lệ | default |
+
+**Lưu ý:** Khi array index out of bounds (ví dụ `items[0]` khi items rỗng), `_resolve_value` trả về `None`. Nếu bất kỳ arg nào là `None`, node đó bị **skip** với lỗi "Dữ liệu đầu vào không đầy đủ" — tool không được gọi.
 
 Default parsing: `null`/`None` → `None`; `true`/`false` → bool; số → int/float.
 

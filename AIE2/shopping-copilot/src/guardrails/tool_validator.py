@@ -31,6 +31,7 @@ ALLOWED_TOOLS = frozenset([
     "get_recommendations_tool",      # gợi ý sản phẩm
     "convert_currency_tool",         # quy đổi tiền tệ
     "get_shipping_quote_tool",       # phí vận chuyển
+    "respond_out_of_scope_tool",     # trả lời khi câu hỏi ngoài phạm vi
 ])
 
 # ── Giới hạn tham số ──

@@ -113,7 +113,7 @@ class Reranker:
                 f"VD: 3,1,4,2,5\n\n{product_text}"
             )
             llm = get_llm_client()
-            response = llm.invoke(prompt, temperature=0.3, max_tokens=256)
+            response = llm.invoke(prompt, temperature=0.0, max_tokens=256)
             indices = [int(x.strip()) for x in response.content.split(",") if x.strip().isdigit()]
             reordered = []
             for idx in indices:

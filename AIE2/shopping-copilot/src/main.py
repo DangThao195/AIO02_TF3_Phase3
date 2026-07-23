@@ -106,12 +106,28 @@ def _get_graph():
 @app.on_event("startup")
 async def warmup_db_pool():
     """Khởi tạo PostgreSQL pool ngay khi server start, tránh lazy init 5s trong request path."""
-    try:
-        from src.database.connect import init_pool
-        init_pool()
-        logger.info("[MAIN] PostgreSQL pool warmup done")
-    except Exception as e:
-        logger.warning("[MAIN] PostgreSQL pool warmup failed (will lazy init): %s", e)
+    import asyncio
+    from src.database.connect import init_pool
+
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            init_pool()
+            logger.info("[MAIN] PostgreSQL pool warmup done")
+            return
+        except Exception as e:
+            if attempt < max_retries - 1:
+                wait = 2 ** attempt
+                logger.warning(
+                    "[MAIN] PostgreSQL pool warmup attempt %d/%d failed, retry in %ds: %s",
+                    attempt + 1, max_retries, wait, e,
+                )
+                await asyncio.sleep(wait)
+            else:
+                logger.warning(
+                    "[MAIN] PostgreSQL pool warmup failed after %d attempts (will lazy init): %s",
+                    max_retries, e,
+                )
 
 
 # ── Request/Response models ──

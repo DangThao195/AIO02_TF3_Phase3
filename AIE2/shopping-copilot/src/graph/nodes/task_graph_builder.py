@@ -39,10 +39,58 @@ def _format_memory(memory: dict) -> str:
     return "; ".join(parts) if parts else "(không có dữ liệu phiên trước)"
 
 
-def _repair_plan(plan: dict) -> dict:
+_REFERENTIAL_PATTERNS = (
+    "nó", "cái này", "cái trước", "cái đó", "đó",
+    "sản phẩm trước", "sản phẩm đó", "sản phẩm này",
+    "previous", "của nó", "trước đó",
+)
+
+
+def _is_referential(query: str) -> bool:
+    q = query.lower().strip()
+    return any(p in q for p in _REFERENTIAL_PATTERNS)
+
+
+def _force_memory_reuse(plan: dict, memory: dict) -> dict:
+    removed_ids = set()
+    new_nodes = []
+
+    for node in plan.get("nodes", []):
+        nid = node.get("id", "")
+        if node.get("tool") == "search_products_v2":
+            removed_ids.add(nid)
+            continue
+
+        deps = [d for d in node.get("depends_on", []) if d not in removed_ids]
+        node = dict(node)
+        node["depends_on"] = deps
+
+        args = dict(node.get("args", {}))
+        for k, v in args.items():
+            if isinstance(v, str):
+                for sid in list(removed_ids):
+                    v = v.replace(f"$steps[{sid}].products[0].id", "$memory.last_product_id")
+                args[k] = v
+        node["args"] = args
+
+        new_nodes.append(node)
+
+    plan = dict(plan)
+    plan["nodes"] = new_nodes
+    plan["reasoning"] = plan.get("reasoning", "") + "; Force-dùng memory.last_product_id"
+    return plan
+
+
+def _repair_plan(plan: dict, query: str = "", memory: dict | None = None) -> dict:
     """RepairLayer: fix common LLM output issues."""
     from difflib import get_close_matches
     from src.tools.registry import ToolRegistry
+
+    # ── Layer 0: force dùng memory nếu query quy chiếu ──
+    if memory and memory.get("last_product_id") and _is_referential(query):
+        search_exists = any(n.get("tool") == "search_products_v2" for n in plan.get("nodes", []))
+        if search_exists:
+            plan = _force_memory_reuse(plan, memory)
 
     nodes = plan.get("nodes", [])
     all_ids = {n.get("id") for n in nodes}
@@ -145,7 +193,7 @@ async def task_graph_builder_node(state: dict) -> dict:
             plan = {"nodes": [], "goal": query, "reasoning": "LLM parse failed"}
 
     # ── RepairLayer ──
-    plan = _repair_plan(plan)
+    plan = _repair_plan(plan, query=query, memory=planner_memory)
 
     # ── Validation: filter unknown tools ──
     from src.tools.registry import ToolRegistry

@@ -219,10 +219,20 @@ def format_memory(memory: dict) -> str:
         parts.append(f"Lần trước bạn tìm: {memory['last_search']}")
     if memory.get("last_product_id"):
         parts.append(f"Product ID vừa xem: {memory['last_product_id']}")
+    if memory.get("last_searched_product_id"):
+        parts.append(f"Sản phẩm vừa tìm thấy: {memory['last_searched_product_name']} ({memory['last_searched_product_id']})")
     if memory.get("current_cart_items", 0) > 0:
         parts.append(f"Giỏ hàng có {memory['current_cart_items']} món")
     return "; ".join(parts)
 ```
+
+**Phân biệt memory fields:**
+| Field | Tool ghi | Khi nào dùng |
+|---|---|---|
+| `last_product_id` | `get_product_details_tool`, `get_product_reviews_tool`, `get_recommendations_tool`, `add_to_cart_tool` | User nói "nó", "cái này", "thêm 3 cái" → sản phẩm đang được tham chiếu |
+| `last_searched_product_id` | `search_products_v2` | Kết quả tìm kiếm gần nhất — dùng cho follow-up search context |
+| `last_search` | `search_products_v2` | Query tìm kiếm gốc |
+| `current_cart_items` | `get_cart_tool` | Số item trong giỏ |
 
 ### Confidence Scoring
 - `overall_confidence = average(nodes[i].confidence)`

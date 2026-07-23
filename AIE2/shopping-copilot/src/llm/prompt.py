@@ -116,6 +116,11 @@ Từng công cụ được mô tả chi tiết bên dưới. Chỉ dùng đúng 
 - Ví dụ: "tính phí giao đến 123 Nguyễn Huệ, Quận 1" → get_shipping_quote_tool(address="123 Nguyễn Huệ, Quận 1")
 - Lưu ý: Chỉ hỗ trợ địa chỉ nội địa Việt Nam
 
+--- respond_out_of_scope_tool ---
+- Công dụng: Trả lời các câu hỏi KHÔNG liên quan đến mua sắm. Dùng khi người dùng hỏi về thời tiết, toán học, tên tuổi, tin tức, thể thao, sức khỏe, lịch sử, khoa học, giải trí, thông tin cá nhân, hoặc các chủ đề khác ngoài phạm vi mua sắm.
+- Tham số: reason (str) — một trong các giá trị: greeting, weather, math, name, news, sports, health, history, science, entertainment, personal_info, general
+- KHÔNG dùng tool này cho câu hỏi liên quan đến mua sắm.
+
 
 === 2a. LUỒNG BẮT BUỘC: product_id ===
 
@@ -288,6 +293,12 @@ HƯỚNG DẪN SỬ DỤNG TOOL:
 - Tính phí vận chuyển nội địa Việt Nam
 - Input: {{"address": str}}
 
+--- respond_out_of_scope_tool ---
+- Trả lời câu hỏi KHÔNG liên quan đến mua sắm (thời tiết, toán, tên, tin tức, thể thao, sức khỏe, lịch sử, khoa học, giải trí, thông tin cá nhân, chào hỏi)
+- Input: {{"reason": str}} — one of greeting|weather|math|name|news|sports|health|history|science|entertainment|personal_info|general
+- ƯU TIÊN dùng tool này THAY VÌ trả nodes rỗng cho câu hỏi ngoài phạm vi
+- KHÔNG dùng cho câu hỏi mua sắm
+
 QUY TẮC DAG:
 1. Tối đa 8 nodes
 2. depends_on phải là ID node đã tồn tại (n1 có thể depends_on n0, không được depends_on n2)
@@ -296,10 +307,10 @@ QUY TẮC DAG:
    Nếu Lịch sử phiên đã có "Product ID vừa xem" thì DÙNG LUÔN product_id đó, KHÔNG search lại
 4. Tool add_to_cart, get_reviews, get_recommendations, get_product_details, update_cart_item, check_cart_item
    ĐỀU cần product_id — nếu chưa có, PHẢI thêm search hoặc get_product_id trước
-5. Nếu user chào hỏi (xin chào, hello, hi...): trả {{"nodes": [], "goal": "Chào hỏi", "reasoning": "Câu chào, không cần tool"}}
+5. Nếu user chào hỏi (xin chào, hello, hi...): dùng respond_out_of_scope_tool(reason="greeting")
 6. Nếu user muốn thanh toán/đặt hàng: trả {{"nodes": [], "goal": "Đặt hàng", "reasoning": "Từ chối: không hỗ trợ checkout"}}
-7. Nếu không biết làm gì: trả {{"nodes": [], "goal": "Không rõ", "reasoning": "Không hiểu yêu cầu"}}
-8. Nếu câu hỏi KHÔNG liên quan đến mua sắm (thời tiết, toán học, tin tức, thể thao, sức khỏe, lịch sử, khoa học, giải trí,...): trả {{"nodes": [], "goal": "Ngoài phạm vi", "reasoning": "Từ chối: câu hỏi ngoài phạm vi mua sắm"}}
+7. Nếu không biết làm gì: dùng respond_out_of_scope_tool(reason="general")
+8. Nếu câu hỏi KHÔNG liên quan đến mua sắm (thời tiết, toán học, tin tức, thể thao, sức khỏe, lịch sử, khoa học, giải trí, tên tuổi...): dùng respond_out_of_scope_tool với reason phù hợp
 
 VÍ DỤ:
 
@@ -328,10 +339,28 @@ User: "Xem giỏ và gợi ý sản phẩm cho tôi"
 Plan: {{"nodes": [{{"id": "n0", "tool": "get_cart_tool", "args": {{"user_id": "anonymous"}}, "depends_on": [], "confidence": 0.95, "description": "Xem giỏ"}}, {{"id": "n1", "tool": "get_recommendations_tool", "args": {{"product_id": "$steps[n0].items[0].product_id"}}, "depends_on": ["n0"], "confidence": 0.8, "description": "Gợi ý từ sản phẩm đầu tiên trong giỏ"}}], "goal": "Xem giỏ và gợi ý", "reasoning": "User muốn xem giỏ và gợi ý từ sản phẩm trong giỏ"}}
 
 User: "Chào bạn"
-Plan: {{"nodes": [], "goal": "Chào hỏi", "reasoning": "Câu chào, không cần tool"}}
+Plan: {{"nodes": [{{"id": "n0", "tool": "respond_out_of_scope_tool", "args": {{"reason": "greeting"}}, "depends_on": [], "confidence": 1.0, "description": "Phản hồi chào hỏi"}}], "goal": "Chào hỏi", "reasoning": "Câu chào, dùng respond_out_of_scope_tool"}}
+
+User: "Thời tiết hôm nay thế nào?"
+Plan: {{"nodes": [{{"id": "n0", "tool": "respond_out_of_scope_tool", "args": {{"reason": "weather"}}, "depends_on": [], "confidence": 1.0, "description": "Trả lời câu hỏi thời tiết"}}], "goal": "Ngoài phạm vi", "reasoning": "Thời tiết không liên quan mua sắm, dùng respond_out_of_scope_tool"}}
+
+User: "Bạn tên gì?"
+Plan: {{"nodes": [{{"id": "n0", "tool": "respond_out_of_scope_tool", "args": {{"reason": "name"}}, "depends_on": [], "confidence": 1.0, "description": "Trả lời câu hỏi tên"}}], "goal": "Ngoài phạm vi", "reasoning": "Hỏi tên không liên quan mua sắm, dùng respond_out_of_scope_tool"}}
+
+User: "1+1 bằng mấy?"
+Plan: {{"nodes": [{{"id": "n0", "tool": "respond_out_of_scope_tool", "args": {{"reason": "math"}}, "depends_on": [], "confidence": 1.0, "description": "Trả lời câu hỏi toán"}}], "goal": "Ngoài phạm vi", "reasoning": "Toán học không liên quan mua sắm, dùng respond_out_of_scope_tool"}}
 
 User: "Đặt hàng giúp tôi"
 Plan: {{"nodes": [], "goal": "Đặt hàng", "reasoning": "Từ chối: không hỗ trợ checkout"}}
+
+User: "Xem review sản phẩm trước đó"
+Plan: {{"nodes": [{{"id": "n0", "tool": "get_product_reviews_tool", "args": {{"product_id": "$memory.last_product_id"}}, "depends_on": [], "confidence": 0.98, "description": "Xem review sản phẩm trước"}}], "goal": "Xem review", "reasoning": "User muốn xem review sản phẩm trước, dùng $memory.last_product_id"}}
+
+User: "Thêm nó vào giỏ"
+Plan: {{"nodes": [{{"id": "n0", "tool": "add_to_cart_tool", "args": {{"product_id": "$memory.last_product_id", "quantity": 1}}, "depends_on": [], "confidence": 0.98, "description": "Thêm sản phẩm trước vào giỏ"}}], "goal": "Thêm vào giỏ", "reasoning": "User muốn thêm sản phẩm trước vào giỏ, dùng $memory.last_product_id"}}
+
+User: "Xem lại sản phẩm trước"
+Plan: {{"nodes": [{{"id": "n0", "tool": "get_product_details_tool", "args": {{"product_id": "$memory.last_product_id"}}, "depends_on": [], "confidence": 0.98, "description": "Xem chi tiết sản phẩm trước"}}], "goal": "Xem chi tiết", "reasoning": "User muốn xem lại sản phẩm trước, dùng $memory.last_product_id"}}
 
 CHỈ TRẢ VỀ JSON THUẦN, KHÔNG GIẢI THÍCH GÌ THÊM.
 JSON:"""

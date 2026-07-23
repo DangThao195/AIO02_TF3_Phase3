@@ -231,8 +231,10 @@ def _resolve_value(val: Any, node_outputs: dict, state: dict) -> Any:
             arr_match = re.match(r"(\w+)\[(\d+)\]", part)
             if arr_match:
                 key, idx = arr_match.group(1), int(arr_match.group(2))
-                result = result.get(key, []) if isinstance(result, dict) else []
-                result = result[idx] if isinstance(result, list) and len(result) > idx else {}
+                arr = result.get(key, []) if isinstance(result, dict) else []
+                if not isinstance(arr, list) or len(arr) <= idx:
+                    return None
+                result = arr[idx]
             elif isinstance(result, dict):
                 result = result.get(part, "")
             else:
@@ -341,8 +343,8 @@ def _update_planner_memory(memory: dict, tool_name: str, result: Any, state: dic
     if tool_name == "search_products_v2":
         products = result.get("products", [])
         if products:
-            memory["last_product_id"] = products[0].get("id", "")
-            memory["last_product_name"] = products[0].get("name", "")
+            memory["last_searched_product_id"] = products[0].get("id", "")
+            memory["last_searched_product_name"] = products[0].get("name", "")
             memory["last_results_ids"] = [p.get("id") for p in products[:5] if p.get("id")]
             mentioned = memory.get("mentioned_products", [])
             for p in products[:5]:
@@ -362,6 +364,12 @@ def _update_planner_memory(memory: dict, tool_name: str, result: Any, state: dic
         if pid:
             memory["last_product_id"] = pid
             memory["last_product_name"] = product.get("name", "")
+
+    elif tool_name == "add_to_cart_tool":
+        pid = result.get("product_id", "")
+        if pid:
+            memory["last_product_id"] = pid
+            memory["last_product_name"] = result.get("product_name", "")
 
     elif tool_name == "get_cart_tool":
         memory["current_cart_items"] = result.get("item_count", 0)
@@ -449,6 +457,16 @@ async def tool_executor_node(state: dict) -> dict:
                                   "add_to_cart_tool", "update_cart_item_tool"):
                     args["user_id"] = user_id
 
+                # Skip if any arg could not be resolved (template variable → None)
+                if any(v is None for v in args.values()):
+                    err_msg = (
+                        f"Dữ liệu đầu vào không đầy đủ — "
+                        f"không thể resolve template variable cho {tool_name}. "
+                        f"Có thể do dữ liệu phụ thuộc rỗng."
+                    )
+                    logger.warning("[tool_executor] SKIP tool=%s reason=unresolved_args args=%s", tool_name, args)
+                    return nid, None, err_msg, None
+
                 # L3 validate
                 try:
                     from src.guardrails.tool_validator import validate_tool_call
@@ -472,7 +490,7 @@ async def tool_executor_node(state: dict) -> dict:
                             cached = await cache_mgr.get(cache_key, "tool")
                             if cached is not None:
                                 logger.debug("[cache] HIT tool=%s key=%s", tool_name, cache_key)
-                                return nid, cached, None, None
+                                return nid, cached, None, args
                         except Exception:
                             pass
 
@@ -519,7 +537,7 @@ async def tool_executor_node(state: dict) -> dict:
                 except Exception:
                     pass
 
-                return nid, result, None, None
+                return nid, result, None, args
 
             results = await asyncio.gather(*[execute_one(n) for n in batch],
                                            return_exceptions=True)
@@ -533,7 +551,7 @@ async def tool_executor_node(state: dict) -> dict:
                     done.add(nid)
                     continue
 
-                nid_out, result, err, pending_info = outcome
+                nid_out, result, err, resolved_args = outcome
 
                 if err:
                     errors.append({"node": nid, "error": err})
@@ -559,7 +577,7 @@ async def tool_executor_node(state: dict) -> dict:
                     branch = _evaluate_condition(data, condition)
                     if branch == "ask_user":
                         msg = data.get("message", "Vui lòng cung cấp thêm thông tin.")
-                        pending = {"action": tool_name, "args": node.get("args", {}), "message": msg}
+                        pending = {"action": tool_name, "args": resolved_args or {}, "message": msg}
                         tool_results[tool_name] = parsed
                         # Set pending_action — interrupt will happen in confirmation_node
                         tool_had_pending = True
@@ -576,7 +594,7 @@ async def tool_executor_node(state: dict) -> dict:
                     message = parsed.get("message", "")
                     pending = {
                         "action": tool_name,
-                        "args": node.get("args", {}),
+                        "args": resolved_args or {},
                         "token": token,
                         "message": message,
                     }

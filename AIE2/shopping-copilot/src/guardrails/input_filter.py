@@ -147,6 +147,22 @@ ATTACK_PATTERNS: List[Tuple[re.Pattern, str]] = [
     (re.compile(r"(cách|hướng\s*dẫn|dạy)\s*(hack|tấn\s*công|khai\s*thác\s*lỗ\s*hổng|bẻ\s*khoá|phá\s*hệ\s*thống)", re.IGNORECASE),
      "OFF_TOPIC"),
 
+    # ── Personal questions / chit-chat ──
+    (re.compile(r"(bạn|anh|chị|em)\s*(tên|gọi)\s*(là\s*)?(gì|nha|nhé)?\s*\??", re.IGNORECASE),
+     "OFF_TOPIC"),
+    (re.compile(r"(bạn|anh|chị|em)\s*(có|đã)\s*(yêu|thích|ghét|cưới|ngủ|ăn|cơm|thông|say|buồn|vui|giận)", re.IGNORECASE),
+     "OFF_TOPIC"),
+    (re.compile(r"ai\s*(đó|là)\s*(tên|là)\s*\w+\s*(là\s*)?(gì|ai|nào)", re.IGNORECASE),
+     "OFF_TOPIC"),
+    (re.compile(r"(kể|đọc|viết)\s*(chuyện|câu\s*chuyện|thơ|bài\s*hát|truyện\s*cười)", re.IGNORECASE),
+     "OFF_TOPIC"),
+    (re.compile(r"(thời\s*tiết|nhiệt\s*độ|mưa|bão)\s*(hôm\s*nay|ngày\s*mai|thế\s*nào)?", re.IGNORECASE),
+     "OFF_TOPIC"),
+    (re.compile(r"(có\s*thông|đang\s*say|uống\s*rượu|ma\s*túy)", re.IGNORECASE),
+     "OFF_TOPIC"),
+    (re.compile(r"tên\s+thật\s+(của\s+)?(bạn|m|mày)\s*(là\s*)?gì", re.IGNORECASE),
+     "OFF_TOPIC"),
+
     # ══════════════════════════════════════
     # Danh mục 7: Encoding Evasion
     # (phát hiện kẻ tấn công mã hoá payload

@@ -68,14 +68,21 @@ retry_count: int
 ```
 planner_memory: dict = {
     "last_search": str,
-    "last_product_id": str,
+    "last_product_id": str,               # set bởi detail/review/recommendation tools + add_to_cart
     "last_product_name": str,
+    "last_searched_product_id": str,       # set bởi search_products_v2 (không ghi đè last_product_id)
+    "last_searched_product_name": str,
     "last_results_ids": list,
     "mentioned_products": list,
     "current_cart_items": int,
     "last_intent": str,
 }
 ```
+
+> **Lưu ý:** `last_product_id` và `last_searched_product_id` là 2 field riêng biệt.
+> `last_product_id` chỉ được ghi bởi get_product_details_tool, get_product_reviews_tool,
+> get_recommendations_tool, và add_to_cart_tool — không bị search_products_v2 ghi đè.
+> Điều này tránh lỗi "Thêm ba cái" lấy sai sản phẩm từ kết quả tìm kiếm.
 
 ### Session
 ```

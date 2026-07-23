@@ -729,6 +729,26 @@ async function confirmAction(token) {
     // Show confirm result as a bot message
     appendBotMsg(data.reply || 'Đã xác nhận.');
     loadCart();
+    // Append cart summary to the bot bubble
+    try {
+      const cartRes = await fetch(`${API_CART}?user_id=${encodeURIComponent(STATE.userId)}`);
+      const cartData = await cartRes.json();
+      if (cartData.items && cartData.items.length > 0) {
+        const lastBubble = chat.lastElementChild?.querySelector('.bubble');
+        if (lastBubble) {
+          let lines = cartData.items.map(item =>
+            `• **${item.name}** — $${parseFloat(item.price).toFixed(2)} x${item.quantity}`
+          );
+          const subtotal = cartData.items.reduce(
+            (s, it) => s + parseFloat(it.price) * it.quantity, 0
+          );
+          lines.push(`\n**Tổng cộng: $${subtotal.toFixed(2)}**`);
+          lastBubble.innerHTML += renderMarkdown(
+            '\n\n---\n**🛒 Giỏ hàng hiện tại:**\n' + lines.join('\n')
+          );
+        }
+      }
+    } catch (_) {}
   } catch (err) {
     showToast('Lỗi xác nhận: ' + err.message);
   } finally {
