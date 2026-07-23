@@ -22,32 +22,45 @@ async def hallucination_guard_node(state: ShoppingState) -> dict:
 Template path (complexity ≤ 0.5) luôn grounded 100% → auto PASS, bỏ qua check.
 
 ### Groundedness Score Algorithm
+HallucinationGuard chỉ phụ trách các check **exact deterministic** (L1). Mọi nghi ngờ semantic/entity đẩy xuống **Semantic Hallucination Gate** (Nova Lite, `gate_layer_design.md` §3).
+
 Bắt đầu từ 1.0, mỗi violation trừ penalty. Clamp [0, 1].
 
 | # | Check | Mechanism | Penalty |
 |---|---|---|---|
 | 1 | **Price** | Regex `\$\d+(?:\.\d{2})?` → mỗi price exact match với tool_results | -0.15 each |
-| 2 | **Entity** | Noun phrase (token viết hoa + bigram) → check trong known_products/categories | -0.40 |
-| 3 | **Entity (zero-result)** | Nếu search total=0 → mọi noun phrase violation | -0.50 |
+| 2 | **Entity** | List intersection: set answer token {product_name, category} ∩ known_set từ tool_results → nếu token trong answer không nằm trong known_set | -0.40 |
+| 3 | **Entity (zero-result)** | Nếu search total=0 → mọi entity token trong answer bị coi là violation | -0.50 |
 | 4 | **Count** | Regex `(\d+)\s*(sản phẩm\|kết quả\|đánh giá\|món)` → exact number match | -0.15 |
 | 5 | **Score** | Regex `(\d+\.?\d*)\s*/?\s*5` → match ±0.1 tolerance | -0.15 |
 | 6 | **Action confirm** | Regex `(đã thêm\|đã xoá\|đã cập nhật)` → chỉ nếu confirmed | -0.15 |
-| 7 | **Semantic attribute** | Regex `(có\|được\|sử dụng\|phù hợp\|chất liệu\|tính năng\|màu\|công dụng)` → claim phải trong description/name | -0.25 |
+| — | **Semantic attribute** | ❌ ĐÃ XOÁ — chuyển sang Semantic Hallucination Gate | — |
 
-### Entity Extraction Strategies
+> **Note:** 3 check bị khai tử khỏi HallucinationGuard và chuyển sang Semantic Hallucination Gate:
+> - Semantic attribute regex (#7 cũ) — không đáng tin với regex thuần, Nova Lite xử lý ngữ nghĩa chính xác hơn
+> - Mọi entity claim còn lại không match list intersection ở L2 → Nova Lite quyết định grounded/không
+
+### Entity Verification (List Intersection)
 ```
-1. Token viết hoa: "Telescope", "Camping Stove" → check in known set
-2. Bigram trong known set: "Camping Stove" → check in answer
-3. Category từ known set: "Outdoor", "Camping" → check in answer
+1. Build known_set từ tool_results: gom all `products[].name`, `products[].categories`, `items[].name`
+2. Extract candidate tokens từ answer: danh từ, cụm danh từ (tách bằng regex: \b[A-Za-zÀ-ỹ][A-Za-zÀ-ỹ\s]{2,}\b)
+3. Loại stop words (và, của, các, the, a, an, in, on...)
+4. So intersection: token nào không trong known_set → entity violation
+5. Nếu known_set rỗng và total>0 → skip (không có đối chiếu)
 ```
 
-Known set build từ `tool_results`: gom all `products[].name`, `products[].categories`, `items[].name`.
+> Không dùng "token viết hoa" làm tín hiệu — tiếng Việt không viết hoa danh từ chung.
 
 ### Decision
 ```
-groundedness_score >= 0.8 → PASS → hallucination_detected = False
+groundedness_score >= 0.8 → PASS → chuyển sang Semantic Hallucination Gate
+                                   (Nova Lite, per-claim) nếu còn claim nghi ngờ
 groundedness_score < 0.8  → FAIL → hallucination_detected = True, final_answer = None
+                                   → FallbackGenerator
 ```
+
+> **Luồng đầy đủ:** HallucinationGuard (rule-based) → nếu PASS → `semantic_hallucination_gate` (Nova Lite, per-claim) → cả 2 PASS → answer_generator.
+> Chi tiết gate: `gate_layer_design.md` §3.
 
 ### Edge Cases
 | Condition | Behavior |
@@ -55,9 +68,10 @@ groundedness_score < 0.8  → FAIL → hallucination_detected = True, final_answ
 | `complexity ≤ 0.5` (template) | Auto PASS, score=1.0 |
 | Không có tool_results | Auto PASS, score=1.0 |
 | Answer trống | Auto PASS |
-| known set rỗng + total=0 | Mọi noun phrase → entity violation (-0.50) |
+| known set rỗng + total=0 | Mọi entity token → violation (-0.50) |
 | known set rỗng + total>0 | No entity violations (không có đối chiếu) |
 | Guardrail violation trước | Giữ nguyên guardrail message |
+| HallucinationGuard PASS <br>nhưng còn claim nghi ngờ | Đẩy sang Semantic Hallucination Gate (Nova Lite) — <br>xem `gate_layer_design.md` §3 |
 
 ---
 
@@ -117,17 +131,22 @@ def select_fallback_template(tool_types: list[str], data: dict) -> str:
 ```
 response_verifier → HALLUCINATION_GUARD
                        │ pass (≥ 0.8)
-                       ▼
-                  answer_generator → END
+                       ├── không còn claim nghi ngờ → answer_generator → END
+                       └── còn N claims cần kiểm tra ngữ nghĩa
+                            → asyncio.gather(semantic_hallucination_gate(c1..cN))
+                                 → tất cả PASS → answer_generator → END
+                                 → bất kỳ FAIL → semantic_hallucination_detected
+                                               → FALLBACK_GENERATOR → answer_generator → END
                        │ fail (< 0.8)
                        ▼
                   FALLBACK_GENERATOR → answer_generator → END
-
-Route function: state.hallucination_detected → "fail" | "pass"
 ```
 
+> Note: `semantic_hallucination_gate` dùng Amazon Nova Lite (`apac.amazon.nova-lite-v1:0`), timeout 2s, cost ~$0.000019/claim.
+
 ### Cost
-| Component | Cost | Latency |
-|---|---|---|
-| HallucinationGuard | $0 (rule-based regex) | < 3ms |
-| FallbackGenerator | $0 (template render) | < 1ms |
+| Component | Cost | Latency | Trigger rate |
+|---|---|---|---|
+| HallucinationGuard | $0 (rule-based regex) | < 3ms | ~40% request (LLM path) |
+| Semantic Hallucination Gate | ~$0.000019/claim (Nova Lite) | ~150ms | ~3-5 claims, ~20% request |
+| FallbackGenerator | $0 (template render) | < 1ms | ~5% request |

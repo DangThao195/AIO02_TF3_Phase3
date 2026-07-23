@@ -1,382 +1,209 @@
 """
-memory/store.py — SessionStore và CacheStore cho Shopping Copilot.
+memory/store.py — In-memory SessionStore + CacheStore
 
-Hai class in-memory (dict) với TTL và LRU eviction.
-Schema JSON đã được mô tả trong data/session.json và data/cache.json.
-
-Trên EKS production: thay thế bằng Valkey (Redis-compatible) client.
+CacheStore: OrderedDict LRU, max 500 entries, JSON persist.
+Thêm interface get(key, db_type) và set(key, value, db_type, ttl) để
+compatible với CacheManager.
 """
 
-import json
-import os
-import hashlib
-import time
-import logging
-from collections import OrderedDict
-from datetime import datetime, timezone, timedelta
-from typing import Optional, Any
+from __future__ import annotations
 
-_BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'data'))
+import json
+import logging
+import os
+import threading
+import time
+from collections import OrderedDict
+from typing import Any, Optional
 
 logger = logging.getLogger("memory.store")
 
-# ── Config ──
-_SESSION_TTL_SECONDS = 1800       # 30 phút không hoạt động → xóa session
-_SESSION_MAX_MESSAGES = 20        # Sliding window tối đa 20 messages
-
-_CACHE_MAX_ENTRIES = 500
-_CACHE_TTL_MAP = {
-    "search_products_tool":     300,   # 5 phút
-    "get_product_reviews_tool": 300,   # 5 phút
-    "get_recommendations_tool": 300,   # 5 phút
-    "convert_currency_tool":     60,   # 1 phút
-}
-_CACHE_DEFAULT_TTL = 300
-_NEVER_CACHE = {"add_to_cart_tool", "get_cart_tool", "get_shipping_quote_tool"}
+_CACHE_FILE = os.path.join(os.path.dirname(__file__), "../../data/cache.json")
+_SESSION_FILE = os.path.join(os.path.dirname(__file__), "../../data/session.json")
+_MAX_CACHE_ENTRIES = 500
+_SESSION_TTL = 1800  # 30 minutes
 
 
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
-def _now_ts() -> float:
-    return time.time()
-
-
-# ══════════════════════════════════════════════════════════════════
-# SessionStore
-# ══════════════════════════════════════════════════════════════════
-
-class SessionStore:
-    """
-    Lưu trữ lịch sử hội thoại per-session, tự động persist ra file JSON.
-
-    Mỗi session chứa:
-    - messages: list[{role, content, timestamp}]
-    - pending_confirmation: {token, action, action_params, expires_at} | {}
-    - metadata: {total_turns, total_tool_calls, last_active_ts}
-    """
-
-    def __init__(self, filepath: Optional[str] = None):
-        self._filepath = filepath or os.path.join(_BASE_DIR, "session.json")
-        self._store: dict[str, dict] = {}
-        self._load()
-
-    # ── Persistence ──
-
-    def _load(self) -> None:
-        try:
-            if os.path.exists(self._filepath):
-                with open(self._filepath, encoding="utf-8") as f:
-                    data = json.load(f)
-                if isinstance(data, dict):
-                    self._store = data
-                    logger.info("[SESSION] Loaded %d sessions from %s", len(self._store), self._filepath)
-        except Exception as e:
-            logger.warning("[SESSION] Load failed — starting fresh: %s", e)
-
-    def _save(self) -> None:
-        try:
-            tmp = self._filepath + ".tmp"
-            with open(tmp, "w", encoding="utf-8") as f:
-                json.dump(self._store, f, indent=2, ensure_ascii=False)
-            os.replace(tmp, self._filepath)
-        except Exception as e:
-            logger.error("[SESSION] Save failed: %s", e)
-
-    # ── Public API ──
-
-    def get_or_create(self, session_id: str, user_id: str) -> dict:
-        """Lấy session hiện có hoặc tạo mới nếu chưa tồn tại / đã hết hạn."""
-        session = self._store.get(session_id)
-
-        if session is None:
-            session = self._create(session_id, user_id)
-            self._save()
-            logger.info("[SESSION] Created new session | id=%s | user=%s", session_id, user_id)
-        else:
-            # Kiểm tra TTL
-            last_active = session["metadata"].get("last_active_ts", 0)
-            if _now_ts() - last_active > _SESSION_TTL_SECONDS:
-                logger.info("[SESSION] Expired session — reset | id=%s", session_id)
-                session = self._create(session_id, user_id)
-                self._save()
-
-        return session
-
-    def append_message(self, session_id: str, role: str, content: str,
-                       tool_name: Optional[str] = None) -> None:
-        """Thêm message vào lịch sử, áp dụng sliding window."""
-        session = self._store.get(session_id)
-        if session is None:
-            return
-
-        session["messages"].append({
-            "role": role,
-            "content": content,
-            "timestamp": _now_iso(),
-            "tool_name": tool_name,
-        })
-
-        # Sliding window: giữ tối đa _SESSION_MAX_MESSAGES messages gần nhất
-        if len(session["messages"]) > _SESSION_MAX_MESSAGES:
-            session["messages"] = session["messages"][-_SESSION_MAX_MESSAGES:]
-
-        session["metadata"]["total_turns"] += 1
-        self._save()
-
-    def touch(self, session_id: str) -> None:
-        """Cập nhật last_active_ts."""
-        session = self._store.get(session_id)
-        if session:
-            session["metadata"]["last_active_ts"] = _now_ts()
-            session["last_active"] = _now_iso()
-            self._save()
-
-    def set_pending(self, session_id: str, token: str, action: str,
-                    action_params: Optional[dict]) -> None:
-        """Lưu trạng thái đang chờ xác nhận."""
-        session = self._store.get(session_id)
-        if session is None:
-            return
-        expires_at = (datetime.now(timezone.utc) + timedelta(seconds=300)).isoformat()
-        session["pending_confirmation"] = {
-            "token": token,
-            "action": action,
-            "action_params": action_params or {},
-            "expires_at": expires_at,
-        }
-        self._save()
-        logger.info("[SESSION] Pending set | id=%s | action=%s", session_id, action)
-
-    def clear_pending(self, session_id: str) -> None:
-        """Xóa trạng thái pending sau khi user xác nhận hoặc huỷ."""
-        session = self._store.get(session_id)
-        if session:
-            session["pending_confirmation"] = {}
-            self._save()
-            logger.info("[SESSION] Pending cleared | id=%s", session_id)
-
-    def dump(self, session_id: str) -> Optional[dict]:
-        """Trả về snapshot JSON-serializable của một session (dùng để debug)."""
-        return self._store.get(session_id)
-
-    def dump_all(self) -> dict:
-        """Trả về toàn bộ store (dùng để debug / export)."""
-        return dict(self._store)
-
-    # ── Private ──
-
-    def _create(self, session_id: str, user_id: str) -> dict:
-        session = {
-            "user_id": user_id,
-            "session_id": session_id,
-            "created_at": _now_iso(),
-            "last_active": _now_iso(),
-            "ttl_seconds": _SESSION_TTL_SECONDS,
-            "messages": [],
-            "context_window": {
-                "max_messages": _SESSION_MAX_MESSAGES,
-                "strategy": "sliding_window",
-            },
-            "pending_confirmation": {},
-            "metadata": {
-                "total_turns": 0,
-                "total_tool_calls": 0,
-                "last_active_ts": _now_ts(),
-            },
-        }
-        self._store[session_id] = session
-        return session
-
-
-# ══════════════════════════════════════════════════════════════════
-# CacheStore
-# ══════════════════════════════════════════════════════════════════
+# ── CacheStore ────────────────────────────────────────────────────
 
 class CacheStore:
     """
-    Cache kết quả tool với TTL, LRU eviction, và persist ra file JSON.
-
-    Key: "<tool_name>:<sha256(params)[:16]>"
-    Chỉ cache read-only tools; write tools bị NEVER_CACHE.
+    In-memory LRU cache with optional JSON persistence.
+    Implements get(key, db_type) and set(key, value, db_type, ttl) for
+    compatibility with CacheManager.
     """
 
-    def __init__(self, filepath: Optional[str] = None):
-        self._filepath = filepath or os.path.join(_BASE_DIR, "cache.json")
-        # OrderedDict để implement LRU (di chuyển entry lên đầu khi hit)
+    def __init__(self, max_size: int = _MAX_CACHE_ENTRIES, persist_path: str = _CACHE_FILE):
         self._store: OrderedDict[str, dict] = OrderedDict()
-        self._stats = {"hits": 0, "misses": 0}
+        self._max_size = max_size
+        self._persist_path = persist_path
+        self._hits = 0
+        self._misses = 0
+        self._lock = threading.Lock()
         self._load()
 
-    # ── Persistence ──
+    # ── CacheManager-compatible interface ─────────────────────────
 
-    def _load(self) -> None:
-        try:
-            if os.path.exists(self._filepath):
-                with open(self._filepath, encoding="utf-8") as f:
-                    data = json.load(f)
-                if isinstance(data, dict):
-                    self._store = OrderedDict(data.get("entries", data))
-                    self._stats = data.get("stats", {"hits": 0, "misses": 0})
-                    logger.info("[CACHE] Loaded %d entries from %s", len(self._store), self._filepath)
-        except Exception as e:
-            logger.warning("[CACHE] Load failed — starting fresh: %s", e)
+    def get(self, key: str, db_type: str = "tool") -> Optional[Any]:
+        """Get value by key (db_type ignored for in-memory store)."""
+        with self._lock:
+            entry = self._store.get(key)
+            if entry is None:
+                self._misses += 1
+                return None
+            if entry.get("expires_at") and time.time() > entry["expires_at"]:
+                del self._store[key]
+                self._misses += 1
+                return None
+            # LRU: move to end
+            self._store.move_to_end(key)
+            self._hits += 1
+            return entry.get("value")
 
-    def _save(self) -> None:
-        try:
-            tmp = self._filepath + ".tmp"
-            with open(tmp, "w", encoding="utf-8") as f:
-                json.dump({
-                    "entries": dict(self._store),
-                    "stats": dict(self._stats),
-                }, f, indent=2, ensure_ascii=False)
-            os.replace(tmp, self._filepath)
-        except Exception as e:
-            logger.error("[CACHE] Save failed: %s", e)
+    def set(self, key: str, value: Any, db_type: str = "tool", ttl: int = 600) -> None:
+        """Set key with TTL (db_type ignored for in-memory store)."""
+        with self._lock:
+            if key in self._store:
+                self._store.move_to_end(key)
+            self._store[key] = {
+                "value": value,
+                "expires_at": time.time() + ttl if ttl > 0 else None,
+                "created_at": time.time(),
+            }
+            if len(self._store) > self._max_size:
+                self._store.popitem(last=False)
 
-    # ── Public API ──
+    def delete(self, key: str, db_type: str = "tool") -> None:
+        with self._lock:
+            self._store.pop(key, None)
 
-    def get(self, tool_name: str, params: dict) -> Optional[str]:
-        """
-        Lấy kết quả cache.
-        Returns None nếu miss hoặc tool thuộc NEVER_CACHE.
-        """
-        if tool_name in _NEVER_CACHE:
-            return None
+    # ── Legacy interface ──────────────────────────────────────────
 
-        key = self._make_key(tool_name, params)
-        entry = self._store.get(key)
+    def get_cached(self, key: str) -> Optional[Any]:
+        return self.get(key)
 
-        if entry is None:
-            self._stats["misses"] += 1
-            return None
-
-        # Kiểm tra TTL
-        if _now_ts() > entry["expires_at_ts"]:
-            del self._store[key]
-            self._stats["misses"] += 1
-            self._save()
-            logger.debug("[CACHE] TTL expired | key=%s", key)
-            return None
-
-        # LRU: di chuyển lên cuối (most-recently-used)
-        self._store.move_to_end(key)
-        entry["hit_count"] += 1
-        self._stats["hits"] += 1
-        logger.debug("[CACHE] HIT | key=%s | hits=%d", key, entry["hit_count"])
-        return entry["result"]
-
-    def set(self, tool_name: str, params: dict, result: str) -> None:
-        """Lưu kết quả vào cache và persist."""
-        if tool_name in _NEVER_CACHE:
-            return
-
-        key = self._make_key(tool_name, params)
-        ttl = _CACHE_TTL_MAP.get(tool_name, _CACHE_DEFAULT_TTL)
-        expires_ts = _now_ts() + ttl
-
-        self._store[key] = {
-            "tool_name": tool_name,
-            "params": params,
-            "params_hash": self._hash_params(params),
-            "result": result,
-            "cached_at": _now_iso(),
-            "expires_at_ts": expires_ts,
-            "expires_at": datetime.fromtimestamp(expires_ts, timezone.utc).isoformat(),
-            "hit_count": 0,
-            "source": "grpc",
-        }
-        self._store.move_to_end(key)
-
-        # LRU eviction khi vượt giới hạn
-        while len(self._store) > _CACHE_MAX_ENTRIES:
-            evicted_key, _ = self._store.popitem(last=False)
-            logger.info("[CACHE] LRU evict | key=%s", evicted_key)
-
-        self._save()
-        logger.debug("[CACHE] SET | tool=%s | ttl=%ds", tool_name, ttl)
+    def set_cached(self, key: str, value: Any, ttl: int = 600) -> None:
+        self.set(key, value, ttl=ttl)
 
     def stats(self) -> dict:
-        """Trả về thống kê cache."""
-        total = self._stats["hits"] + self._stats["misses"]
-        hit_rate = round(self._stats["hits"] / total * 100, 1) if total > 0 else 0
+        total = self._hits + self._misses
         return {
-            **self._stats,
+            "hits": self._hits,
+            "misses": self._misses,
             "total_entries": len(self._store),
-            "hit_rate_pct": hit_rate,
+            "hit_rate_pct": round(self._hits / total * 100, 1) if total else 0,
         }
 
     def dump(self) -> dict:
-        """Snapshot toàn bộ cache (dùng để debug)."""
-        return {
-            "cache_config": {
-                "max_entries": _CACHE_MAX_ENTRIES,
-                "eviction_policy": "LRU",
-                "enabled_tools": list(_CACHE_TTL_MAP.keys()),
-                "never_cache_tools": list(_NEVER_CACHE),
-            },
-            "entries": {k: {**v, "expires_at_ts": None} for k, v in self._store.items()},
-            "stats": self.stats(),
+        return {k: v.get("value") for k, v in self._store.items()}
+
+    def _load(self) -> None:
+        try:
+            path = os.path.abspath(self._persist_path)
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    now = time.time()
+                    for k, v in data.items():
+                        if isinstance(v, dict) and v.get("expires_at", now + 1) > now:
+                            self._store[k] = v
+        except Exception as e:
+            logger.warning("[CacheStore] _load failed: %s", e)
+
+    def persist(self) -> None:
+        try:
+            path = os.path.abspath(self._persist_path)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(dict(self._store), f, ensure_ascii=False, default=str)
+        except Exception as e:
+            logger.warning("[CacheStore] persist failed: %s", e)
+
+
+# ── SessionStore ──────────────────────────────────────────────────
+
+class SessionStore:
+    """In-memory session store with TTL and sliding window (20 messages)."""
+
+    def __init__(self, ttl: int = _SESSION_TTL, persist_path: str = _SESSION_FILE):
+        self._sessions: dict[str, dict] = {}
+        self._ttl = ttl
+        self._persist_path = persist_path
+        self._lock = threading.Lock()
+        self._load()
+
+    def get(self, session_id: str) -> Optional[dict]:
+        with self._lock:
+            session = self._sessions.get(session_id)
+            if not session:
+                return None
+            if time.time() - session.get("last_active", 0) > self._ttl:
+                del self._sessions[session_id]
+                return None
+            session["last_active"] = time.time()
+            return session
+
+    def create(self, session_id: str, user_id: str) -> dict:
+        session = {
+            "session_id": session_id,
+            "user_id": user_id,
+            "messages": [],
+            "created_at": time.time(),
+            "last_active": time.time(),
+            "pending_confirmation": {},
         }
+        with self._lock:
+            self._sessions[session_id] = session
+        return session
 
-    def get_raw(self, cache_key: str) -> Optional[Any]:
-        """
-        Get raw cached value by cache key (raw string key, not tool_name/params).
-        Used for generic caching (e.g., LLM parse results).
-        """
-        entry = self._store.get(cache_key)
-        if entry is None:
-            return None
+    def get_or_create(self, session_id: str, user_id: str) -> dict:
+        session = self.get(session_id)
+        if session is None:
+            session = self.create(session_id, user_id)
+        return session
 
-        # Check TTL
-        if _now_ts() > entry.get("expires_at_ts", 0):
-            del self._store[cache_key]
-            self._save()
-            return None
+    def add_message(self, session_id: str, role: str, content: str) -> None:
+        with self._lock:
+            session = self._sessions.get(session_id)
+            if session:
+                session["messages"].append({"role": role, "content": content})
+                if len(session["messages"]) > 20:
+                    session["messages"] = session["messages"][-20:]
+                session["last_active"] = time.time()
 
-        # LRU: move to end
-        self._store.move_to_end(cache_key)
-        entry["hit_count"] = entry.get("hit_count", 0) + 1
-        return entry.get("value")
+    def set_pending(self, session_id: str, token: str, action: str, params: dict) -> None:
+        with self._lock:
+            session = self._sessions.get(session_id)
+            if session:
+                session["pending_confirmation"] = {
+                    "token": token, "action": action, "params": params,
+                    "expires_at": time.time() + 300,
+                }
 
-    def set_raw(self, cache_key: str, value: Any, ttl: int = 300) -> None:
-        """
-        Set raw cached value by cache key with TTL.
-        Used for generic caching (e.g., LLM parse results).
+    def clear_pending(self, session_id: str) -> None:
+        with self._lock:
+            session = self._sessions.get(session_id)
+            if session:
+                session["pending_confirmation"] = {}
 
-        Args:
-            cache_key: Arbitrary cache key string
-            value: Value to cache (typically dict or str)
-            ttl: Time-to-live in seconds (default 300s = 5 min)
-        """
-        expires_ts = _now_ts() + ttl
-        self._store[cache_key] = {
-            "cache_key": cache_key,
-            "value": value,
-            "cached_at": _now_iso(),
-            "expires_at_ts": expires_ts,
-            "expires_at": datetime.fromtimestamp(expires_ts, timezone.utc).isoformat(),
-            "hit_count": 0,
-            "ttl_seconds": ttl,
-        }
-        self._store.move_to_end(cache_key)
+    def dump(self, session_id: str) -> Optional[dict]:
+        with self._lock:
+            return self._sessions.get(session_id)
 
-        # LRU eviction
-        while len(self._store) > _CACHE_MAX_ENTRIES:
-            evicted_key, _ = self._store.popitem(last=False)
-            logger.debug("[CACHE] LRU evict raw | key=%s", evicted_key)
+    def _load(self) -> None:
+        try:
+            path = os.path.abspath(self._persist_path)
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    self._sessions = json.load(f)
+        except Exception as e:
+            logger.warning("[SessionStore] _load failed: %s", e)
 
-        self._save()
-
-    # ── Private ──
-
-    @staticmethod
-    def _hash_params(params: dict) -> str:
-        serialized = json.dumps(params, sort_keys=True, ensure_ascii=False)
-        return hashlib.sha256(serialized.encode()).hexdigest()
-
-    @staticmethod
-    def _make_key(tool_name: str, params: dict) -> str:
-        h = CacheStore._hash_params(params)
-        return f"{tool_name}:{h[:16]}"
+    def persist(self) -> None:
+        try:
+            path = os.path.abspath(self._persist_path)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(self._sessions, f, ensure_ascii=False, default=str)
+        except Exception as e:
+            logger.warning("[SessionStore] persist failed: %s", e)

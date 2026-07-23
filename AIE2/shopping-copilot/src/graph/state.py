@@ -1,130 +1,156 @@
 """
-graph/state.py — ShoppingState TypedDict cho LangGraph StateGraph.
+graph/state.py — ShoppingState v3.2
 
-State được chia sẻ qua tất cả nodes trong graph.
-Dùng Annotated reducers để LangGraph tự merge các field list/dict.
+TypedDict state cho LangGraph StateGraph.
+Tất cả fields dùng total=False (optional) để LangGraph merge partial updates.
+
+Reducers:
+    - merge_tool_results: chỉ nhận key chưa tồn tại (idempotent)
+    - accumulate_errors: append list
+    - accumulate_tool_history: append, giới hạn 6 turns
+    - merge_node_durations: cộng dồn ms theo node
 """
 
 from __future__ import annotations
 
-import operator
 from typing import Annotated, Any, Optional
 from typing_extensions import TypedDict
-
 from langchain_core.messages import BaseMessage
-from langgraph.graph import add_messages
 
 
-# ──────────────────────────────────────────────────────────────────
-# Reducer functions
-# ──────────────────────────────────────────────────────────────────
+# ── Reducers ────────────────────────────────────────────────────
 
-def merge_tool_results(
-    existing: dict[str, Any],
-    updates: dict[str, Any],
-) -> dict[str, Any]:
-    """Reducer: merge tool_results dict, không ghi đè kết quả đã có."""
-    result = existing.copy()
-    for k, v in updates.items():
-        if k not in result:  # Chỉ nhận kết quả đầu tiên cho mỗi call_id
+def merge_tool_results(existing: dict, update: dict) -> dict:
+    """
+    Merge tool_results: reset khi __reset__ flag, giữ nguyên key cũ nếu không có key mới.
+    __reset__ được dùng để clear state giữa các turn (từ main.py api_chat).
+    """
+    if not existing:
+        result = dict(update)
+    elif "__reset__" in update:
+        result = {k: v for k, v in update.items() if k != "__reset__"}
+    else:
+        result = dict(existing)
+        for k, v in update.items():
             result[k] = v
-    return result
+    return {k: v for k, v in result.items() if not k.startswith("__")}
 
 
-def accumulate_errors(existing: list, updates: list) -> list:
-    """Reducer: append errors vào danh sách hiện có."""
-    return existing + updates
+def accumulate_errors(existing: list, update: Any) -> list:
+    """
+    Append errors. update có thể là list hoặc dict đơn lẻ.
+    __reset__ trong list sẽ clear toàn bộ errors (cho turn mới).
+    """
+    if isinstance(update, list) and "__reset__" in update:
+        return []
+    if not existing:
+        existing = []
+    if isinstance(update, list):
+        return existing + update
+    elif isinstance(update, dict):
+        return existing + [update]
+    return existing
 
 
-def merge_node_durations(existing: dict, updates: dict) -> dict:
-    """Reducer: merge node duration dict (cộng dồn nếu node chạy lại)."""
-    result = existing.copy()
-    for node, ms in updates.items():
-        result[node] = result.get(node, 0) + ms
-    return result
+def accumulate_tool_history(existing: list, update: Any) -> list:
+    """
+    Append tool history, giới hạn 6 turns gần nhất.
+    """
+    if not existing:
+        existing = []
+    if isinstance(update, list):
+        combined = existing + update
+    elif isinstance(update, dict):
+        combined = existing + [update]
+    else:
+        return existing
+    return combined[-6:]
 
 
-# ──────────────────────────────────────────────────────────────────
-# ShoppingState
-# ──────────────────────────────────────────────────────────────────
+def merge_node_durations(existing: dict, update: dict) -> dict:
+    """
+    Merge node_durations: cộng dồn ms theo node key trong cùng turn.
+    __reset__ flag sẽ clear toàn bộ durations (cho turn mới).
+    """
+    if "__reset__" in update:
+        return {}
+    if not existing:
+        return dict(update)
+    merged = dict(existing)
+    for k, v in update.items():
+        merged[k] = merged.get(k, 0) + v
+    return merged
+
+
+def _last_wins(existing: Any, update: Any) -> Any:
+    """Simple last-write-wins reducer cho các field thông thường."""
+    return update if update is not None else existing
+
+
+# ── ShoppingState v3.2 ────────────────────────────────────────────
 
 class ShoppingState(TypedDict, total=False):
     """
-    State chia sẻ toàn bộ LangGraph cho Shopping Copilot.
+    State cho Shopping Copilot v3.2 LangGraph.
 
-    Dùng total=False để cho phép khởi tạo partial state (không cần
-    khai báo tất cả fields khi invoke).
+    Tất cả fields optional (total=False) — LangGraph merge partial dicts.
+    Annotated fields có reducers đặc biệt; còn lại dùng last-write-wins.
     """
 
-    # ── Core message history ──
-    # add_messages reducer tự merge, không ghi đè
-    messages: Annotated[list[BaseMessage], add_messages]
-
-    # ── Intent & Entities ──
-    intent: str           # search | review | recommend | cart | shipping | sequential | agent
-    intent_source: str    # regex | llm | default
-    entities: dict        # {"product_name": "iPhone 15", "quantity": 2, ...}
-
-    # ── Workflow state ──
-    current_product_id: Optional[str]    # Product ID đang xử lý (set bởi ResolveProductNode)
-    resolved_product_name: Optional[str]  # Tên sản phẩm chính xác từ DB (set bởi ResolveProductNode)
-    candidate_products: list             # Danh sách sản phẩm từ search/recommend
-    tool_results: Annotated[dict, merge_tool_results]  # {f"{tool_name}:{call_id}": result}
-    final_answer: str                    # Câu trả lời cuối cùng
-
-    # ── Sequential workflow (mixing) ──
-    pending_workflows: list              # ["recommend", "cart"] — chạy tuần tự
-    current_workflow_index: int          # Workflow thứ mấy đang chạy
-    workflow_results: list               # Kết quả từng workflow
-
-    # ── Session ──
+    # ── Conversation ──────────────────────────────────────────────
+    messages: list[BaseMessage]         # Chat history (LangGraph quản lý)
     session_id: str
     user_id: str
-    trace_id: str                        # UUID cho tracing
+    trace_id: str
 
-    # ── Confirmation ──
-    pending_action: Optional[dict]       # {"token": "...", "action": "AddItem", "params": {...}}
-    confirmed: bool                      # User đã confirm chưa (resume từ checkpoint)
+    # ── Planner fields ────────────────────────────────────────────
+    plan: dict                          # DAGPlan: {nodes: [...], edges: [...]}
+    plan_step_index: int
+    current_goal: str
+    planner_reasoning: str
+    plan_confidence: float              # 0.0–1.0
+    entities: dict                      # Extracted entities from input (product_name, category, price)
 
-    # ── Error & Retry ──
-    errors: Annotated[list, accumulate_errors]  # [{"node": "...", "error": "...", ...}]
-    retry_count: int                     # Tổng số lần retry toàn cục
-    node_retry_counts: dict              # {"ToolExecutor:search_products_v2": 2}
+    # ── Tool Execution fields ─────────────────────────────────────
+    tool_results: Annotated[dict, merge_tool_results]
+    tool_history: Annotated[list, accumulate_tool_history]
+    dependency_graph: dict
+    retry_count: int
 
-    # ── Guardrail ──
-    guardrail_violations: list           # [{"guardrail": "L2a", "type": "JAILBREAK", "detail": ...}]
+    # ── Response / Hallucination fields ──────────────────────────
+    complexity_score: float             # 0.0–1.0
+    final_answer: str
+    groundedness_score: float           # 0.0–1.0
+    hallucination_detected: bool
+    fallback_used: bool
 
-    # ── Telemetry ──
-    node_durations: Annotated[dict, merge_node_durations]  # {"InputGuard": 12, ...} (ms)
+    # ── Gate fields ───────────────────────────────────────────────
+    gate_decisions: dict                # {gate_name: {decision, reason}}
+    semantic_hallucination_detected: bool
+    replan_count: int
 
+    # ── Reflection fields ─────────────────────────────────────────
+    reflection_result: str              # "pass" | "replan"
+    reflection_issues: list             # danh sách vấn đề phát hiện
 
-# ──────────────────────────────────────────────────────────────────
-# Default state factory (khởi tạo với giá trị mặc định hợp lý)
-# ──────────────────────────────────────────────────────────────────
+    # ── Planner Memory (cross-turn context) ───────────────────────
+    planner_memory: dict
+    # planner_memory schema:
+    #   last_search: str           — query lần tìm kiếm trước
+    #   last_product_id: str       — product_id sản phẩm vừa xem
+    #   last_product_name: str     — tên sản phẩm vừa xem
+    #   last_results_ids: list     — list[str] top 5 IDs từ search
+    #   mentioned_products: list   — tất cả product_id đã mention
+    #   current_cart_items: int    — số lượng item trong giỏ
+    #   last_goal: str             — mục tiêu của lượt trước
 
-def default_state() -> ShoppingState:
-    """Trả về ShoppingState với tất cả fields có giá trị mặc định."""
-    return ShoppingState(
-        messages=[],
-        intent="agent",
-        intent_source="default",
-        entities={},
-        current_product_id=None,
-        resolved_product_name=None,
-        candidate_products=[],
-        tool_results={},
-        final_answer="",
-        pending_workflows=[],
-        current_workflow_index=0,
-        workflow_results=[],
-        session_id="",
-        user_id="anonymous",
-        trace_id="",
-        pending_action=None,
-        confirmed=False,
-        errors=[],
-        retry_count=0,
-        node_retry_counts={},
-        guardrail_violations=[],
-        node_durations={},
-    )
+    # ── Confirmation / Write flow ──────────────────────────────────
+    pending_action: Optional[dict]      # {action, params, token, message}
+    confirmed: bool
+
+    # ── Guardrails ────────────────────────────────────────────────
+    guardrail_violations: list          # [{type, detail, tier}]
+
+    # ── Observability ─────────────────────────────────────────────
+    errors: Annotated[list, accumulate_errors]
+    node_durations: Annotated[dict, merge_node_durations]

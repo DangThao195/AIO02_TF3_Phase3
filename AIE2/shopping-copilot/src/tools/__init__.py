@@ -1,7 +1,8 @@
 # tools/__init__.py
 
 from src.tools.search import search_products_v2
-from src.tools.cart_tool import add_to_cart_tool, get_cart_tool, check_cart_item_tool
+from src.tools.cart_tool import add_to_cart_tool, update_cart_item_tool, get_cart_tool, check_cart_item_tool
+from src.tools.product_tool import get_product_details_tool
 from src.tools.review_tool import get_product_reviews_tool
 from src.tools.recommendation_tool import get_recommendations_tool
 from src.tools.currency_tool import convert_currency_tool
@@ -22,10 +23,15 @@ all_shopping_tools = [
     # Nhóm ID Lookup
     get_product_id,              # tra product_id từ tên sản phẩm
     
+    # Nhóm Product Detail
+    get_product_details_tool,    # chi tiết sản phẩm theo ID
+    
     # Nhóm Core (Bắt buộc)
     get_product_reviews_tool,
     add_to_cart_tool,
+    update_cart_item_tool,       # cập nhật/xoá sản phẩm trong giỏ
     get_cart_tool,
+    check_cart_item_tool,        # kiểm tra sản phẩm có trong giỏ không
     
     # Nhóm Mở rộng (Đua top)
     get_recommendations_tool,

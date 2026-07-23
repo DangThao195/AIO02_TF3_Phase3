@@ -3,6 +3,10 @@
 .env.local
 .env.*.local
 
+.kiro/
+.claude/
+.blackbox/
+
 # Python
 __pycache__/
 *.py[cod]

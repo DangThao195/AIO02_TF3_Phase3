@@ -3,26 +3,13 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from src.tools.search.models import Product
-from src.database.connect import get_conn, init_pool
+from src.database.connect import get_conn
 
 
 class SQLQueryExecutor:
     """Thực thi SQL query trên database của thư mục src/database."""
 
-    def __init__(self):
-        self._initialized = False
-
-    def ensure_initialized(self) -> None:
-        if self._initialized:
-            return
-        try:
-            init_pool()
-        except Exception:
-            pass
-        self._initialized = True
-
     def execute(self, query: str, limit: int = 15) -> List[Dict[str, Any]]:
-        self.ensure_initialized()
         self._validate_query(query)
         try:
             with get_conn() as conn:

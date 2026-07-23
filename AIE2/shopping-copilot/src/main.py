@@ -15,7 +15,9 @@ Chạy local:
 import logging
 import sys
 import os
+import time as _time
 import uuid
+from collections import defaultdict
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -29,13 +31,10 @@ parser = argparse.ArgumentParser(description="Shopping Copilot API Server")
 parser.add_argument("--mock", action="store_true", help="Chạy với gRPC mock EKS")
 args, _ = parser.parse_known_args()
 
-# ── Logging setup (JSON-friendly format) ──
-logging.basicConfig(
-    level=logging.INFO,
-    stream=sys.stdout,
-    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-)
-logger = logging.getLogger("main")
+# ── Logging setup (file + console, JSON + plain) ──
+from src.logging_config import setup_logging, request_context
+setup_logging()
+logger = logging.getLogger("api")
 
 # ── FastAPI app ──
 app = FastAPI(
@@ -51,6 +50,39 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Observability metrics ──
+_metrics = {
+    "latencies": defaultdict(list),
+    "gate_decisions": defaultdict(int),
+    "hallucination": defaultdict(int),
+    "tool_results": defaultdict(int),
+}
+
+@app.middleware("http")
+async def metrics_middleware(request, call_next):
+    start = _time.time()
+    trace_id = str(uuid.uuid4())
+    ctx = {
+        "session_id": request.headers.get("X-Session-Id", request.query_params.get("session_id", "")),
+        "trace_id": trace_id,
+        "user_id": request.headers.get("X-User-Id", request.query_params.get("user_id", "anonymous")),
+    }
+    token = request_context.set(ctx)
+    try:
+        response = await call_next(request)
+        latency_ms = (_time.time() - start) * 1000
+        _metrics["latencies"][request.url.path].append(latency_ms)
+        logger.info("[API] %s %s → %d (%.0fms) trace=%s",
+                     request.method, request.url.path, response.status_code, latency_ms, trace_id)
+        return response
+    except Exception as e:
+        latency_ms = (_time.time() - start) * 1000
+        logger.error("[API] %s %s → 500 (%.0fms) trace=%s | %s",
+                      request.method, request.url.path, latency_ms, trace_id, e, exc_info=True)
+        return JSONResponse(status_code=500, content={"status": "error", "reply": "Internal server error."})
+    finally:
+        request_context.reset(token)
 
 # ── LangGraph graph (lazy init) ──
 _graph = None
@@ -68,6 +100,18 @@ def _get_graph():
         _graph = build_graph()
         logger.info("[MAIN] LangGraph graph initialized")
     return _graph
+
+
+# ── PostgreSQL pool warmup ──
+@app.on_event("startup")
+async def warmup_db_pool():
+    """Khởi tạo PostgreSQL pool ngay khi server start, tránh lazy init 5s trong request path."""
+    try:
+        from src.database.connect import init_pool
+        init_pool()
+        logger.info("[MAIN] PostgreSQL pool warmup done")
+    except Exception as e:
+        logger.warning("[MAIN] PostgreSQL pool warmup failed (will lazy init): %s", e)
 
 
 # ── Request/Response models ──
@@ -94,6 +138,18 @@ class ChatResponse(BaseModel):
 
 # ── Step labels mapping (node_key → display name) ──
 _STEP_LABELS: dict[str, str] = {
+    # v3.2 nodes
+    "input_guard": "Kiểm tra đầu vào",
+    "task_graph_builder": "Lập kế hoạch",
+    "plan_validity_gate": "Kiểm tra kế hoạch",
+    "tool_executor": "Thực thi công cụ",
+    "reflection": "Phản ánh kết quả",
+    "response_verifier": "Xác minh câu trả lời",
+    "hallucination_guard": "Kiểm tra độ chính xác",
+    "fallback_generator": "Tạo câu trả lời dự phòng",
+    "answer_generator": "Tạo câu trả lời",
+    "confirmation": "Xác nhận hành động",
+    # v2 legacy (kept for backward compat)
     "InputGuard": "Kiểm tra đầu vào",
     "IntentClassifier": "Phân loại ý định",
     "EntityExtractor": "Trích xuất thông tin",
@@ -137,7 +193,12 @@ def _build_steps(state: dict) -> List[StepInfo]:
         base = node_key.split(":")[0]
         action = _STEP_LABELS.get(base, base)
 
-        if node_key.startswith("ToolExecutor:"):
+        # v3.2: tool_executor:tool_name
+        if node_key.startswith("tool_executor:"):
+            tool_name = node_key.split(":", 1)[1]
+            action = f"Công cụ: {tool_name}"
+        # v2 legacy
+        elif node_key.startswith("ToolExecutor:"):
             tool_name = node_key.split(":", 1)[1]
             action = f"Công cụ: {tool_name}"
         elif node_key.startswith("Aggregate"):
@@ -162,7 +223,7 @@ def _build_steps(state: dict) -> List[StepInfo]:
             elif state.get("entities", {}).get("product_name"):
                 detail = "Không tìm thấy sản phẩm"
 
-        if base == "Confirmation":
+        if base in ("Confirmation", "confirmation"):
             pending = state.get("pending_action")
             if pending:
                 detail = pending.get("message", "")[:80]
@@ -376,7 +437,7 @@ def chatbot():
 
 
 @app.get("/api/cart")
-def api_get_cart(user_id: str):
+async def api_get_cart(user_id: str):
     """Lấy danh sách sản phẩm trong giỏ hàng (giả lập hoặc gRPC thật tuỳ theo chế độ)."""
     try:
         if not (args.mock or os.getenv("MOCK_EKS") == "true"):
@@ -384,36 +445,37 @@ def api_get_cart(user_id: str):
             from src.protos import demo_pb2_grpc, demo_pb2
             from src.tools.service_config import CART_ADDR, CATALOG_ADDR
             
-            channel_cart = grpc.insecure_channel(CART_ADDR)
-            channel_cat = grpc.insecure_channel(CATALOG_ADDR)
-            try:
-                stub_cart = demo_pb2_grpc.CartServiceStub(channel_cart)
-                stub_cat = demo_pb2_grpc.ProductCatalogServiceStub(channel_cat)
-                
-                req = demo_pb2.GetCartRequest(user_id=user_id)
-                res = stub_cart.GetCart(req)
-                
-                detailed_items = []
-                for item in res.items:
-                    p_id = item.product_id
-                    try:
-                        p_res = stub_cat.GetProduct(demo_pb2.GetProductRequest(id=p_id))
-                        p_name = p_res.name
-                        p_price = f"{p_res.price_usd.units}.{p_res.price_usd.nanos // 10000000:02d}"
-                    except Exception:
-                        p_name = p_id
-                        p_price = "0.00"
-                        
-                    detailed_items.append({
-                        "product_id": p_id,
-                        "name": p_name,
-                        "price": p_price,
-                        "quantity": item.quantity
-                    })
-                return {"user_id": user_id, "items": detailed_items}
-            finally:
-                channel_cart.close()
-                channel_cat.close()
+            loop = asyncio.get_event_loop()
+            
+            def _fetch():
+                with grpc.insecure_channel(CART_ADDR) as channel_cart, \
+                     grpc.insecure_channel(CATALOG_ADDR) as channel_cat:
+                    stub_cart = demo_pb2_grpc.CartServiceStub(channel_cart)
+                    stub_cat = demo_pb2_grpc.ProductCatalogServiceStub(channel_cat)
+                    
+                    req = demo_pb2.GetCartRequest(user_id=user_id)
+                    res = stub_cart.GetCart(req)
+                    
+                    detailed_items = []
+                    for item in res.items:
+                        p_id = item.product_id
+                        try:
+                            p_res = stub_cat.GetProduct(demo_pb2.GetProductRequest(id=p_id))
+                            p_name = p_res.name
+                            p_price = f"{p_res.price_usd.units}.{p_res.price_usd.nanos // 10000000:02d}"
+                        except Exception:
+                            p_name = p_id
+                            p_price = "0.00"
+                            
+                        detailed_items.append({
+                            "product_id": p_id,
+                            "name": p_name,
+                            "price": p_price,
+                            "quantity": item.quantity
+                        })
+                    return {"user_id": user_id, "items": detailed_items}
+            
+            return await loop.run_in_executor(None, _fetch)
                 
         # Fallback: Trả về mock data
         from tests.test_interactive import MOCK_CART, MOCK_PRODUCTS
@@ -464,6 +526,10 @@ async def api_chat(req: ChatRequest):
                 "session_id": req.session_id,
                 "user_id": req.user_id,
                 "trace_id": str(uuid.uuid4()),
+                # Reset per-turn transient state để tránh tích lũy từ turn trước
+                "tool_results": {"__reset__": True},
+                "errors": ["__reset__"],
+                "node_durations": {"__reset__": 0},
             },
             config=config,
         )
@@ -560,6 +626,18 @@ def debug_session(session_id: str):
     return {
         "session_id": session_id,
         "note": "LangGraph dùng MemorySaver checkpoint — không có session memory riêng",
+    }
+
+
+@app.get("/debug/metrics")
+def debug_metrics():
+    """Observability metrics."""
+    return {
+        "latency_p50": sorted(_metrics["latencies"].get("/api/chat", [0]))[
+            len(_metrics["latencies"].get("/api/chat", [])) // 2
+        ] if _metrics["latencies"].get("/api/chat") else 0,
+        "hallucination": dict(_metrics["hallucination"]),
+        "tool_results": dict(_metrics["tool_results"]),
     }
 
 

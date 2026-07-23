@@ -1,140 +1,317 @@
 """
-graph/main_graph.py — Main LangGraph StateGraph builder.
+graph/main_graph.py — Shopping Copilot LangGraph v3.4
 
-build_graph() tạo và compile graph với:
-  - InputGuard node (L1 + L2a + L2b)
-  - IntentClassifier + EntityExtractor
-  - Router node
-  - 7 workflow subgraphs (search, review, recommend, cart, shipping, agent, sequential)
-  - AnswerGenerator node (L5 + format)
-
-Xem thiết kế đầy đủ: docs/design/langgraph_design.md
+Topology:
+  START → input_guard → task_graph_builder → plan_validity_gate
+        → tool_executor → reflection → replan_gate
+        → (replan → task_graph_builder) or (continue → response_verifier)
+        → response_verifier → hallucination_guard
+        → answer_generator / fallback_generator → answer_generator → END
 """
 
 from __future__ import annotations
 
-import os
-import time
+import asyncio
+import functools
 import logging
-from typing import TYPE_CHECKING
+import time
 
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 
 from src.graph.state import ShoppingState
-from src.graph.nodes.input_guard import InputGuard
-from src.graph.nodes.router import Router
-from src.graph.nodes.intent_classifier import IntentClassifier
-from src.graph.nodes.entity_extractor import EntityExtractor
-from src.graph.nodes.resolve_product import ResolveProductNode
-from src.graph.nodes.response_editor import ResponseEditor
-from src.graph.nodes.answer_generator import AnswerGenerator
 from src.graph.edges import (
     route_after_input_guard,
-    route_to_workflow,
+    route_after_plan_validity_gate,
+    route_after_reflection,
+    route_after_hallucination_guard,
+    route_after_tool_executor,
 )
-from src.graph.workflows.agent import create_agent_workflow
-from src.graph.workflows.search import create_search_workflow
-from src.graph.workflows.review import create_review_workflow
-from src.graph.workflows.recommend import create_recommend_workflow
-from src.graph.workflows.cart import create_cart_workflow
-from src.graph.workflows.shipping import create_shipping_workflow
-from src.graph.workflows.sequential import create_sequential_workflow
-
-if TYPE_CHECKING:
-    pass
+from src.graph.nodes import (
+    input_guard_node,
+    task_graph_builder_node,
+    tool_executor_node,
+    confirmation_node,
+    reflection_node,
+    response_verifier_node,
+    hallucination_guard_node,
+    fallback_generator_node,
+    answer_generator_node,
+)
+from src.graph.gates import (
+    plan_validity_gate_node,
+    replan_gate_node,
+)
 
 logger = logging.getLogger("graph.main_graph")
+_IO_LOG = logging.getLogger("graph.io")
+
+# ── Node I/O logging helpers ──────────────────────────────────────
 
 
-# ──────────────────────────────────────────────────────────────────
-# build_graph()
-# ──────────────────────────────────────────────────────────────────
+def _summarize_input(node_name: str, state: dict) -> str:
+    """Build compact input summary for a node, tailored per node type."""
+    info = {}
+
+    msgs = state.get("messages", [])
+    if msgs:
+        last = msgs[-1]
+        text = (last.content if hasattr(last, "content") else str(last))[:120]
+        info["msg"] = text.replace("\n", " ")
+
+    if node_name in ("task_graph_builder", "plan_validity_gate",
+                     "reflection", "response_verifier"):
+        if state.get("tool_results"):
+            info["tool_results"] = str(list(state["tool_results"].keys()))
+        if state.get("planner_memory"):
+            mem = state["planner_memory"]
+            info["memory"] = str({k: v for k, v in mem.items()
+                                  if k not in ("mentioned_products",)})
+
+    if node_name in ("reflection", "response_verifier", "hallucination_guard",
+                     "fallback_generator", "tool_executor"):
+        if state.get("errors"):
+            info["errors"] = len(state["errors"])
+        if state.get("tool_results"):
+            info["tool_results"] = str(list(state["tool_results"].keys()))
+
+    if node_name in ("task_graph_builder", "plan_validity_gate", "tool_executor"):
+        plan = state.get("plan")
+        if plan:
+            info["plan_nodes"] = len(plan.get("nodes", []))
+            if plan.get("goal"):
+                info["plan_goal"] = plan["goal"][:80]
+
+    if node_name in ("reflection",):
+        if state.get("replan_count") is not None:
+            info["replan_count"] = state["replan_count"]
+        if state.get("pending_action"):
+            info["pending"] = state["pending_action"].get("action", "?")
+
+    if node_name == "confirmation":
+        pa = state.get("pending_action")
+        if pa:
+            info["pending_action"] = pa.get("action", "?")
+        if state.get("confirmed"):
+            info["confirmed"] = state["confirmed"]
+
+    if node_name in ("plan_validity_gate", "replan_gate"):
+        if state.get("gate_decisions"):
+            info["gate_decisions"] = str(state["gate_decisions"])
+        if state.get("current_goal"):
+            info["goal"] = state["current_goal"][:80]
+
+    if node_name in ("response_verifier", "hallucination_guard",
+                     "answer_generator", "fallback_generator"):
+        fa = state.get("final_answer", "")
+        if fa:
+            info["final_answer"] = fa[:80].replace("\n", " ")
+
+    if node_name == "hallucination_guard":
+        cs = state.get("complexity_score")
+        if cs is not None:
+            info["complexity_score"] = f"{cs:.2f}"
+
+    if not info:
+        info["state_keys"] = str(list(state.keys()))
+
+    return str(info)
+
+
+def _summarize_output(node_name: str, result: dict) -> str:
+    """Build compact output summary from a node's return dict."""
+    info = {}
+    for k, v in result.items():
+        if k == "node_durations":
+            continue
+        if k == "final_answer" and isinstance(v, str):
+            info[k] = v[:120].replace("\n", " ")
+        elif k == "errors" and isinstance(v, list):
+            info[k] = f"{len(v)} errors"
+        elif k == "tool_results" and isinstance(v, dict):
+            info[k] = str(list(v.keys()))
+        elif k == "plan" and isinstance(v, dict):
+            info[k] = f"{len(v.get('nodes', []))} nodes, goal={v.get('goal','')[:40]}"
+        elif k == "guardrail_violations" and isinstance(v, list):
+            info[k] = f"{len(v)} violations"
+        elif k == "reflection_issues" and isinstance(v, list):
+            info[k] = f"{len(v)} issues"
+        elif k == "gate_decisions" and isinstance(v, dict):
+            info[k] = str(v)
+        elif k == "pending_action" and isinstance(v, dict):
+            info[k] = v.get("action", "?")
+        elif k == "planner_memory" and isinstance(v, dict):
+            info[k] = str({kk: str(vv)[:60] for kk, vv in v.items()
+                           if kk not in ("mentioned_products",)})
+        elif k in ("confidence", "plan_confidence") and isinstance(v, (int, float)):
+            info[k] = f"{v:.2f}"
+        elif k in ("current_goal", "planner_reasoning",
+                   "reflection_result", "hallucination_detected",
+                   "groundedness_score", "complexity_score", "fallback_used",
+                   "replan_count", "retry_count", "plan_step_index"):
+            if isinstance(v, float):
+                info[k] = f"{v:.2f}"
+            else:
+                info[k] = str(v)[:60]
+        elif isinstance(v, (str, int, float, bool)):
+            info[k] = v
+        elif isinstance(v, dict):
+            info[k] = str({kk: str(vv)[:60]
+                          for kk, vv in list(v.items())[:5]})
+        elif isinstance(v, list):
+            info[k] = f"[{len(v)} items]"
+        else:
+            info[k] = type(v).__name__
+    return str(info)
+
+
+def _log_node_io(node_name: str, func):
+    """Wrap a node function to log input summary and output summary."""
+    if asyncio.iscoroutinefunction(func):
+        @functools.wraps(func)
+        async def wrapper(state: dict) -> dict:
+            _IO_LOG.debug("[NODE:%s] INPUT %s", node_name,
+                          _summarize_input(node_name, state))
+            t0 = time.time()
+            try:
+                result = await func(state)
+            except Exception as e:
+                _IO_LOG.error("[NODE:%s] ERROR %s (%dms)", node_name,
+                              str(e)[:300], int((time.time() - t0) * 1000))
+                raise
+            dur_ms = int((time.time() - t0) * 1000)
+            _IO_LOG.debug("[NODE:%s] OUTPUT %s (%dms)", node_name,
+                          _summarize_output(node_name, result), dur_ms)
+            return result
+        return wrapper
+
+    @functools.wraps(func)
+    def wrapper(state: dict) -> dict:
+        _IO_LOG.debug("[NODE:%s] INPUT %s", node_name,
+                      _summarize_input(node_name, state))
+        t0 = time.time()
+        try:
+            result = func(state)
+        except Exception as e:
+            _IO_LOG.error("[NODE:%s] ERROR %s (%dms)", node_name,
+                          str(e)[:300], int((time.time() - t0) * 1000))
+            raise
+        dur_ms = int((time.time() - t0) * 1000)
+        _IO_LOG.debug("[NODE:%s] OUTPUT %s (%dms)", node_name,
+                      _summarize_output(node_name, result), dur_ms)
+        return result
+    return wrapper
+
 
 def build_graph() -> StateGraph:
     """
-    Tạo và compile main LangGraph StateGraph.
+    Build và compile LangGraph StateGraph cho Shopping Copilot v3.4.
 
     Returns:
-        Compiled graph (CompiledStateGraph) với MemorySaver checkpointer.
-        Dùng graph.ainvoke(inputs, config={"configurable": {"thread_id": session_id}}).
+        Compiled graph với MemorySaver checkpoint.
     """
-    builder = StateGraph(ShoppingState)
+    # Import all tools to trigger ToolRegistry registration
+    import src.tools  # noqa: F401
 
-    # ── Phase 2: Real nodes ──
-    builder.add_node("input_guard", InputGuard())
-    builder.add_node("intent_classifier", IntentClassifier())
-    builder.add_node("entity_extractor", EntityExtractor())
-    builder.add_node("resolve_product", ResolveProductNode())
-    builder.add_node("router", Router())
-    builder.add_node("response_editor", ResponseEditor())
-    builder.add_node("answer_generator", AnswerGenerator())
+    graph = StateGraph(ShoppingState)
 
-    # ── Workflow nodes ──
-    builder.add_node("agent_workflow", create_agent_workflow())
-    builder.add_node("search_workflow", create_search_workflow())
-    builder.add_node("review_workflow", create_review_workflow())
-    builder.add_node("recommend_workflow", create_recommend_workflow())
-    builder.add_node("cart_workflow", create_cart_workflow())
-    builder.add_node("shipping_workflow", create_shipping_workflow())
-    builder.add_node("sequential_workflow", create_sequential_workflow())
+    # ── Register nodes (wrapped with I/O logging) ────────────────
+    graph.add_node("input_guard",        _log_node_io("input_guard",        input_guard_node))
+    graph.add_node("task_graph_builder", _log_node_io("task_graph_builder", task_graph_builder_node))
+    graph.add_node("plan_validity_gate", _log_node_io("plan_validity_gate", plan_validity_gate_node))
+    graph.add_node("tool_executor",      _log_node_io("tool_executor",      tool_executor_node))
+    graph.add_node("reflection",         _log_node_io("reflection",         reflection_node))
+    graph.add_node("response_verifier",  _log_node_io("response_verifier",  response_verifier_node))
+    graph.add_node("hallucination_guard", _log_node_io("hallucination_guard", hallucination_guard_node))
+    graph.add_node("fallback_generator", _log_node_io("fallback_generator", fallback_generator_node))
+    graph.add_node("answer_generator",   _log_node_io("answer_generator",   answer_generator_node))
+    graph.add_node("replan_gate",        _log_node_io("replan_gate",        replan_gate_node))
+    graph.add_node("confirmation",       _log_node_io("confirmation",       confirmation_node))
 
-    # ── Edges ──
-    builder.add_edge(START, "input_guard")
+    # ── Entry point ──────────────────────────────────────────────
+    graph.set_entry_point("input_guard")
 
-    # InputGuard: nếu có violation → kết thúc ngay (final_answer đã có trong state)
-    builder.add_conditional_edges(
+    # ── Edges ────────────────────────────────────────────────────
+
+    # input_guard → task_graph_builder OR end (blocked)
+    graph.add_conditional_edges(
         "input_guard",
         route_after_input_guard,
         {
-            "blocked": "response_editor",  # final_answer đã có trong state
-            "pass": "intent_classifier",
-        }
+            "task_graph_builder": "task_graph_builder",
+            "blocked": "answer_generator",
+        },
     )
 
-    builder.add_edge("intent_classifier", "entity_extractor")
-    builder.add_edge("entity_extractor", "resolve_product")
-    builder.add_edge("resolve_product", "router")
+    # task_graph_builder → plan_validity_gate
+    graph.add_edge("task_graph_builder", "plan_validity_gate")
 
-    # Router → workflow (Phase 2: tất cả workflows sẵn sàng)
-    builder.add_conditional_edges(
-        "router",
-        route_to_workflow,
+    # plan_validity_gate → tool_executor OR response_verifier (no-tool plan)
+    graph.add_conditional_edges(
+        "plan_validity_gate",
+        route_after_plan_validity_gate,
         {
-            "agent":      "agent_workflow",
-            "search":     "search_workflow",
-            "review":     "review_workflow",
-            "recommend":  "recommend_workflow",
-            "cart":       "cart_workflow",
-            "shipping":   "shipping_workflow",
-            "sequential": "sequential_workflow",
-        }
+            "tool_executor": "tool_executor",
+            "response_verifier": "response_verifier",
+        },
     )
 
-    # Tất cả workflows → response_editor → answer_generator
-    _all_workflows = [
-        "agent_workflow",
-        "search_workflow",
-        "review_workflow",
-        "recommend_workflow",
-        "cart_workflow",
-        "shipping_workflow",
-        "sequential_workflow",
-    ]
-    for wf in _all_workflows:
-        builder.add_edge(wf, "response_editor")
+    # tool_executor → confirmation OR reflection (conditional on pending_action)
+    graph.add_conditional_edges(
+        "tool_executor",
+        route_after_tool_executor,
+        {
+            "confirmation": "confirmation",
+            "reflection": "reflection",
+        },
+    )
 
-    builder.add_edge("response_editor", "answer_generator")
-    builder.add_edge("answer_generator", END)
+    # reflection → replan_gate OR response_verifier
+    graph.add_conditional_edges(
+        "reflection",
+        route_after_reflection,
+        {
+            "replan_gate": "replan_gate",
+            "response_verifier": "response_verifier",
+        },
+    )
 
-    # Blocked path (input guard violation) → vẫn qua response_editor
-    # để đảm bảo luồng đồng nhất
+    # replan_gate → task_graph_builder OR response_verifier
+    from src.graph.edges import route_after_replan_gate
+    graph.add_conditional_edges(
+        "replan_gate",
+        route_after_replan_gate,
+        {
+            "task_graph_builder": "task_graph_builder",
+            "response_verifier": "response_verifier",
+        },
+    )
 
-    # ── Compile với MemorySaver checkpoint ──
-    # MemorySaver: in-memory checkpoint cho Phase 1-2
-    # Phase 3 production: chuyển sang PostgresSaver
+    # response_verifier → hallucination_guard
+    graph.add_edge("response_verifier", "hallucination_guard")
+
+    # hallucination_guard → answer_generator OR fallback_generator
+    graph.add_conditional_edges(
+        "hallucination_guard",
+        route_after_hallucination_guard,
+        {
+            "answer_generator": "answer_generator",
+            "fallback_generator": "fallback_generator",
+        },
+    )
+
+    # fallback_generator → answer_generator
+    graph.add_edge("fallback_generator", "answer_generator")
+
+    # confirmation → response_verifier (sau khi user confirm write)
+    graph.add_edge("confirmation", "response_verifier")
+
+    # answer_generator → END
+    graph.add_edge("answer_generator", END)
+
+    # ── Compile with MemorySaver (session checkpoint) ────────────
     checkpointer = MemorySaver()
-    graph = builder.compile(checkpointer=checkpointer)
+    compiled = graph.compile(checkpointer=checkpointer, interrupt_before=[])
 
-    logger.info("[MAIN_GRAPH] Graph compiled (Phase 3 — Pure LangGraph)")
-    return graph
+    logger.info("[main_graph] Graph compiled: %d nodes", len(graph.nodes))
+    return compiled

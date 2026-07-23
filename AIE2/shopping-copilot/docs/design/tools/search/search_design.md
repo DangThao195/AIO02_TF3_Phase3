@@ -502,14 +502,51 @@ Ví dụ:
 
 **Fail-safe matrix:**
 
-| Flow 1 | Flow 2 | Kết quả |
-|---|---|---|
-| OK | OK | Merge + rerank |
-| OK | Lỗi/timeout | Chỉ dùng Flow 1 |
-| Lỗi | OK | Chỉ dùng Flow 2 |
-| Lỗi | Lỗi | `"Không tìm thấy sản phẩm phù hợp"` |
+| Flow 1 | Flow 2 | Flow 1b (pgvector) | Kết quả |
+|---|---|---|---|
+| OK | OK | — | Merge + rerank (ưu tiên SQL+RAG) |
+| OK | Unavailable | OK | Merge SQL + pgvector |
+| OK | Lỗi/timeout | — | Chỉ dùng Flow 1 |
+| Lỗi | OK | — | Chỉ dùng Flow 2 |
+| Lỗi | Unavailable | OK | Chỉ dùng pgvector |
+| Lỗi | Lỗi | Lỗi | `"Không tìm thấy sản phẩm phù hợp"` |
 
-### 3.10 __init__.py — Cổng ra LangChain Tool + ToolRegistry
+### 3.9a HealthAwareOrchestrator
+
+**File:** `orchestrator.py` (mở rộng)
+
+Bọc `SearchOrchestrator` hiện tại, thêm health check cho Bedrock KB trước khi quyết định chạy Flow 2:
+
+```
+HealthAwareOrchestrator.search(query):
+  1. Trim query, nếu rỗng → return error
+  2. Load schema context
+  3. [HEALTH CHECK] Kiểm tra Bedrock KB availability (timeout 1s, cache 5 phút):
+     ├── KB available → chạy Flow 1 + Flow 2 song song
+     └── KB unavailable → chạy Flow 1 + Flow 1b (pgvector) song song
+  4. Reranker.rerank(...) → SearchResult
+```
+
+**Health check implementation:**
+```python
+async def _check_kb_health() -> bool:
+    """Kiểm tra Bedrock KB availability. Cache kết quả 5 phút."""
+    if not os.getenv("BEDROCK_KB_ID"):
+        return False
+    try:
+        client = boto3.client("bedrock-agent-runtime", region_name=KB_REGION)
+        await asyncio.wait_for(
+            client.retrieve(knowledgeBaseId=KB_ID,
+                            retrievalQuery={"text": "health check"},
+                            numberOfResults=1),
+            timeout=1.0
+        )
+        return True
+    except Exception:
+        return False
+```
+
+### 3.9b __init__.py — Cổng ra LangChain Tool + ToolRegistry
 
 ```python
 @tool
@@ -611,7 +648,7 @@ TOOL_SPEC = ToolSpec(
         {"query": "đèn pin",
          "output_summary": "liệt kê sản phẩm đèn pin có sẵn"},
     ],
-    retry_config={"max_retries": 2, "backoff": "exponential"},
+    retry_config={"max_retries": 2, "backoff": [0.5, 1.0]},
 )
 ToolRegistry.register(TOOL_SPEC, fn=search_products_v2)
 ```
@@ -654,9 +691,10 @@ In-memory `CacheStore` dùng làm fallback cho dev/local khi Redis không availa
 ### 4.1 Phân loại cache
 
 | Cache | Dữ liệu | TTL | Redis Namespace | Memo |
-|---|---|---|---|---|
+|---|---|---|---|---|---|
 | L2 Search Cache | Top N Product IDs | **10 phút** | `db1` / `search:*` | Chỉ cache danh sách ID, không cache raw product detail — giá/stock có thể thay đổi |
 | L3 Product Cache | Product detail (name, price, description, image) | 30 phút | `db1` / `product:*` | Resolve từ Product ID |
+| L4 RAG Cache | Kết quả từ Flow 2 (RAG + Flow1b) | **30-60 phút** | `db1` / `rag:*` | Cache kết quả semantic search, align với L4 cache design chung |
 | Fallback (dev) | In-memory LRU + JSON persist | Như trên | — | Dùng `CacheStore` (src/memory/store.py) khi không có Redis |
 
 ### 4.2 Key naming
@@ -678,8 +716,12 @@ Lý do chỉ cache Product IDs cho search:
 
 ```
 Executor → Cache Lookup (Redis DB1)
-  ├── Hit → Return cached Product IDs → Resolve từ Product Cache (Redis) hoặc DB
-  └── Miss → Call Flow 1 + Flow 2 → Validate output → Redis SETEX (10p) → Return
+  ├── Hit (search cache) → Return cached Product IDs → Resolve từ Product Cache (Redis) hoặc DB
+  ├── Hit (RAG cache)    → Return cached RAG results → dùng thay Flow 2/Flow 1b
+  └── Miss → Call Flow 1 + (Flow 2 | Flow 1b tuỳ KB health)
+           → Cache search: Redis SETEX (10p)
+            → Cache RAG:    Redis SETEX (3600s) — chỉ cache nếu có kết quả
+           → Return
 ```
 
 **Chỉ cache sau khi**:
@@ -697,7 +739,7 @@ class SessionStore:
     Mỗi session: messages[], pending_confirmation{}, metadata{total_turns, ...}
     """
     _SESSION_TTL_SECONDS = 1800        # 30 phút
-    _SESSION_MAX_MESSAGES = 20         # Sliding window
+    _SESSION_MAX_MESSAGES = 6          # Sliding window (khớp resource_limits_design.md)
 ```
 
 Session lưu Planner Memory ngắn hạn: `{last_search, last_product_id, current_cart_items, last_intent}`.
@@ -913,7 +955,7 @@ Tests 6 batch queries với real gRPC + LLM:
 
 Hỗ trợ 2 mode:
 - **MOCK**: Test regex + logic, không cần API key
-- **REAL**: Test với LLM thật, cần `GROQ_API_KEY`
+- **REAL**: Test với LLM thật, cần biến môi trường Bedrock (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`)
 
 Test 4 module:
 1. Regex query parsing
@@ -1027,7 +1069,7 @@ Metrics:
 
 1. **Category detection dùng SQLite trong source tree**: `EntityExtractor._get_catalog_category_hints()` scan parent directories tìm `shopping.db` — fragile, không scale trên EKS
 2. **SQL injection protection chưa đủ mạnh**: Chỉ block các token cơ bản (`;`, `--`, `DROP`), không dùng parameterized query cho SQLite fallback
-3. **Bedrock KB phụ thuộc env var**: Nếu `BEDROCK_KB_ID` không set, Flow 2 silently skip
+3. **Bedrock KB phụ thuộc env var**: Nếu `BEDROCK_KB_ID` không set → Flow 2 skip, Flow 1b (pgvector) fallback tự động nếu `PGVECTOR_ENABLED=true`
 4. **LLM dependency cho entity extraction**: Nếu Bedrock lỗi và heuristic không đủ, kết quả search sẽ rỗng
 5. **ThreadedConnectionPool không async**: `SQLQueryExecutor` dùng sync `psycopg2` pool blocking event loop
 6. **Chưa có monitoring tích hợp**: SearchTracer chỉ log ra console, không push metrics
@@ -1091,6 +1133,8 @@ Metrics:
 | `BEDROCK_REGION` | `ap-southeast-1` | AWS region |
 | `BEDROCK_KB_ID` | — | Knowledge Base ID (Flow 2) |
 | `BEDROCK_KB_REGION` | `us-east-1` | KB region |
+| `PGVECTOR_ENABLED` | `true` | Bật Flow 1b pgvector fallback khi KB unavailable |
+| `PGVECTOR_EMBED_DIM` | `384` | Kích thước embedding vector (Nova Lite) |
 | `DB_HOST` | `localhost` | PostgreSQL host |
 | `DB_PORT` | `5432` | PostgreSQL port |
 | `DB_NAME` | `otel` | Database name |
@@ -1098,8 +1142,7 @@ Metrics:
 | `DB_PASSWORD` | `otelp` | Database password |
 | `DB_MIN_CONN` | `2` | Pool min connections |
 | `DB_MAX_CONN` | `10` | Pool max connections |
-| `REDIS_HOST` | `localhost` | Redis host (for cache) |
-| `REDIS_PORT` | `6379` | Redis port |
+| `REDIS_URL` | `redis://localhost:6379/0` | Redis connection string (primary) |
 | `REDIS_DB_PLANNER` | `0` | Redis logical DB cho Planner cache |
 | `REDIS_DB_TOOL` | `1` | Redis logical DB cho Tool cache (search + product) |
 | `REDIS_DB_SESSION` | `2` | Redis logical DB cho Session cache |
@@ -1120,7 +1163,7 @@ python tests/test_search/test_orchestrator_smoke.py
 # Interactive test (mock mode)
 python tests/test_search/test_interactive.py --mode mock
 
-# E2E test (cần GROQ_API_KEY)
+# E2E test (cần Bedrock credentials)
 python tests/test_search/test_e2e.py "kính thiên văn dưới 100 đô"
 
 # Evaluation suite

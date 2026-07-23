@@ -14,10 +14,14 @@ Lưu ý khi deploy multi-replica:
 import time
 import threading
 import logging
+from collections import defaultdict
 from dataclasses import dataclass
 from typing import Dict, List
 
 logger = logging.getLogger("guardrails.rate_limiter")
+
+# ── Metrics ──
+_rate_metrics: dict = {"hits": defaultdict(int), "blocked": defaultdict(int)}
 
 # ── Cấu hình giới hạn ──
 MAX_REQUESTS_PER_MINUTE = 10     # Tối đa 10 câu chat / phút / user
@@ -90,12 +94,13 @@ class RateLimiter:
             if user_id not in self._requests:
                 self._requests[user_id] = []
 
+            # Luôn cleanup request cũ hơn 24h ở mỗi lần check
+            self._cleanup_old_requests(user_id, now)
+
             # Reset counter hàng ngày
             if self._current_day.get(user_id) != today:
                 self._current_day[user_id] = today
                 self._daily_tokens[user_id] = 0
-                # Xóa request cũ hơn 24h
-                self._cleanup_old_requests(user_id, now)
 
             requests = self._requests[user_id]
 
@@ -107,6 +112,7 @@ class RateLimiter:
                     f"[RATE_LIMIT] BLOCKED_MINUTE | user={user_id} | "
                     f"count={len(recent_requests)}/{self.max_per_minute}"
                 )
+                _rate_metrics["blocked"][user_id] += 1
                 return RateLimitResult(
                     is_allowed=False,
                     blocked_reason=f"Bạn đã gửi quá {self.max_per_minute} tin nhắn trong 1 phút. "
@@ -116,13 +122,13 @@ class RateLimiter:
                     estimated_tokens_used=self._daily_tokens.get(user_id, 0),
                 )
 
-            # ── Check 2: Request per day ──
-            today_start = now - (now % 86400)  # Midnight UTC
-            today_requests = [ts for ts in requests if ts > today_start]
-            if len(today_requests) >= self.max_per_day:
+            # ── Check 2: Request per day (24h sliding window) ──
+            one_day_ago = now - 86400
+            day_requests = [ts for ts in requests if ts > one_day_ago]
+            if len(day_requests) >= self.max_per_day:
                 logger.warning(
                     f"[RATE_LIMIT] BLOCKED_DAY | user={user_id} | "
-                    f"count={len(today_requests)}/{self.max_per_day}"
+                    f"count={len(day_requests)}/{self.max_per_day}"
                 )
                 return RateLimitResult(
                     is_allowed=False,
@@ -150,9 +156,10 @@ class RateLimiter:
                 )
 
             # ── Cho phép — ghi nhận request ──
+            _rate_metrics["hits"][user_id] += 1
             requests.append(now)
             remaining_minute = self.max_per_minute - len(recent_requests) - 1
-            remaining_day = self.max_per_day - len(today_requests) - 1
+            remaining_day = self.max_per_day - len(day_requests) - 1
 
             return RateLimitResult(
                 is_allowed=True,
@@ -185,3 +192,92 @@ class RateLimiter:
 
 # ── Singleton instance — import và dùng ngay ──
 rate_limiter = RateLimiter()
+
+
+# ── RedisRateLimiter (global, multi-replica) ──────────────────────
+
+class RedisRateLimiter:
+    """
+    Redis sorted-set based rate limiter — global across all pods.
+    Falls back to per-pod InMemoryRateLimiter when Redis is unavailable.
+    """
+
+    def __init__(self, redis_url: str = "", fallback: RateLimiter | None = None):
+        self._redis_url = redis_url
+        self._fallback = fallback or rate_limiter
+        self._redis = None
+        if redis_url:
+            try:
+                import redis.asyncio as aioredis
+                self._redis = aioredis.from_url(redis_url, decode_responses=True)
+            except Exception as e:
+                logger.warning("[RedisRateLimiter] Redis init failed: %s", e)
+
+    async def _redis_available(self) -> bool:
+        if not self._redis:
+            return False
+        try:
+            await self._redis.ping()
+            return True
+        except Exception:
+            return False
+
+    async def check(self, user_id: str) -> RateLimitResult:
+        """
+        Check rate limit using Redis sorted set (global) or in-memory fallback.
+        """
+        if not await self._redis_available():
+            return self._fallback.check_rate_limit(user_id)
+
+        import time as _time
+        now = _time.time()
+        today_key = f"ratelimit:{user_id}:{int(now // 86400)}"
+        minute_key = f"ratelimit_min:{user_id}"
+
+        try:
+            pipe = self._redis.pipeline()
+
+            # Per-minute: sorted set with 60s window
+            one_min_ago = now - 60
+            pipe.zadd(minute_key, {str(now): now})
+            pipe.zremrangebyscore(minute_key, "-inf", one_min_ago)
+            pipe.zcard(minute_key)
+            pipe.expire(minute_key, 120)
+
+            # Per-day
+            pipe.incr(today_key)
+            pipe.expire(today_key, 86400)
+
+            results = await pipe.execute()
+            minute_count = results[2]
+            day_count = results[4]
+
+            if minute_count > MAX_REQUESTS_PER_MINUTE:
+                return RateLimitResult(
+                    is_allowed=False,
+                    blocked_reason=f"Bạn đã gửi quá {MAX_REQUESTS_PER_MINUTE} tin nhắn trong 1 phút.",
+                    remaining_minute=0,
+                    remaining_day=max(0, MAX_REQUESTS_PER_DAY - day_count),
+                    estimated_tokens_used=0,
+                )
+
+            if day_count > MAX_REQUESTS_PER_DAY:
+                return RateLimitResult(
+                    is_allowed=False,
+                    blocked_reason=f"Bạn đã đạt giới hạn {MAX_REQUESTS_PER_DAY} tin nhắn trong ngày.",
+                    remaining_minute=0,
+                    remaining_day=0,
+                    estimated_tokens_used=0,
+                )
+
+            return RateLimitResult(
+                is_allowed=True,
+                blocked_reason="",
+                remaining_minute=max(0, MAX_REQUESTS_PER_MINUTE - minute_count),
+                remaining_day=max(0, MAX_REQUESTS_PER_DAY - day_count),
+                estimated_tokens_used=0,
+            )
+
+        except Exception as e:
+            logger.warning("[RedisRateLimiter] Redis error, fallback: %s", e)
+            return self._fallback.check_rate_limit(user_id)

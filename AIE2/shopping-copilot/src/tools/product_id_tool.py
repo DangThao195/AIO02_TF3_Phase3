@@ -1,59 +1,73 @@
-import sqlite3
-from pathlib import Path
+"""
+tools/product_id_tool.py — get_product_id
+
+Backend: SQLite/PostgreSQL trực tiếp — tra product_id từ tên sản phẩm.
+"""
+
+import json
+import logging
 
 from langchain_core.tools import tool
 
-from src.database.connect import get_conn, init_pool
+logger = logging.getLogger("tools.product_id")
 
 
 @tool
 def get_product_id(product_name: str) -> str:
     """
-    Tra cứu mã product_id từ tên sản phẩm (chính xác).
-    Dùng sau search_products_v2 khi cần product_id để gọi các tool khác
-    (get_product_reviews_tool, add_to_cart_tool, get_recommendations_tool).
+    Tra cứu mã product_id từ tên sản phẩm chính xác.
+    Trả về JSON: {status, product_id, product_name}
     """
-    name = (product_name or "").strip()
-    if not name:
-        return "Vui lòng nhập tên sản phẩm."
+    if not product_name or not product_name.strip():
+        return json.dumps({"status": "error", "message": "Vui lòng nhập tên sản phẩm."})
 
     try:
-        init_pool()
-        with get_conn() as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT id FROM products WHERE name = %s", (name,))
-            row = cur.fetchone()
-            if row:
-                return str(row[0])
-    except Exception:
-        pass
+        import sqlite3, os
+        root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        db_path = os.path.join(root, "server-test", "shopping.db")
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
 
-    try:
-        candidates = []
-        file_path = Path(__file__).resolve()
-        for base in [file_path.parents[4], file_path.parents[3], file_path.parents[2], file_path.parents[1], Path.cwd()]:
-            candidates.append(base / "server-test" / "shopping.db")
-            candidates.append(base / "shopping.db")
-        db_path = None
-        for candidate in candidates:
-            if candidate.exists():
-                db_path = candidate
-                break
-        if db_path is None:
-            return f"Không tìm thấy sản phẩm '{product_name}'."
-        conn = sqlite3.connect(str(db_path))
-        try:
-            cur = conn.cursor()
-            cur.execute("SELECT id FROM products WHERE name = ?", (name,))
-            row = cur.fetchone()
-            if row:
-                return str(row[0])
-        finally:
-            conn.close()
-    except Exception:
-        pass
+        # Exact match trước
+        cursor.execute("SELECT id, name FROM products WHERE name = ? LIMIT 1", (product_name,))
+        row = cursor.fetchone()
 
-    return f"Không tìm thấy sản phẩm '{product_name}'."
+        # Fallback: LIKE match (case-insensitive)
+        if not row:
+            cursor.execute("SELECT id, name FROM products WHERE LOWER(name) LIKE ? LIMIT 1",
+                           (f"%{product_name.lower()}%",))
+            row = cursor.fetchone()
+
+        conn.close()
+
+        if row:
+            return json.dumps({"status": "success", "product_id": row[0], "product_name": row[1]},
+                              ensure_ascii=False)
+        return json.dumps({"status": "not_found",
+                           "message": f"Không tìm thấy sản phẩm '{product_name}'."})
+    except Exception as e:
+        logger.error("[get_product_id] error: %s", e)
+        return json.dumps({"status": "error", "message": "Dịch vụ không khả dụng."})
 
 
-__all__ = ["get_product_id"]
+# ── ToolSpec registration ─────────────────────────────────────────
+
+from src.tools.registry import ToolRegistry, ToolSpec
+
+ToolRegistry.register(ToolSpec(
+    name="get_product_id",
+    description="Tra cứu mã product_id từ tên sản phẩm chính xác. Dùng khi cần product_id để gọi tool khác.",
+    is_write=False,
+    input_schema={"type": "object", "properties": {
+        "product_name": {"type": "string", "description": "Tên sản phẩm chính xác"},
+    }, "required": ["product_name"]},
+    output_schema={"type": "object", "properties": {
+        "status": {"type": "string", "enum": ["success", "not_found", "error"]},
+        "product_id": {"type": "string"},
+        "product_name": {"type": "string"},
+        "message": {"type": "string"},
+    }},
+    examples=[{"input": {"product_name": "Vintage Typewriter"},
+               "output": {"status": "success", "product_id": "OLJCESPC7Z"}}],
+    retry_config={"max_retries": 2, "backoff": [0.5]},
+), fn=get_product_id)

@@ -44,7 +44,7 @@ Không như v2 dùng workflow cố định: DAG cho phép chạy song song node 
 
 | Lớp | Cost | Cơ chế |
 |---|---|---|
-| **HallucinationGuard** (rule-based) | $0 | Regex check: price, entity, count, score, action, semantic attribute — groundedness ≥80% |
+| **HallucinationGuard** (rule-based) | $0 | Regex check: price, entity (list intersection), count, score, action — groundedness ≥80%. Semantic claim → Nova Lite gate |
 | **Semantic Decision Gate** (Nova Lite) | ~$0.00002/request | Binary Yes/No cho hallucination ngữ nghĩa, plan validity, replan decision — ép output tối giản, temperature=0.0 |
 
 ### 6 Guardrail Layers
@@ -76,7 +76,7 @@ Không như v2 dùng workflow cố định: DAG cho phép chạy song song node 
 - Max 4 parallel nodes / batch
 - Max 1 replan / request
 - P95 latency < 5s
-- LLM timeout: TGB 3s, Verifier 4s, Gate 2s
+- LLM timeout: TGB 5s, Verifier 4s, Gate 2s
 
 ---
 

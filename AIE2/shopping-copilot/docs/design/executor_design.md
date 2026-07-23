@@ -93,7 +93,7 @@ Actions: `ask_user` → pause graph; `stop` → dừng DAG; `continue` → chạ
 | Max DAG depth | 5 levels | Flatten nếu vượt |
 | Max parallel nodes | 4 | Batch `asyncio.gather` |
 | Tool timeout | 2s (shipping: 3s) | Retry → error |
-| LLM timeout | TGB: 3s, Verifier: 4s, Gate: 2s | Fallback |
+| LLM timeout | TGB: 5s, Verifier: 4s, Gate: 2s | Fallback |
 
 ---
 

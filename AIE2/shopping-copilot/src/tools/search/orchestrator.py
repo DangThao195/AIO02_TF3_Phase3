@@ -82,7 +82,7 @@ class SearchOrchestrator:
                     name=str(r.get("name", "")),
                     description=str(r.get("description", "")),
                     categories=list(r.get("categories", [])),
-                    price_usd=Money(units=int(r.get("price_units", 0))),
+                    price_usd=Money(units=int(r.get("price_units", 0)), nanos=int(r.get("price_nanos", 0))),
                 )
                 products.append(ScoredProduct(product=product, score=0.0, source="sql", strategy_name="sql_matching"))
             except Exception:

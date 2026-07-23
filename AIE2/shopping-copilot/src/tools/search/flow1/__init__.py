@@ -42,6 +42,7 @@ class Flow1SQL:
                     "description": p.description,
                     "categories": p.categories,
                     "price_units": p.price_usd.units,
+                    "price_nanos": p.price_usd.nanos,
                 }
                 for p in products
             ],

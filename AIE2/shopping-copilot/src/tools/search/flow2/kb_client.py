@@ -10,7 +10,7 @@ try:  # pragma: no cover - optional dependency
 except Exception:  # pragma: no cover - optional dependency
     boto3 = None  # type: ignore[assignment]
 
-from src.database.connect import get_conn, init_pool
+from src.database.connect import get_conn
 from src.tools.search.models import Money, Product, SearchQuery, ScoredProduct, SearchStrategy
 
 
@@ -101,7 +101,6 @@ class BedrockRAGStrategy(SearchStrategy):
 
     def _resolve_product_details(self, product_id: str, chunk_text: str) -> Product:
         try:
-            init_pool()
             with get_conn() as conn:
                 cur = conn.cursor()
                 cur.execute(

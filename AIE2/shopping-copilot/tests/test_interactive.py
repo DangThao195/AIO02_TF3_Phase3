@@ -175,15 +175,6 @@ def _setup_grpc_mocks():
         except AttributeError:
             continue
 
-    # Mock agent's grpc channel (for confirm flow)
-    try:
-        import src.agent.copilot_agent
-        p = patch(f"src.agent.copilot_agent.grpc.insecure_channel", return_value=mock_channel)
-        p.start()
-        _patches.append(p)
-    except Exception:
-        pass
-
     # ── Mock Async Catalog Stub (for new search strategies) ──
     from unittest.mock import AsyncMock
     mock_aio_channel = MagicMock()
@@ -252,14 +243,6 @@ def _setup_grpc_mocks():
     p.start()
     _patches.append(p)
 
-    # Mock agent's CartServiceStub too (for confirm flow)
-    try:
-        p = patch("src.agent.copilot_agent.demo_pb2_grpc.CartServiceStub", mock_cart_stub)
-        p.start()
-        _patches.append(p)
-    except Exception:
-        pass
-
     # ── Mock Recommendation Stub ──
     mock_reco_stub = MagicMock()
     mock_reco_stub.return_value.ListRecommendations.return_value = _build_mock_recommendations_response()
@@ -289,31 +272,23 @@ def _setup_llm_mock():
     """Mock LLM cho chế độ --no-llm."""
     from langchain_core.messages import AIMessage
 
+    class _MockLLMResponse:
+        def __init__(self, content):
+            self.content = content
+
     mock_llm = MagicMock()
 
-    def _mock_invoke(messages, *a, **kw):
-        last_msg = messages[-1].content if messages else ""
-        return AIMessage(content=(
-            f"[MOCK LLM] Tôi nhận được câu hỏi: \"{last_msg}\"\n\n"
-            f"Đây là chế độ mock (--no-llm). LLM không thật sự hoạt động.\n"
-            f"Các guardrail layers vẫn chạy đầy đủ.\n"
-            f"Để test với LLM thật, bỏ flag --no-llm."
-        ))
-
-    async def _mock_ainvoke(messages, *a, **kw):
-        last_msg = messages[-1].content if messages else ""
-        return AIMessage(content=(
-            f"[MOCK LLM] Tôi nhận được câu hỏi: \"{last_msg}\"\n\n"
-            f"Đây là chế độ mock (--no-llm). LLM không thật sự hoạt động.\n"
-            f"Các guardrail layers vẫn chạy đầy đủ.\n"
-            f"Để test với LLM thật, bỏ flag --no-llm."
-        ))
+    def _mock_invoke(prompt, *a, **kw):
+        query = prompt if isinstance(prompt, str) else str(prompt)[:80]
+        return _MockLLMResponse(
+            f"[MOCK LLM] Nhận được: \"{query[:60]}\"\n"
+            f"Đây là chế độ mock (--no-llm). Guardrails vẫn chạy đầy đủ."
+        )
 
     mock_llm.invoke = _mock_invoke
-    mock_llm.ainvoke = _mock_ainvoke
-    mock_llm.bind_tools = MagicMock(return_value=mock_llm)
+    mock_llm.ainvoke = MagicMock(side_effect=_mock_invoke)
 
-    p = patch("src.agent.copilot_agent.CopilotAgent._build_llm", return_value=mock_llm)
+    p = patch("src.llm.llm.get_llm_client", return_value=mock_llm)
     p.start()
     _patches.append(p)
 
@@ -405,45 +380,27 @@ def _print_result(result: dict, elapsed_ms: int):
     print()
 
 
-def _print_session_info(agent, session_id):
-    session = agent._sessions.dump(session_id)
-    if not session:
-        print(f"  {C.YELLOW}Session '{session_id}' chưa tồn tại.{C.RESET}\n")
-        return
-
+def _print_session_info(session_id: str):
     print(f"\n  {C.CYAN}{C.BOLD}Session Info{C.RESET}")
     print(f"  {C.DIM}{'─' * 50}{C.RESET}")
-    print(f"  Session ID:  {session.get('session_id', '?')}")
-    print(f"  User ID:     {session.get('user_id', '?')}")
-    print(f"  Created:     {session.get('created_at', '?')}")
-    print(f"  Last Active: {session.get('last_active', '?')}")
-    print(f"  Messages:    {len(session.get('messages', []))}")
-
-    pending = session.get("pending_confirmation", {})
-    if pending.get("token"):
-        print(f"  {C.YELLOW}Pending:     {pending.get('action', '?')} — expires {pending.get('expires_at', '?')}{C.RESET}")
-    else:
-        print(f"  Pending:     None")
-
-    msgs = session.get("messages", [])
-    if msgs:
-        print(f"\n  {C.DIM}Recent messages:{C.RESET}")
-        for m in msgs[-6:]:
-            role = m.get("role", "?")
-            content = str(m.get("content", ""))[:80]
-            icon = "👤" if role == "user" else "🤖"
-            print(f"    {icon} {C.DIM}[{role}]{C.RESET} {content}{'...' if len(str(m.get('content', ''))) > 80 else ''}")
+    print(f"  Session ID:  {session_id}")
+    print(f"  Backend:     LangGraph MemorySaver checkpoint")
     print()
 
 
-def _print_cache_stats(agent):
-    stats = agent._cache.stats()
+def _print_cache_stats():
     print(f"\n  {C.CYAN}{C.BOLD}Cache Stats{C.RESET}")
     print(f"  {C.DIM}{'─' * 50}{C.RESET}")
-    print(f"  Hits:      {stats.get('hits', 0)}")
-    print(f"  Misses:    {stats.get('misses', 0)}")
-    print(f"  Entries:   {stats.get('total_entries', 0)}")
-    print(f"  Hit Rate:  {stats.get('hit_rate_pct', 0)}%")
+    try:
+        from src.memory.store import CacheStore
+        cs = CacheStore()
+        stats = cs.stats()
+        print(f"  Hits:      {stats.get('hits', 0)}")
+        print(f"  Misses:    {stats.get('misses', 0)}")
+        print(f"  Entries:   {stats.get('total_entries', 0)}")
+        print(f"  Hit Rate:  {stats.get('hit_rate_pct', 0)}%")
+    except Exception as e:
+        print(f"  (unavailable: {e})")
     print()
 
 
@@ -470,15 +427,18 @@ async def async_main():
     if args.no_llm:
         _setup_llm_mock()
 
-    from src.agent.copilot_agent import CopilotAgent
-    agent = CopilotAgent()
+    from langchain_core.messages import HumanMessage
+    from langgraph.types import Command
+    from src.graph.main_graph import build_graph
+    from src.guardrails.confirmation import verify_confirmation_token
 
+    graph = build_graph()
     session_id = str(uuid.uuid4())
     user_id = args.user_id
     pending_token = None
+    config = {"configurable": {"thread_id": session_id}}
 
     _print_banner()
-
     print(f"  {C.GREEN}🤖 Xin chào! Tôi là trợ lý mua sắm của TechX Corp.{C.RESET}")
     print(f"  {C.GREEN}   Hãy hỏi tôi về sản phẩm, đánh giá, hoặc thêm hàng vào giỏ!{C.RESET}")
     print()
@@ -498,59 +458,95 @@ async def async_main():
         if cmd in ("/quit", "/exit", "/q"):
             print(f"\n  {C.DIM}Bye! 👋{C.RESET}\n")
             break
-
         elif cmd == "/new":
             session_id = str(uuid.uuid4())
+            config = {"configurable": {"thread_id": session_id}}
             pending_token = None
             print(f"  {C.CYAN}🔄 Session mới: {session_id[:8]}...{C.RESET}\n")
             continue
-
         elif cmd == "/session":
-            _print_session_info(agent, session_id)
+            _print_session_info(session_id)
             continue
-
         elif cmd == "/cache":
-            _print_cache_stats(agent)
+            _print_cache_stats()
             continue
-
         elif cmd == "/cart":
             _print_cart()
             continue
-
         elif cmd == "/confirm":
             if not pending_token:
                 print(f"  {C.YELLOW}Không có hành động nào đang chờ xác nhận.{C.RESET}\n")
                 continue
+            is_valid, _ = verify_confirmation_token(pending_token)
+            if not is_valid:
+                print(f"  {C.RED}Token không hợp lệ hoặc đã hết hạn.{C.RESET}\n")
+                pending_token = None
+                continue
             t0 = time.monotonic()
-            result = await agent.confirm(session_id=session_id, token=pending_token)
-            elapsed_ms = int((time.monotonic() - t0) * 1000)
+            try:
+                state = await graph.ainvoke(Command(resume={"confirmed": True}), config=config)
+                elapsed_ms = int((time.monotonic() - t0) * 1000)
+                result = {
+                    "status": "ok",
+                    "reply": state.get("final_answer", "✅ Đã xác nhận."),
+                }
+            except Exception as e:
+                elapsed_ms = int((time.monotonic() - t0) * 1000)
+                result = {"status": "error", "reply": str(e)}
             _print_result(result, elapsed_ms)
             pending_token = None
             continue
-
         elif cmd == "/cancel":
-            if not pending_token:
-                print(f"  {C.YELLOW}Không có hành động nào đang chờ huỷ.{C.RESET}\n")
-                continue
-            agent._sessions.clear_pending(session_id)
             pending_token = None
             print(f"  {C.RED}✖ Đã huỷ hành động đang chờ.{C.RESET}\n")
             continue
 
-        # Chat
+        # ── Chat ──
         t0 = time.monotonic()
-        result = await agent.chat(
-            session_id=session_id,
-            user_id=user_id,
-            user_message=user_input,
-        )
-        elapsed_ms = int((time.monotonic() - t0) * 1000)
+        try:
+            state = await graph.ainvoke(
+                {
+                    "messages": [HumanMessage(content=user_input)],
+                    "session_id": session_id,
+                    "user_id": user_id,
+                    "trace_id": str(uuid.uuid4()),
+                },
+                config=config,
+            )
+            elapsed_ms = int((time.monotonic() - t0) * 1000)
+
+            # Check interrupt (pending confirm)
+            interrupts = state.get("__interrupt__", [])
+            if interrupts:
+                intr_val = interrupts[0].value if hasattr(interrupts[0], "value") else interrupts[0]
+                if isinstance(intr_val, dict) and intr_val.get("pending_action"):
+                    pa = intr_val["pending_action"]
+                    result = {
+                        "status": "pending",
+                        "reply": pa.get("message", "Vui lòng xác nhận hành động."),
+                        "token": pa.get("token"),
+                    }
+                    pending_token = pa.get("token")
+                    _print_result(result, elapsed_ms)
+                    print(f"  {C.YELLOW}💡 Gõ /confirm để xác nhận, /cancel để huỷ.{C.RESET}\n")
+                    continue
+
+            # Check violations
+            violations = state.get("guardrail_violations", [])
+            if violations:
+                result = {"status": "error", "reply": violations[0].get("detail", "Bị từ chối.")}
+            else:
+                result = {"status": "ok", "reply": state.get("final_answer", "")}
+
+        except Exception as e:
+            elapsed_ms = int((time.monotonic() - t0) * 1000)
+            result = {"status": "error", "reply": f"Lỗi: {str(e)[:200]}"}
 
         _print_result(result, elapsed_ms)
 
         if result.get("status") == "pending" and result.get("token"):
             pending_token = result["token"]
-            print(f"  {C.YELLOW}💡 Gõ /confirm để xác nhận, hoặc /cancel để huỷ.{C.RESET}\n")
+            print(f"  {C.YELLOW}💡 Gõ /confirm để xác nhận, /cancel để huỷ.{C.RESET}\n")
 
     for p in _patches:
         try:

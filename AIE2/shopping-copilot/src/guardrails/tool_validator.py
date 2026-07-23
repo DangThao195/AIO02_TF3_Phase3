@@ -22,8 +22,10 @@ ALLOWED_TOOLS = frozenset([
     "get_categories",                # lấy danh sách danh mục
     "get_all_products",              # lấy toàn bộ sản phẩm
     "get_product_id",                # tra product_id từ tên sản phẩm
+    "get_product_details_tool",      # chi tiết sản phẩm theo ID
     "check_cart_item_tool",          # kiểm tra sản phẩm trong giỏ
     "add_to_cart_tool",              # thêm vào giỏ hàng (write — cần L4 confirm)
+    "update_cart_item_tool",         # cập nhật/xoá sản phẩm trong giỏ (write)
     "get_cart_tool",                 # xem giỏ hàng
     "get_product_reviews_tool",      # xem đánh giá sản phẩm
     "get_recommendations_tool",      # gợi ý sản phẩm

@@ -68,6 +68,8 @@ _EXPENSIVE_PATTERNS = (
 _CATEGORY_SIGNAL_WORDS = {
     "loại", "loai", "danh", "muc", "danh muc", "danh mục",
     "categories", "category", "kind", "types",
+    "bán gì", "ban gi", "có gì", "co gi", "bán những gì",
+    "ban nhung gi", "có những gì", "co nhung gi",
 }
 
 
@@ -132,8 +134,8 @@ class EntityExtractor:
                     data = self._parse_response(response.content)
                     if data:
                         entities = self._merge(entities, data)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("[entity_extractor] LLM extraction failed, falling back to heuristic: %s", e)
 
         return self._infer_intent(query, entities)
 
@@ -147,7 +149,16 @@ class EntityExtractor:
             "sort": "relevance",
         }
 
-        price_matches = re.findall(r"(\d+)", query)
+        price_matches = []
+        for m in re.finditer(r"(\d+)", query):
+            val = int(m.group(1))
+            if val > 1000000:
+                continue
+            before = query[:m.start()].strip()
+            if before and re.search(r'(năm|year|version|phiên|ban|phien|model|series|202\d)$', before, re.I):
+                continue
+            price_matches.append(val)
+
         if price_matches:
             if any(token in lowered for token in ["dưới", "duoi", "nhỏ hơn", "nho hon", "<", "under", "less than", "max", "below"]):
                 entities["price_max"] = int(price_matches[0])
@@ -287,7 +298,8 @@ class EntityExtractor:
                             hints[cleaned] = original
             finally:
                 conn.close()
-        except Exception:
+        except Exception as e:
+            logger.warning("[entity_extractor] failed to load category hints: %s", e)
             return hints
         return hints
 

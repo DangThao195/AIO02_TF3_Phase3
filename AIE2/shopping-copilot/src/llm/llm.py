@@ -4,9 +4,28 @@ Migrated from Groq to Bedrock (Amazon Nova) to use TechX Corp infra.
 """
 
 import os
+import re
 import boto3
 import json
 from typing import Optional
+
+_boto3_session = None
+_bedrock_client = None
+
+
+def _get_bedrock_client():
+    global _boto3_session, _bedrock_client
+    if _bedrock_client is not None:
+        return _bedrock_client
+    profile = os.getenv("AWS_PROFILE")
+    if profile:
+        _boto3_session = boto3.Session(profile_name=profile)
+    else:
+        _boto3_session = boto3.Session()
+    region = os.getenv("BEDROCK_REGION", "ap-southeast-1")
+    _bedrock_client = _boto3_session.client("bedrock-runtime", region_name=region)
+    return _bedrock_client
+
 
 class LLMClient:
     """LLM client wrapper using AWS Bedrock (Amazon Nova model)."""
@@ -17,18 +36,10 @@ class LLMClient:
         Reads credentials via AWS profile or environment variables.
         """
         self.model = os.getenv("BEDROCK_MODEL_ID", "apac.amazon.nova-lite-v1:0")
-        self.region = os.getenv("BEDROCK_REGION", "ap-southeast-1")
-        self.profile = os.getenv("AWS_PROFILE")
+        self.client = _get_bedrock_client()
 
-        # Initialize boto3 session
-        if self.profile:
-            session = boto3.Session(profile_name=self.profile)
-        else:
-            session = boto3.Session()
-            
-        self.client = session.client("bedrock-runtime", region_name=self.region)
-
-    def invoke(self, prompt: str, temperature: float = 0.3, max_tokens: int = 500) -> "LLMResponse":
+    def invoke(self, prompt: str, temperature: float = 0.3, max_tokens: int = 500,
+               system_prompt: str = "") -> "LLMResponse":
         """
         Call Bedrock Converse API with given prompt.
         
@@ -36,12 +47,13 @@ class LLMClient:
             prompt: Input prompt
             temperature: Creativity level (0-1), lower = more deterministic
             max_tokens: Max response length
+            system_prompt: Optional system prompt passed via Converse system parameter
             
         Returns:
             LLMResponse object with .content attribute
         """
         try:
-            response = self.client.converse(
+            kwargs = dict(
                 modelId=self.model,
                 messages=[
                     {
@@ -54,6 +66,9 @@ class LLMClient:
                     "maxTokens": max_tokens
                 }
             )
+            if system_prompt:
+                kwargs["system"] = [{"text": system_prompt}]
+            response = self.client.converse(**kwargs)
             
             content_blocks = response["output"]["message"]["content"]
             response_text = ""
@@ -70,14 +85,22 @@ class LLMClient:
         if response.error:
             return {}
         try:
-            # Clean possible markdown wrap (```json ... ```)
             text = response.content.strip()
-            if text.startswith("```json"):
-                text = text[7:]
-            if text.endswith("```"):
-                text = text[:-3]
-            return json.loads(text.strip())
-        except json.JSONDecodeError:
+            if not text:
+                return {}
+            # Strip markdown code fences and any surrounding whitespace
+            text = re.sub(r"^```(?:json)?\s*\n?", "", text)
+            text = re.sub(r"\n?\s*```$", "", text)
+            text = text.strip()
+            # Also strip any leading/trailing non-JSON cruft
+            start = text.find("{")
+            end = text.rfind("}")
+            if start != -1 and end != -1 and end > start:
+                text = text[start:end+1]
+            # Remove BOM and zero-width chars
+            text = text.replace("\ufeff", "").replace("\u200b", "")
+            return json.loads(text)
+        except (json.JSONDecodeError, ValueError):
             return {}
 
 
@@ -121,10 +144,16 @@ class MockLLMClient:
         return LLMResponse(content="{}", error="Mock client - no API key")
 
 
-# Export singleton instance
-try:
-    llm_model = get_llm_client()
-except Exception as exc:
-    # Keep a placeholder that fails clearly for production-like usage.
-    llm_model = None
-    _llm_init_error = exc
+# Lazy singleton access — only initializes on first use, not at import time
+_llm_init_error = None
+
+
+def __getattr__(name):
+    if name == "llm_model":
+        global _llm_init_error
+        try:
+            return get_llm_client()
+        except Exception as exc:
+            _llm_init_error = exc
+            return None
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

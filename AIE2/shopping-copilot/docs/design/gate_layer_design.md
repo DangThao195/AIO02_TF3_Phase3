@@ -21,7 +21,7 @@ async def gate_node(
     timeout: float = 2.0,
 ) -> GateResult:
     """
-    Gọi Amazon Nova Lite (amazon.nova-lite-v1:0) với binary classification.
+    Gọi Amazon Nova Lite (apac.amazon.nova-lite-v1:0) với binary classification.
     
     System prompt:
         "Bạn là bộ phân loại nhị phân. Chỉ trả lời đúng 1 từ: YES hoặc NO."
@@ -48,15 +48,16 @@ async def gate_node(
 
 ## 5 Gates
 
-### 1. `routing_gate` — Fast Path Detection
+### 1. `routing_gate` — Fast Path Detection (v3.3: deactivated)
 | Field | Value |
 |---|---|
 | Position | Trước Intent Parser |
-| Trigger | L2a regex không match rõ ràng |
+| Trigger | Luôn trả `False` (không bypass) |
 | Question | "Câu hỏi mua sắm này có match một pattern đơn giản (cart view, search, greeting) không?" |
 | `want_reason` | False |
 | Default decision | `False` (đi LLM path — an toàn) |
 | Cost | ~$0.000009/call |
+| **Trạng thái** | **Giữ nguyên code nhưng decision luôn `False`.** Mọi query đều qua `intent_parser` để đảm bảo độ chính xác tuyệt đối. Có thể bỏ hẳn gate này trong tương lai. |
 
 ### 2. `plan_validity_gate` — DAG Validity Check
 | Field | Value |
@@ -113,21 +114,21 @@ response → HallucinationGuard (rule-based, $0)
 | Default decision | `False` (không replan — giữ nguyên kết quả) |
 | Cost | ~$0.000025/call |
 
-### Gate Execution trong Graph
+### Gate Execution trong Graph (v3.3)
 ```
-                                   ┌─ routing_gate (trước Planner)
-                                   │
+input_guard → routing_gate (luôn False → intent_parser)
+                                    │
 Intent Parser → TGB → plan_validity_gate (nếu multi-node)
-                         │ valid
-                         ▼
-                  Tool Executor → Reflection
-                                    │ need replan? → replan_gate
-                                    │                 │ Yes → TGB (partial)
-                                    │                 │ No  → ResponseVerifier
-                                    ▼
-                  ResponseVerifier → HallucinationGuard → semantic_hallucination_gate (per claim)
-                                                              │ PASS → answer_generator
-                                                              │ FAIL → fallback_generator
+                          │ valid
+                          ▼
+                   Tool Executor → Reflection
+                                     │ need replan? → replan_gate
+                                     │                 │ Yes → TGB (partial)
+                                     │                 │ No  → ResponseVerifier
+                                     ▼
+                   ResponseVerifier → HallucinationGuard → semantic_hallucination_gate (per claim)
+                                                               │ PASS → answer_generator
+                                                               │ FAIL → fallback_generator
 ```
 
 ## Default Decisions (Fallback khi Gate timeout/lỗi)
@@ -144,7 +145,7 @@ Intent Parser → TGB → plan_validity_gate (nếu multi-node)
 
 | Gate | Input tokens | Output tokens | Cost/call | Trigger rate |
 |---|---|---|---|---|
-| routing_gate | ~150 | 1 | ~$0.000009 | ~20% request |
+| routing_gate | ~150 | 1 | ~$0.000009 | ~100% request (v3.3) |
 | plan_validity_gate | ~400 | ~20 | ~$0.000029 | ~40% request |
 | semantic_hallucination_gate | ~250/claim | ~18 | ~$0.000019/claim | ~1-2 claims, ~15% request |
 | confirm_parse_gate | ~100 | 1 | ~$0.000006 | ~5% request |

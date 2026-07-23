@@ -1,8 +1,13 @@
 import os
 import logging
+import time
+import grpc
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Optional
+from dotenv import load_dotenv
+
+load_dotenv(override=True)
 
 try:
     import psycopg2
@@ -13,6 +18,18 @@ except Exception:  # pragma: no cover - optional dependency in local dev
     extras = None
 
 logger = logging.getLogger(__name__)
+
+# gRPC retry configuration
+GRPC_RETRY_CONFIG = {
+    "max_retries": 3,
+    "initial_backoff_ms": 100,
+    "max_backoff_ms": 2000,
+    "backoff_multiplier": 1.5,
+    "retry_on_codes": ["UNAVAILABLE", "RESOURCE_EXHAUSTED", "DEADLINE_EXCEEDED"],
+}
+
+# gRPC channel pool for connection reuse
+_grpc_channels: dict[str, grpc.Channel] = {}
 
 
 @dataclass
@@ -42,7 +59,7 @@ class DBConfig:
         default_factory=lambda: int(os.getenv("DB_TIMEOUT", "30"))
     )
     sslmode: str = field(
-        default_factory=lambda: os.getenv("DB_SSLMODE", "disable")
+        default_factory=lambda: os.getenv("DB_SSLMODE", "prefer")
     )
     application_name: str = field(
         default_factory=lambda: os.getenv("DB_APP_NAME", "shopping-copilot")
@@ -62,7 +79,7 @@ class DBConfig:
             "keepalives_idle": 30,
             "keepalives_interval": 10,
             "keepalives_count": 5,
-            "options": f"-c statement_timeout={self.connect_timeout * 1000}",
+            "options": f"-c statement_timeout={self.connect_timeout * 1000} -c search_path=catalog,reviews,public",
         }
         return kwargs
 
@@ -85,8 +102,7 @@ def get_config() -> DBConfig:
 def init_pool(config: Optional[DBConfig] = None):
     global _pool, _config
     if _pool is not None:
-        logger.warning("Pool already initialized; closing existing pool first")
-        close_all()
+        return _pool
 
     _config = config or get_config()
     kwargs = _config.get_connect_kwargs()

@@ -37,7 +37,7 @@ class SQLBuilder:
         sort = str(entities.get("sort", "relevance") or "relevance").lower()
         if sort == "price_desc":
             query += " ORDER BY price_units DESC, price_nanos DESC"
-        else:
+        elif sort == "price_asc":
             query += " ORDER BY price_units ASC, price_nanos ASC"
         query += " LIMIT 15"
         return query
@@ -74,4 +74,8 @@ class SQLBuilder:
         return f"lower({column}) LIKE '%{self._escape_value(value)}%'"
 
     def _escape_value(self, value: str) -> str:
-        return str(value).replace("'", "''")
+        escaped = str(value).replace("'", "''")
+        escaped = escaped.replace("\\", "\\\\")
+        escaped = escaped.replace("%", "\\%")
+        escaped = escaped.replace("_", "\\_")
+        return escaped

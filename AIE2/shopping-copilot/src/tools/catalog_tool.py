@@ -1,5 +1,7 @@
 """
-tools/catalog_tool.py — Công cụ truy vấn danh mục và toàn bộ sản phẩm.
+tools/catalog_tool.py — get_categories, get_all_products
+
+Backend: SQLite/PostgreSQL trực tiếp
 """
 
 import json
@@ -7,75 +9,128 @@ import logging
 
 from langchain_core.tools import tool
 
-from src.tools.search.flow1.sql_executor import SQLQueryExecutor
+logger = logging.getLogger("tools.catalog")
 
-logger = logging.getLogger("tools.catalog_tool")
+
+def _get_db_conn():
+    """Thử PostgreSQL, fallback SQLite."""
+    try:
+        from src.database.connect import get_conn
+        return get_conn, "pg"
+    except Exception:
+        pass
+    # SQLite fallback
+    import sqlite3
+    import os
+    root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    db_path = os.path.join(root, "server-test", "shopping.db")
+    return sqlite3.connect(db_path), "sqlite"
+
+
+def _normalize_price(units: int, nanos: int) -> str:
+    cents = nanos // 10_000_000
+    return f"${units}.{cents:02d}"
 
 
 @tool
 def get_categories() -> str:
     """
-    Lấy danh sách tất cả các danh mục sản phẩm khác nhau trong database.
-    Dùng khi người dùng hỏi: "có những danh mục nào?", "bạn bán những loại gì?",
-    "categories", "list categories", hoặc muốn xem tổng quan các nhóm hàng.
-    Không cần tham số đầu vào.
+    Lấy danh sách tất cả danh mục sản phẩm hiện có trong hệ thống (sorted A-Z).
+    Trả về JSON: {status, categories[], total}
     """
     try:
-        executor = SQLQueryExecutor()
-        executor.ensure_initialized()
-        rows = executor.execute(
-            "SELECT DISTINCT categories FROM products WHERE categories IS NOT NULL AND categories != '' ORDER BY categories"
-        )
-        seen: set = set()
-        categories: list[str] = []
-        for row in rows:
-            raw = str(row.get("categories", "") or "")
-            if not raw:
-                continue
-            for part in raw.split(","):
-                cleaned = part.strip()
-                if cleaned and cleaned.lower() not in seen:
-                    seen.add(cleaned.lower())
-                    categories.append(cleaned)
-        if not categories:
-            return "Không có danh mục nào trong hệ thống."
-        return "Các danh mục sản phẩm hiện có:\n" + "\n".join(f"- {c}" for c in sorted(categories))
+        import sqlite3, os
+        root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        db_path = os.path.join(root, "server-test", "shopping.db")
+        conn = sqlite3.connect(db_path)
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT DISTINCT categories FROM products WHERE categories IS NOT NULL AND categories != ''")
+            rows = cursor.fetchall()
+        finally:
+            conn.close()
+
+        cats: set = set()
+        for (raw,) in rows:
+            for c in str(raw).split(","):
+                c = c.strip()
+                if c:
+                    cats.add(c)
+
+        sorted_cats = sorted(cats)
+        if not sorted_cats:
+            return json.dumps({"status": "empty", "categories": [], "total": 0})
+
+        return json.dumps({"status": "success", "categories": sorted_cats, "total": len(sorted_cats)},
+                          ensure_ascii=False)
     except Exception as e:
-        logger.error(f"get_categories error: {e}")
-        return "Dịch vụ tạm thời không khả dụng, vui lòng thử lại sau."
+        logger.error("[get_categories] error | %s", e, exc_info=True)
+        return json.dumps({"status": "error", "message": "Dịch vụ không khả dụng."})
 
 
 @tool
 def get_all_products() -> str:
     """
-    Lấy toàn bộ thông tin sản phẩm trong database (tên, giá, mô tả, danh mục).
-    CHỈ DÙNG khi thực sự cần thiết: khi người dùng yêu cầu danh sách đầy đủ tất cả sản phẩm
-    (VD: "liệt kê tất cả sản phẩm", "show all products", "bán những gì", "danh sách full"),
-    xuất dữ liệu kho hàng, hoặc kiểm kê toàn bộ danh mục.
-    KHÔNG dùng để tìm kiếm thông thường — dùng search_products_v2 cho mục đích đó.
-    Không cần tham số đầu vào.
+    Lấy toàn bộ danh sách sản phẩm. CHỈ dùng khi user yêu cầu 'tất cả sản phẩm'.
+    Trả về JSON: {status, products[], total}
     """
     try:
-        executor = SQLQueryExecutor()
-        executor.ensure_initialized()
-        rows = executor.execute(
-            "SELECT id, name, description, categories, price_units, price_nanos FROM products ORDER BY name",
-            limit=100,
-        )
-        if not rows:
-            return "Không có sản phẩm nào trong hệ thống."
+        import sqlite3, os
+        root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        db_path = os.path.join(root, "server-test", "shopping.db")
+        conn = sqlite3.connect(db_path)
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, name, description, categories, price_units, price_nanos
+                FROM products ORDER BY name LIMIT 100
+            """)
+            rows = cursor.fetchall()
+        finally:
+            conn.close()
 
-        parts = [f"Toàn bộ sản phẩm ({len(rows)} sản phẩm):"]
-        for r in rows:
-            name = r.get("name", "N/A")
-            price_u = r.get("price_units", 0)
-            price_n = r.get("price_nanos", 0)
-            price = f"${price_u}.{str(price_n).zfill(9)}"
-            cats = r.get("categories", "")
-            cat_str = f" [{cats}]" if cats else ""
-            desc = (r.get("description", "") or "")[:80]
-            parts.append(f"- {name} - {price}{cat_str} — {desc}")
-        return "\n".join(parts)
+        products = []
+        for row in rows:
+            pid, name, desc, cats_raw, units, nanos = row
+            cats = [c.strip() for c in str(cats_raw or "").split(",") if c.strip()]
+            products.append({
+                "id": pid,
+                "name": name,
+                "price": _normalize_price(units or 0, nanos or 0),
+                "description": desc or "",
+                "categories": cats,
+            })
+
+        return json.dumps({"status": "success", "products": products, "total": len(products)},
+                          ensure_ascii=False)
     except Exception as e:
-        logger.error(f"get_all_products error: {e}")
-        return "Dịch vụ tạm thời không khả dụng, vui lòng thử lại sau."
+        logger.error("[get_all_products] error | %s", e, exc_info=True)
+        return json.dumps({"status": "error", "message": "Dịch vụ không khả dụng."})
+
+
+# ── ToolSpec registration ─────────────────────────────────────────
+
+from src.tools.registry import ToolRegistry, ToolSpec
+
+ToolRegistry.register(ToolSpec(
+    name="get_categories",
+    description="Lấy danh sách tất cả danh mục sản phẩm hiện có trong hệ thống.",
+    is_write=False,
+    input_schema={"type": "object", "properties": {}, "required": []},
+    output_schema={"type": "object", "properties": {
+        "status": {"type": "string"}, "categories": {"type": "array"}, "total": {"type": "integer"},
+    }},
+    examples=[{"input": {}, "output": {"status": "success", "categories": ["telescopes", "books"], "total": 2}}],
+    retry_config={"max_retries": 2, "backoff": [0.5]},
+), fn=get_categories)
+
+ToolRegistry.register(ToolSpec(
+    name="get_all_products",
+    description="Lấy toàn bộ danh sách sản phẩm (CHỈ dùng khi user yêu cầu 'tất cả sản phẩm' — không dùng để tìm kiếm).",
+    is_write=False,
+    input_schema={"type": "object", "properties": {}, "required": []},
+    output_schema={"type": "object", "properties": {
+        "status": {"type": "string"}, "products": {"type": "array"}, "total": {"type": "integer"},
+    }},
+    retry_config={"max_retries": 2, "backoff": [0.5]},
+), fn=get_all_products)

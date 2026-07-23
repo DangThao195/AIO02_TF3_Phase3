@@ -117,7 +117,7 @@ def verify_confirmation_token(token: str) -> tuple[bool, Optional[Dict]]:
         return True, action_data
 
     except Exception as e:
-        logger.error(f"[CONFIRMATION] Token verification error: {e}")
+        logger.error("[CONFIRMATION] Token verification error: %s", e)
         return False, None
 
 

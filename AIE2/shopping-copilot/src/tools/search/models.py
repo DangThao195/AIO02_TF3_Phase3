@@ -57,9 +57,10 @@ class SearchToolResponse:
     products: List[dict] = field(default_factory=list)
     categories: List[str] = field(default_factory=list)
     message: str = ""
+    confidence: float = 0.0
 
     def to_json(self) -> str:
-        payload: dict = {"status": self.status, "total": self.total}
+        payload: dict = {"status": self.status, "total": self.total, "confidence": self.confidence}
         if self.products:
             payload["products"] = self.products
         if self.categories:

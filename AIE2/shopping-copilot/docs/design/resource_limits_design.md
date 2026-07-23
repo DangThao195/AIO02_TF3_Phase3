@@ -9,7 +9,7 @@
 | Max tool calls / request | **8 nodes** | Tool Executor (trước execute) | Trim nodes confidence thấp nhất |
 | Max DAG depth | **5 levels** | Tool Executor (validation) | Flatten dependency chain |
 | Max parallel nodes / batch | **4 nodes** | `asyncio.gather` batching | Split into batches of 4 |
-| Max replan / request | **1 time** | `reflection.py` | Force pass after 1 replan |
+| Max replan / request | **1 time** | `graph/nodes/reflection.py` | Force pass after 1 replan |
 | Max conversation history | **6 turns** or **2000 tokens** | `SessionStore` | Sliding window |
 | Planner memory size | **20 KB** / session | `state.planner_memory` | Chỉ lưu fields cố định |
 | Search results | Top **20** | Search tool | Limit trong gRPC query |
@@ -21,7 +21,7 @@
 
 | Component | Timeout | Fallback |
 |---|---|---|
-| TGB (LLM) | **3s** | Plan rỗng → template response |
+| TGB (LLM) | **5s** | Plan rỗng → template response |
 | Response Verifier (LLM) | **4s** | Template fallback |
 | Semantic Gate (Nova Lite) | **2s** | `DEFAULT_DECISION` |
 | Default tool (gRPC) | **2s** | Retry → error |
@@ -64,7 +64,7 @@ async def llm_call(prompt: str, timeout: float = 3.0, **kwargs) -> str:
 | Requests/day/user | **200** |
 | Estimated tokens/day/user | **50,000** |
 
-**Lưu ý:** In-memory per-pod. Production → chuyển sang Redis/Valkey global limiter.
+**Lưu ý:** Mặc định chạy global limiter qua Redis (sorted set); fallback in-memory per-pod khi Redis unavailable. Chi tiết: `cache_design.md` Global Rate Limiter.
 
 ## Validation Flow per Tool Call (L3)
 
@@ -82,8 +82,8 @@ Executor → validate_tool_call(tool_name, args, user_id):
 - [ ] Max tool calls check trong `tool_executor.py` — trim nodes trước execute
 - [ ] Max DAG depth check — flatten chain
 - [ ] Max parallel batching — `asyncio.gather` batch size 4
-- [ ] Replan limit trong `reflection.py` — `replan_count >= 1` → force pass
+- [ ] Replan limit trong `graph/nodes/reflection.py` — `replan_count >= 1` → force pass
 - [ ] LLM timeout — `asyncio.wait_for` trong `llm.py`
 - [ ] Tool timeout — per-tool config trong retry config
 - [ ] P95 < 5s — monitoring + template fallback
-- [ ] Rate limiter per-pod (giữ nguyên) → Redis global (Phase 4)
+- [x] Rate limiter global (Redis sorted set) + fallback per-pod — `cache_design.md` Global Rate Limiter

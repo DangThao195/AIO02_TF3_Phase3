@@ -125,7 +125,7 @@ def test_sql_builder_ignores_empty_values_and_preserves_ordering():
 
     assert "WHERE" in sql
     assert "price_units <= 75" in sql
-    assert "ORDER BY price_units ASC" in sql
+    assert "ORDER BY" not in sql
     assert "LIMIT 15" in sql
 
 

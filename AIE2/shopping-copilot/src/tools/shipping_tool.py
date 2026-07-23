@@ -1,11 +1,19 @@
-# tools/shipping_tool.py
-from __future__ import annotations
+"""
+tools/shipping_tool.py — get_shipping_quote_tool
+
+Backend: ShippingService HTTP/gRPC
+"""
 
 import json
-import requests
+import logging
+
+import grpc
 from langchain_core.tools import tool
 
-from src.tools.service_config import SHIPPING_ADDR as SHIPPING_REST_ADDR
+from src.protos import demo_pb2, demo_pb2_grpc
+from src.tools.service_config import SHIPPING_ADDR
+
+logger = logging.getLogger("tools.shipping")
 
 
 @tool
@@ -14,67 +22,73 @@ def get_shipping_quote_tool(
     destination: str = "",
     street: str = "",
     city: str = "",
-    country: str = "",
+    country: str = "VN",
     zip_code: str = "",
     state: str = "",
-    product_id: str = "",
-    quantity: int = 1,
 ) -> str:
     """
-    Get a shipping estimate for a domestic delivery.
-    Accepts either a free-form address or structured address fields.
+    Xem phí vận chuyển đến một địa chỉ (nội địa Việt Nam).
+    Trả về JSON: {status, destination, cost, days}
     """
-    if country and country.lower() != "vietnam":
-        return "I am only authorized to estimate shipping costs for domestic deliveries within Vietnam."
-
-    normalized_address = (address or destination or "").strip()
-    if not normalized_address:
-        structured = [street, city, state, zip_code, country]
-        normalized_address = ", ".join(part.strip() for part in structured if part and part.strip())
-
-    params = {
-        "address": normalized_address,
-        "street": street,
-        "city": city,
-        "state": state,
-        "country": country,
-        "zip_code": zip_code,
-        "product_id": product_id,
-        "quantity": quantity,
-    }
-    params = {
-        key: value
-        for key, value in params.items()
-        if value not in ("", None, 0)
-    }
+    # Normalize address
+    dest = address or destination or f"{street}, {city}, {country}".strip(", ")
+    if not dest.strip():
+        return json.dumps({"status": "error", "message": "Vui lòng cung cấp địa chỉ giao hàng."})
 
     try:
-        response = requests.get(
-            f"{SHIPPING_REST_ADDR}/api/v1/shipping/quote",
-            params=params,
-            timeout=5,
-        )
-        response.raise_for_status()
+        # Dùng gRPC nếu địa chỉ là host:port (không có http://)
+        shipping_host = SHIPPING_ADDR.replace("http://", "").replace("https://", "")
+        with grpc.insecure_channel(shipping_host) as ch:
+            stub = demo_pb2_grpc.ShippingServiceStub(ch)
+            resp = stub.GetQuote(demo_pb2.GetQuoteRequest(
+                address=demo_pb2.Address(
+                    street_address=street or address,
+                    city=city,
+                    state=state,
+                    country=country or "VN",
+                    zip_code=zip_code,
+                ),
+                items=[],
+            ))
+            cost = resp.cost_usd
+            cost_str = f"${cost.units}.{cost.nanos // 10_000_000:02d}"
+            days = getattr(resp, "shipping_days", getattr(resp, "days", 3))
 
-        data = response.json()
-        cost_info = data.get("cost_usd", {})
-        units = cost_info.get("units", 0)
-        nanos = cost_info.get("nanos", 0)
-        currency_code = cost_info.get("currency_code", "USD")
-        shipping_fee = float(units) + (float(nanos) / 1_000_000_000)
+            return json.dumps({
+                "status": "success",
+                "destination": dest,
+                "cost": cost_str,
+                "days": days,
+            }, ensure_ascii=False)
 
-        payload = {
-            "shipping_fee": round(shipping_fee, 2),
-            "currency_code": currency_code,
-            "address": normalized_address,
-        }
-        if "shipping_days" in data:
-            payload["estimated_days"] = data.get("shipping_days")
-        if "carrier" in data:
-            payload["carrier"] = data.get("carrier")
+    except grpc.RpcError as e:
+        code = e.code().name if hasattr(e, "code") else "UNKNOWN"
+        logger.error("[get_shipping_quote_tool] gRPC %s | dest=%s | %s", code, dest, e, exc_info=True)
+        return json.dumps({"status": "error", "message": "Dịch vụ vận chuyển tạm thời không khả dụng."})
+    except Exception as e:
+        logger.error("[get_shipping_quote_tool] error | dest=%s | %s", dest, e, exc_info=True)
+        return json.dumps({"status": "error", "message": str(e)})
 
-        return json.dumps(payload, ensure_ascii=False)
-    except requests.exceptions.RequestException as e:
-        return f"System error when estimating shipping cost (REST Service on EKS): {str(e)}"
-    except ValueError:
-        return "Error: Received invalid JSON data from the REST shipping service on EKS Cluster."
+
+# ── ToolSpec registration ─────────────────────────────────────────
+
+from src.tools.registry import ToolRegistry, ToolSpec
+
+ToolRegistry.register(ToolSpec(
+    name="get_shipping_quote_tool",
+    description="Xem phí vận chuyển và thời gian giao hàng đến một địa chỉ nội địa Việt Nam.",
+    is_write=False,
+    input_schema={"type": "object", "properties": {
+        "address": {"type": "string", "description": "Địa chỉ đầy đủ (ưu tiên)"},
+        "city": {"type": "string"}, "country": {"type": "string", "default": "VN"},
+    }, "required": []},
+    output_schema={"type": "object", "properties": {
+        "status": {"type": "string"},
+        "destination": {"type": "string"},
+        "cost": {"type": "string", "description": "Phí ship (VD: $8.99)"},
+        "days": {"type": "integer"},
+    }},
+    examples=[{"input": {"address": "123 Nguyễn Huệ, Q1, TP.HCM"},
+               "output": {"status": "success", "cost": "$8.99", "days": 3}}],
+    retry_config={"max_retries": 1, "backoff": [1.0]},
+), fn=get_shipping_quote_tool)

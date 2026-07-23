@@ -21,8 +21,8 @@ messages: Annotated[list[BaseMessage], add_messages]
 ### Entities
 | Field | Type | Note |
 |---|---|---|
-| `intent` | `str` | `search\|review\|cart\|shipping\|currency\|agent\|unknown` |
-| `entities` | `dict` | Raw entities từ Intent Parser |
+| `intent` | `str` | `search\|product_qa\|cart_view\|cart_add\|cart_update\|review\|recommend\|compare\|currency\|shipping\|greeting\|overview\|product_detail\|checkout\|unknown` |
+| `entities` | `dict` | Raw entities từ Intent Parser (xem `IntentEntities` schema) |
 | `resolved_entities` | `dict` | Resolved (product_id thực tế) |
 
 ### Tool results
@@ -69,6 +69,9 @@ retry_count: int
 planner_memory: dict = {
     "last_search": str,
     "last_product_id": str,
+    "last_product_name": str,
+    "last_results_ids": list,
+    "mentioned_products": list,
     "current_cart_items": int,
     "last_intent": str,
 }
@@ -83,14 +86,14 @@ trace_id: str
 
 ### Confirmation
 ```
-pending_action: Optional[dict]   # {token, action, params}
+pending_action: Optional[dict]   # {token, action, params, message}
 confirmed: bool                  # resume signal
 ```
 
 ### Guardrail / Error / Telemetry
 ```
 guardrail_violations: list
-errors: Annotated[dict, accumulate_errors]
+errors: Annotated[list, accumulate_errors]
 node_durations: Annotated[dict, merge_node_durations]
 ```
 
@@ -103,14 +106,26 @@ node_durations: Annotated[dict, merge_node_durations]
 | `accumulate_tool_history` | `existing + updates` (giới hạn 6 turns) |
 | `merge_node_durations` | `result[node] = existing.get(node, 0) + ms` |
 
-## State Flow qua Graph
+## State Flow qua Graph (v3.3)
 
 ```
-START → input_guard → intent_parser → task_graph_builder → [plan_validity_gate]
-         → tool_executor → reflection → [pass] → response_verifier
-                                       → [replan] → task_graph_builder (partial)
-         → hallucination_guard → [pass] → answer_generator → END
-                               → [fail] → fallback_generator → answer_generator → END
+START → input_guard
+    → [violations] → answer_generator → END
+    → [clean] → routing_gate (luôn → intent_parser)
+        → intent_parser (LLM-first)
+            → [confidence < 0.5 / unknown] → ask_user → answer_generator → END
+            → [confidence >= 0.5] → task_graph_builder
+                → plan_validity_gate
+                    → [no nodes] → response_verifier → hallucination_guard → ...
+                    → [valid] → tool_executor
+                        → [pending_action] → confirmation → response_verifier → ...
+                        → [no pending] → reflection
+                            → [pass] → response_verifier → hallucination_guard
+                                → [pass] → answer_generator → END
+                                → [fail] → fallback_generator → answer_generator → END
+                            → [replan] → replan_gate
+                                → [YES] → task_graph_builder (partial replan)
+                                → [NO] → response_verifier → ...
 ```
 
 ## Migration từ v2 → v3.2
