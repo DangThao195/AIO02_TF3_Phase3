@@ -25,7 +25,7 @@ Trong quá trình vận hành dịch vụ `product-reviews`, AIOps Engine cần 
 ### 2.2 Schema Prometheus Custom Metrics
 Bổ sung counter metric mới vào `metrics.py`:
 * **Metric Name:** `app_ai_fallback_total`
-* **Description:** Counts total number of AI Assistant fallbacks triggered
+* **Description:** Tổng số lần fallback của ai_assistant
 * **Labels:**
   * `source`: Nguồn nguyên nhân hạ cấp (`"redis_override"`, `"rate_limit"`, `"timeout"`, `"bedrock_error"`, `"circuit_breaker"`).
   * `error`: Loại lỗi hoặc mã HTTP (`"forced"`, `"429"`, `"timeout"`, `"500"`).
