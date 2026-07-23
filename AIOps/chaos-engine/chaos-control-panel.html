@@ -1,0 +1,371 @@
+<title>Chaos Control — TF3 Fault Injection</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --void: #0e1117; --surface: #171c26; --surface-2: #1e2530;
+    --edge: #2b3444; --edge-soft: #222b38;
+    --ink: #e6ecf5; --ink-dim: #93a1b5; --ink-faint: #5f6d80;
+    --armed: #ff5c47; --armed-dim: #c0432f;
+    --safe: #3ddc97; --accent: #4c8dff;
+    --warn: #ffb454;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+    --r: 10px;
+  }
+  :root[data-theme="light"] {
+    --void: #eef1f6; --surface: #ffffff; --surface-2: #f4f6fa;
+    --edge: #d2d9e4; --edge-soft: #e2e7ef;
+    --ink: #15202e; --ink-dim: #4b5a6e; --ink-faint: #8494a6;
+    --armed-dim: #d84c34; --safe: #1ba876;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --void: #eef1f6; --surface: #ffffff; --surface-2: #f4f6fa;
+      --edge: #d2d9e4; --edge-soft: #e2e7ef;
+      --ink: #15202e; --ink-dim: #4b5a6e; --ink-faint: #8494a6;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--void); color: var(--ink);
+    font-family: var(--sans); line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 80px; }
+
+  /* ── header ── */
+  header { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 20px 32px; margin-bottom: 8px; }
+  .title h1 {
+    font-family: var(--mono); font-size: clamp(22px, 3vw, 30px); font-weight: 600;
+    margin: 0; letter-spacing: -0.02em; text-wrap: balance;
+  }
+  .title .sub { color: var(--ink-dim); font-size: 13.5px; margin-top: 4px; max-width: 62ch; }
+  .kbd { font-family: var(--mono); color: var(--accent); }
+
+  .readout {
+    margin-left: auto; display: flex; gap: 10px; align-items: center;
+    font-family: var(--mono); font-variant-numeric: tabular-nums;
+  }
+  .gauge {
+    background: var(--surface); border: 1px solid var(--edge); border-radius: var(--r);
+    padding: 10px 16px; text-align: center; min-width: 92px;
+  }
+  .gauge .n { font-size: 24px; font-weight: 600; line-height: 1; }
+  .gauge .l { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); margin-top: 5px; }
+  .gauge.hot .n { color: var(--armed); }
+
+  /* ── control bar ── */
+  .bar {
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    margin: 22px 0 18px; padding: 14px 16px;
+    background: var(--surface); border: 1px solid var(--edge); border-radius: var(--r);
+  }
+  .bar .grp { display: flex; gap: 8px; align-items: center; }
+  .bar .spacer { flex: 1 1 auto; }
+  .bar .hint { font-size: 12px; color: var(--ink-faint); font-family: var(--mono); }
+
+  button {
+    font-family: var(--mono); font-size: 12.5px; font-weight: 500;
+    color: var(--ink); background: var(--surface-2);
+    border: 1px solid var(--edge); border-radius: 8px;
+    padding: 8px 13px; cursor: pointer; transition: border-color .14s, background .14s, color .14s;
+  }
+  button:hover { border-color: var(--accent); color: #fff; }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover { filter: brightness(1.1); }
+  button.danger:hover { border-color: var(--armed); color: var(--armed); }
+  button.armed-btn { background: color-mix(in srgb, var(--armed) 16%, transparent); border-color: var(--armed-dim); color: var(--armed); }
+
+  .seg { display: inline-flex; border: 1px solid var(--edge); border-radius: 8px; overflow: hidden; }
+  .seg button { border: 0; border-radius: 0; background: transparent; }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+
+  .toggle { display: inline-flex; align-items: center; gap: 9px; cursor: pointer; user-select: none; font-family: var(--mono); font-size: 12.5px; color: var(--ink-dim); }
+  .toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .track { width: 40px; height: 22px; border-radius: 22px; background: var(--edge); border: 1px solid var(--edge-soft); position: relative; transition: background .18s; flex: none; }
+  .track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--ink-dim); transition: transform .18s, background .18s; }
+  .toggle input:checked + .track { background: color-mix(in srgb, var(--accent) 55%, var(--edge)); }
+  .toggle input:checked + .track::after { transform: translateX(18px); background: #fff; }
+  .toggle input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* ── grid ── */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+  .cell {
+    position: relative; display: grid; grid-template-columns: 5px 1fr; gap: 0;
+    background: var(--surface); border: 1px solid var(--edge); border-radius: var(--r);
+    overflow: hidden; transition: border-color .16s, box-shadow .16s;
+  }
+  .cell .stripe { background: var(--edge); transition: background .16s; }
+  .cell .body { padding: 14px 15px 13px; min-width: 0; }
+  .cell[data-armed="true"] { border-color: var(--armed-dim); box-shadow: 0 0 0 1px color-mix(in srgb, var(--armed) 30%, transparent), 0 8px 24px -14px var(--armed); }
+  .cell[data-armed="true"] .stripe { background: var(--armed); }
+  .cell[data-sev="critical"] .stripe { opacity: .95; }
+
+  .cell.hidden { display: none; }
+
+  .row1 { display: flex; align-items: baseline; gap: 8px; }
+  .fname { font-family: var(--mono); font-size: 14px; font-weight: 600; letter-spacing: -0.01em; word-break: break-word; }
+  .sev { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; padding: 2px 6px; border-radius: 4px; border: 1px solid var(--edge); color: var(--ink-faint); flex: none; margin-left: auto; }
+  .sev.critical { color: var(--armed); border-color: var(--armed-dim); }
+  .sev.warning { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, var(--edge)); }
+
+  .svc { font-family: var(--mono); font-size: 11.5px; color: var(--accent); margin: 6px 0 2px; }
+  .desc { font-size: 12.5px; color: var(--ink-dim); margin: 0 0 12px; }
+
+  .ctl { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .state-pill {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 4px 9px; border-radius: 20px; border: 1px solid var(--edge); color: var(--safe);
+    display: inline-flex; align-items: center; gap: 6px; flex: none;
+  }
+  .state-pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--safe); box-shadow: 0 0 0 3px color-mix(in srgb, var(--safe) 22%, transparent); }
+  .cell[data-armed="true"] .state-pill { color: var(--armed); border-color: var(--armed-dim); }
+  .cell[data-armed="true"] .state-pill::before { background: var(--armed); box-shadow: 0 0 0 3px color-mix(in srgb, var(--armed) 22%, transparent); animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--armed) 22%, transparent);} 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--armed) 6%, transparent);} }
+
+  select {
+    font-family: var(--mono); font-size: 12px; color: var(--ink);
+    background: var(--surface-2); border: 1px solid var(--edge); border-radius: 7px;
+    padding: 6px 8px; cursor: pointer; margin-left: auto;
+  }
+  select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .fire {
+    font-family: var(--mono); font-size: 11.5px; padding: 6px 12px; border-radius: 7px;
+    border: 1px solid var(--edge); background: transparent; cursor: pointer; color: var(--ink-dim);
+    transition: all .14s;
+  }
+  .cell[data-armed="false"] .fire:hover { border-color: var(--armed-dim); color: var(--armed); background: color-mix(in srgb, var(--armed) 10%, transparent); }
+  .cell[data-armed="true"] .fire { color: var(--safe); border-color: color-mix(in srgb, var(--safe) 40%, var(--edge)); }
+  .cell[data-armed="true"] .fire:hover { background: color-mix(in srgb, var(--safe) 12%, transparent); }
+
+  /* ── log ── */
+  .log {
+    margin-top: 26px; background: var(--surface); border: 1px solid var(--edge); border-radius: var(--r);
+    font-family: var(--mono); font-size: 12px;
+  }
+  .log h2 { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); margin: 0; padding: 12px 15px; border-bottom: 1px solid var(--edge-soft); display: flex; align-items: center; gap: 10px; }
+  .log .clr { margin-left: auto; font-size: 11px; padding: 3px 9px; }
+  .log .stream { max-height: 200px; overflow-y: auto; padding: 6px 0; }
+  .log .line { padding: 3px 15px; display: flex; gap: 12px; white-space: nowrap; overflow-x: auto; }
+  .log .line .t { color: var(--ink-faint); flex: none; }
+  .log .line .on { color: var(--armed); }
+  .log .line .off { color: var(--safe); }
+  .log .line .sys { color: var(--accent); }
+  .log .empty { padding: 18px 15px; color: var(--ink-faint); }
+
+  footer { margin-top: 22px; font-family: var(--mono); font-size: 11px; color: var(--ink-faint); line-height: 1.7; }
+  footer .warn-note { color: var(--warn); }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="title">
+      <h1>Chaos Control</h1>
+      <div class="sub">Bơm sự cố qua <span class="kbd">flagd</span> để kiểm chứng detector. Panel này thao tác trên <span class="kbd">demo.flagd.json</span> — 15 flag do BTC kiểm soát. <strong>Không gỡ đường đọc flag</strong> (RULES §8) — chỉ bật/tắt biến thể.</div>
+    </div>
+    <div class="readout">
+      <div class="gauge" id="gaugeArmed"><div class="n" id="nArmed">0</div><div class="l">Armed</div></div>
+      <div class="gauge"><div class="n" id="nTotal">15</div><div class="l">Flags</div></div>
+    </div>
+  </header>
+
+  <div class="bar">
+    <div class="grp">
+      <span class="hint">Chế độ:</span>
+      <div class="seg" role="group" aria-label="Chế độ hiển thị">
+        <button id="modeCheck" aria-pressed="true">Kiểm từng lỗi</button>
+        <button id="modeCovert" aria-pressed="false">Bơm ngầm</button>
+      </div>
+    </div>
+    <div class="grp" id="covertControls" style="display:none">
+      <button id="rollOne" class="primary">🎲 Bơm 1 lỗi ngẫu nhiên</button>
+      <label class="toggle"><input type="checkbox" id="autoCovert"><span class="track"></span>Tự động bơm ngầm</label>
+    </div>
+    <div class="spacer"></div>
+    <div class="grp">
+      <button id="resetAll" class="danger">Reset tất cả (off)</button>
+      <button id="themeBtn" title="Đổi theme">◐ Theme</button>
+    </div>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <section class="log">
+    <h2>Nhật ký bơm lỗi <span id="logCount" style="color:var(--ink-faint)"></span><button class="clr" id="clearLog">Xoá</button></h2>
+    <div class="stream" id="stream"><div class="empty">Chưa có thao tác. Bật một flag để bắt đầu.</div></div>
+  </section>
+
+  <footer>
+    <div>Nguồn flag: <span class="kbd">AIE1/techx-corp-chart/flagd/demo.flagd.json</span> · Detector đối chiếu: <span class="kbd">chaos-engine/ai-engine/scripts/chaos_validate.py</span></div>
+    <div class="warn-note">⚠ Đây là bảng điều khiển MÔ PHỎNG (client-side). Để bơm THẬT vào cluster, patch flagd ConfigMap qua kubectl — panel này sinh sẵn lệnh trong nhật ký.</div>
+  </footer>
+</div>
+
+<script>
+const FLAGS = {"llmInaccurateResponse":{"variants":["off","on"],"default":"off"},"llmRateLimitError":{"variants":["off","on"],"default":"off"},"productCatalogFailure":{"variants":["on","off"],"default":"off"},"recommendationCacheFailure":{"variants":["on","off"],"default":"off"},"adManualGc":{"variants":["on","off"],"default":"off"},"adHighCpu":{"variants":["on","off"],"default":"off"},"adFailure":{"variants":["on","off"],"default":"off"},"kafkaQueueProblems":{"variants":["on","off"],"default":"off"},"cartFailure":{"variants":["on","off"],"default":"off"},"paymentFailure":{"variants":["100%","90%","75%","50%","25%","10%","off"],"default":"off"},"paymentUnreachable":{"variants":["on","off"],"default":"off"},"loadGeneratorFloodHomepage":{"variants":["on","off"],"default":"off"},"imageSlowLoad":{"variants":["10sec","5sec","off"],"default":"off"},"failedReadinessProbe":{"variants":["on","off"],"default":"off"},"emailMemoryLeak":{"variants":["off","1x","10x","100x","1000x","10000x"],"default":"off"}};
+
+// service ảnh hưởng + severity + mô tả + INC lịch sử liên quan (từ INCIDENT_HISTORY / catalog)
+const META = {
+  llmInaccurateResponse:   {svc:"product-reviews → llm", sev:"warning",  inc:"AIE",   d:"Tóm tắt review trả về nội dung sai lệch — test faithfulness guardrail."},
+  llmRateLimitError:       {svc:"product-reviews → llm", sev:"critical", inc:"INC-4", d:"Bedrock 429 rate limit — test fallback + circuit breaker."},
+  productCatalogFailure:   {svc:"product-catalog",       sev:"critical", inc:"INC-1", d:"Catalog lỗi/cạn pool — test detect + scale remediation."},
+  recommendationCacheFailure:{svc:"recommendation",     sev:"warning",  inc:"INC-6", d:"Cache gợi ý hỏng — test degrade + memory pressure."},
+  adManualGc:              {svc:"ad",                    sev:"warning",  inc:"—",     d:"Ép GC thủ công — test GC-latency anomaly."},
+  adHighCpu:               {svc:"ad",                    sev:"warning",  inc:"—",     d:"CPU cao bất thường — test saturation detector."},
+  adFailure:               {svc:"ad",                    sev:"warning",  inc:"—",     d:"Service ad lỗi — test blast radius phụ trợ."},
+  kafkaQueueProblems:      {svc:"kafka → accounting",    sev:"critical", inc:"INC-5", d:"Consumer lag lớn — test queue-lag detector + scale."},
+  cartFailure:             {svc:"cart → valkey",         sev:"critical", inc:"INC-2", d:"Cart lỗi (SPOF) — test KHÔNG auto-restart (mất giỏ)."},
+  paymentFailure:          {svc:"payment",               sev:"critical", inc:"INC-3", d:"Thanh toán fail theo % — test error-rate burn-rate."},
+  paymentUnreachable:      {svc:"payment",               sev:"critical", inc:"INC-3", d:"Payment không kết nối — test gRPC timeout detect."},
+  loadGeneratorFloodHomepage:{svc:"frontend",            sev:"warning",  inc:"—",     d:"Flood trang chủ — test latency p95 + scale frontend."},
+  imageSlowLoad:           {svc:"frontend/image",        sev:"warning",  inc:"—",     d:"Ảnh load chậm (5-10s) — test latency multi-window."},
+  failedReadinessProbe:    {svc:"fraud-detection",       sev:"critical", inc:"INC-3", d:"Readiness probe fail khi deploy — test deploy-gap detect."},
+  emailMemoryLeak:         {svc:"email",                 sev:"warning",  inc:"—",     d:"Rò rỉ bộ nhớ theo bội số — test memory anomaly."},
+};
+
+const state = {}; // flag -> current variant
+const grid = document.getElementById('grid');
+const stream = document.getElementById('stream');
+let logLines = [];
+
+function offValue(f){ return "off"; }
+function isArmed(f){ return state[f] !== "off"; }
+function onVariants(f){ return FLAGS[f].variants.filter(v => v !== "off"); }
+
+function armVariant(f){ // giá trị "bật" mặc định: variant on đầu tiên khác off
+  const ons = onVariants(f);
+  return ons.includes("on") ? "on" : ons[ons.length-1]; // paymentFailure→10%, imageSlowLoad→5sec, email→1x
+}
+
+// build cells
+Object.keys(FLAGS).forEach(f => {
+  state[f] = FLAGS[f].default;
+  const m = META[f];
+  const cell = document.createElement('div');
+  cell.className = 'cell'; cell.dataset.flag = f; cell.dataset.armed = "false"; cell.dataset.sev = m.sev;
+  const opts = FLAGS[f].variants.map(v => `<option value="${v}">${v}</option>`).join("");
+  cell.innerHTML = `
+    <div class="stripe"></div>
+    <div class="body">
+      <div class="row1">
+        <span class="fname">${f}</span>
+        <span class="sev ${m.sev}">${m.sev==='critical'?'CRIT':'WARN'}</span>
+      </div>
+      <div class="svc">${m.svc}${m.inc!=='—'?` · ${m.inc}`:''}</div>
+      <p class="desc">${m.d}</p>
+      <div class="ctl">
+        <span class="state-pill" data-pill>OFF</span>
+        <select data-sel aria-label="Biến thể ${f}">${opts}</select>
+        <button class="fire" data-fire>Bật lỗi</button>
+      </div>
+    </div>`;
+  grid.appendChild(cell);
+  cell.querySelector('[data-sel]').value = state[f];
+  cell.querySelector('[data-sel]').addEventListener('change', e => setFlag(f, e.target.value, 'select'));
+  cell.querySelector('[data-fire]').addEventListener('click', () => setFlag(f, isArmed(f) ? "off" : armVariant(f), 'button'));
+});
+
+function setFlag(f, variant, src){
+  const prev = state[f];
+  if (prev === variant) return;
+  state[f] = variant;
+  render(f);
+  const armed = variant !== "off";
+  log(f, armed ? variant : "off", armed);
+  updateGauge();
+}
+
+function render(f){
+  const cell = grid.querySelector(`[data-flag="${f}"]`);
+  const armed = isArmed(f);
+  cell.dataset.armed = armed ? "true" : "false";
+  cell.querySelector('[data-pill]').textContent = armed ? `ARMED · ${state[f]}` : "OFF";
+  cell.querySelector('[data-sel]').value = state[f];
+  cell.querySelector('[data-fire]').textContent = armed ? "Tắt lỗi" : "Bật lỗi";
+}
+
+function updateGauge(){
+  const n = Object.keys(FLAGS).filter(isArmed).length;
+  document.getElementById('nArmed').textContent = n;
+  document.getElementById('gaugeArmed').classList.toggle('hot', n>0);
+}
+
+function log(f, variant, armed){
+  const t = new Date().toLocaleTimeString('vi-VN', {hour12:false});
+  const cmd = `kubectl -n techx-tf3 patch cm techx-flagd --type merge -p '{"${f}":"${variant}"}'`;
+  logLines.unshift({t, f, variant, armed, cmd});
+  if (logLines.length > 60) logLines.pop();
+  renderLog();
+}
+function renderLog(){
+  document.getElementById('logCount').textContent = logLines.length ? `(${logLines.length})` : '';
+  if (!logLines.length){ stream.innerHTML = '<div class="empty">Chưa có thao tác. Bật một flag để bắt đầu.</div>'; return; }
+  stream.innerHTML = logLines.map(l =>
+    `<div class="line"><span class="t">${l.t}</span><span class="${l.armed?'on':'off'}">${l.armed?'ARM ':'SAFE'}</span><span>${l.f} → ${l.variant}</span></div>`
+  ).join("");
+}
+
+// ── controls ──
+document.getElementById('resetAll').addEventListener('click', () => {
+  let changed = 0;
+  Object.keys(FLAGS).forEach(f => { if (isArmed(f)){ state[f]="off"; render(f); changed++; } });
+  if (changed){ const t=new Date().toLocaleTimeString('vi-VN',{hour12:false}); logLines.unshift({t,f:`RESET ${changed} flag`,variant:'off',armed:false,cmd:'# reset all'}); renderLog(); }
+  updateGauge();
+});
+
+document.getElementById('clearLog').addEventListener('click', () => { logLines=[]; renderLog(); });
+
+// mode toggle
+const modeCheck = document.getElementById('modeCheck');
+const modeCovert = document.getElementById('modeCovert');
+const covertControls = document.getElementById('covertControls');
+function setMode(covert){
+  modeCheck.setAttribute('aria-pressed', String(!covert));
+  modeCovert.setAttribute('aria-pressed', String(covert));
+  covertControls.style.display = covert ? 'flex' : 'none';
+  // ở chế độ bơm ngầm: ẩn variant selector để "check lỗi ngầm" (không lộ đang bơm gì)
+  document.body.classList.toggle('covert', covert);
+  grid.querySelectorAll('[data-sel]').forEach(s => s.style.visibility = covert ? 'hidden' : 'visible');
+  grid.querySelectorAll('.desc').forEach(d => d.style.opacity = covert ? '0.35' : '1');
+  if (!covert) autoCb.checked = false, stopAuto();
+}
+modeCheck.addEventListener('click', () => setMode(false));
+modeCovert.addEventListener('click', () => setMode(true));
+
+// covert random inject
+function rollOne(){
+  const off = Object.keys(FLAGS).filter(f => !isArmed(f));
+  if (!off.length) return;
+  const f = off[Math.floor(Math.random()*off.length)];
+  setFlag(f, armVariant(f), 'covert');
+}
+document.getElementById('rollOne').addEventListener('click', rollOne);
+
+let autoTimer = null;
+const autoCb = document.getElementById('autoCovert');
+function stopAuto(){ if (autoTimer){ clearInterval(autoTimer); autoTimer=null; } }
+autoCb.addEventListener('change', e => {
+  stopAuto();
+  if (e.target.checked){
+    autoTimer = setInterval(() => {
+      // 65% bơm thêm, 35% tắt bớt — mô phỏng sự cố đến/đi ngẫu nhiên
+      const armed = Object.keys(FLAGS).filter(isArmed);
+      if (armed.length && Math.random() < 0.35){ setFlag(armed[Math.floor(Math.random()*armed.length)], "off", 'covert'); }
+      else rollOne();
+    }, 3500);
+  }
+});
+
+// theme
+const root = document.documentElement;
+document.getElementById('themeBtn').addEventListener('click', () => {
+  const cur = root.getAttribute('data-theme');
+  const next = cur === 'dark' ? 'light' : cur === 'light' ? 'dark'
+    : (matchMedia('(prefers-color-scheme: dark)').matches ? 'light' : 'dark');
+  root.setAttribute('data-theme', next);
+});
+
+updateGauge();
+</script>
