@@ -122,14 +122,14 @@ Triển khai thiết kế bộ nhớ đệm 2 tầng (LLM response cache bằng 
 - Triển khai cơ chế **chống Cache Stampede (Thundering Herd)** bằng khóa phân tán Redis `SET NX EX 10` để chỉ 1 request đồng thời gọi LLM khi cache miss.
 - Thiết lập cơ chế **Fail-Open** (Redis sập, dịch vụ vẫn gọi LLM bình thường).
 
-#### Sub-task 2.3: Tích hợp Cache & Asynchronous Logging vào server [Thứ 3] — Priority: High
-- Tích hợp kiểm tra cache ở đầu hàm `AskProductAIAssistant` (Cache Hit -> trả kết quả trong < 10ms).
-- Áp dụng Cache Policy (Chỉ cache khi Judge duyệt thành công `approved == True`, không cache thông báo lỗi/lạc đề/thiếu thông tin).
-- Triển khai **Asynchronous Logging** bằng `ThreadPoolExecutor` để thực hiện ghi log kiểm toán Fidelity Audit xuống PostgreSQL (AWS RDS) chạy nền, tránh nghẽn I/O trên luồng gRPC chính.
+#### Sub-task 2.3: Tích hợp Cache & Asynchronous Logging vào server [Thứ 3] — Priority: High (Đã hoàn thành)
+- [x] Tích hợp kiểm tra cache ở đầu hàm `AskProductAIAssistant` (Cache Hit -> trả kết quả trong < 10ms).
+- [x] Áp dụng Cache Policy (Chỉ cache khi Judge duyệt thành công `approved == True`, không cache thông báo lỗi/lạc đề/thiếu thông tin).
+- [x] Triển khai **Asynchronous Logging** bằng `ThreadPoolExecutor` để thực hiện ghi log kiểm toán Fidelity Audit xuống PostgreSQL (AWS RDS) chạy nền, tránh nghẽn I/O trên luồng gRPC chính.
 
-#### Sub-task 2.4: Đo Cost/Latency After Caching & So sánh [Thứ 4] — Priority: High
-- Chạy lại benchmark đo lường sau khi tích hợp cache.
-- So sánh số liệu trước/sau và lưu kết quả đối chiếu vào `repro/artifacts/cost_latency_comparison.json`.
+#### Sub-task 2.4: Đo Cost/Latency After Caching & So sánh [Thứ 4] — Priority: High (Đã hoàn thành)
+- [x] Chạy lại benchmark đo lường sau khi tích hợp cache.
+- [x] So sánh số liệu trước/sau và lưu kết quả đối chiếu vào `repro/artifacts/cost_latency_comparison.json`.
 
 #### Sub-task 2.5: Đóng gói, Viết ADR 0006 và Tạo Jira Ticket `AI MANDATE #14 [TF3]` [Thứ 5] — Priority: Highest
 - Soạn thảo tài liệu ADR 0006 trong `docs/adr/` ký tên đầy đủ các thành viên.
@@ -137,12 +137,12 @@ Triển khai thiết kế bộ nhớ đệm 2 tầng (LLM response cache bằng 
 
 ### Tiêu chí nghiệm thu (Acceptance Criteria)
 - [x] Có file baseline `cost_latency_BEFORE_cache.json` trước khi sửa code.
-- [ ] Redis cache hoạt động với cơ chế Fail-Open, TLS bảo mật (`rediss://`) và phản hồi Cache Hit < 10ms.
-- [ ] Logic sinh Cache Key chứa `review_version` (tự động invalidate) và `model_id`.
-- [ ] Triển khai thành công khóa phân tán chống Cache Stampede.
+- [x] Redis cache hoạt động với cơ chế Fail-Open, TLS bảo mật (`rediss://`) và phản hồi Cache Hit < 10ms.
+- [x] Logic sinh Cache Key chứa `review_version` (tự động invalidate) và `model_id`.
+- [x] Triển khai thành công khóa phân tán chống Cache Stampede.
 - [x] Cột `is_safe` và index được thêm vào DB thành công; queries lọc review sạch hoàn tất.
-- [ ] Tích hợp Asynchronous Logging ghi audit log xuống RDS chạy nền.
-- [ ] File đối chiếu latency/cost after cache được xuất ra.
+- [x] Tích hợp Asynchronous Logging ghi audit log xuống RDS chạy nền.
+- [x] File đối chiếu latency/cost after cache được xuất ra.
 - [ ] ADR 0006 được phê duyệt và commit.
 - [ ] Jira ticket được tạo đúng format với đầy đủ bằng chứng.
 
