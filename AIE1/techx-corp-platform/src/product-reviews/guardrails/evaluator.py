@@ -194,6 +194,9 @@ Rules:
 - An unsupported claim has no evidence in either source.
 - A contradicted claim conflicts with either source.
 - Inferences not explicitly supported by the sources are unsupported.
+- The candidate answer may be in a different language than the product/review evidence. Judge semantic equivalence across languages; translated claims are supported when the same meaning is directly present in the sources.
+- Do not mark a claim unsupported solely because it is written in Vietnamese while the evidence is written in English, or vice versa.
+- Superlatives or rankings such as "most", "best", "top", or Vietnamese "nhất" are supported only when the sources explicitly rank or quantify that comparison.
 - For this service, a negative review means score < 3. A score of 3 or 4 is not negative.
 - Claims that there are no negative reviews are directly supported when trusted_derived_review_facts.negative_review_count is 0.
 - Apply numeric comparisons literally: a score of 4.0 satisfies "4.0 or higher".

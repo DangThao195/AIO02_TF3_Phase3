@@ -1,0 +1,250 @@
+{
+  "run_id": "2026-07-22T15:37:19+07:00",
+  "purpose": "Mandate 14 cost/token before-after evidence for AIE1 product-review AI runtime.",
+  "method": {
+    "type": "controlled_ablation_from_runtime_AI_USAGE",
+    "before_baseline": "candidate_only_observed_model_calls",
+    "after_current": "candidate_plus_runtime_judge_observed_model_calls",
+    "note": "Before is a controlled candidate-only ablation computed from the candidate role calls in the same runtime requests. After is the current runtime path with Candidate Nova Lite plus Judge Nova Micro. This avoids restarting the service with a different flag and keeps the dataset/request population identical.",
+    "source": "ProductReviewService stdout AI_USAGE lines observed during the final probe run.",
+    "pricing_source": "DEFAULT_PRICING in repro/run_eval_guardrail.py",
+    "pricing_usd_per_million_tokens": {
+      "amazon.nova-lite-v1:0": {
+        "input": 0.06,
+        "output": 0.24
+      },
+      "amazon.nova-micro-v1:0": {
+        "input": 0.035,
+        "output": 0.14
+      }
+    }
+  },
+  "dataset": {
+    "path": "AIE1/repro/datasets/dataset.jsonl",
+    "sha256": "5fe93cd58dadddfdd17a1490e3463ee92507835e810bb1fd6092a1ad0db286fe",
+    "selection_rule": "type=normal + first 6 cases",
+    "source_case_count": 200,
+    "uncapped_selected_case_count": 43,
+    "selected_case_count": 6,
+    "selected_case_ids": [1, 2, 3, 4, 5, 6],
+    "selected_product_count": 3
+  },
+  "command": "python AIE1\\repro\\run_eval_guardrail.py --dataset AIE1\\repro\\datasets\\dataset.jsonl --case-types normal --max-cases 6 --grpc-addr localhost:8085 --grpc-timeout-seconds 60 --workers 1 --candidate-provider bedrock --candidate-model amazon.nova-lite-v1:0 --judge-provider bedrock --judge-model amazon.nova-micro-v1:0 --expected-cases 6 --min-products 3 --out AIE1\\repro\\artifacts\\cost_latency_probe_tmp.json",
+  "runtime_summary": {
+    "total": 6,
+    "passed": 5,
+    "failed": 1,
+    "pass_rate": 0.8333,
+    "errors": 0,
+    "quality_gate_passed": true,
+    "latency_seconds_end_to_end_after": {
+      "count": 6,
+      "mean": 2.8922,
+      "p50": 2.8213,
+      "p95": 3.4962,
+      "p99": 3.6188,
+      "max": 3.6495
+    }
+  },
+  "before_candidate_only": {
+    "calls": 6,
+    "provider": "bedrock",
+    "model": "amazon.nova-lite-v1:0",
+    "input_tokens": 5028,
+    "output_tokens": 103,
+    "total_tokens": 5131,
+    "tokens_per_request": 855.1667,
+    "model_call_latency_ms": {
+      "count": 6,
+      "p50": 584.06,
+      "p95": 623.27,
+      "max": 626.2
+    },
+    "estimated_cost_usd": 0.0003264,
+    "estimated_cost_usd_per_request": 0.0000544
+  },
+  "after_candidate_plus_judge": {
+    "calls": 12,
+    "input_tokens": 13058,
+    "output_tokens": 730,
+    "total_tokens": 13788,
+    "tokens_per_request": 2298.0,
+    "model_call_latency_ms": {
+      "count": 12,
+      "p50": 1200.165,
+      "p95": 2660.433,
+      "max": 2919.45
+    },
+    "estimated_cost_usd": 0.00069523,
+    "estimated_cost_usd_per_request": 0.00011587,
+    "by_role": {
+      "candidate": {
+        "calls": 6,
+        "provider": "bedrock",
+        "model": "amazon.nova-lite-v1:0",
+        "input_tokens": 5028,
+        "output_tokens": 103,
+        "total_tokens": 5131,
+        "model_call_latency_ms": {
+          "p50": 584.06,
+          "p95": 623.27,
+          "max": 626.2
+        },
+        "estimated_cost_usd": 0.0003264
+      },
+      "judge": {
+        "calls": 6,
+        "provider": "bedrock",
+        "model": "amazon.nova-micro-v1:0",
+        "input_tokens": 8030,
+        "output_tokens": 627,
+        "total_tokens": 8657,
+        "model_call_latency_ms": {
+          "p50": 2115.975,
+          "p95": 2801.715,
+          "max": 2919.45
+        },
+        "estimated_cost_usd": 0.00036883
+      }
+    }
+  },
+  "delta_after_minus_before": {
+    "additional_calls": 6,
+    "additional_input_tokens": 8030,
+    "additional_output_tokens": 627,
+    "additional_total_tokens": 8657,
+    "additional_tokens_per_request": 1442.8333,
+    "additional_estimated_cost_usd": 0.00036883,
+    "additional_estimated_cost_usd_per_request": 0.00006147,
+    "end_to_end_after_p95_seconds": 3.4962,
+    "candidate_only_model_call_p95_seconds": 0.62327,
+    "judge_model_call_p95_seconds": 2.801715
+  },
+  "raw_usage_records": [
+    {
+      "timestamp": "2026-07-22T15:37:02.932+07:00",
+      "role": "candidate",
+      "provider": "bedrock",
+      "model": "amazon.nova-lite-v1:0",
+      "input_tokens": 862,
+      "output_tokens": 18,
+      "total_tokens": 880,
+      "latency_ms": 626.2
+    },
+    {
+      "timestamp": "2026-07-22T15:37:04.832+07:00",
+      "role": "judge",
+      "provider": "bedrock",
+      "model": "amazon.nova-micro-v1:0",
+      "input_tokens": 1363,
+      "output_tokens": 76,
+      "total_tokens": 1439,
+      "latency_ms": 1859.41
+    },
+    {
+      "timestamp": "2026-07-22T15:37:05.466+07:00",
+      "role": "candidate",
+      "provider": "bedrock",
+      "model": "amazon.nova-lite-v1:0",
+      "input_tokens": 788,
+      "output_tokens": 19,
+      "total_tokens": 807,
+      "latency_ms": 575.42
+    },
+    {
+      "timestamp": "2026-07-22T15:37:07.519+07:00",
+      "role": "judge",
+      "provider": "bedrock",
+      "model": "amazon.nova-micro-v1:0",
+      "input_tokens": 1291,
+      "output_tokens": 82,
+      "total_tokens": 1373,
+      "latency_ms": 2035.45
+    },
+    {
+      "timestamp": "2026-07-22T15:37:08.245+07:00",
+      "role": "candidate",
+      "provider": "bedrock",
+      "model": "amazon.nova-lite-v1:0",
+      "input_tokens": 857,
+      "output_tokens": 15,
+      "total_tokens": 872,
+      "latency_ms": 614.48
+    },
+    {
+      "timestamp": "2026-07-22T15:37:10.474+07:00",
+      "role": "judge",
+      "provider": "bedrock",
+      "model": "amazon.nova-micro-v1:0",
+      "input_tokens": 1355,
+      "output_tokens": 113,
+      "total_tokens": 1468,
+      "latency_ms": 2196.5
+    },
+    {
+      "timestamp": "2026-07-22T15:37:11.159+07:00",
+      "role": "candidate",
+      "provider": "bedrock",
+      "model": "amazon.nova-lite-v1:0",
+      "input_tokens": 879,
+      "output_tokens": 19,
+      "total_tokens": 898,
+      "latency_ms": 541.0
+    },
+    {
+      "timestamp": "2026-07-22T15:37:14.121+07:00",
+      "role": "judge",
+      "provider": "bedrock",
+      "model": "amazon.nova-micro-v1:0",
+      "input_tokens": 1380,
+      "output_tokens": 180,
+      "total_tokens": 1560,
+      "latency_ms": 2919.45
+    },
+    {
+      "timestamp": "2026-07-22T15:37:14.693+07:00",
+      "role": "candidate",
+      "provider": "bedrock",
+      "model": "amazon.nova-lite-v1:0",
+      "input_tokens": 790,
+      "output_tokens": 14,
+      "total_tokens": 804,
+      "latency_ms": 476.1
+    },
+    {
+      "timestamp": "2026-07-22T15:37:17.163+07:00",
+      "role": "judge",
+      "provider": "bedrock",
+      "model": "amazon.nova-micro-v1:0",
+      "input_tokens": 1288,
+      "output_tokens": 110,
+      "total_tokens": 1398,
+      "latency_ms": 2448.51
+    },
+    {
+      "timestamp": "2026-07-22T15:37:17.810+07:00",
+      "role": "candidate",
+      "provider": "bedrock",
+      "model": "amazon.nova-lite-v1:0",
+      "input_tokens": 852,
+      "output_tokens": 18,
+      "total_tokens": 870,
+      "latency_ms": 592.7
+    },
+    {
+      "timestamp": "2026-07-22T15:37:19.608+07:00",
+      "role": "judge",
+      "provider": "bedrock",
+      "model": "amazon.nova-micro-v1:0",
+      "input_tokens": 1353,
+      "output_tokens": 66,
+      "total_tokens": 1419,
+      "latency_ms": 1774.13
+    }
+  ],
+  "limitations": [
+    "The before number is a candidate-only ablation from the same observed requests, not a separate historical deployment run.",
+    "The sample is intentionally small to control Bedrock spend; it is cost telemetry, not the full acceptance quality run.",
+    "End-to-end before latency is not reconstructed because local catalog/review overhead was only measured on the current after path."
+  ]
+}
