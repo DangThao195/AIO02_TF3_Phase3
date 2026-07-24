@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import sys
 sys.path.insert(0, '.')
-from src.tools.search.flow1.sql_executor import SQLQueryExecutor
+from src.tools.search_product.flow1.sql_executor import SQLQueryExecutor
 
 e = SQLQueryExecutor()
 e.ensure_initialized()

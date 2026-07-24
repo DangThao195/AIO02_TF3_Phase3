@@ -67,7 +67,7 @@ def run_evaluation(
     kind_stats: dict[str, dict] = {}
 
     for idx, case in enumerate(cases):
-        case_kind = case.get("kind", "single_intent")
+        case_kind = case.get("case_kind") or case.get("kind", "single_intent")
         if case_kind not in kind_stats:
             kind_stats[case_kind] = {"total": 0, "passed": 0, "scores": []}
         kind_stats[case_kind]["total"] += 1

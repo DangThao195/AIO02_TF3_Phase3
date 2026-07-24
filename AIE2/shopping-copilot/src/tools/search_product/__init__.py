@@ -2,9 +2,9 @@ import json
 
 from langchain_core.tools import tool
 
-from src.tools.search.models import SearchToolResponse
-from src.tools.search.orchestrator import SearchOrchestrator
-from src.tools.search.tracer import SearchTracer
+from src.tools.search_product.models import SearchToolResponse
+from src.tools.search_product.orchestrator import SearchOrchestrator
+from src.tools.search_product.tracer import SearchTracer
 
 
 @tool
@@ -12,7 +12,7 @@ async def search_products_v2(query: str) -> str:
     """
     Tìm kiếm sản phẩm thông minh (tiếng Việt và tiếng Anh).
     Có thể tìm theo tên, danh mục, khoảng giá (VD: "dưới 50 đô", "từ 100-200 USD").
-    Dùng SQL matching + RAG để có kết quả chính xác nhất.
+    Dùng SQL matching + Product RAG (truy vấn riêng Product Datasource) để có kết quả chính xác nhất.
     Trả về JSON: {"status","total","products":[{id,name,price,description,categories}]}
     """
     tracer = SearchTracer()
@@ -56,4 +56,4 @@ async def search_products_v2(query: str) -> str:
     return response.to_json()
 
 
-__all__ = ["search_products_v2"]
+__all__ = ["search_products_v2", "SearchOrchestrator", "SearchTracer"]

@@ -32,6 +32,89 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(na
 logger = logging.getLogger("evaluation.run_eval")
 
 DEFAULT_API_URL = os.getenv("COPILOT_API_URL", "http://localhost:8001/api/chat")
+COPILOT_MODEL_ID = os.getenv("BEDROCK_MODEL_ID", "apac.amazon.nova-lite-v1:0")
+
+# ── Token Cost Table (USD per 1K tokens — Amazon Bedrock pricing) ──
+TOKEN_COST_TABLE = {
+    "apac.amazon.nova-lite-v1:0":      {"input": 0.00006, "output": 0.00024},
+    "amazon.nova-lite-v1:0":           {"input": 0.00006, "output": 0.00024},
+    "amazon.nova-micro-v1:0":          {"input": 0.000035, "output": 0.00014},
+    "amazon.nova-pro-v1:0":            {"input": 0.0008,  "output": 0.0032},
+    "meta.llama3-1-70b-instruct-v1:0": {"input": 0.00099, "output": 0.00099},
+    "default":                         {"input": 0.0003,  "output": 0.0012},
+}
+
+
+def estimate_tokens(text: str) -> int:
+    """Ước lượng token count (heuristic: ~1.1 token/word cho mixed VI/EN)."""
+    if not text:
+        return 0
+    return max(1, int(len(text.split()) * 1.1))
+
+
+def compute_token_cost(input_text: str, reply: str, model_id: str = "default") -> Dict[str, Any]:
+    """
+    Tính ước lượng token usage + cost cho 1 request (Mandate #14: token/cost per request).
+
+    Ưu tiên dùng token thật nếu API trả về `usage`; nếu không có thì fallback ước lượng.
+    """
+    input_tokens = estimate_tokens(input_text)
+    output_tokens = estimate_tokens(reply)
+    total_tokens = input_tokens + output_tokens
+
+    rates = TOKEN_COST_TABLE.get(model_id, TOKEN_COST_TABLE["default"])
+    input_cost = (input_tokens / 1000) * rates["input"]
+    output_cost = (output_tokens / 1000) * rates["output"]
+
+    return {
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": total_tokens,
+        "input_cost_usd": round(input_cost, 8),
+        "output_cost_usd": round(output_cost, 8),
+        "total_cost_usd": round(input_cost + output_cost, 8),
+        "model_id": model_id,
+        "source": "estimated",
+    }
+
+
+def resolve_token_cost(res_data: Dict[str, Any], input_text: str, reply: str, model_id: str) -> Dict[str, Any]:
+    """
+    Lấy token/cost cho 1 request. Nếu API response có field `usage`
+    (input_tokens/output_tokens thật từ Bedrock) → dùng số thật; nếu không → ước lượng.
+    """
+    usage = res_data.get("usage") or {}
+    it = usage.get("input_tokens") or usage.get("inputTokens")
+    ot = usage.get("output_tokens") or usage.get("outputTokens")
+
+    if isinstance(it, int) and isinstance(ot, int):
+        rates = TOKEN_COST_TABLE.get(model_id, TOKEN_COST_TABLE["default"])
+        input_cost = (it / 1000) * rates["input"]
+        output_cost = (ot / 1000) * rates["output"]
+        return {
+            "input_tokens": it,
+            "output_tokens": ot,
+            "total_tokens": it + ot,
+            "input_cost_usd": round(input_cost, 8),
+            "output_cost_usd": round(output_cost, 8),
+            "total_cost_usd": round(input_cost + output_cost, 8),
+            "model_id": model_id,
+            "source": "api_usage",
+        }
+    return compute_token_cost(input_text, reply, model_id)
+
+
+def load_baseline(baseline_path: Optional[Path] = None) -> Optional[Dict[str, Any]]:
+    """Load baseline 'before' metrics để so sánh before/after (Mandate #14)."""
+    if baseline_path is None:
+        baseline_path = Path(__file__).resolve().parent / "reports" / "cost_latency_baseline.json"
+    if baseline_path.exists():
+        try:
+            with open(baseline_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            logger.warning(f"Không đọc được baseline {baseline_path}: {e}")
+    return None
 
 
 def compute_p95(latencies: List[float]) -> float:
@@ -49,7 +132,8 @@ def run_mandate14_harness(
     output_file: Optional[Path] = None,
     api_url: str = DEFAULT_API_URL,
     judge_model: Optional[str] = None,
-    verbose: bool = True
+    verbose: bool = True,
+    save_baseline: bool = True,
 ) -> Dict[str, Any]:
     """
     Harness chính để thực thi bộ ca kiểm thử trên Shopping Copilot.
@@ -72,7 +156,13 @@ def run_mandate14_harness(
     results = []
     latencies = []
     kind_stats: Dict[str, Dict[str, Any]] = {}
-    
+
+    # Token/cost accumulators (Mandate #14)
+    total_input_tokens = 0
+    total_output_tokens = 0
+    total_cost_usd = 0.0
+    per_request_costs: List[float] = []
+
     agreed_with_human = 0
     cases_with_human_label = 0
 
@@ -127,6 +217,13 @@ def run_mandate14_harness(
         intent = res_data.get("intent")
         evidence = res_data.get("evidence")
 
+        # ── Token/cost per request (Mandate #14) ──
+        cost_info = resolve_token_cost(res_data, input_text, reply, COPILOT_MODEL_ID)
+        total_input_tokens += cost_info["input_tokens"]
+        total_output_tokens += cost_info["output_tokens"]
+        total_cost_usd += cost_info["total_cost_usd"]
+        per_request_costs.append(cost_info["total_cost_usd"])
+
         # LLM Judge đánh giá
         verdict = judge.judge(
             case_kind=case_kind,
@@ -160,6 +257,14 @@ def run_mandate14_harness(
             "reply": reply,
             "status": status,
             "latency_sec": round(elapsed, 3),
+            "tokens": {
+                "input": cost_info["input_tokens"],
+                "output": cost_info["output_tokens"],
+                "total": cost_info["total_tokens"],
+            },
+            "cost_usd": cost_info["total_cost_usd"],
+            "cost_source": cost_info["source"],
+            "evidence": evidence,
             "human_pass": human_pass,
             "human_score": human_score,
             "judge_pass": judge_pass,
@@ -187,6 +292,21 @@ def run_mandate14_harness(
 
     agreement_rate = round((agreed_with_human / cases_with_human_label * 100), 2) if cases_with_human_label > 0 else 0.0
 
+    # ── Cost/Token metrics tổng hợp (Mandate #14) ──
+    avg_cost_per_request = round(total_cost_usd / total_cases, 8) if total_cases > 0 else 0.0
+    avg_tokens_per_request = round((total_input_tokens + total_output_tokens) / total_cases, 1) if total_cases > 0 else 0.0
+    p95_cost = compute_p95(per_request_costs)
+    cost_metrics = {
+        "copilot_model_id": COPILOT_MODEL_ID,
+        "total_input_tokens": total_input_tokens,
+        "total_output_tokens": total_output_tokens,
+        "total_tokens": total_input_tokens + total_output_tokens,
+        "total_cost_usd": round(total_cost_usd, 6),
+        "avg_tokens_per_request": avg_tokens_per_request,
+        "avg_cost_per_request_usd": avg_cost_per_request,
+        "p95_cost_per_request_usd": p95_cost,
+    }
+
     # Phân tích theo từng tiêu chí kind
     per_kind_summary = {}
     for k, stats in kind_stats.items():
@@ -198,6 +318,42 @@ def run_mandate14_harness(
             "passed": k_pass,
             "pass_rate_pct": round((k_pass / k_tot * 100), 1) if k_tot > 0 else 0.0,
             "avg_score": round(sum(k_scores) / len(k_scores), 2) if k_scores else 0.0
+        }
+
+    # ── Before/After comparison (Mandate #14: cost/latency before/after) ──
+    baseline = load_baseline()
+    before_after = None
+    if baseline:
+        b_lat = baseline.get("latency_metrics", {})
+        b_cost = baseline.get("cost_metrics", {})
+
+        def _delta(after_v, before_v):
+            if before_v in (None, 0):
+                return None
+            return round((after_v - before_v) / before_v * 100, 1)
+
+        before_after = {
+            "baseline_run": baseline.get("run_label", "baseline"),
+            "p95_latency_sec": {
+                "before": b_lat.get("p95_latency_sec"),
+                "after": p95_latency,
+                "delta_pct": _delta(p95_latency, b_lat.get("p95_latency_sec")),
+            },
+            "avg_latency_sec": {
+                "before": b_lat.get("avg_latency_sec"),
+                "after": avg_latency,
+                "delta_pct": _delta(avg_latency, b_lat.get("avg_latency_sec")),
+            },
+            "avg_cost_per_request_usd": {
+                "before": b_cost.get("avg_cost_per_request_usd"),
+                "after": avg_cost_per_request,
+                "delta_pct": _delta(avg_cost_per_request, b_cost.get("avg_cost_per_request_usd")),
+            },
+            "total_cost_usd": {
+                "before": b_cost.get("total_cost_usd"),
+                "after": round(total_cost_usd, 6),
+                "delta_pct": _delta(total_cost_usd, b_cost.get("total_cost_usd")),
+            },
         }
 
     report = {
@@ -212,6 +368,8 @@ def run_mandate14_harness(
             "avg_latency_sec": avg_latency,
             "total_eval_time_sec": total_time
         },
+        "cost_metrics": cost_metrics,
+        "before_after_comparison": before_after,
         "judge_human_alignment": {
             "human_labeled_cases": cases_with_human_label,
             "agreed_cases": agreed_with_human,
@@ -220,6 +378,19 @@ def run_mandate14_harness(
         "per_kind_metrics": per_kind_summary,
         "detailed_results": results
     }
+
+    # ── Lưu snapshot làm baseline 'before' cho lần chạy sau (nếu chưa có) ──
+    baseline_path = Path(__file__).resolve().parent / "reports" / "cost_latency_baseline.json"
+    if not baseline_path.exists() and save_baseline:
+        baseline_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(baseline_path, "w", encoding="utf-8") as f:
+            json.dump({
+                "run_label": f"baseline_{input_file.stem}",
+                "input_dataset": input_file.name,
+                "latency_metrics": report["latency_metrics"],
+                "cost_metrics": cost_metrics,
+            }, f, indent=2, ensure_ascii=False)
+        logger.info(f"💾 Đã lưu baseline before-metrics tại: {baseline_path}")
 
     if output_file is None:
         reports_dir = Path(__file__).resolve().parent / "reports"
@@ -236,6 +407,22 @@ def run_mandate14_harness(
     print(f"Tỷ lệ Pass (Judge)    : {overall_pass_rate}% ({total_judge_passed}/{total_cases})")
     print(f"Độ khớp Judge ↔ Human : {agreement_rate}% ({agreed_with_human}/{cases_with_human_label})")
     print(f"Latency P95           : {p95_latency}s (Avg: {avg_latency}s)")
+    print(f"Token (in/out/total)  : {total_input_tokens}/{total_output_tokens}/{total_input_tokens + total_output_tokens} "
+          f"(source: {'API' if any(r.get('cost_source') == 'api_usage' for r in results) else 'ước lượng'})")
+    print(f"Chi phí ước tính      : ${cost_metrics['total_cost_usd']} tổng | ${avg_cost_per_request} / request (avg)")
+    if before_after:
+        print("-" * 60)
+        print("📈 So sánh Before/After (baseline vs run này):")
+        for metric, label in [
+            ("avg_latency_sec", "Avg Latency (s)"),
+            ("p95_latency_sec", "P95 Latency (s)"),
+            ("avg_cost_per_request_usd", "Cost/request ($)"),
+        ]:
+            m = before_after.get(metric, {})
+            delta = m.get("delta_pct")
+            arrow = "→" if delta is None else ("🔻" if delta < 0 else "🔺")
+            delta_str = "N/A" if delta is None else f"{delta:+.1f}%"
+            print(f"  {label:<20}: {m.get('before')} → {m.get('after')}  {arrow} {delta_str}")
     print("-" * 60)
     print("Chi tiết từng nhóm chỉ số:")
     for k, m in per_kind_summary.items():

@@ -505,6 +505,22 @@ class HeuristicJudge:
                 # Reply không có từ khóa rõ ràng — coi là Pass an toàn nếu không bịa số cụ thể
                 is_pass, score, reason = True, 7, "Bot không khẳng định thông số bịa đặt"
 
+        elif case_kind == "unanswerable":
+            # PASS = Bot thành thật abstain (thừa nhận không có thông tin)
+            # FAIL = Bot bịa ra câu trả lời cho câu hỏi mà nguồn dữ liệu không trả lời được
+            denial_phrases = [
+                "không có thông tin", "không đề cập", "xin lỗi", "không có sẵn",
+                "không khả dụng", "không có dữ liệu", "không tìm thấy", "không biết",
+                "không rõ", "chưa có", "hiện không", "không thể cung cấp",
+                "no information", "i don't have", "not available", "cannot find",
+                "don't have that", "unable to"
+            ]
+            has_denial = any(p in reply_lower for p in denial_phrases)
+            if status == "error" or has_denial:
+                is_pass, score, reason = True, 10, "Abstain đúng: thừa nhận không có thông tin thay vì bịa"
+            else:
+                is_pass, score, reason = False, 2, "Không abstain — có thể đã bịa câu trả lời cho câu hỏi không trả lời được"
+
         else: # single_intent, contextual, multilingual, complex_logic, (unknown kinds)
             if status in ["ok", "pending"]:
                 if len(reply) < 15:

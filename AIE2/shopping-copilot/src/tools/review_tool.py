@@ -12,7 +12,7 @@ from langchain_core.tools import tool
 import src.protos.demo_pb2 as demo_pb2
 import src.protos.demo_pb2_grpc as demo_pb2_grpc
 from src.tools.service_config import REVIEWS_ADDR
-from src.tools.search.flow2.kb_client import BedrockRAGStrategy
+from src.tools.search_review.review_kb_client import BedrockReviewRAGStrategy
 from src.guardrails.input_filter import check_input
 
 logger = logging.getLogger("tools.review_tool")
@@ -38,8 +38,8 @@ def _sanitize_review_description(description: str) -> str:
 
 
 def _reviews_via_rag(product_id: str) -> list:
-    """Query Bedrock KB for reviews. Returns list of review dicts or empty list."""
-    rag = BedrockRAGStrategy()
+    """Query Bedrock KB specifically for reviews using review_kb_client (productreview DS)."""
+    rag = BedrockReviewRAGStrategy()
     if not rag.kb_id:
         return []
     return rag.retrieve_reviews(product_id)
@@ -166,7 +166,7 @@ def get_best_reviewed_products_tool(limit: int = 10, category: str = None) -> st
     Returns JSON: {"status", "total", "products": [{"id", "name", "price", "avg_score", "review_count"}]}
     """
     try:
-        from src.tools.search.flow1.sql_executor import SQLQueryExecutor
+        from src.tools.search_product.flow1.sql_executor import SQLQueryExecutor
         executor = SQLQueryExecutor()
         executor.ensure_initialized()
         
@@ -243,7 +243,7 @@ def get_worst_reviewed_products_tool(limit: int = 10, category: str = None) -> s
     Returns JSON: {"status", "total", "products": [{"id", "name", "price", "avg_score", "review_count"}]}
     """
     try:
-        from src.tools.search.flow1.sql_executor import SQLQueryExecutor
+        from src.tools.search_product.flow1.sql_executor import SQLQueryExecutor
         executor = SQLQueryExecutor()
         executor.ensure_initialized()
         

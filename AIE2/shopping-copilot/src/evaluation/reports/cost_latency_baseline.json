@@ -1,0 +1,19 @@
+{
+  "run_label": "baseline_labeled_testcases",
+  "input_dataset": "labeled_testcases.json",
+  "latency_metrics": {
+    "p95_latency_sec": 16.984,
+    "avg_latency_sec": 8.618,
+    "total_eval_time_sec": 744.21
+  },
+  "cost_metrics": {
+    "copilot_model_id": "apac.amazon.nova-lite-v1:0",
+    "total_input_tokens": 811,
+    "total_output_tokens": 3704,
+    "total_tokens": 4515,
+    "total_cost_usd": 0.000938,
+    "avg_tokens_per_request": 85.2,
+    "avg_cost_per_request_usd": 1.769e-05,
+    "p95_cost_per_request_usd": 0.0
+  }
+}

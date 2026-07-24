@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.tools.search.flow1 import Flow1SQL
+from src.tools.search_product.flow1 import Flow1SQL
 
 
 def test_flow1_generates_sql_and_returns_results():
@@ -31,7 +31,7 @@ def test_entity_extractor_uses_catalog_values_from_db(tmp_path):
     old_env = os.environ.get("SHOPPING_DB_PATH")
     os.environ["SHOPPING_DB_PATH"] = str(db_path)
     try:
-        from src.tools.search.flow1.entity_extractor import EntityExtractor
+        from src.tools.search_product.flow1.entity_extractor import EntityExtractor
 
         extractor = EntityExtractor()
         entities = extractor.extract("find camping gear under 100")
@@ -55,7 +55,7 @@ def test_entity_extractor_uses_fuzzy_matching_for_catalog_variants(tmp_path):
     old_env = os.environ.get("SHOPPING_DB_PATH")
     os.environ["SHOPPING_DB_PATH"] = str(db_path)
     try:
-        from src.tools.search.flow1.entity_extractor import EntityExtractor
+        from src.tools.search_product.flow1.entity_extractor import EntityExtractor
 
         extractor = EntityExtractor()
         entities = extractor.extract("find camping gears under 100")
@@ -69,7 +69,7 @@ def test_entity_extractor_uses_fuzzy_matching_for_catalog_variants(tmp_path):
 
 
 def test_sql_builder_uses_schema_driven_rules():
-    from src.tools.search.flow1.sql_builder import SQLBuilder
+    from src.tools.search_product.flow1.sql_builder import SQLBuilder
 
     builder = SQLBuilder(
         field_rules={
@@ -85,7 +85,7 @@ def test_sql_builder_uses_schema_driven_rules():
 
 
 def test_sql_builder_handles_multiple_clauses_and_ranges():
-    from src.tools.search.flow1.sql_builder import SQLBuilder
+    from src.tools.search_product.flow1.sql_builder import SQLBuilder
 
     builder = SQLBuilder(
         field_rules={
@@ -113,7 +113,7 @@ def test_sql_builder_handles_multiple_clauses_and_ranges():
 
 
 def test_sql_builder_ignores_empty_values_and_preserves_ordering():
-    from src.tools.search.flow1.sql_builder import SQLBuilder
+    from src.tools.search_product.flow1.sql_builder import SQLBuilder
 
     builder = SQLBuilder(
         field_rules={
@@ -141,7 +141,7 @@ def test_entity_extractor_handles_mixed_language_and_long_keywords(tmp_path):
     old_env = os.environ.get("SHOPPING_DB_PATH")
     os.environ["SHOPPING_DB_PATH"] = str(db_path)
     try:
-        from src.tools.search.flow1.entity_extractor import EntityExtractor
+        from src.tools.search_product.flow1.entity_extractor import EntityExtractor
 
         extractor = EntityExtractor()
         entities = extractor.extract("tìm sản phẩm cắm trại ngoài trời dưới 200")

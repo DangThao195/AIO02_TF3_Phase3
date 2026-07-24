@@ -6,7 +6,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from src.tools.search.flow1.sql_executor import SQLQueryExecutor
+from src.tools.search_product.flow1.sql_executor import SQLQueryExecutor
 
 print("="*80)
 print("DIRECT DATABASE QUERY TEST")

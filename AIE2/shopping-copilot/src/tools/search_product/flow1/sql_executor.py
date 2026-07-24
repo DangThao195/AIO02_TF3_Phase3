@@ -1,6 +1,6 @@
 from typing import Any, Dict, List
 
-from src.tools.search.models import Product
+from src.tools.search_product.models import Product
 from src.database.connect import get_conn, init_pool
 
 
@@ -15,12 +15,16 @@ class SQLQueryExecutor:
             return
         try:
             init_pool()
-        except Exception:
-            pass
-        self._initialized = True
+            self._initialized = True
+        except Exception as e:
+            self._initialized = False
+            raise e
 
     def execute(self, query: str, limit: int = 15) -> List[Dict[str, Any]]:
-        self.ensure_initialized()
+        try:
+            self.ensure_initialized()
+        except Exception:
+            pass
         self._validate_query(query)
         try:
             with get_conn() as conn:
@@ -31,11 +35,23 @@ class SQLQueryExecutor:
                 results = [dict(zip(columns, row)) for row in rows[:limit]]
                 return results
         except Exception as e:
-            raise RuntimeError(
-                f"Cannot execute SQL query — PostgreSQL EKS not reachable. "
-                f"Please start port-forward (kubectl port-forward svc/postgresql 5433:5432 -n techx-tf3). "
-                f"Original error: {e}"
-            ) from e
+            # Retry once with fresh pool if initial connection was stale/failed
+            try:
+                self._initialized = False
+                init_pool()
+                with get_conn() as conn:
+                    cur = conn.cursor()
+                    cur.execute(query)
+                    rows = cur.fetchall()
+                    columns = [desc[0] for desc in cur.description or []]
+                    self._initialized = True
+                    return [dict(zip(columns, row)) for row in rows[:limit]]
+            except Exception as retry_exc:
+                raise RuntimeError(
+                    f"Cannot execute SQL query — PostgreSQL EKS not reachable. "
+                    f"Please start port-forward (kubectl port-forward svc/postgresql 5433:5432 -n techx-tf3). "
+                    f"Original error: {retry_exc}"
+                ) from retry_exc
 
     def _validate_query(self, query: str) -> None:
         normalized = (query or "").strip()

@@ -8,7 +8,7 @@ import logging
 
 from langchain_core.tools import tool
 
-from src.tools.search.flow1.sql_executor import SQLQueryExecutor
+from src.tools.search_product.flow1.sql_executor import SQLQueryExecutor
 
 logger = logging.getLogger("tools.catalog_tool")
 

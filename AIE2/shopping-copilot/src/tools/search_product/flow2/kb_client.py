@@ -5,16 +5,16 @@ import boto3
 from typing import List, Optional
 
 from src.database.connect import get_conn, init_pool
-from src.tools.search.models import Money, Product, SearchQuery, ScoredProduct, SearchStrategy
+from src.tools.search_product.models import Money, Product, SearchQuery, ScoredProduct, SearchStrategy
 
 
 class BedrockRAGStrategy(SearchStrategy):
     """
-    Query AWS Bedrock Knowledge Base to perform semantic vector search on products.
-    Requires BEDROCK_KB_ID to be set in environment variables.
+    Query AWS Bedrock Knowledge Base to perform semantic vector search on PRODUCTS.
+    Targets specifically the PRODUCT data source (BEDROCK_KB_DATA_SOURCE_ID / DATA_SOURCE_ID).
     """
 
-    _name = "bedrock_rag"
+    _name = "bedrock_product_rag"
 
     def __init__(self):
         pass
@@ -22,6 +22,11 @@ class BedrockRAGStrategy(SearchStrategy):
     @property
     def kb_id(self) -> Optional[str]:
         return os.environ.get("BEDROCK_KB_ID")
+
+    @property
+    def product_data_source_id(self) -> Optional[str]:
+        """ID of the product datasource in Bedrock KB."""
+        return os.environ.get("BEDROCK_KB_DATA_SOURCE_ID") or os.environ.get("DATA_SOURCE_ID", "OJQNE88GXV")
 
     @property
     def region(self) -> str:
@@ -40,33 +45,45 @@ class BedrockRAGStrategy(SearchStrategy):
         if not kb_id:
             return []
 
-        print(f"\n[RAG] Kich hoat Bedrock RAG tim kiem ngu nghia cho: '{sq.raw}' (Region: {self.region}, KB_ID: {kb_id})")
+        print(f"\n[PRODUCT RAG] Kích hoạt RAG tìm kiếm sản phẩm: '{sq.raw}' (KB_ID: {kb_id}, Product DS: {self.product_data_source_id})")
         try:
             loop = asyncio.get_event_loop()
             results = await loop.run_in_executor(None, self._query_kb, sq.raw)
-            print(f"[RAG] Tim thay {len(results)} san pham phu hop tu Vector KB.")
+            print(f"[PRODUCT RAG] Tìm thấy {len(results)} sản phẩm phù hợp từ Product Vector KB.")
             return results
         except Exception as e:
-            print(f"[RAG] Loi BedrockRAGStrategy: {e}")
+            print(f"[PRODUCT RAG] Lỗi BedrockRAGStrategy: {e}")
             return []
 
     def _query_kb(self, query_text: str) -> List[ScoredProduct]:
         kb_id = self.kb_id
         region = self.region
+        ds_id = self.product_data_source_id
 
         session = boto3.Session(profile_name=os.environ.get("AWS_PROFILE"))
         client = session.client("bedrock-agent-runtime", region_name=region)
+
+        retrieval_config = {
+            'vectorSearchConfiguration': {
+                'numberOfResults': 5
+            }
+        }
+
+        # Filter strictly by PRODUCT data source ID
+        if ds_id:
+            retrieval_config['vectorSearchConfiguration']['filter'] = {
+                'equals': {
+                    'key': 'x-amz-bedrock-kb-data-source-id',
+                    'value': ds_id
+                }
+            }
 
         response = client.retrieve(
             knowledgeBaseId=kb_id,
             retrievalQuery={
                 'text': query_text
             },
-            retrievalConfiguration={
-                'vectorSearchConfiguration': {
-                    'numberOfResults': 5
-                }
-            }
+            retrievalConfiguration=retrieval_config
         )
 
         scored_products = []
@@ -130,64 +147,3 @@ class BedrockRAGStrategy(SearchStrategy):
             categories=categories,
             price_usd=Money(units=price)
         )
-
-    def retrieve_reviews(self, product_id: str) -> list:
-        """
-        Query Bedrock KB for reviews of a specific product.
-        Parses the S3 review format:
-          Product ID: <id>
-          Product Reviews (N total):
-            - id: 1 | username: X | description: Y | score: Z
-        Returns list of dicts: [{username, score, description}]
-        """
-        kb_id = self.kb_id
-        if not kb_id:
-            return []
-
-        try:
-            session = boto3.Session(profile_name=os.environ.get("AWS_PROFILE"))
-            client = session.client("bedrock-agent-runtime", region_name=self.region)
-
-            response = client.retrieve(
-                knowledgeBaseId=kb_id,
-                retrievalQuery={"text": f"product reviews {product_id}"},
-                retrievalConfiguration={
-                    "vectorSearchConfiguration": {"numberOfResults": 5}
-                }
-            )
-
-            reviews = []
-            for res in response.get("retrievalResults", []):
-                text = res.get("content", {}).get("text", "")
-
-                # Only process chunks that belong to this product_id
-                if product_id.upper() not in text.upper():
-                    continue
-
-                # Parse each review line: - id: 1 | username: X | description: Y | score: Z
-                for line in text.splitlines():
-                    line = line.strip().lstrip("- ")
-                    if "username:" not in line.lower():
-                        continue
-                    parts = {}
-                    for segment in line.split(" | "):
-                        if ":" in segment:
-                            k, _, v = segment.partition(":")
-                            parts[k.strip().lower()] = v.strip()
-                    if "username" in parts:
-                        try:
-                            score = float(parts.get("score", 0))
-                        except ValueError:
-                            score = 0.0
-                        reviews.append({
-                            "username": parts.get("username", "Anonymous"),
-                            "score": score,
-                            "description": parts.get("description", ""),
-                        })
-
-            print(f"[RAG] retrieve_reviews({product_id}): found {len(reviews)} reviews from KB")
-            return reviews
-
-        except Exception as e:
-            print(f"[RAG] retrieve_reviews error: {e}")
-            return []

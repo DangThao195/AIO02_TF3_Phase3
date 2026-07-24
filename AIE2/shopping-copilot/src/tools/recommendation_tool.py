@@ -8,7 +8,7 @@ import src.protos.demo_pb2 as demo_pb2
 import src.protos.demo_pb2_grpc as demo_pb2_grpc
 
 from src.tools.service_config import RECO_ADDR
-from src.tools.search.flow1.sql_executor import SQLQueryExecutor
+from src.tools.search_product.flow1.sql_executor import SQLQueryExecutor
 
 
 def _sql_fallback_recommendations(product_id: str, limit: int = 4) -> list:

@@ -113,7 +113,6 @@ class EntityExtractor:
         return entities
 
     def _infer_intent(self, query: str, entities: Dict[str, Any]) -> Dict[str, Any]:
-        """Xác định intent: product_search, category_listing, hay general."""
         has_filters = (
             entities.get("category") is not None
             or entities.get("price_max") is not None
@@ -217,7 +216,6 @@ class EntityExtractor:
         return hints
 
     def get_all_categories(self) -> List[str]:
-        """Lấy danh sách tất cả danh mục sản phẩm từ database."""
         hints = self._get_catalog_category_hints()
         return sorted(set(hints.values()))
 

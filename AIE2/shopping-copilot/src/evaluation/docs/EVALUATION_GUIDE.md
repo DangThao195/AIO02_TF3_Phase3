@@ -12,13 +12,9 @@ Trước khi chạy bộ Eval, bạn **BẮT BUỘC** phải đảm bảo môi t
 Lệnh này giúp kết nối môi trường local của bạn tới AWS EKS để sử dụng các dịch vụ (như database, cart service). Chạy và giữ nguyên cửa sổ này:
 
 ```powershell
-aws ssm start-session `
-  --target "i-02a8d3e39b87180ce" `
-  --document-name AWS-StartPortForwardingSessionToRemoteHost `
-  --parameters host="ADA05FFC84146C0AED730F78786EB320.gr7.ap-southeast-1.eks.amazonaws.com",portNumber="443",localPortNumber="8443" `
-  --region "ap-southeast-1"
+python scripts/start_port_forwards.py
 ```
-*(Nếu bạn đã cấu hình script chạy tự động, bạn có thể chạy: `python scripts/start_port_forwards.py`)*
+*(Script sẽ tự động tra cứu Bastion Instance ID mới nhất qua AWS EC2 API mà không bị hardcode ID cũ)*
 
 ### Terminal 2: Khởi chạy API Server
 Sau khi Terminal 1 đã kết nối, mở Terminal 2 để khởi động FastAPI Server cho Shopping Copilot. Server sẽ chạy trên port `8001`:

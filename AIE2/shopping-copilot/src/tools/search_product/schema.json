@@ -1,0 +1,8 @@
+{
+  "tables": [
+    {
+      "name": "products",
+      "columns": ["id", "name", "description", "categories", "price_units", "price_nanos"]
+    }
+  ]
+}

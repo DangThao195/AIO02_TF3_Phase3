@@ -1,12 +1,12 @@
 import asyncio
 from typing import List, Optional
 
-from src.tools.search.flow1 import Flow1SQL
-from src.tools.search.flow2 import Flow2RAG
-from src.tools.search.models import Money, Product, ScoredProduct, SearchQuery, SearchResult
-from src.tools.search.reranker import Reranker
-from src.tools.search.schema_loader import SchemaLoader
-from src.tools.search.tracer import SearchTracer
+from src.tools.search_product.flow1 import Flow1SQL
+from src.tools.search_product.flow2 import Flow2RAG
+from src.tools.search_product.models import Money, Product, ScoredProduct, SearchQuery, SearchResult
+from src.tools.search_product.reranker import Reranker
+from src.tools.search_product.schema_loader import SchemaLoader
+from src.tools.search_product.tracer import SearchTracer
 
 
 class SearchOrchestrator:
@@ -47,7 +47,7 @@ class SearchOrchestrator:
         sql_products = self._process_flow1_result(flow1_result, tracer)
         tracer.end(sql_start, "ok", f"Flow 1 completed: {len(sql_products)} products")
 
-        rag_start = tracer.time("Flow2: RAG")
+        rag_start = tracer.time("Flow2: Product RAG")
         rag_task = asyncio.create_task(self._run_flow2(query, tracer, rag_start))
         rag_results = await rag_task
 
@@ -91,7 +91,7 @@ class SearchOrchestrator:
 
     async def _run_flow2(self, query: str, tracer: SearchTracer, flow_start: tuple) -> List[ScoredProduct]:
         try:
-            from src.tools.search.flow2.prompt_rewriter import PromptRewriter
+            from src.tools.search_product.flow2.prompt_rewriter import PromptRewriter
             s_rw = tracer.time("PromptRewriter")
             rewriter = PromptRewriter()
             rewritten = await asyncio.wait_for(
@@ -103,7 +103,7 @@ class SearchOrchestrator:
             else:
                 tracer.end(s_rw, "skip", "No rewrite needed")
 
-            s_kb = tracer.time("KB Query")
+            s_kb = tracer.time("KB Query (Product DS)")
             sq = SearchQuery(raw=query)
             results = await asyncio.wait_for(self.flow2.run(sq), timeout=5.0)
             if not results:
@@ -113,8 +113,8 @@ class SearchOrchestrator:
             for sp in results:
                 sp.source = sp.source or "rag"
                 if not sp.strategy_name:
-                    sp.strategy_name = "bedrock_rag"
-            tracer.end(s_kb, "ok", f"Found {len(results)} products from KB")
+                    sp.strategy_name = "bedrock_product_rag"
+            tracer.end(s_kb, "ok", f"Found {len(results)} products from Product KB")
             tracer.end(flow_start, "ok", f"Flow 2 completed: {len(results)} products")
             return results
         except asyncio.TimeoutError:

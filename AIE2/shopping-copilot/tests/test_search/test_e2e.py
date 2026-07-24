@@ -89,7 +89,7 @@ class E2ETestRunner:
         
         # Phase 3: Search strategies
         logger.info("\n[Phase 3] SEARCH STRATEGIES")
-        from src.tools.search.orchestrator import SearchOrchestrator
+        from src.tools.search_product.orchestrator import SearchOrchestrator
         
         orchestrator = SearchOrchestrator()
         try:
