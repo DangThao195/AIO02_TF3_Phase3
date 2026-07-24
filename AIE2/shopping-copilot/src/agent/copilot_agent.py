@@ -259,6 +259,11 @@ class CopilotAgent:
                     plan.append({"name": "get_best_reviewed_products_tool", "args": {"limit": 10, "category": category}})
                 else:
                     plan.append({"name": "get_best_reviewed_products_tool", "args": {"limit": 10}})
+            elif task_type == "compare" and " vs " in intent.get("product_query", ""):
+                # Multi-entity compare: split by ' vs ' and search each separately
+                parts = intent["product_query"].split(" vs ", 1)
+                plan.append({"name": "search_products_v2", "args": {"query": parts[0].strip()}})
+                plan.append({"name": "search_products_v2", "args": {"query": parts[1].strip()}})
             elif intent.get("product_query"):
                 plan.append({"name": "search_products_v2", "args": {"query": intent.get("product_query")}})
                 plan.append({"name": "__fetch_reviews_for_context__", "args": {}})
