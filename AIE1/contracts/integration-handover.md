@@ -272,10 +272,10 @@ Committed evidence now exists for the attack-block-rate path as well:
 ## 13. ADR linkage
 
 The current AIE1 package already has these ADRs in `docs/adr/`:
-- `0001-choose-bedrock-nova-lite.md`
-- `0002-fallback-mechanism.md`
-- `0003-ai-trust-safety-guardrails.md`
-- `0004-summary-fidelity-evaluation.md`
+- `0001-CHOOSE-BEDROCK-NOVA-LITE.md`
+- `0002-FALLBACK-MECHANISM.md`
+- `0003-AI-TRUST-SAFETY-GUARDRAILS.md`
+- `0004-SUMMARY-FIDELITY-EVALUATION.md`
 
 These ADRs cover:
 - candidate model choice
