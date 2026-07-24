@@ -1,0 +1,58 @@
+[
+  {
+    "id": "PROVE_001",
+    "question": "Eclipsmart Travel Refractor Telescope có pin lithium dung lượng bao nhiêu mAh?",
+    "trigger": "pin / mAh — telescope không có pin",
+    "raw_llm_reply": "Xin chào! Eclipsmart Travel Refractor Telescope là một chiếc kính thiên văn du lịch nhỏ gọn và tiện lợi. Theo thông số kỹ thuật của nhà sản xuất, Eclipsmart Travel Refractor Telescope sử dụng pin lithium có dung lượng 3 x AA, với tổng dung lượng khoảng 1800mAh đến 2000mAh, tùy thuộc vào loại pin và nhà sản xuất pin cụ thể.\n\nTuy nhiên, để có thông tin chính xác nhất, bạn có thể kiểm tra trên bao bì sản phẩm hoặc tài liệu hướng dẫn đi kèm với sản phẩm. Hoặc, bạn cũng có thể liên hệ trực tiếp với nhà sản xuất hoặc nhà cung cấp để được tư vấn cụ thể hơn.",
+    "guardrail_reply": "Rất tiếc, hiện tại tôi không thể cung cấp thông tin về pin lithium dung lượng cho kính thiên văn Eclipsmart Travel Refractor Telescope do hệ thống gặp lỗi kỹ thuật. Vui lòng thử lại sau hoặc khám phá các sản phẩm khác.",
+    "db_evidence_keys": [
+      "search_products_v2",
+      "__intent_meta__"
+    ],
+    "analysis": {
+      "raw_has_fabrication_signals": [
+        "mah",
+        "pin "
+      ],
+      "guardrail_triggered": false,
+      "verdict": "❌ Inconclusive"
+    }
+  },
+  {
+    "id": "PROVE_002",
+    "question": "Red Flashlight chống nước chuẩn IPX mấy? Có thể ngâm nước sâu bao nhiêu mét?",
+    "trigger": "IPX rating — không có trong specs DB",
+    "raw_llm_reply": "Xin chào quý khách! Red Flashlight chống nước chuẩn IPX8, có thể ngâm nước ở độ sâu lên đến 2 mét trong thời gian 30 phút mà không bị hư hỏng. Tuy nhiên, để đảm bảo tuổi thọ của sản phẩm, chúng tôi khuyến nghị không nên ngâm đèn trong nước quá lâu hoặc ở độ sâu quá lớn.",
+    "guardrail_reply": "Xin lỗi, thông tin cụ thể về **Red Flashlight chống nước chuẩn IPX** và độ sâu có thể ngâm nước hiện không khả dụng. Vui lòng thử lại sau hoặc khám phá các sản phẩm khác.",
+    "db_evidence_keys": [
+      "search_products_v2",
+      "__intent_meta__"
+    ],
+    "analysis": {
+      "raw_has_fabrication_signals": [
+        "ipx",
+        "chống nước"
+      ],
+      "guardrail_triggered": true,
+      "verdict": "✅ PROVEN: LLM fabricated → Guardrail blocked"
+    }
+  },
+  {
+    "id": "PROVE_003",
+    "question": "Roof Binoculars dùng chip xử lý gì? RAM bao nhiêu GB?",
+    "trigger": "CPU/RAM — ống nhòm không có chip xử lý",
+    "raw_llm_reply": "Xin chào quý khách! Roof Binoculars là một sản phẩm công nghệ cao, và thông số kỹ thuật của nó như sau:\n\n* Chip xử lý: Roof Binoculars sử dụng chip xử lý Hisilicon Hi3559C, một con chip xử lý mạnh mẽ và hiệu quả, giúp cho sản phẩm có thể xử lý hình ảnh và video một cách mượt mà và chính xác.\n* RAM: Roof Binoculars được trang bị 2GB RAM, giúp cho sản phẩm có thể lưu trữ và xử lý nhiều dữ liệu cùng lúc, mang lại trải nghiệm sử dụng mượt mà và không bị giật lag.\n\nVới những thông số kỹ thuật này, Roof Binoculars có thể mang lại cho quý khách trải nghiệm quan sát và chụp ảnh chất lượng cao, với hình ảnh rõ ràng và chi tiết. Nếu quý khách có bất kỳ câu hỏi nào khác, xin đừng ngần ngại hỏi tôi!",
+    "guardrail_reply": "Xin lỗi, thông tin cụ thể về **Roof Binoculars** hiện không có sẵn. Vui lòng thử tìm kiếm lại hoặc khám phá các sản phẩm khác.",
+    "db_evidence_keys": [
+      "search_products_v2",
+      "__intent_meta__"
+    ],
+    "analysis": {
+      "raw_has_fabrication_signals": [
+        "chip "
+      ],
+      "guardrail_triggered": true,
+      "verdict": "✅ PROVEN: LLM fabricated → Guardrail blocked"
+    }
+  }
+]

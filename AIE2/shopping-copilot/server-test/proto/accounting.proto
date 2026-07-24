@@ -1,0 +1,79 @@
+syntax = "proto3";
+
+package accounting;
+
+import "google/protobuf/empty.proto";
+
+service Accounting {
+  rpc CreateOrder(CreateOrderRequest) returns (Order);
+  rpc GetOrder(GetOrderRequest) returns (Order);
+  rpc AddOrderItem(AddOrderItemRequest) returns (OrderItem);
+  rpc SetShipping(SetShippingRequest) returns (Shipping);
+  rpc GetShipping(GetShippingRequest) returns (Shipping);
+  rpc DeleteOrder(DeleteOrderRequest) returns (google.protobuf.Empty);
+}
+
+message CreateOrderRequest {
+  string order_id = 1;
+}
+
+message GetOrderRequest {
+  string order_id = 1;
+}
+
+message AddOrderItemRequest {
+  string order_id = 1;
+  string product_id = 2;
+  int32 quantity = 3;
+  string cost_currency_code = 4;
+  int64 cost_units = 5;
+  int32 cost_nanos = 6;
+}
+
+message SetShippingRequest {
+  string shipping_tracking_id = 1;
+  string shipping_cost_currency_code = 2;
+  int64 shipping_cost_units = 3;
+  int32 shipping_cost_nanos = 4;
+  string street_address = 5;
+  string city = 6;
+  string state = 7;
+  string country = 8;
+  string zip_code = 9;
+  string order_id = 10;
+}
+
+message GetShippingRequest {
+  string shipping_tracking_id = 1;
+}
+
+message DeleteOrderRequest {
+  string order_id = 1;
+}
+
+message Order {
+  string order_id = 1;
+  repeated OrderItem items = 2;
+  optional Shipping shipping = 3;
+}
+
+message OrderItem {
+  string product_id = 1;
+  int32 quantity = 2;
+  string cost_currency_code = 3;
+  int64 cost_units = 4;
+  int32 cost_nanos = 5;
+}
+
+message Shipping {
+  string shipping_tracking_id = 1;
+  string shipping_cost_currency_code = 2;
+  int64 shipping_cost_units = 3;
+  int32 shipping_cost_nanos = 4;
+  string street_address = 5;
+  string city = 6;
+  string state = 7;
+  string country = 8;
+  string zip_code = 9;
+  string order_id = 10;
+}
