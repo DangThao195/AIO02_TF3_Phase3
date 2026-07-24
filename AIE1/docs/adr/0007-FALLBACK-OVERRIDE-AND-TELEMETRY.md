@@ -1,7 +1,7 @@
 # ADR 0007: Thiết kế Redis Control Key `fallback_override`, Prometheus Telemetry & Graceful Shutdown
 
 * **Trạng thái:** Đã phê duyệt
-* **Tác giả:** Kiên (AIE1)
+* **Tác giả:** Kiên (AIE1) và Khoa (Leader AIE1)
 * **Ngày tạo:** 2026-07-23
 
 ---
