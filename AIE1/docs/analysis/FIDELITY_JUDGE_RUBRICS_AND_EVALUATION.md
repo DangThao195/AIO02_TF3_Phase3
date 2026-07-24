@@ -1,4 +1,4 @@
-# ADR 0008: Thống nhất Bộ Rubric Đánh Giá Độ Trung Thực (Fidelity) cho LLM-as-a-Judge
+# Thống nhất Bộ Rubric Đánh Giá Độ Trung Thực (Fidelity) cho LLM-as-a-Judge
 
 * **Trạng thái:** Đã phê duyệt
 * **Tác giả:** Khoa (Leader AIE1), Thịnh (AIE1)
