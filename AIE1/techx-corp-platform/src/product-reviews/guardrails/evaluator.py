@@ -8,11 +8,11 @@ from typing import Any, Dict, List
 
 import boto3
 from botocore.config import Config as BotoConfig
-from openai import OpenAI
 
 from guardrails.input_filter import check_input
 from guardrails.output_filter import filter_output
 from guardrails.fallback import TransientJudgeResponseError
+from guardrails.llm_trace import set_last_usage
 
 
 logger = logging.getLogger("guardrails.evaluator")
@@ -274,6 +274,7 @@ def _log_usage(role: str, provider: str, model: str, response: Any, latency_ms: 
     input_tokens = int(usage.get("inputTokens", 0) or 0)
     output_tokens = int(usage.get("outputTokens", 0) or 0)
     total_tokens = int(usage.get("totalTokens", input_tokens + output_tokens) or 0)
+    set_last_usage(role, provider, model, input_tokens, output_tokens, total_tokens, latency_ms)
     logger.info(
         "AI_USAGE role=%s provider=%s model=%s input_tokens=%s output_tokens=%s total_tokens=%s latency_ms=%.2f",
         role,
@@ -369,6 +370,8 @@ def evaluate_summary_fidelity(
             raise TransientJudgeResponseError("Judge did not return the required structured tool payload.")
         return _normalize_payload(tool_payload)
     else:
+        from openai import OpenAI
+
         client = OpenAI(base_url=judge_base_url, api_key=judge_api_key)
         response = client.chat.completions.create(
             model=judge_model,
@@ -382,12 +385,16 @@ def evaluate_summary_fidelity(
         )
         latency_ms = (time.perf_counter() - started) * 1000
         usage = getattr(response, "usage", None)
+        input_tokens = getattr(usage, "prompt_tokens", 0) if usage else 0
+        output_tokens = getattr(usage, "completion_tokens", 0) if usage else 0
+        total_tokens = getattr(usage, "total_tokens", input_tokens + output_tokens) if usage else 0
+        set_last_usage("judge", "openai", judge_model, input_tokens, output_tokens, total_tokens, latency_ms)
         logger.info(
             "AI_USAGE role=judge provider=openai model=%s input_tokens=%s output_tokens=%s total_tokens=%s latency_ms=%.2f",
             judge_model,
-            getattr(usage, "prompt_tokens", 0) if usage else 0,
-            getattr(usage, "completion_tokens", 0) if usage else 0,
-            getattr(usage, "total_tokens", 0) if usage else 0,
+            input_tokens,
+            output_tokens,
+            total_tokens,
             latency_ms,
         )
         response_text = response.choices[0].message.content

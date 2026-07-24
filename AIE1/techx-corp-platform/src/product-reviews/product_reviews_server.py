@@ -8,28 +8,110 @@ import os
 import json
 from concurrent import futures
 import hashlib
+import logging
 import random
 import re
 import time
 import unicodedata
 import signal       
 import threading
+import secrets
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlparse
 
 # Pip
 import boto3
 import grpc
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ImportError:  # pragma: no cover - optional local .env convenience
+    def load_dotenv(*args, **kwargs):
+        return False
 load_dotenv(override=True)
-from opentelemetry import trace, metrics
-from opentelemetry._logs import set_logger_provider
-from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
-from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
-from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
-from opentelemetry.sdk.resources import Resource
-from opentelemetry.trace import Status, StatusCode
+try:
+    from opentelemetry import trace, metrics
+    from opentelemetry._logs import set_logger_provider
+    from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
+    from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+    from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+    from opentelemetry.sdk.resources import Resource
+    from opentelemetry.trace import Status, StatusCode
+except ImportError:  # pragma: no cover - unit-test fallback when OTel is absent locally
+    class _NoopSpan:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def set_attribute(self, *args, **kwargs):
+            return None
+
+        def set_status(self, *args, **kwargs):
+            return None
+
+    class _NoopTracer:
+        def start_as_current_span(self, *args, **kwargs):
+            return _NoopSpan()
+
+    class _NoopTracerProvider:
+        def get_tracer(self, *args, **kwargs):
+            return _NoopTracer()
+
+    class _NoopMeterProvider:
+        def get_meter(self, *args, **kwargs):
+            return None
+
+    class _NoopTelemetryModule:
+        @staticmethod
+        def get_tracer_provider():
+            return _NoopTracerProvider()
+
+        @staticmethod
+        def get_meter_provider():
+            return _NoopMeterProvider()
+
+    class StatusCode:
+        ERROR = "ERROR"
+
+    class Status:
+        def __init__(self, *args, **kwargs):
+            pass
+
+    class Resource:
+        @staticmethod
+        def create(*args, **kwargs):
+            return None
+
+    class LoggerProvider:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def add_log_record_processor(self, *args, **kwargs):
+            return None
+
+        def shutdown(self):
+            return None
+
+    class LoggingHandler(logging.Handler):
+        def emit(self, record):
+            return None
+
+    class OTLPLogExporter:
+        def __init__(self, *args, **kwargs):
+            pass
+
+    class BatchLogRecordProcessor:
+        def __init__(self, *args, **kwargs):
+            pass
+
+    def set_logger_provider(*args, **kwargs):
+        return None
+
+    trace = _NoopTelemetryModule()
+    metrics = _NoopTelemetryModule()
 
 # Local
-import logging
 import demo_pb2
 import demo_pb2_grpc
 from grpc_health.v1 import health_pb2
@@ -43,14 +125,21 @@ from openfeature.contrib.provider.flagd import FlagdProvider
 
 from metrics import init_metrics
 
-# OpenAI-compatible clients
-from openai import OpenAI
-
 # Guardrails
 from guardrails.input_filter import check_input
 from guardrails.output_filter import filter_output
 from guardrails.fallback import with_fallback, handle_exception
 from guardrails.evaluator import evaluate_summary_fidelity
+from guardrails.llm_trace import (
+    attach_trace_metadata,
+    build_runtime_trace_record,
+    clear_last_usage,
+    current_trace_id,
+    finalize_runtime_trace,
+    read_llm_trace,
+    set_last_usage,
+    write_llm_trace,
+)
 from guardrails.routing import is_clearly_off_topic_question
 
 from google.protobuf.json_format import MessageToJson
@@ -195,6 +284,28 @@ def call_candidate_chat(client, **kwargs):
     return client.chat.completions.create(**kwargs)
 
 
+def build_openai_client(base_url, api_key):
+    from openai import OpenAI
+
+    return OpenAI(base_url=base_url, api_key=api_key)
+
+
+def record_openai_candidate_usage(response, latency_ms):
+    usage = getattr(response, "usage", None)
+    input_tokens = getattr(usage, "prompt_tokens", 0) if usage else 0
+    output_tokens = getattr(usage, "completion_tokens", 0) if usage else 0
+    total_tokens = getattr(usage, "total_tokens", input_tokens + output_tokens) if usage else 0
+    set_last_usage(
+        "candidate",
+        llm_provider or "openai",
+        llm_model,
+        input_tokens,
+        output_tokens,
+        total_tokens,
+        latency_ms,
+    )
+
+
 @with_fallback
 def call_candidate_bedrock(system_prompt, user_prompt):
     started = time.perf_counter()
@@ -214,6 +325,7 @@ def call_candidate_bedrock(system_prompt, user_prompt):
     input_tokens = int(usage.get("inputTokens", 0) or 0)
     output_tokens = int(usage.get("outputTokens", 0) or 0)
     total_tokens = int(usage.get("totalTokens", input_tokens + output_tokens) or 0)
+    set_last_usage("candidate", "bedrock", llm_model, input_tokens, output_tokens, total_tokens, latency_ms)
     logger.info(
         "AI_USAGE role=candidate provider=bedrock model=%s input_tokens=%s output_tokens=%s total_tokens=%s latency_ms=%.2f",
         llm_model,
@@ -623,27 +735,68 @@ def get_average_product_review_score(request_product_id):
 def get_ai_assistant_response(request_product_id, question, context=None):
     with tracer.start_as_current_span("get_ai_assistant_response") as span:
         ai_assistant_response = demo_pb2.AskProductAIAssistantResponse()
+        trace_id, trace_id_source = current_trace_id()
+        trace_started = time.perf_counter()
+        cache_key = None
+        review_version = ""
+        clear_last_usage()
+        attach_trace_metadata(context, trace_id)
         span.set_attribute("app.product.id", request_product_id)
+        span.set_attribute("app.trace.id", trace_id)
+        span.set_attribute("app.trace.id_source", trace_id_source)
         span.set_attribute(
             "app.product.question_sha256",
             hashlib.sha256((question or "").encode("utf-8")).hexdigest(),
         )
+        trace_record = build_runtime_trace_record(
+            trace_id=trace_id,
+            trace_id_source=trace_id_source,
+            product_id=request_product_id,
+            question=question,
+            candidate_provider=llm_provider,
+            candidate_model=llm_model,
+            judge_provider=judge_provider,
+            judge_model=judge_model,
+        )
+
+        def finalize_response(
+            response_text,
+            *,
+            outcome=None,
+            fallback_reason=None,
+            cache_hit=False,
+            judge_status_override=None,
+        ):
+            ai_assistant_response.response = response_text
+            finalized_trace = finalize_runtime_trace(
+                trace_record,
+                trace_started,
+                response_text,
+                outcome=outcome,
+                fallback_reason=fallback_reason,
+                cache_hit=cache_hit,
+                judge_status=judge_status_override,
+                cache_key=cache_key,
+                fallback_message=FALLBACK_SUMMARY_MESSAGE,
+                unverified_message=UNVERIFIED_SUMMARY_MESSAGE,
+                out_of_scope_message=OUT_OF_SCOPE_MESSAGE,
+                no_info_message=NO_INFO_MESSAGE,
+            )
+            write_llm_trace(finalized_trace)
+            return ai_assistant_response
 
         input_check = check_input(question)
+        trace_record["guardrails"]["input_safe"] = bool(input_check.is_safe)
         if not input_check.is_safe:
-            ai_assistant_response.response = input_check.blocked_reason
-            return ai_assistant_response
+            return finalize_response(input_check.blocked_reason, outcome="input_blocked")
 
         safe_question = filter_output(question).filtered_response
 
         if is_clearly_off_topic_question(safe_question):
-            ai_assistant_response.response = OUT_OF_SCOPE_MESSAGE
             product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
             logger.info("Returning deterministic OUT_OF_SCOPE response for product_id:%s", request_product_id)
-            return ai_assistant_response
+            return finalize_response(OUT_OF_SCOPE_MESSAGE, outcome="out_of_scope")
 
-        cache_key = None
-        review_version = ""
         try:
             review_version = get_review_version(request_product_id)
             cache_key = generate_cache_key(
@@ -655,10 +808,11 @@ def get_ai_assistant_response(request_product_id, question, context=None):
             cached_data = get_cached_response(cache_key)
             if cached_data:
                 logger.info(f"[CACHE] Hit for product_id: {request_product_id}")
-                ai_assistant_response.response = cached_data["answer"]
+                trace_record["cache"]["source_trace_id"] = cached_data.get("source_trace_id")
+                trace_record["cache"]["source_response_sha256"] = cached_data.get("source_response_sha256")
                 span.set_attribute("app.cache.hit", True)
                 product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
-                return ai_assistant_response
+                return finalize_response(cached_data["answer"], outcome="cache_hit", cache_hit=True)
             span.set_attribute("app.cache.hit", False)
         except Exception as cache_err:
             logger.warning(f"[CACHE] Error checking cache: {cache_err}")
@@ -674,9 +828,10 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                     cached_data = get_cached_response(cache_key)
                     if cached_data:
                         logger.info(f"[CACHE] Lock poll Hit for product_id: {request_product_id}")
-                        ai_assistant_response.response = cached_data["answer"]
+                        trace_record["cache"]["source_trace_id"] = cached_data.get("source_trace_id")
+                        trace_record["cache"]["source_response_sha256"] = cached_data.get("source_response_sha256")
                         product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
-                        return ai_assistant_response
+                        return finalize_response(cached_data["answer"], outcome="cache_hit_after_lock", cache_hit=True)
                 logger.warning(f"[CACHE] Lock timeout for key {cache_key}, proceeding to call LLM directly.")
 
         result = None
@@ -690,9 +845,8 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                     1,
                     {"source": "redis_override", "error": "forced"},
                 )
-                ai_assistant_response.response = FALLBACK_SUMMARY_MESSAGE
                 product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
-                return ai_assistant_response
+                return finalize_response(FALLBACK_SUMMARY_MESSAGE, outcome="fallback", fallback_reason="redis_override")
 
             force_err_code = None
             if context:
@@ -707,17 +861,15 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                 span.set_attribute("app.fallback.triggered", True)
                 span.set_attribute("app.fallback.source", "rate_limit")
                 product_review_svc_metrics["app_ai_fallback_total"].add(1, {"source": "rate_limit", "error": "429"})
-                ai_assistant_response.response = FALLBACK_SUMMARY_MESSAGE
                 product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
-                return ai_assistant_response
+                return finalize_response(FALLBACK_SUMMARY_MESSAGE, outcome="fallback", fallback_reason="forced_429")
             if force_err_code == "timeout":
                 logger.warning("[FORCED_ERROR] Metadata x-force-llm-error=timeout received, triggering Timeout Fallback.")
                 span.set_attribute("app.fallback.triggered", True)
                 span.set_attribute("app.fallback.source", "timeout")
                 product_review_svc_metrics["app_ai_fallback_total"].add(1, {"source": "timeout", "error": "timeout"})
-                ai_assistant_response.response = FALLBACK_SUMMARY_MESSAGE
                 product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
-                return ai_assistant_response
+                return finalize_response(FALLBACK_SUMMARY_MESSAGE, outcome="fallback", fallback_reason="forced_timeout")
 
             user_prompt, accurate_prompt, inaccurate_prompt = build_runtime_prompts(request_product_id, safe_question)
             system_prompt = build_system_prompt()
@@ -730,8 +882,11 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                 except Exception as review_filter_error:
                     logger.error(f"Error filtering reviews for Bedrock path: {review_filter_error}")
                     span.set_status(Status(StatusCode.ERROR, description="review_sanitization_failed"))
-                    ai_assistant_response.response = FALLBACK_SUMMARY_MESSAGE
-                    return ai_assistant_response
+                    return finalize_response(
+                        FALLBACK_SUMMARY_MESSAGE,
+                        outcome="fallback",
+                        fallback_reason="review_sanitization_failed",
+                    )
 
                 deterministic_answer = answer_deterministic_rating_question(
                     safe_question,
@@ -740,7 +895,6 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                 if deterministic_answer is not None:
                     result = deterministic_answer
                     judge_status = "deterministic"
-                    ai_assistant_response.response = result
                     product_review_svc_metrics["app_ai_assistant_counter"].add(
                         1,
                         {'product.id': request_product_id},
@@ -749,7 +903,7 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                         "AI_OUTCOME product_id=%s stage=deterministic_rating outcome=answered",
                         request_product_id,
                     )
-                    return ai_assistant_response
+                    return finalize_response(result, outcome="deterministic_answer", judge_status_override=judge_status)
 
                 product_info_json = fetch_product_info(request_product_id)
                 llm_inaccurate_response = check_feature_flag("llmInaccurateResponse")
@@ -777,8 +931,11 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                             llm_provider,
                             llm_model,
                         )
-                        ai_assistant_response.response = final_text
-                        return ai_assistant_response
+                        return finalize_response(
+                            final_text,
+                            outcome="fallback",
+                            fallback_reason="candidate_bedrock_failed",
+                        )
 
                 result = post_process_output(final_text, safe_question)
                 if result == NO_INFO_MESSAGE and is_summary_request(safe_question) and raw_reviews_for_judge:
@@ -814,21 +971,21 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                     judge_model,
                 )
 
-                ai_assistant_response.response = result
                 product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
                 logger.info("Returning AI assistant response class=%s", result if result in {
                     OUT_OF_SCOPE_MESSAGE, NO_INFO_MESSAGE, FALLBACK_SUMMARY_MESSAGE, UNVERIFIED_SUMMARY_MESSAGE
                 } else "grounded_answer")
-                return ai_assistant_response
+                return finalize_response(result, judge_status_override=judge_status)
 
             llm_rate_limit_error = check_feature_flag("llmRateLimitError")
             logger.info(f"llmRateLimitError feature flag: {llm_rate_limit_error}")
             if llm_rate_limit_error and random.random() < 0.5:
-                mock_client = OpenAI(base_url=f"{llm_mock_url}", api_key=f"{llm_api_key}")
+                mock_client = build_openai_client(base_url=f"{llm_mock_url}", api_key=f"{llm_api_key}")
                 messages = [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
                 ]
+                candidate_started = time.perf_counter()
                 rate_limit_response = call_candidate_chat(
                     mock_client,
                     model="techx-llm-rate-limit",
@@ -837,17 +994,23 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                     tool_choice="auto",
                     timeout=3.0,
                 )
+                candidate_latency_ms = (time.perf_counter() - candidate_started) * 1000
                 if isinstance(rate_limit_response, str):
                     span.set_status(Status(StatusCode.ERROR, description="rate_limit_mock_failed"))
-                    ai_assistant_response.response = rate_limit_response
-                    return ai_assistant_response
+                    return finalize_response(
+                        rate_limit_response,
+                        outcome="fallback",
+                        fallback_reason="rate_limit_mock_failed",
+                    )
+                record_openai_candidate_usage(rate_limit_response, candidate_latency_ms)
 
-            client = OpenAI(base_url=f"{llm_base_url}", api_key=f"{llm_api_key}")
+            client = build_openai_client(base_url=f"{llm_base_url}", api_key=f"{llm_api_key}")
             messages = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ]
 
+            candidate_started = time.perf_counter()
             initial_response = call_candidate_chat(
                 client,
                 model=llm_model,
@@ -856,6 +1019,7 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                 tool_choice="auto",
                 timeout=3.0,
             )
+            candidate_latency_ms = (time.perf_counter() - candidate_started) * 1000
             if isinstance(initial_response, str):
                 span.set_status(Status(StatusCode.ERROR, description="candidate_call_1_failed"))
                 logger.error(
@@ -864,8 +1028,12 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                     llm_provider,
                     llm_model,
                 )
-                ai_assistant_response.response = initial_response
-                return ai_assistant_response
+                return finalize_response(
+                    initial_response,
+                    outcome="fallback",
+                    fallback_reason="candidate_call_1_failed",
+                )
+            record_openai_candidate_usage(initial_response, candidate_latency_ms)
 
             response_message = initial_response.choices[0].message
             tool_calls = response_message.tool_calls
@@ -929,12 +1097,14 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                     messages.append({"role": "user", "content": accurate_prompt})
 
                 logger.info("Invoking the LLM with %s messages after tool sanitization", len(messages))
+                candidate_started = time.perf_counter()
                 final_response = call_candidate_chat(
                     client,
                     model=llm_model,
                     messages=messages,
                     timeout=3.0,
                 )
+                candidate_latency_ms = (time.perf_counter() - candidate_started) * 1000
                 if isinstance(final_response, str):
                     span.set_status(Status(StatusCode.ERROR, description="candidate_call_2_failed"))
                     logger.error(
@@ -943,8 +1113,12 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                         llm_provider,
                         llm_model,
                     )
-                    ai_assistant_response.response = final_response
-                    return ai_assistant_response
+                    return finalize_response(
+                        final_response,
+                        outcome="fallback",
+                        fallback_reason="candidate_call_2_failed",
+                    )
+                record_openai_candidate_usage(final_response, candidate_latency_ms)
 
                 result = final_response.choices[0].message.content or ""
                 result = post_process_output(result, safe_question)
@@ -965,19 +1139,19 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                     judge_model,
                 )
 
-                ai_assistant_response.response = result
                 logger.info("Returning AI assistant response class=%s", result if result in {
                     OUT_OF_SCOPE_MESSAGE, NO_INFO_MESSAGE, FALLBACK_SUMMARY_MESSAGE, UNVERIFIED_SUMMARY_MESSAGE
                 } else "grounded_answer")
+                product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
+                return finalize_response(result, judge_status_override=judge_status)
             else:
                 result = post_process_output(response_message.content or "", safe_question)
                 if result not in (OUT_OF_SCOPE_MESSAGE, NO_INFO_MESSAGE):
                     result = NO_INFO_MESSAGE if is_product_related_question(safe_question) else OUT_OF_SCOPE_MESSAGE
-                ai_assistant_response.response = result
                 logger.info(f"Returning an AI assistant response: '{result}'")
 
             product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
-            return ai_assistant_response
+            return finalize_response(result)
         finally:
             if lock_key and acquired_lock:
                 release_lock(lock_key)
@@ -988,7 +1162,13 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                     "model": llm_model,
                     "created_at": int(time.time()),
                     "review_version": review_version,
-                    "token_usage": {"input_tokens": 0, "output_tokens": 0},
+                    "source_trace_id": trace_id,
+                    "source_response_sha256": trace_record.get("response_sha256"),
+                    "source_judge_status": judge_status,
+                    "token_usage": (trace_record.get("candidate") or {}).get("total_usage") or {
+                        "input_tokens": 0,
+                        "output_tokens": 0,
+                    },
                 }
                 set_cached_response(cache_key, cache_data)
 
@@ -1029,6 +1209,81 @@ shutdown_event = threading.Event()
 def handle_shutdown_signal(signum, frame):
     logger.info(f"Received signal {signum}, initiating graceful shutdown...")
     shutdown_event.set()
+
+
+class LLMTraceHTTPHandler(BaseHTTPRequestHandler):
+    """Small debug endpoint for fetching black-box LLM traces by trace id."""
+
+    def _send_json(self, status_code, payload):
+        body = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+        self.send_response(status_code)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_GET(self):
+        expected_token = os.environ.get("PRODUCT_REVIEWS_TRACE_HTTP_TOKEN", "").strip()
+        if expected_token:
+            provided_token = (
+                self.headers.get("x-trace-token", "").strip()
+                or self.headers.get("authorization", "").replace("Bearer ", "", 1).strip()
+            )
+            if not secrets.compare_digest(provided_token, expected_token):
+                self._send_json(401, {"error": "unauthorized"})
+                return
+
+        parsed = urlparse(self.path)
+        prefix = "/debug/llm-traces/"
+        if not parsed.path.startswith(prefix):
+            self._send_json(404, {"error": "not_found"})
+            return
+
+        trace_id = parsed.path[len(prefix):].strip()
+        trace_record = read_llm_trace(trace_id)
+        if trace_record is None:
+            self._send_json(404, {"error": "trace_not_found", "trace_id": trace_id})
+            return
+
+        self._send_json(200, trace_record)
+
+    def log_message(self, format, *args):
+        logger.info("LLM_TRACE_HTTP " + format, *args)
+
+
+def start_llm_trace_http_server():
+    port_value = os.environ.get("PRODUCT_REVIEWS_TRACE_HTTP_PORT", "").strip()
+    if not port_value:
+        logger.info("LLM trace HTTP endpoint disabled; set PRODUCT_REVIEWS_TRACE_HTTP_PORT to enable it.")
+        return None
+
+    token_value = os.environ.get("PRODUCT_REVIEWS_TRACE_HTTP_TOKEN", "").strip()
+    allow_unauthenticated = os.environ.get(
+        "PRODUCT_REVIEWS_TRACE_HTTP_ALLOW_UNAUTHENTICATED",
+        "false",
+    ).strip().lower() in {"1", "true", "yes", "on"}
+    if not token_value and not allow_unauthenticated:
+        logger.warning(
+            "LLM trace HTTP endpoint disabled because PRODUCT_REVIEWS_TRACE_HTTP_TOKEN is not set. "
+            "Set PRODUCT_REVIEWS_TRACE_HTTP_ALLOW_UNAUTHENTICATED=true only for local debugging."
+        )
+        return None
+
+    try:
+        port = int(port_value)
+    except ValueError:
+        logger.warning("Invalid PRODUCT_REVIEWS_TRACE_HTTP_PORT=%r; trace HTTP endpoint disabled.", port_value)
+        return None
+
+    http_server = ThreadingHTTPServer(("", port), LLMTraceHTTPHandler)
+    thread = threading.Thread(
+        target=http_server.serve_forever,
+        name="llm-trace-http",
+        daemon=True,
+    )
+    thread.start()
+    logger.info("LLM trace HTTP endpoint started on port %s", port)
+    return http_server
     
 def connect_to_product_catalog_with_retry(catalog_addr, max_retries=5, initial_backoff=2.0):
     """Kết nối sang Product Catalog Service với Exponential Backoff Retry."""
@@ -1140,6 +1395,7 @@ if __name__ == "__main__":
     server.add_insecure_port(f'[::]:{port}')
     server.start()
     logger.info(f'Product reviews service started, listening on port {port}')
+    trace_http_server = start_llm_trace_http_server()
 
     # Main thread sẽ dừng tại đây chờ tín hiệu SIGTERM/SIGINT từ Kubernetes/OS
     shutdown_event.wait()
@@ -1157,6 +1413,11 @@ if __name__ == "__main__":
     grpc_stop_event = server.stop(grace=5.0)
     grpc_stop_event.wait()
     logger.info("gRPC server stopped.")
+
+    if trace_http_server:
+        logger.info("Stopping LLM trace HTTP endpoint...")
+        trace_http_server.shutdown()
+        trace_http_server.server_close()
 
     # Bước C: Cleanup tài nguyên
     try:

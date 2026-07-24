@@ -14,15 +14,37 @@ Tham khảo: docs/analysis/LLM_RETRY_BACKOFF.md
 import logging
 import functools
 
-from openai import (
-    OpenAIError,
-    RateLimitError,
-    InternalServerError,
-    APIConnectionError,
-    BadRequestError,
-    AuthenticationError,
-    PermissionDeniedError,
-)
+try:
+    from openai import (
+        OpenAIError,
+        RateLimitError,
+        InternalServerError,
+        APIConnectionError,
+        BadRequestError,
+        AuthenticationError,
+        PermissionDeniedError,
+    )
+except ImportError:  # pragma: no cover - Bedrock-only runtime path
+    class OpenAIError(Exception):
+        pass
+
+    class RateLimitError(OpenAIError):
+        pass
+
+    class InternalServerError(OpenAIError):
+        pass
+
+    class APIConnectionError(OpenAIError):
+        pass
+
+    class BadRequestError(OpenAIError):
+        pass
+
+    class AuthenticationError(OpenAIError):
+        pass
+
+    class PermissionDeniedError(OpenAIError):
+        pass
 try:
     from botocore.exceptions import ClientError, BotoCoreError
 except ImportError:  # pragma: no cover
