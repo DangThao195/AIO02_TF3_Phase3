@@ -50,14 +50,19 @@ Bổ sung counter metric mới vào `metrics.py`:
 * **Bước 4: Rollback (Lùi lỗi):** AIOps Controller thực hiện xóa Redis key để đưa hệ thống về trạng thái ban đầu.
 * **Bước 5: Recover (Phục hồi):** Verify hệ thống tự động phục hồi luồng LLM bình thường (tỷ lệ lỗi thực tế giảm về mức an toàn **2%**).
 
-### 3.2. Audit Log ghi nhận thực tế
-Toàn bộ quy trình trên được lưu trữ dưới dạng JSON Lines tại [audit_log.jsonl](../../techx-corp-platform/src/product-reviews/logs/audit_log.jsonl):
-```json
-{"run_id": "1983499c-f5e8-4afd-b9e1-8d02cdbf10e3", "timestamp": "2026-07-24T02:46:37.497483+00:00", "phase": "start", "status": "OK", "detail": "AIOps replay simulation started. run_id=1983499c-f5e8-4afd-b9e1-8d02cdbf10e3"}
-{"run_id": "1983499c-f5e8-4afd-b9e1-8d02cdbf10e3", "timestamp": "2026-07-24T02:46:37.497483+00:00", "phase": "trigger", "status": "FIRED", "detail": "AIOps Detector phat hien LLM error spike. simulated_error_rate=82%", "simulated_error_rate": 0.82, "threshold": 0.3, "fault_type": "llm_rate_limit_spike"}
-{"run_id": "1983499c-f5e8-4afd-b9e1-8d02cdbf10e3", "timestamp": "2026-07-24T02:46:37.799044+00:00", "phase": "action", "status": "OK", "detail": "AIOps Controller SET product_reviews:fallback_override=true", "redis_key": "product_reviews:fallback_override", "redis_value": "true"}
-{"run_id": "1983499c-f5e8-4afd-b9e1-8d02cdbf10e3", "timestamp": "2026-07-24T02:46:38.100788+00:00", "phase": "verify", "status": "OK", "detail": "Goi guardrails.cache.is_fallback_override_active() -> True. product-reviews chuyen sang Fallback/Cache mode (Error rate=0%)", "fallback_override_active_from_cache_py": true, "simulated_error_rate_after_fallback": 0.0, "verdict": "PASS", "llm_calls_bypassed": true}
-{"run_id": "1983499c-f5e8-4afd-b9e1-8d02cdbf10e3", "timestamp": "2026-07-24T02:46:38.402907+00:00", "phase": "rollback", "status": "OK", "detail": "AIOps Controller DEL product_reviews:fallback_override", "redis_key": "product_reviews:fallback_override"}
-{"run_id": "1983499c-f5e8-4afd-b9e1-8d02cdbf10e3", "timestamp": "2026-07-24T02:46:38.704155+00:00", "phase": "recover", "status": "OK", "detail": "Goi guardrails.cache.is_fallback_override_active() -> False. He thong tu phuc hoi, LLM path active (Error rate=2%)", "fallback_override_active_from_cache_py": false, "simulated_error_rate_recovered": 0.02, "verdict": "PASS"}
-{"run_id": "1983499c-f5e8-4afd-b9e1-8d02cdbf10e3", "timestamp": "2026-07-24T02:46:38.704155+00:00", "phase": "end", "status": "OK", "detail": "AIOps replay simulation completed."}
-```
+### 3.2. Bảng phân tích log kiểm thử hệ thống
+
+Mọi pha tự động trong Closed-loop Auto-remediation được ghi nhận trực tiếp vào tệp nhật ký kiểm toán [audit_log.jsonl](../../techx-corp-platform/src/product-reviews/logs/audit_log.jsonl) như sau:
+
+| Lượt chạy (Run ID) | Bước (Phase) | Trạng thái (Status) | Chi tiết kỹ thuật | Kết quả (Verdict) |
+| :--- | :---: | :---: | :--- | :---: |
+| `1983499c-...` | `start` | `OK` | Bắt đầu chạy kịch bản mô phỏng AIOps replay | Khởi động |
+| `1983499c-...` | `trigger` | `FIRED` | Phát hiện LLM error spike ở mức **82%** (ngưỡng **30%**) | Kích hoạt cảnh báo |
+| `1983499c-...` | `action` | `OK` | Controller thiết lập `product_reviews:fallback_override=true` | Ép hạ cấp an toàn |
+| `1983499c-...` | `verify` | `OK` | `is_fallback_override_active() -> True`. Bypass LLM sang Cache | **PASS (Error 0%)** |
+| `1983499c-...` | `rollback` | `OK` | Controller thực hiện xóa key `fallback_override` khỏi Redis | Hủy bỏ hạ cấp |
+| `1983499c-...` | `recover` | `OK` | `is_fallback_override_active() -> False`. Khôi phục gọi LLM | **PASS (Error 2%)** |
+| `1983499c-...` | `end` | `OK` | Kết thúc quy trình tự dập lỗi và rollback | Hoàn thành |
+
+> [!NOTE]
+> Chi tiết toàn bộ log thô định dạng JSON Lines có thể tham chiếu trực tiếp tại [audit_log.jsonl](../../techx-corp-platform/src/product-reviews/logs/audit_log.jsonl).
