@@ -17,6 +17,12 @@ import sys
 import os
 import uuid
 
+# ── Mandate Engine Integration (Mandates #23, #24, #25) ──
+from src.aie_mandates_engine import (
+    get_tracer, get_cache, get_user_memory, get_circuit_breaker,
+    LLMTracer,
+)
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
@@ -95,10 +101,12 @@ class ChatResponse(BaseModel):
     status: str
     reply: str
     session_id: str
+    trace_id: str | None = None
     token: str | None = None
     steps: List[StepInfo] = []
     intent: dict | None = None
     evidence: dict | None = None
+    cache_hit: bool = False
 
 class ConfirmRequest(BaseModel):
     session_id: str = Field(..., description="ID phiên chat")
@@ -216,14 +224,18 @@ def api_get_cart(user_id: str):
 async def api_chat(req: ChatRequest):
     """
     Gửi tin nhắn đến Shopping Copilot và nhận câu trả lời.
+    Mandate #24: Mỗi request sinh trace_id, trả về trong response.
 
     - **status = ok**: có câu trả lời
     - **status = pending**: cần xác nhận hành động ghi (dùng token để confirm)
     - **status = error**: có lỗi (input bị block hoặc exception)
     """
+    # Mandate #24: Generate trace_id per request
+    trace_id = LLMTracer.generate_trace_id()
+
     logger.info(
-        "[API] /api/chat | session=%s | user=%s | msg=%.80s",
-        req.session_id, req.user_id, req.message
+        "[API] /api/chat | session=%s | user=%s | trace=%s | msg=%.80s",
+        req.session_id, req.user_id, trace_id, req.message
     )
 
     agent = _get_agent()
@@ -233,9 +245,23 @@ async def api_chat(req: ChatRequest):
         user_message=req.message,
     )
 
+    # Mandate #24: Trace the top-level request
+    tracer = get_tracer()
+    tracer.trace_call(
+        model_name=result.get("model_used", "copilot-agent"),
+        prompt=req.message,
+        response=result.get("reply", "")[:200],
+        latency_ms=result.get("latency_ms", 0),
+        trace_id=trace_id,
+        session_id=req.session_id,
+        user_id=req.user_id,
+        outcome=result.get("status", "ok"),
+        surface="copilot",
+    )
+
     logger.info(
-        "[API] /api/chat response | session=%s | status=%s",
-        req.session_id, result.get("status")
+        "[API] /api/chat response | session=%s | status=%s | trace=%s",
+        req.session_id, result.get("status"), trace_id
     )
 
     steps_data = result.get("steps", [])
@@ -246,9 +272,11 @@ async def api_chat(req: ChatRequest):
         reply=result.get("reply", "Có lỗi xảy ra."),
         token=result.get("token"),
         session_id=req.session_id,
+        trace_id=trace_id,
         steps=steps,
         intent=result.get("intent"),
         evidence=result.get("evidence"),
+        cache_hit=result.get("cache_hit", False),
     )
 
 
@@ -315,6 +343,51 @@ def debug_ratelimit():
                 for uid, ts_list in rl._requests.items()
             },
         }
+
+
+# ══════════════════════════════════════════════════════════════════
+# MANDATE DEBUG/VERIFICATION ENDPOINTS
+# ══════════════════════════════════════════════════════════════════
+
+@app.get("/debug/traces/{trace_id}")
+def debug_fetch_trace(trace_id: str):
+    """Mandate #24: Fetch trace by ID — mentor verification endpoint."""
+    tracer = get_tracer()
+    spans = tracer.get_trace(trace_id)
+    if not spans:
+        raise HTTPException(status_code=404, detail=f"Trace '{trace_id}' not found")
+    return {"trace_id": trace_id, "spans": spans, "span_count": len(spans)}
+
+
+@app.get("/debug/aggregate")
+def debug_aggregate():
+    """Mandate #24: Aggregated cost/latency/tokens view."""
+    tracer = get_tracer()
+    return tracer.get_aggregate_view()
+
+
+@app.get("/debug/mandate-cache")
+def debug_mandate_cache():
+    """Mandate #23: Semantic cache stats."""
+    cache = get_cache()
+    return cache.stats()
+
+
+@app.get("/debug/circuit-breaker")
+def debug_circuit_breaker():
+    """Mandate #25: Circuit breaker status."""
+    cb = get_circuit_breaker()
+    return cb.get_status()
+
+
+@app.get("/debug/user-memory/{user_id}")
+def debug_user_memory(user_id: str):
+    """Mandate #23: Cross-session user memory recall."""
+    mem = get_user_memory()
+    data = mem.recall(user_id)
+    if data is None:
+        raise HTTPException(status_code=404, detail=f"No memory for user '{user_id}'")
+    return {"user_id": user_id, "memory": data}
 
 
 # ── Entry point ──
