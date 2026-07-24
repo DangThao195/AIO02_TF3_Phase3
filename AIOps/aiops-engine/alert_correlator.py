@@ -278,6 +278,33 @@ class AlertCorrelator:
         )
         return best_service
 
+    def calculate_blast_radius(self, culprit_service: str) -> float:
+        """
+        [Mandate #22] Tính phần trăm Blast Radius tác động lên các Application Microservices (7 services).
+        Edge u -> v nghĩa là u gọi v (u phụ thuộc v).
+        Tất cả u ∈ nx.ancestors(G, culprit_service) là các callers/dependents chịu tác động.
+        """
+        app_services = [
+            "frontend", "checkout", "payment", "product-catalog",
+            "product-reviews", "shipping", "recommendation"
+        ]
+        if culprit_service not in app_services:
+            return 0.0
+
+        if culprit_service not in self.nx_graph:
+            return 0.0
+
+        # Lấy danh sách các service gọi/phụ thuộc vào culprit_service
+        dependents = nx.ancestors(self.nx_graph, culprit_service)
+        # Lọc chỉ đếm các application services (bỏ infra nodes như postgres, redis, flagd)
+        app_dependents = set(dependents) & set(app_services)
+
+        # % Blast Radius = (Số app dependents) / 7.0 * 100
+        percentage = (len(app_dependents) / float(len(app_services))) * 100.0
+        logger.info(f"[BlastRadius] {culprit_service} affects {len(app_dependents)} app dependents ({app_dependents}) -> {percentage:.2f}%")
+        return round(percentage, 2)
+
+
     def correlate_alerts(self, alerts: list[dict]) -> list[dict]:
         """
         Gộp nhóm (Clustering) danh sách alerts đầu vào dựa trên:

@@ -22,6 +22,7 @@ class AnomalyDetector:
         
         # Nạp các model Isolation Forest từ S3/local cache
         self._load_models_from_s3()
+        self.load_local_models()
 
     def download_models_from_s3(self):
         """Tải các model Isolation Forest từ S3 về models/ nếu có."""
@@ -439,8 +440,8 @@ class AnomalyDetector:
 
     def check_infra_anomaly(self, service: str, features: list) -> bool:
         """Dùng IF nếu có model, fallback Z-Score nếu không."""
-        # 1. Chế độ giả lập Sandbox
-        if os.getenv("AIOPS_SIMULATION_MODE") == "true":
+        # 1. Chế độ giả lập Sandbox (chỉ override khi không truyền features chuỗi thời gian)
+        if os.getenv("AIOPS_SIMULATION_MODE") == "true" and (not features or all(v == 0.0 for v in features)):
             from config import SIMULATION_STATE
             scenario = SIMULATION_STATE["scenario"]
             remediated = SIMULATION_STATE["remediated"]
@@ -458,6 +459,16 @@ class AnomalyDetector:
                     "error_ratio", "client_error_ratio", "latency_deviation", "rps_delta", "cpu_per_rps", "memory_growth", "kafka_lag_growth",
                     "hour_of_day", "day_of_week", "is_business_hours", "is_high_traffic_period"
                 ]
+                if not features or len(features) != len(feature_cols):
+                    features = [0.0] * len(feature_cols)
+                
+                # IDLE GUARDRAIL: Triệt tiêu 100% cảnh báo giả khi dịch vụ rảnh rỗi (RPS <= 0.1 và Error = 0)
+                rps_val = features[0]
+                err_val = features[4]
+                if rps_val <= 0.1 and err_val == 0.0:
+                    logger.info(f"Idle Guardrail: Service {service} is idle (RPS={rps_val:.3f} <= 0.1, Error=0). Forcing prediction=1 (Normal).")
+                    return False
+
                 df_t = pd.DataFrame([features], columns=feature_cols)
                 prediction = int(self.iforest_models[service].predict(df_t)[0])
                 logger.info(f"IF prediction for {service}: {prediction} (1: Normal, -1: Anomaly)")

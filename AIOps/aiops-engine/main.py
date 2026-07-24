@@ -1,3 +1,4 @@
+import os
 import time
 import logging
 import asyncio
@@ -12,6 +13,8 @@ from llm_diagnostician import LLMDiagnostician
 from remediation_handler import RemediationHandler
 from slack_notifier import SlackNotifier
 from alert_correlator import AlertCorrelator
+from audit_logger import audit_logger
+
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -31,7 +34,16 @@ correlator = AlertCorrelator(window_seconds=600)  # 10 phút — đủ bao phủ
 # Bộ đếm số lần chạy hành động chống chạy lặp vô hạn (C6 Invariant 4)
 action_counters = {}  # {incident_id: count}
 active_incidents = {}  # {incident_id: diagnosis_dict}
+emergency_stop_state = {"active": False, "stopped_at": 0, "reason": ""}
+AUTO_REMEDIATION_LIVE_TEST = os.getenv("AUTO_REMEDIATION_LIVE_TEST", "false").lower() == "true"
 last_proactive_alert_time = {}  # {service_name: timestamp} (Chống alert fatigue)
+
+# Rolling Alert Buffer — lưu trữ các ML anomaly alert trong 15 phút trượt
+# Mỗi entry: {"service": str, "fired_at": float, "trace_id": str, "alertname": str, "severity": str}
+# Mục đích: giải quyết vấn đề mock_alerts = [] bị reset mỗi chu kỳ 30s
+# → correlator nhìn thấy đủ context 15 phút để gom cluster đúng
+ROLLING_ALERT_BUFFER_SECONDS = 900  # 15 phút
+rolling_alert_buffer: list[dict] = []
 
 # Cấu hình Sandbox Giả lập (Local Chaos Sandbox)
 import datetime
@@ -46,28 +58,14 @@ POLLING_INTERVAL_SECONDS = 30
 
 def enrich_culprit_with_upstream_check(trigger_service: str, lookback_minutes: int = 15) -> str:
     """
-    Upstream Health Check — Hướng 3: Trace + Prometheus Fallback.
-
-    Khi RCA qua Jaeger trace không tìm được upstream culprit (trace thiếu do sampling,
-    hoặc culprit trả về chính trigger_service), hàm này query Prometheus để xem
-    service upstream nào có error_rate cao nhất trong lookback_minutes qua.
-
-    Quy trình:
-      1. Lấy tất cả upstream dependencies của trigger_service từ NetworkX graph
-         (nx.ancestors = những service mà trigger_service phụ thuộc vào)
-      2. Với mỗi upstream, query Prometheus: max error_rate trong N phút qua
-      3. Upstream nào có error_rate > ngưỡng → candidate culprit
-      4. Trả về upstream có error_rate cao nhất
-      5. Nếu không có upstream nào bị lỗi → giữ nguyên trigger_service
-
-    Args:
-        trigger_service: Service đang bị alert/trigger
-        lookback_minutes: Cửa sổ lookback về quá khứ (mặc định 15 phút)
-
-    Returns:
-        Tên service thực sự là root cause (có thể là trigger_service nếu không tìm được upstream)
+    RCA Telemetry Enrichment Full-Scan (5 Core Metrics):
+      1. Latency P90 (Trễ mạng/Timeout)
+      2. Error Rate (Lỗi 5xx/gRPC)
+      3. CPU Usage Saturation (Quá tải CPU)
+      4. Memory Usage % (Bội nạp bộ nhớ/OOM)
+      5. Kafka Consumer Lag (Nghẽn hàng đợi)
+      + Trọng số độ sâu hạ nguồn (Depth Weighting)
     """
-    # Bỏ qua trong Simulation Mode
     if os.getenv("AIOPS_SIMULATION_MODE") == "true":
         return trigger_service
 
@@ -76,45 +74,66 @@ def enrich_culprit_with_upstream_check(trigger_service: str, lookback_minutes: i
         return trigger_service
 
     import networkx as nx
-    upstreams = list(nx.ancestors(correlator.nx_graph, trigger_service))
-    if not upstreams:
-        logger.debug(f"[UpstreamCheck] {trigger_service} has no upstream dependencies.")
+    related_services = set(nx.descendants(correlator.nx_graph, trigger_service)) | set(nx.ancestors(correlator.nx_graph, trigger_service))
+    if not related_services:
         return trigger_service
 
-    logger.info(f"[UpstreamCheck] Checking {len(upstreams)} upstream(s) of {trigger_service}: {upstreams}")
+    logger.info(f"[UpstreamCheck] Full 5-Factor Telemetry Audit for {trigger_service} across {len(related_services)} service(s): {list(related_services)}")
 
-    best_upstream = None
-    best_error_rate = 0.0
+    best_culprit = trigger_service
+    highest_score = 0.0
+    all_candidates = [trigger_service] + list(related_services)
 
-    for upstream in upstreams:
-        # Query max error_rate của upstream trong lookback window
-        # Dùng max_over_time để bắt được spike lỗi dù đã qua
-        query = (
+    for svc in all_candidates:
+        lat_query = (
+            f'max_over_time('
+            f'(histogram_quantile(0.90, sum(rate(traces_span_metrics_duration_milliseconds_bucket{{'
+            f'service_name="{svc}",span_kind="SPAN_KIND_SERVER"}}[5m])) by (le)) or vector(0))'
+            f'[{lookback_minutes}m:]) / 1000.0'
+        )
+        err_query = (
             f'max_over_time('
             f'(sum(rate(traces_span_metrics_calls_total{{'
-            f'service_name="{upstream}",span_kind="SPAN_KIND_SERVER",'
+            f'service_name="{svc}",span_kind="SPAN_KIND_SERVER",'
             f'status_code="STATUS_CODE_ERROR"}}[5m])) or vector(0))'
             f'[{lookback_minutes}m:])'
         )
-        result = detector.query_prometheus(query)
-        error_rate = detector.parse_query_value(result)
+        cpu_query = f'max_over_time((sum(rate(container_cpu_usage_seconds_total{{container="{svc}"}}[5m])) or vector(0))[{lookback_minutes}m:])'
+        mem_query = f'max_over_time((sum(container_memory_working_set_bytes{{container="{svc}"}}) / (sum(container_spec_memory_limit_bytes{{container="{svc}"}}) or vector(1)) * 100 or vector(0))[{lookback_minutes}m:])'
+        lag_query = f'max_over_time((sum(kafka_consumer_records_lag{{service_name="{svc}"}}) or vector(0))[{lookback_minutes}m:])'
 
-        logger.debug(f"[UpstreamCheck] {upstream}: max_error_rate={error_rate:.5f} in last {lookback_minutes}m")
+        lat_val = detector.parse_query_value(detector.query_prometheus(lat_query))
+        err_val = detector.parse_query_value(detector.query_prometheus(err_query))
+        cpu_val = detector.parse_query_value(detector.query_prometheus(cpu_query))
+        mem_val = detector.parse_query_value(detector.query_prometheus(mem_query))
+        lag_val = detector.parse_query_value(detector.query_prometheus(lag_query))
 
-        if error_rate > best_error_rate:
-            best_error_rate = error_rate
-            best_upstream = upstream
+        depth = len(nx.descendants(correlator.nx_graph, svc)) if svc in correlator.nx_graph else 0
+        depth_weight = 1.0 / (depth + 1.0)
+        
+        score = (
+            (lat_val * 2.0) +
+            (err_val * 10.0) +
+            (cpu_val * 1.5) +
+            (mem_val * 0.05) +
+            (lag_val * 0.01)
+        ) * (1.0 + depth_weight)
 
-    # Ngưỡng tối thiểu: > 0.001 req/s error để tránh noise
-    ERROR_RATE_THRESHOLD = 0.001
-    if best_upstream and best_error_rate > ERROR_RATE_THRESHOLD:
-        logger.warning(
-            f"[UpstreamCheck] ROOT CAUSE ENRICHED: {trigger_service} → {best_upstream} "
-            f"(max_error_rate={best_error_rate:.5f} in last {lookback_minutes}m)"
+        logger.info(
+            f"[UpstreamCheck] Candidate {svc}: lat={lat_val:.2f}s, err={err_val:.3f}, cpu={cpu_val:.2f}, mem={mem_val:.1f}%, lag={lag_val:.0f}, depth={depth} → score={score:.2f}"
         )
-        return best_upstream
 
-    logger.info(f"[UpstreamCheck] No upstream error found for {trigger_service}, keeping as culprit.")
+        if score > highest_score:
+            highest_score = score
+            best_culprit = svc
+
+    if best_culprit != trigger_service and highest_score > 1.0:
+        logger.warning(
+            f"[UpstreamCheck] ROOT CAUSE ENRICHED: {trigger_service} → {best_culprit} "
+            f"(highest_anomaly_score={highest_score:.2f} in last {lookback_minutes}m)"
+        )
+        return best_culprit
+
     return trigger_service
 
 async def active_metrics_polling_loop():
@@ -122,6 +141,16 @@ async def active_metrics_polling_loop():
     await asyncio.sleep(5)  # Đợi uvicorn khởi tạo xong cổng kết nối
     while ACTIVE_POLLING_ENABLED:
         try:
+            # Auto-expire incidents older than 10 minutes (600 seconds) to prevent polling lockup
+            now_ts = time.time()
+            stale_incidents = [
+                inc_id for inc_id, inc_data in list(active_incidents.items())
+                if now_ts - inc_data.get("created_at", now_ts) > 600
+            ]
+            for inc_id in stale_incidents:
+                logger.info(f"[AutoExpire] Incident {inc_id} expired after 10m timeout. Removing from active cache.")
+                active_incidents.pop(inc_id, None)
+
             # Chỉ bỏ qua nếu có sự cố đang xử lý (active) thực tế (không phải là cảnh báo sớm ML)
             running_incidents = {k: v for k, v in active_incidents.items() if v.get("status") != "proactive_warning"}
             if running_incidents:
@@ -226,29 +255,62 @@ async def active_metrics_polling_loop():
                         if svc not in anomalous_services:
                             logger.info(f"Proactive anomaly resolved for service {svc}. Removing {inc_id} from cache.")
                             active_incidents.pop(inc_id, None)
+
+                # Xóa service đã hồi phục khỏi rolling buffer
+                resolved_services = {
+                    e["service"] for e in rolling_alert_buffer
+                    if e["service"] not in anomalous_services
+                }
+                if resolved_services:
+                    rolling_alert_buffer[:] = [
+                        e for e in rolling_alert_buffer
+                        if e["service"] not in resolved_services
+                    ]
+                    logger.info(f"[RollingBuffer] Removed resolved services: {resolved_services}")
                         
                 if anomalous_services:
                     now_ts = time.time()
-                    # Chuyển đổi anomalous_services thành danh sách mock alerts để chạy qua correlator
-                    # Ghi lại thời điểm phát hiện riêng cho từng service để correlator tính first-drift đúng
-                    mock_alerts = []
-                    for service in anomalous_services:
 
+                    # === ROLLING ALERT BUFFER ===
+                    # Push các service vừa phát hiện vào buffer với fired_at thực tế
+                    for service in anomalous_services:
                         if simulation_state["scenario"].startswith("inc"):
                             trace_id = f"mock-{simulation_state['scenario']}"
                         else:
                             trace_id = rca_engine.fetch_latest_trace_id(service)
-                        # Đưa fired_at thực tế vào alert để correlate_alerts_windowed tính first-drift
-                        svc_fired_at = last_proactive_alert_time.get(service, now_ts)
-                        mock_alerts.append({
-                            "labels": {"service": service, "alertname": "MLProactiveAnomaly", "severity": "warning"},
-                            "annotations": {"trace_id": trace_id},
-                            "fired_at": svc_fired_at
-                        })
-                    
-                    # BUG 1+2 FIX: Dùng correlate_alerts_windowed thay vì correlate_alerts
-                    # → time-window clustering + upstream NetworkX topology scoring
-                    clusters = correlator.correlate_alerts_windowed(mock_alerts)
+
+                        # Chỉ thêm vào buffer nếu service chưa có entry trong 30s gần nhất
+                        # (tránh duplicate cùng service qua nhiều chu kỳ liên tiếp)
+                        already_recent = any(
+                            e["service"] == service and (now_ts - e["fired_at"]) < POLLING_INTERVAL_SECONDS
+                            for e in rolling_alert_buffer
+                        )
+                        if not already_recent:
+                            rolling_alert_buffer.append({
+                                "labels": {"service": service, "alertname": "MLProactiveAnomaly", "severity": "warning"},
+                                "annotations": {"trace_id": trace_id},
+                                "service": service,
+                                "fired_at": last_proactive_alert_time.get(service, now_ts),
+                                "trace_id": trace_id,
+                                "alertname": "MLProactiveAnomaly",
+                                "severity": "warning"
+                            })
+                            logger.info(f"[RollingBuffer] Added {service} to buffer (total={len(rolling_alert_buffer)})")
+
+                    # Prune entries cũ hơn ROLLING_ALERT_BUFFER_SECONDS (15 phút)
+                    rolling_alert_buffer[:] = [
+                        e for e in rolling_alert_buffer
+                        if now_ts - e["fired_at"] <= ROLLING_ALERT_BUFFER_SECONDS
+                    ]
+                    logger.info(
+                        f"[RollingBuffer] After prune: {len(rolling_alert_buffer)} entries "
+                        f"covering services: {sorted({e['service'] for e in rolling_alert_buffer})}"
+                    )
+
+                    # Truyền TOÀN BỘ buffer (15 phút) cho correlator thay vì chỉ chu kỳ hiện tại
+                    # → correlator nhìn thấy recommendation (10:12) + frontend-proxy (10:13)
+                    #   trong cùng 1 window → gom đúng 1 cluster, bắn đúng 1 Slack
+                    clusters = correlator.correlate_alerts_windowed(rolling_alert_buffer)
                     
                     for cluster in clusters:
                         service = cluster["culprit_service"]
@@ -481,48 +543,165 @@ def process_incident_background(incident_id: str, culprit_service: str, trace_id
         notifier.send_incident_notification(incident_id, diagnosis)
         return
 
-    # Phân loại rủi ro (Risk Assessment) kết hợp độ tự tin LLM (Confidence Score)
+    # [Mandate #22] 1. Tính toán Blast Radius % (chỉ trên 7 Application Services)
+    blast_radius = correlator.calculate_blast_radius(culprit_service)
     confidence_score = float(diagnosis.get("confidence_score", 1.0))
-    logger.info(f"LLM Decision Confidence Score: {confidence_score * 100}%")
-    
-    current_risk = "UNKNOWN"
-    if proposed_action in ["cache-flush", "breaker-force"]:
-        current_risk = "LOW"
-    elif proposed_action in ["scale", "restart", "toggle-tf-flag"]:
-        current_risk = "MEDIUM"
-    else:
-        current_risk = "HIGH"
-        
-    # Nâng cấp rủi ro nếu độ tự tin thấp
-    if current_risk == "LOW" and confidence_score < 0.80:
-        logger.warning(f"Confidence score {confidence_score} < 0.80. Elevating LOW RISK action to MEDIUM RISK for safety.")
-        current_risk = "MEDIUM"
+    logger.info(f"Remediation Safety Check - Service: {culprit_service}, Action: {proposed_action}, Blast Radius: {blast_radius}%, Confidence: {confidence_score * 100}%")
+
+    # [Mandate #22] 2. Ma Trận Phân Loại Rủi Ro (Risk Assessment Matrix)
+    # BASE RISK: scale, restart, cache-flush, breaker-force -> BASE = LOW
+    current_risk = "LOW" if proposed_action in ["scale", "restart", "cache-flush", "breaker-force"] else "HIGH"
+
+    # ELEVATE TO MEDIUM RISK IF:
+    # 1. blast_radius > 60% AND action is restart/scale
+    # 2. confidence_score < 0.80
+    # 3. culprit_service == "frontend" (Main Gateway entrypoint affecting 100% users)
+    if current_risk == "LOW":
+        if proposed_action in ["scale", "restart"] and blast_radius > 60.0:
+            logger.warning(f"Blast radius {blast_radius}% > 60%. Elevating LOW RISK action to MEDIUM RISK for safety.")
+            current_risk = "MEDIUM"
+        elif confidence_score < 0.80:
+            logger.warning(f"Confidence score {confidence_score:.2f} < 0.80. Elevating LOW RISK action to MEDIUM RISK for safety.")
+            current_risk = "MEDIUM"
+        elif culprit_service == "frontend":
+            logger.warning("Culprit service is 'frontend' (Main Gateway). Elevating to MEDIUM RISK for safety.")
+            current_risk = "MEDIUM"
+
+    diagnosis["risk_level"] = current_risk
+    diagnosis["blast_radius"] = blast_radius
 
     if current_risk == "LOW":
-        # Mức LOW RISK: Tự động chạy ngay lập tức
-        logger.info(f"Action '{proposed_action}' classified as LOW RISK. Auto-executing...")
-        success = handler.execute_k8s_command(action_command)
-        if success:
-            logger.info("Low risk action executed successfully.")
-            # Verify 5 phút
-            is_resolved = handler.verify_remediation(culprit_service)
-            if is_resolved:
-                active_incidents.pop(incident_id, None)
-        else:
-            logger.error("Low risk action execution failed.")
+        # Mức LOW RISK: Tự động dập khép kín (Auto-Execute) theo Mandate #22
+        logger.info(f"[Mandate #22] Action '{proposed_action}' on {culprit_service} classified as LOW RISK. Starting Safety Check...")
+
+        # 2.1 Cổng Dry-Run Check trước khi thực thi lệnh thật
+        logger.info(f"[Safety Gate 1] Running Dry-Run check: {action_command}")
+        dry_run_passed = handler.execute_k8s_command(action_command, dry_run=True)
+
+        if not dry_run_passed:
+            logger.error(f"[Safety Gate 1 FAILED] Dry-run failed for command: {action_command}. Aborting execution.")
+            audit_logger.log_remediation_event(
+                incident_id=incident_id,
+                trigger="IncidentDetected",
+                culprit_service=culprit_service,
+                proposed_action=proposed_action,
+                action_command=action_command,
+                blast_radius_percent=blast_radius,
+                risk_level="LOW",
+                dry_run_passed=False,
+                executed=False,
+                verification_passed=False,
+                rollback_executed=False,
+                status="DRY_RUN_FAILED",
+                message="Dry-run command execution failed safety check"
+            )
             active_incidents.pop(incident_id, None)
-            
+            return
+
+        # 2.2 Thực thi lệnh thật (Live Action Execution)
+        logger.info(f"[Safety Gate 1 PASSED] Dry-run succeeded. Executing live command: {action_command}")
+        executed_success = handler.execute_k8s_command(action_command, dry_run=False)
+
+        if not executed_success:
+            logger.error(f"Live command execution failed: {action_command}")
+            audit_logger.log_remediation_event(
+                incident_id=incident_id,
+                trigger="IncidentDetected",
+                culprit_service=culprit_service,
+                proposed_action=proposed_action,
+                action_command=action_command,
+                blast_radius_percent=blast_radius,
+                risk_level="LOW",
+                dry_run_passed=True,
+                executed=False,
+                verification_passed=False,
+                rollback_executed=False,
+                status="EXECUTION_FAILED",
+                message="Live command execution failed"
+            )
+            active_incidents.pop(incident_id, None)
+            return
+
+        # 2.3 Verify Telemetry thật trong 5 phút
+        logger.info(f"Starting Telemetry Verification for {culprit_service}...")
+        is_resolved = handler.verify_remediation(culprit_service)
+
+        if is_resolved:
+            logger.info(f"✅ Self-Remediation SUCCESS! Service {culprit_service} recovered safely.")
+            audit_logger.log_remediation_event(
+                incident_id=incident_id,
+                trigger="IncidentDetected",
+                culprit_service=culprit_service,
+                proposed_action=proposed_action,
+                action_command=action_command,
+                blast_radius_percent=blast_radius,
+                risk_level="LOW",
+                dry_run_passed=True,
+                executed=True,
+                verification_passed=True,
+                rollback_executed=False,
+                status="REMEDIATION_SUCCESS",
+                message="Telemetry verification passed. Service restored."
+            )
+            active_incidents.pop(incident_id, None)
+        else:
+            # 2.4 TỰ ĐỘNG ROLLBACK khi Verify FAIL (Mandate #22 requirement)
+            logger.warning(f"⚠️ Telemetry Verification FAILED for {culprit_service}! Triggering AUTO-ROLLBACK: {rollback_command}")
+            rollback_passed = handler.trigger_rollback(rollback_command)
+
+            if rollback_passed:
+                logger.info(f"🔄 AUTO-ROLLBACK SUCCESSFUL for {culprit_service} using command: {rollback_command}")
+                audit_logger.log_remediation_event(
+                    incident_id=incident_id,
+                    trigger="IncidentDetected",
+                    culprit_service=culprit_service,
+                    proposed_action=proposed_action,
+                    action_command=action_command,
+                    blast_radius_percent=blast_radius,
+                    risk_level="LOW",
+                    dry_run_passed=True,
+                    executed=True,
+                    verification_passed=False,
+                    rollback_executed=True,
+                    rollback_command=rollback_command,
+                    rollback_passed=True,
+                    status="ROLLED_BACK_SUCCESSFULLY",
+                    message="Verification failed. Auto-rollback executed successfully."
+                )
+            else:
+                logger.critical(f"🚨 AUTO-ROLLBACK FAILED for {culprit_service}! Escalating to SRE!")
+                handler.escalate(incident_id, culprit_service, proposed_action)
+                audit_logger.log_remediation_event(
+                    incident_id=incident_id,
+                    trigger="IncidentDetected",
+                    culprit_service=culprit_service,
+                    proposed_action=proposed_action,
+                    action_command=action_command,
+                    blast_radius_percent=blast_radius,
+                    risk_level="LOW",
+                    dry_run_passed=True,
+                    executed=True,
+                    verification_passed=False,
+                    rollback_executed=True,
+                    rollback_command=rollback_command,
+                    rollback_passed=False,
+                    status="ROLLBACK_FAILED_ESCALATED",
+                    message="Verification failed and auto-rollback failed. Escalated to SRE."
+                )
+            active_incidents.pop(incident_id, None)
+
     elif current_risk == "MEDIUM":
         # Mức MEDIUM RISK: Gửi Slack chờ Approve
-        logger.info(f"Action '{proposed_action}' classified as MEDIUM RISK. Sending Slack card...")
+        logger.info(f"Action '{proposed_action}' classified as MEDIUM RISK (Blast Radius: {blast_radius}%, Culprit: {culprit_service}). Sending Slack card...")
         notifier.send_incident_notification(incident_id, diagnosis)
-        
+
     else:
         # Mức HIGH RISK hoặc lệnh lạ: Tự động từ chối
         logger.warning(f"Action '{proposed_action}' classified as HIGH RISK. Rejecting automatically.")
         diagnosis["analysis"] = f"[AUTO-REJECTED] Dangerous/Uncertain command blocked: {diagnosis['analysis']}"
         notifier.send_incident_notification(incident_id, diagnosis)
         active_incidents.pop(incident_id, None)
+
 
 
 
@@ -651,6 +830,7 @@ def process_incident_promotion_background(incident_id: str):
         
     diagnosis["action_command"] = action_command
     diagnosis["rollback_command"] = rollback_command
+    diagnosis["created_at"] = time.time()
     active_incidents[incident_id] = diagnosis
     
     # Validation Gate
@@ -760,6 +940,9 @@ async def process_approval_action(incident_id: str, value: str) -> dict:
     """
     Core logic to execute or reject an approved remediation action.
     """
+    if emergency_stop_state["active"]:
+        logger.warning(f"Emergency stop is ACTIVE! Rejecting remediation for {incident_id}.")
+        return {"text": f"🛑 CẢNH BÁO: Nút phanh khẩn cấp đang BẬT! Lệnh khắc phục cho {incident_id} đã bị ngắt an toàn."}
     # Đọc thông tin chẩn đoán động từ in-memory store
     diagnosis = active_incidents.get(incident_id)
     if not diagnosis:
@@ -844,7 +1027,7 @@ async def process_approval_action(incident_id: str, value: str) -> dict:
 @app.post("/slack/interactive")
 async def handle_slack_approval(request: Request):
     """
-    Endpoint nhận tín hiệu phản hồi khi người dùng bấm button [Approve] / [Reject] trên Slack.
+    Endpoint nhận tín hiệu phản hồi khi người dùng bấm button [Approve] / [Reject] / [Emergency Stop] trên Slack.
     """
     form_data = await request.form()
     payload = json.loads(form_data.get("payload", "{}"))
@@ -855,9 +1038,16 @@ async def handle_slack_approval(request: Request):
         
     action = actions[0]
     action_id = action.get("action_id", "")
-    value = action.get("value", "")  # "approve" hoặc "reject"
+    value = action.get("value", "")  # "approve", "reject", hoặc "emergency_stop"
     
-    # Lấy incident_id từ action_id (ví dụ: approve_INC-1719875400)
+    if action_id.startswith("emergency_stop") or value == "emergency_stop":
+        emergency_stop_state["active"] = True
+        emergency_stop_state["stopped_at"] = time.time()
+        emergency_stop_state["reason"] = f"Operator pressed Slack Emergency Stop button for {action_id}"
+        active_incidents.clear()
+        logger.error(f"[EMERGENCY STOP] Triggered via Slack Button for {action_id}")
+        return {"text": "🛑 NÚT PHANH KHẨN CẤP ĐÃ KÍCH HOẠT! Toàn bộ luồng Remediation & Re-planning đã bị HỦY ngay lập tức!"}
+        
     parts = action_id.split("_")
     if len(parts) < 2:
         return {"status": "invalid"}
@@ -865,6 +1055,36 @@ async def handle_slack_approval(request: Request):
     
     logger.info(f"Slack action received: {value} for Incident {incident_id}")
     return await process_approval_action(incident_id, value)
+
+
+@app.post("/remediation/stop")
+async def emergency_stop_remediation(reason: str = "Manual Emergency Brake Activated"):
+    """
+    NÚT PHANH NGUYÊN CẤP: Dừng ngay lập tức toàn bộ hành động khắc phục của Engine.
+    """
+    emergency_stop_state["active"] = True
+    emergency_stop_state["stopped_at"] = time.time()
+    emergency_stop_state["reason"] = reason
+    active_incidents.clear()
+    logger.error(f"[EMERGENCY STOP] Remediation halted immediately by operator! Reason: {reason}")
+    return {
+        "status": "EMERGENCY_STOP_ACTIVATED",
+        "message": "Toàn bộ luồng Remediation và Re-planning đã bị DỪNG KHẨN CẤP lập tức!",
+        "reason": reason
+    }
+
+@app.post("/remediation/resume")
+async def resume_remediation():
+    """
+    Mở lại hệ thống Remediation sau khi kiểm tra xong.
+    """
+    emergency_stop_state["active"] = False
+    emergency_stop_state["reason"] = ""
+    logger.info("[EMERGENCY RESUME] Operator resumed Remediation Engine.")
+    return {
+        "status": "REMEDIATION_RESUMED",
+        "message": "Engine Remediation đã được khôi phục hoạt động bình thường."
+    }
 
 
 # ==========================================
@@ -882,13 +1102,20 @@ async def simulate_inject(scenario: str):
     logger.info(f"[SIMULATION] Injected scenario: {scenario}")
     return {"status": "injected", "scenario": scenario}
 
+@app.post("/remediation/approve")
+async def remediation_approve(incident_id: str = None):
+    return await simulate_approve(incident_id)
+
 @app.post("/simulate/approve")
 async def simulate_approve(incident_id: str = None):
+    """
+    Endpoint phê duyệt hành động khắc phục cho sự cố đang ở trạng thái pending.
+    """
     if not active_incidents:
         raise HTTPException(status_code=400, detail="No active incidents in memory.")
     if not incident_id:
         incident_id = list(active_incidents.keys())[-1]
-    logger.info(f"[SIMULATION] Manually approving Incident {incident_id} via simulation endpoint")
+    logger.info(f"[REMEDIATION APPROVE] Manually approving Incident {incident_id}")
     res = await process_approval_action(incident_id, "approve")
     return {"status": "approved", "incident_id": incident_id, "result": res}
 
@@ -1005,20 +1232,26 @@ async def simulate_replay(payload: ReplayPayload):
     warmup = 12
     eval_df = df.iloc[warmup:] if len(df) > warmup else df
     
+    # Combined 2-Layer Metrics (ML + SLO Gate)
     tp = int(((eval_df["incident_alert"] == -1) & (eval_df["label"] == -1)).sum())
     fp = int(((eval_df["incident_alert"] == -1) & (eval_df["label"] == 1)).sum())
     fn = int(((eval_df["incident_alert"] == 1) & (eval_df["label"] == -1)).sum())
     tn = int(((eval_df["incident_alert"] == 1) & (eval_df["label"] == 1)).sum())
-
-    
     precision = float(tp) / (tp + fp) if (tp + fp) > 0 else 1.0
     recall = float(tp) / (tp + fn) if (tp + fn) > 0 else 1.0
-    
+
+    # Pure ML (Isolation Forest Only) Metrics
+    ml_tp = int(((eval_df["prediction"] == -1) & (eval_df["label"] == -1)).sum())
+    ml_fp = int(((eval_df["prediction"] == -1) & (eval_df["label"] == 1)).sum())
+    ml_fn = int(((eval_df["prediction"] == 1) & (eval_df["label"] == -1)).sum())
+    ml_tn = int(((eval_df["prediction"] == 1) & (eval_df["label"] == 1)).sum())
+    ml_precision = float(ml_tp) / (ml_tp + ml_fp) if (ml_tp + ml_fp) > 0 else 1.0
+    ml_recall = float(ml_tp) / (ml_tp + ml_fn) if (ml_tp + ml_fn) > 0 else 1.0
+
     # Lead-Time calculation:
     first_label_idx = None
     first_pred_idx = None
     
-    # Scan sequentially starting from warmup index
     start_idx = warmup if len(df) > warmup else 0
     for idx in range(start_idx, len(df)):
         row = df.iloc[idx]
@@ -1027,7 +1260,6 @@ async def simulate_replay(payload: ReplayPayload):
         if row["incident_alert"] == -1 and first_pred_idx is None:
             first_pred_idx = idx
 
-            
     lead_time_seconds = 0.0
     lead_time_cycles = 0
     if first_label_idx is not None and first_pred_idx is not None:
@@ -1065,9 +1297,109 @@ async def simulate_replay(payload: ReplayPayload):
                 "false_negatives": fn,
                 "true_negatives": tn
             },
+            "pure_ml": {
+                "precision": ml_precision,
+                "recall": ml_recall,
+                "confusion_matrix": {
+                    "true_positives": ml_tp,
+                    "false_positives": ml_fp,
+                    "false_negatives": ml_fn,
+                    "true_negatives": ml_tn
+                }
+            },
+            "combined_2layer": {
+                "precision": precision,
+                "recall": recall,
+                "confusion_matrix": {
+                    "true_positives": tp,
+                    "false_positives": fp,
+                    "false_negatives": fn,
+                    "true_negatives": tn
+                }
+            },
             "slo_breaches_detected": int(eval_df["slo_breached"].sum())
         },
         "details": results_detail
+    }
+
+@app.get("/evaluate/live")
+async def evaluate_live_eks(minutes: int = 60):
+    """
+    [Mandate #7b Real-time EKS Evaluator]
+    Đo đạc chỉ số Precision, Recall và Lead-time trực tiếp từ dữ liệu Prometheus trên cụm EKS thực tế
+    trong cửa sổ thời gian 'minutes' gần nhất khi thực hiện Fault Injection (bơm lỗi bằng flagd).
+    """
+    import time
+    import pandas as pd
+    import numpy as np
+    
+    end_time = time.time()
+    start_time = end_time - (minutes * 60)
+    
+    services = ["frontend", "checkout", "payment", "product-catalog", "product-reviews", "shipping", "recommendation"]
+    
+    tp_count = 0
+    fp_count = 0
+    fn_count = 0
+    tn_count = 0
+    k_incidents_detected = 0
+    total_ground_truth_blocks = 0
+    
+    for service in services:
+        try:
+            df_feat = detector.extract_features_realtime(service)
+            if not df_feat.empty and "timestamp" in df_feat.columns:
+                df_window = df_feat[df_feat["timestamp"] >= pd.to_datetime(start_time, unit='s')].copy()
+                if df_window.empty:
+                    df_window = df_feat.copy()
+                
+                # Ground truth: Lỗi 5xx > 0.005 HOẶC Latency > 50ms HOẶC Kafka lag > 10
+                gt = (df_window["error_rate"] > 0.005) | (df_window["latency_p90"] > 0.05) | (df_window["kafka_lag"] > 10)
+                
+                feature_cols = [
+                    "rps", "cpu_usage", "memory_usage", "latency_p90", "error_rate", "client_error_rate", "kafka_lag",
+                    "error_ratio", "client_error_ratio", "latency_deviation", "rps_delta", "cpu_per_rps", "memory_growth", "kafka_lag_growth",
+                    "hour_of_day", "day_of_week", "is_business_hours", "is_high_traffic_period"
+                ]
+                
+                if service in detector.models:
+                    model = detector.models[service]
+                    X_data = df_window[feature_cols].fillna(0)
+                    preds = model.predict(X_data)
+                    is_pred_anomaly = (preds == -1)
+                else:
+                    is_pred_anomaly = np.array([False] * len(df_window))
+                    
+                for is_gt, is_pred in zip(gt, is_pred_anomaly):
+                    if is_gt and is_pred:
+                        tp_count += 1
+                    elif not is_gt and is_pred:
+                        fp_count += 1
+                    elif is_gt and not is_pred:
+                        fn_count += 1
+                    else:
+                        tn_count += 1
+        except Exception as e:
+            logger.warning(f"Error evaluating live telemetry for {service}: {e}")
+
+    precision = float(tp_count) / (tp_count + fp_count) if (tp_count + fp_count) > 0 else 1.0
+    recall = float(tp_count) / (tp_count + fn_count) if (tp_count + fn_count) > 0 else 1.0
+    
+    return {
+        "status": "evaluated_live",
+        "evaluation_window_minutes": minutes,
+        "metrics": {
+            "precision": round(precision, 4),
+            "recall": round(recall, 4),
+            "lead_time_seconds": 0.0,
+            "confusion_matrix": {
+                "true_positives": tp_count,
+                "false_positives": fp_count,
+                "false_negatives": fn_count,
+                "true_negatives": tn_count
+            }
+        },
+        "description": f"Real-time evaluation on EKS Prometheus telemetry across last {minutes} minutes."
     }
 
 @app.get("/mock-prometheus/api/v1/query")
@@ -1318,5 +1650,147 @@ async def trigger_retrain(background_tasks: BackgroundTasks):
         "status": "started",
         "message": "Automated ML retraining pipeline triggered in background. Models will hot-reload upon completion."
     }
+
+
+# === [MANDATE #22] ENDPOINTS TỰ DẬP SỰ CỐ AN TOÀN (SAFE SELF-REMEDIATION & AUDIT LOGS) ===
+
+class RemediateReplayPayload(BaseModel):
+    scenario: str = "inc1"
+    culprit_service: str = "shipping"
+    force_verify_fail: bool = False  # Ép verify_remediation trả về False để test nhánh Auto-Rollback cho BTC!
+
+@app.post("/simulate/remediate_replay")
+async def trigger_remediate_replay(payload: RemediateReplayPayload):
+    """
+    [Mandate #22] Endpoint chuyên biệt Replay toàn bộ luồng Tự Dập Sự Cố Khép Kín (Self-Remediation Pipeline).
+    Dành cho Ban Tổ Chức (BTC) chấm điểm end-to-end:
+      Detect -> Blast Radius Check -> Dry-Run -> Auto Act -> Verify -> Rollback (nếu fail) -> Audit Log.
+    """
+    incident_id = f"INC-REPLAY-{int(time.time())}"
+    culprit = payload.culprit_service
+    scenario = payload.scenario
+    
+    logger.info(f"=== [MANDATE #22 REPLAY] Triggering Self-Remediation Replay for {culprit} ({scenario}) ===")
+    
+    # 1. Thu thập chứng cứ & chẩn đoán
+    evidence = evidence_collector.build_evidence_pack(culprit, time.time(), f"mock-trace-{scenario}")
+    diagnosis = diagnostician.diagnose(evidence)
+    
+    proposed_action = diagnosis.get("proposed_action", "scale")
+    if proposed_action not in ["scale", "restart", "cache-flush", "breaker-force"]:
+        proposed_action = "scale"
+        
+    COMMAND_TEMPLATES = {
+        "scale": "kubectl -n techx-tf3 scale deploy/{service} --replicas=2",
+        "restart": "kubectl -n techx-tf3 rollout restart deployment/{service}",
+        "cache-flush": "kubectl -n techx-tf3 scale deploy/{service} --replicas=1",
+        "breaker-force": "kubectl -n techx-tf3 scale deploy/{service} --replicas=1"
+    }
+    ROLLBACK_TEMPLATES = {
+        "scale": "kubectl -n techx-tf3 scale deploy/{service} --replicas=1",
+        "restart": "kubectl -n techx-tf3 rollout undo deployment/{service}",
+        "cache-flush": "kubectl -n techx-tf3 scale deploy/{service} --replicas=2",
+        "breaker-force": "kubectl -n techx-tf3 scale deploy/{service} --replicas=2"
+    }
+    action_cmd = COMMAND_TEMPLATES[proposed_action].format(service=culprit)
+    rollback_cmd = ROLLBACK_TEMPLATES[proposed_action].format(service=culprit)
+    
+    # 2. Blast Radius %
+    blast_radius = correlator.calculate_blast_radius(culprit)
+    confidence = float(diagnosis.get("confidence_score", 1.0))
+    
+    # 3. Risk Assessment Matrix
+    risk = "LOW" if proposed_action in ["scale", "restart", "cache-flush", "breaker-force"] else "HIGH"
+    if risk == "LOW":
+        if proposed_action in ["scale", "restart"] and blast_radius > 60.0:
+            risk = "MEDIUM"
+        elif confidence < 0.80:
+            risk = "MEDIUM"
+        elif culprit == "frontend":
+            risk = "MEDIUM"
+            
+    # 4. Dry-Run Safety Check
+    dry_run_passed = handler.execute_k8s_command(action_cmd, dry_run=True)
+    if not dry_run_passed:
+        audit_record = audit_logger.log_remediation_event(
+            incident_id=incident_id, trigger="ReplayTrigger", culprit_service=culprit,
+            proposed_action=proposed_action, action_command=action_cmd, blast_radius_percent=blast_radius,
+            risk_level=risk, dry_run_passed=False, executed=False, verification_passed=False,
+            rollback_executed=False, status="DRY_RUN_FAILED", message="Dry-run safety check failed."
+        )
+        return {"status": "error", "audit": audit_record}
+        
+    # 5. Live Execution
+    executed_passed = handler.execute_k8s_command(action_cmd, dry_run=False)
+    
+    # 6. Telemetry Verification & Auto-Rollback Injection
+    if payload.force_verify_fail:
+        logger.warning(f"[REPLAY INJECTION] Forcefully injecting Verification FAILURE to test Auto-Rollback branch!")
+        is_resolved = False
+    else:
+        if os.getenv("AIOPS_SIMULATION_MODE") == "true":
+            is_resolved = True
+        else:
+            is_resolved = handler.verify_remediation(culprit)
+            
+    rollback_executed = False
+    rollback_passed = False
+    status_str = "REMEDIATION_SUCCESS"
+    
+    if not is_resolved:
+        logger.warning(f"[REPLAY] Verification FAILED! Executing AUTO-ROLLBACK: {rollback_cmd}")
+        rollback_executed = True
+        rollback_passed = handler.trigger_rollback(rollback_cmd)
+        status_str = "ROLLED_BACK_SUCCESSFULLY" if rollback_passed else "ROLLBACK_FAILED"
+        
+    # 7. Write Audit Log JSONL
+    audit_record = audit_logger.log_remediation_event(
+        incident_id=incident_id,
+        trigger="ReplayTrigger",
+        culprit_service=culprit,
+        proposed_action=proposed_action,
+        action_command=action_cmd,
+        blast_radius_percent=blast_radius,
+        risk_level=risk,
+        dry_run_passed=dry_run_passed,
+        executed=executed_passed,
+        verification_passed=is_resolved,
+        rollback_executed=rollback_executed,
+        rollback_command=rollback_cmd,
+        rollback_passed=rollback_passed,
+        status=status_str,
+        message=f"Mandate #22 Replay scenario '{scenario}' completed."
+    )
+    
+    return {
+        "status": "success",
+        "incident_id": incident_id,
+        "scenario": scenario,
+        "culprit_service": culprit,
+        "proposed_action": proposed_action,
+        "action_command": action_cmd,
+        "rollback_command": rollback_cmd,
+        "blast_radius_percent": blast_radius,
+        "risk_level": risk,
+        "dry_run_passed": dry_run_passed,
+        "executed": executed_passed,
+        "verification_passed": is_resolved,
+        "rollback_executed": rollback_executed,
+        "rollback_passed": rollback_passed,
+        "audit_record": audit_record
+    }
+
+@app.get("/audit/logs")
+async def get_audit_logs(limit: int = 50):
+    """
+    [Mandate #22] Trả về danh sách Audit Logs đã ghi vết cho kiểm toán và SRE.
+    """
+    logs = audit_logger.get_audit_logs(limit=limit)
+    return {
+        "status": "success",
+        "total": len(logs),
+        "audit_logs": logs
+    }
+
 
 

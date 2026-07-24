@@ -8,7 +8,10 @@ if os.path.exists(env_path):
             line = line.strip()
             if "=" in line and not line.startswith("#"):
                 key, val = line.split("=", 1)
-                os.environ[key.strip()] = val.strip()
+                k = key.strip()
+                v = val.strip()
+                if k not in os.environ:
+                    os.environ[k] = v
 
 # Map external AWS credentials if present in env to standard AWS env vars for boto3
 if os.getenv("EXTERNAL_AWS_ACCESS_KEY_ID"):

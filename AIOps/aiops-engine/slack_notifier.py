@@ -148,9 +148,19 @@ class SlackNotifier:
                                     "text": "❌ Reject (Từ chối)",
                                     "emoji": True
                                 },
-                                "style": "danger",
                                 "value": "reject",
                                 "action_id": f"reject_{incident_id}"
+                            },
+                            {
+                                "type": "button",
+                                "text": {
+                                    "type": "plain_text",
+                                    "text": "🛑 EMERGENCY STOP",
+                                    "emoji": True
+                                },
+                                "style": "danger",
+                                "value": "emergency_stop",
+                                "action_id": f"emergency_stop_{incident_id}"
                             }
                         ]
                     }
