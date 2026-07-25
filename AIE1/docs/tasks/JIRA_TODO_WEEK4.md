@@ -117,13 +117,42 @@ Nâng cấp độ bền vững của `product-reviews` khi model bị lỗi (tim
 
 ---
 
+## TICKET 4: Tối ưu hóa chất lượng LLM & Hiệu chuẩn Prompt Judge (RAG Quality Optimization)
+* **Người thực hiện (Assignee):** Thịnh
+* **Loại công việc:** Task / Story
+* **Epic:** AIE1 - Tối ưu hóa Hiệu năng & Chất lượng AI (Tuần 4)
+* **Ưu tiên:** High (P1)
+* **Label Jira:** `ai-quality`, `rag-opt`
+
+### Mô tả công việc (Description)
+Rà soát và cải tiến chất lượng sinh câu trả lời (RAG Accuracy) của LLM Candidate và hiệu chuẩn mô hình Judge để tăng tỷ lệ Pass Rate thực tế (hiện đang ở mức 83.3% trong baseline caching). Khắc phục các trường hợp Judge từ chối nhầm các câu trả lời tốt (False Positive) hoặc Candidate bịa đặt thông tin khi dữ liệu review ít.
+
+### Các tác vụ con (Sub-tasks)
+* **Sub-task 4.1: Cải tiến Prompt System cho Candidate (Thịnh)**
+  - Tinh chỉnh system prompt của `AskProductAIAssistant` để định hình rõ hơn ranh giới thông tin: chỉ tóm tắt các khía cạnh có bằng chứng trực tiếp trong reviews, không tự suy diễn hoặc phóng đại tính năng sản phẩm.
+  - Cải tiến cách cấu trúc Context gửi sang LLM (chèn tiêu đề review, score, và username rõ ràng hơn).
+* **Sub-task 4.2: Hiệu chuẩn tiêu chuẩn và Prompt của Judge (Thịnh)**
+  - Phân tích chi tiết các case bị Judge từ chối (`Unverified` ở baseline) để phát hiện bias.
+  - Tinh chỉnh prompt của Judge để phân biệt rõ giữa "thông tin bổ sung mang tính logic" và "hallucination nghiêm trọng", giảm thiểu False Positive.
+  - Tối ưu hóa định dạng JSON output của Judge để giảm thiểu lỗi parse schema.
+* **Sub-task 4.3: Viết test-suite tự động cho Edge Cases (Thịnh)**
+  - Bổ sung các test cases biên vào `dataset.jsonl` (sản phẩm 0 review, sản phẩm có review cực kỳ mâu thuẫn, review chỉ có rating không có text).
+  - Chạy thử nghiệm và báo cáo Pass Rate cải thiện sau khi tối ưu hóa Prompt.
+
+### Tiêu chí nghiệm thu (Acceptance Criteria)
+- [ ] Tỷ lệ Pass Rate trên bộ test cases normal chuẩn tăng từ 83.3% lên ≥ 90.0%.
+- [ ] Giảm tỷ lệ Judge từ chối nhầm câu trả lời đúng (False Positive Rate) xuống mức tối thiểu.
+- [ ] Hệ thống xử lý êm ái và an toàn các edge cases mới mà không bị crash.
+
+---
+
 ## 📅 LỊCH SPRINT CHI TIẾT THEO NGÀY (TUẦN 4)
 
 | Ngày | Khoa (Leader) | Thịnh | Kiên |
 |------|---------------|-------|------|
 | **T2 26/07** | - Thiết lập cờ cache hit/miss qua gRPC metadata (1.1) | - Trích xuất OTel Trace ID qua metadata gRPC (2.1) | - Họp thiết kế logic Circuit Breaker (3.1) |
 | **T3 27/07** | - Sửa hàm `generate_cache_key` cách ly theo `user_id` (1.2) | - Thiết lập trace JSON lưu Redis (2.2) | - Triển khai class `CircuitBreaker` (3.1) |
-| **T4 28/07** | - Chạy thử nghiệm đo lường cache hit-rate & latency (1.3) | - Code endpoint `POST /replay` (2.3) | - Bọc try-except parse JSON arguments biên (3.2) |
-| **T5 29/07** | - Soạn thảo ADR 0005 cập nhật (1.3) | - Code endpoint `GET /trace/<trace_id>` (2.3) | - Tạo cổng nạp lỗi giả lập `POST /inject` (3.3) |
-| **T6 30/07** | - Kiểm định chéo và tối ưu hóa | - Soạn thảo ADR 0008 và view chi phí (2.4) | - Cập nhật mở rộng ADR 0007 (3.4) |
+| **T4 28/07** | - Đo lường cache hit-rate & latency (1.3) | - Code endpoint `POST /replay` (2.3)<br>- Phân tích prompt Candidate & cases Judge từ chối nhầm (4.1 & 4.2) | - Bọc try-except parse JSON arguments (3.2) |
+| **T5 29/07** | - Soạn thảo ADR 0005 (1.3) | - Code endpoint `GET /trace/<trace_id>` (2.3)<br>- Tinh chỉnh prompt Candidate & Judge (4.1 & 4.2) | - Tạo cổng nạp lỗi giả lập `POST /inject` (3.3) |
+| **T6 30/07** | - Kiểm định chéo và tối ưu hóa | - Soạn thảo ADR 0008 (2.4)<br>- Bổ sung edge cases & Chạy test-suite đánh giá Pass Rate (4.3) | - Cập nhật mở rộng ADR 0007 (3.4) |
 | **T7 31/07** | - Nghiệm thu & Nghiệm thu | - Nghiệm thu & Nghiệm thu | - Nghiệm thu & Nghiệm thu |
