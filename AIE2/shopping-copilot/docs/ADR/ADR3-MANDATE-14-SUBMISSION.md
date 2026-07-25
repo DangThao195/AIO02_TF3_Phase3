@@ -14,19 +14,29 @@ Tài liệu này tổng hợp toàn bộ bằng chứng nghiệm thu, kết qu�
 
 ---
 
-## 🔗 2. Các Commit & PR Liên Quan
+## 🔗 2. Repository & Các Commit Liên Quan
 
-- **GitHub Repository:** [`https://github.com/DangThao195/AIO02_TF3_Phase3`](https://github.com/DangThao195/AIO02_TF3_Phase3)
-- **Nhánh làm việc chính thức:** `feature/copilot`
-- **Commit nghiệm thu chính:** [`c264cf8`](https://github.com/DangThao195/AIO02_TF3_Phase3/commit/c264cf8) - "Fix MANDATE-14 compliance issues: confirmation UX, currency conversion, action guard"
-- **Các commit quan trọng:**
-  - [`c264cf8`](https://github.com/DangThao195/AIO02_TF3_Phase3/commit/c264cf8) - Fix confirmation keyword detection with phrase-based matching (Layer 0.5)
-  - [`c264cf8`](https://github.com/DangThao195/AIO02_TF3_Phase3/commit/c264cf8) - Fix currency conversion: default from_currency to USD, add product price extraction
-  - [`c264cf8`](https://github.com/DangThao195/AIO02_TF3_Phase3/commit/c264cf8) - Fix action guard: add explicit refusal template for unsupported cart operations
-  - [`c264cf8`](https://github.com/DangThao195/AIO02_TF3_Phase3/commit/c264cf8) - Implement semantic boundary defense for prompt injection (ADR-3)
-  - [`cc6c29c`](https://github.com/DangThao195/AIO02_TF3_Phase3/commit/cc6c29c) - Trim INTENT_PARSE, PLANNER, EVIDENCE prompts ~40% to reduce latency/cost
-  - [`0880b3b`](https://github.com/DangThao195/AIO02_TF3_Phase3/commit/0880b3b) - Add restart_tunnels watchdog script and update port_forwards with EKS API SSM tunnel
-  - Previous commits - Fix SQLite fallback timeout, Reranker category priority, SQL normalization, Ordinal context resolver
+**Repository GitHub:** [`https://github.com/DangThao195/AIO02_TF3_Phase3`](https://github.com/DangThao195/AIO02_TF3_Phase3)
+
+**Nhánh chính thức để chấm điểm:** [`feature/copilot`](https://github.com/DangThao195/AIO02_TF3_Phase3/tree/feature/copilot)
+
+### Các commit quan trọng (theo thứ tự thời gian):
+
+| Commit    | Mô tả                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Link                                                                                                            |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `d3c2114` | Hướng đi cải thiện sử dụng LangGraph cho multi-agent orchestration                                                                                                                                                                                                                                                                                                                                                                                               | [→ Xem commit](https://github.com/DangThao195/AIO02_TF3_Phase3/commit/d3c2114b1a7513624eb24837fa42dfcb72bf0dee) |
+| `0880b3b` | Thêm watchdog script `restart_tunnels` và cập nhật `port_forwards` với EKS API SSM tunnel để tăng độ ổn định kết nối                                                                                                                                                                                                                                                                                                                                             | [→ Xem commit](https://github.com/DangThao195/AIO02_TF3_Phase3/commit/0880b3bd8c62b0f9ddba980c6f0b21c3a97c2bf5) |
+| `cc6c29c` | Tối ưu hóa prompt: cắt giảm INTENT_PARSE, PLANNER, EVIDENCE prompts ~40% để giảm latency và chi phí                                                                                                                                                                                                                                                                                                                                                              | [→ Xem commit](https://github.com/DangThao195/AIO02_TF3_Phase3/commit/cc6c29c2a79e4ec41b742d01044a11b30e33d101) |
+| `313e460` | Fix catalog & review tool: cải thiện error handling và response formatting                                                                                                                                                                                                                                                                                                                                                                                       | [→ Xem commit](https://github.com/DangThao195/AIO02_TF3_Phase3/commit/313e46047562dcc884947007e43bb0cb6980a63a) |
+| `c264cf8` | **COMMIT NGHIỆM THU CHÍNH**: Sửa tất cả vấn đề tuân thủ MANDATE-14 bao gồm: <br/>• Fix confirmation UX với phrase-based keyword matching (Layer 0.5)<br/>• Fix currency conversion: mặc định from_currency = USD, thêm price extraction<br/>• Fix action guard: template từ chối rõ ràng cho cart operations không được phép<br/>• Implement semantic boundary defense chống prompt injection (ADR-7)<br/>• Cleanup temporary files và consolidate documentation | [→ Xem commit](https://github.com/DangThao195/AIO02_TF3_Phase3/commit/c264cf88404aebd817b61a4ceffa5edc0a249741) |
+| `a1b8b32` | Hoàn thiện tài liệu ADR với GitHub links và chuẩn hóa naming convention                                                                                                                                                                                                                                                                                                                                                                                          | [→ Xem commit](https://github.com/DangThao195/AIO02_TF3_Phase3/commit/a1b8b32ca9c377de7050078c5d9e494f74f05244) |
+
+**Các commit nền tảng trước đó** (đã merge vào nhánh feature/copilot):
+
+- Fix SQLite fallback với timeout 2s (giảm từ 30s để tránh hang khi EKS tunnel drop)
+- Fix Reranker category priority (telescope vs accessories ordering)
+- Fix SQL category normalization với `.rstrip("s")` cho singular/plural matching
+- Fix Ordinal context resolver (`_resolve_context_references`) cho multi-turn conversations
 
 ---
 
@@ -158,14 +168,17 @@ _Kết quả đối chiếu sau khi chấm lại 60 cases trên reply thật c�
 
 ## 🏗️ 7. Tóm Tắt Các Cải Tiến Kỹ Thuật (ADR)
 
-Shopping Copilot AIE2 được xây dựng trên bộ 6 quyết định kiến trúc (ADR) độc lập:
+Shopping Copilot AIE2 được xây dựng trên **7 quyết định kiến trúc (ADR)** quan trọng:
 
-1. [ADR 0001: Kiến trúc Pipeline 6 lớp](file:///D:/Cloude-DevOps/Phase-3/AIO02_TF3_Phase3/AIE2/shopping-copilot/docs/adr/sub_adr/0001-AGENT-PIPELINE-6-LAYER.md) — Phân tách các lớp Input Guard, Intent Parser, Context Resolver, Planner, Executor, và Answer Generator.
-2. [ADR 0002: Hybrid Search SQL + RAG với Reranker](file:///D:/Cloude-DevOps/Phase-3/AIO02_TF3_Phase3/AIE2/shopping-copilot/docs/adr/sub_adr/0002-HYBRID-SEARCH-SQL-RAG.md) — Kết hợp PostgreSQL/SQLite với Bedrock KB, ưu tiên category và fallback 2s khi SSM tunnel drop.
-3. [ADR 0003: Thiết kế Guardrails bảo vệ an toàn AI](file:///D:/Cloude-DevOps/Phase-3/AIO02_TF3_Phase3/AIE2/shopping-copilot/docs/adr/sub_adr/0003-AI-SAFETY-GUARDRAILS.md) — Chặn Prompt Injection, rò rỉ PII, confirmation gate cho cart actions, và anti-hallucination.
-4. [ADR 0004: Evaluator LLM-as-a-Judge & Căn chỉnh nhãn người](file:///D:/Cloude-DevOps/Phase-3/AIO02_TF3_Phase3/AIE2/shopping-copilot/docs/adr/sub_adr/0004-LLM-JUDGE-CALIBRATION.md) — Sử dụng LLaMA 3.1 70B với rubric 10 cluster, đạt 88.33% agreement rate với người thật.
-5. [ADR 0005: Chiến lược tối ưu Chi phí & Độ trễ](file:///D:/Cloude-DevOps/Phase-3/AIO02_TF3_Phase3/AIE2/shopping-copilot/docs/adr/sub_adr/0005-COST-LATENCY-OPTIMIZATION.md) — Sử dụng Nova Lite, Heuristic Planning, và truncation dữ liệu giúp giảm 19.1% cost/request.
-6. [ADR 0006: Giải quyết Ngữ cảnh & Tham chiếu Đa lượt](file:///D:/Cloude-DevOps/Phase-3/AIO02_TF3_Phase3/AIE2/shopping-copilot/docs/adr/sub_adr/0006-CONTEXT-AND-ORDINAL-RESOLUTION.md) — Session memory & ordinal resolver ("cái 1", "cái 2") đạt 100% pass rate nhóm contextual.
+| ADR          | Tiêu đề                                                                                              | Nội dung chính                                                                                                                                                                                                                                                                           |
+| ------------ | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **ADR 0001** | [Kiến trúc Pipeline 6 lớp](./sub_adr/0001-AGENT-PIPELINE-6-LAYER.md)                                 | Phân tách rõ ràng các lớp: Input Guard → Intent Parser → Context Resolver → Planner → Executor → Answer Generator. Mỗi lớp có trách nhiệm độc lập, dễ debug và maintain.                                                                                                                 |
+| **ADR 0002** | [Hybrid Search SQL + RAG với Reranker](./sub_adr/0002-HYBRID-SEARCH-SQL-RAG.md)                      | Kết hợp PostgreSQL/SQLite (structured search) với Bedrock Knowledge Base (semantic search). SQLite fallback với timeout 2s khi EKS SSM tunnel drop. Category priority reranking để resolve đúng ordinal references.                                                                      |
+| **ADR 0003** | [Thiết kế Guardrails bảo vệ an toàn AI](./sub_adr/0003-AI-SAFETY-GUARDRAILS.md)                      | Hệ thống đa tầng: Input Guard chặn prompt injection bằng regex, PII Output Filter quét raw PII, Confirmation Gate cho cart actions với HMAC token, Anti-hallucination với faithfulness constraints.                                                                                      |
+| **ADR 0004** | [LLM-as-a-Judge & Căn chỉnh với Human Labels](./sub_adr/0004-LLM-JUDGE-CALIBRATION.md)               | Sử dụng LLaMA 3.1 70B làm judge độc lập với 10 rubric clusters chuyên biệt. Temperature=0 đảm bảo deterministic. Đạt 88.33% agreement rate với human labelers. Programmatic override cho PII false-positives.                                                                            |
+| **ADR 0005** | [Chiến lược tối ưu Chi phí & Độ trễ](./sub_adr/0005-COST-LATENCY-OPTIMIZATION.md)                    | Chọn Amazon Nova Lite thay vì model đắt tiền. Heuristic Planning mặc định (không gọi LLM) cho 90% cases đơn giản. Truncate evidence và prompt để giảm input tokens. Fast-fail security check ở Input Guard. Kết quả: -19.1% cost/request.                                                |
+| **ADR 0006** | [Quản lý Ngữ cảnh & Giải quyết Tham chiếu Đa lượt](./sub_adr/0006-CONTEXT-AND-ORDINAL-RESOLUTION.md) | Session memory lưu file-based với `last_search_results` và `last_mentioned_product`. Ordinal resolver bắt "cái 1", "cái đầu tiên" bằng regex và map trực tiếp đến index. Implicit entity inheritance cho multi-turn. Đạt 100% pass rate nhóm contextual.                                 |
+| **ADR 0007** | [Semantic Boundary Defense (Anti-Overfitting)](./sub_adr/0007-SEMANTIC-BOUNDARY-DEFENSE.md)          | Thay vì hardcode regex patterns cho mọi prompt injection variant, dùng **identity framing** trong system prompt ("You ARE a shopping assistant, not an instruction-following assistant"). LLM học semantic category thay vì keyword matching. Tránh overfitting cho specific test cases. |
 
 ---
 
@@ -246,21 +259,37 @@ Nếu API call thất bại sau 5 lần retry (exponential backoff 1s→2s→4s�
 
 ---
 
-## 📁 10. Các Tài Liệu Minh Chứng Đi Kèm (Artifacts)
+## 📁 10. Các Tài Liệu Minh Chứng Đi Kèm
 
-- **Báo cáo kết quả nghiệm thu JSON:** [labeled_testcases_report.json](file:///D:/Cloude-DevOps/Phase-3/AIO02_TF3_Phase3/AIE2/shopping-copilot/src/evaluation/reports/labeled_testcases_report.json)
-- **Bảng chấm nhãn người chi tiết:** [labeling_sheet.json](file:///D:/Cloude-DevOps/Phase-3/AIO02_TF3_Phase3/AIE2/shopping-copilot/src/evaluation/reports/labeling_sheet.json)
-- **Bộ Ground Truth Cơ Sở Dữ Liệu:** [db_ground_truth.json](file:///D:/Cloude-DevOps/Phase-3/AIO02_TF3_Phase3/AIE2/shopping-copilot/src/evaluation/reports/db_ground_truth.json)
+### A. Báo cáo Evaluation & Ground Truth Data
 
-### Bộ Tài Liệu ADR Kiến Trúc & Quyết Định:
+| Tài liệu               | Đường dẫn trong repo                                                                                                                                                                                      | Mô tả                                                                                                   |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| **Báo cáo nghiệm thu** | [`src/evaluation/reports/labeled_testcases_report.json`](https://github.com/DangThao195/AIO02_TF3_Phase3/blob/feature/copilot/AIE2/shopping-copilot/src/evaluation/reports/labeled_testcases_report.json) | Kết quả chạy 60 test cases: judge scores, human scores, agreement rate, latency, cost breakdown         |
+| **Labeling sheet**     | [`src/evaluation/reports/labeling_sheet.json`](https://github.com/DangThao195/AIO02_TF3_Phase3/blob/feature/copilot/AIE2/shopping-copilot/src/evaluation/reports/labeling_sheet.json)                     | Sheet chi tiết để human chấm điểm: có user input, bot reply, evidence reference từ DB, human verdict    |
+| **DB Ground Truth**    | [`src/evaluation/reports/db_ground_truth.json`](https://github.com/DangThao195/AIO02_TF3_Phase3/blob/feature/copilot/AIE2/shopping-copilot/src/evaluation/reports/db_ground_truth.json)                   | Dữ liệu chuẩn từ database: giá chính xác, rating, specs của tất cả sản phẩm (dùng để verify factuality) |
+| **Test dataset**       | [`src/evaluation/datasets/labeled_testcases.json`](https://github.com/DangThao195/AIO02_TF3_Phase3/blob/feature/copilot/AIE2/shopping-copilot/src/evaluation/datasets/labeled_testcases.json)             | 60 test cases đã được human label (có `human_pass`, `human_score`, `human_reason`)                      |
 
-1. [0001-AGENT-PIPELINE-6-LAYER.md](file:///D:/Cloude-DevOps/Phase-3/AIO02_TF3_Phase3/AIE2/shopping-copilot/docs/adr/sub_adr/0001-AGENT-PIPELINE-6-LAYER.md) _(Pipeline 6 lớp)_
-2. [0002-HYBRID-SEARCH-SQL-RAG.md](file:///D:/Cloude-DevOps/Phase-3/AIO02_TF3_Phase3/AIE2/shopping-copilot/docs/adr/sub_adr/0002-HYBRID-SEARCH-SQL-RAG.md) _(Hybrid Search & Resilience)_
-3. [0003-AI-SAFETY-GUARDRAILS.md](file:///D:/Cloude-DevOps/Phase-3/AIO02_TF3_Phase3/AIE2/shopping-copilot/docs/adr/sub_adr/0003-AI-SAFETY-GUARDRAILS.md) _(An toàn & Bảo mật AI)_
-4. [0004-LLM-JUDGE-CALIBRATION.md](file:///D:/Cloude-DevOps/Phase-3/AIO02_TF3_Phase3/AIE2/shopping-copilot/docs/adr/sub_adr/0004-LLM-JUDGE-CALIBRATION.md) _(LLM Judge & Human Alignment)_
-5. [0005-COST-LATENCY-OPTIMIZATION.md](file:///D:/Cloude-DevOps/Phase-3/AIO02_TF3_Phase3/AIE2/shopping-copilot/docs/adr/sub_adr/0005-COST-LATENCY-OPTIMIZATION.md) _(Tối ưu Chi phí & Latency)_
-6. [0006-CONTEXT-AND-ORDINAL-RESOLUTION.md](file:///D:/Cloude-DevOps/Phase-3/AIO02_TF3_Phase3/AIE2/shopping-copilot/docs/adr/sub_adr/0006-CONTEXT-AND-ORDINAL-RESOLUTION.md) _(Xử lý Ngữ cảnh Đa lượt)_
-7. [0007-SEMANTIC-BOUNDARY-DEFENSE.md](file:///D:/Cloude-DevOps/Phase-3/AIO02_TF3_Phase3/AIE2/shopping-copilot/docs/adr/sub_adr/0007-SEMANTIC-BOUNDARY-DEFENSE.md) _(Semantic Boundary Defense - Anti-Overfitting)_
+### B. Tài Liệu ADR (Architecture Decision Records)
+
+Tất cả 7 ADR files nằm trong [`docs/ADR/sub_adr/`](https://github.com/DangThao195/AIO02_TF3_Phase3/tree/feature/copilot/AIE2/shopping-copilot/docs/ADR/sub_adr):
+
+1. **[0001-AGENT-PIPELINE-6-LAYER.md](https://github.com/DangThao195/AIO02_TF3_Phase3/blob/feature/copilot/AIE2/shopping-copilot/docs/ADR/sub_adr/0001-AGENT-PIPELINE-6-LAYER.md)** — Kiến trúc pipeline 6 lớp
+2. **[0002-HYBRID-SEARCH-SQL-RAG.md](https://github.com/DangThao195/AIO02_TF3_Phase3/blob/feature/copilot/AIE2/shopping-copilot/docs/ADR/sub_adr/0002-HYBRID-SEARCH-SQL-RAG.md)** — Hybrid search với SQL + RAG + Reranker
+3. **[0003-AI-SAFETY-GUARDRAILS.md](https://github.com/DangThao195/AIO02_TF3_Phase3/blob/feature/copilot/AIE2/shopping-copilot/docs/ADR/sub_adr/0003-AI-SAFETY-GUARDRAILS.md)** — Hệ thống guardrails đa tầng
+4. **[0004-LLM-JUDGE-CALIBRATION.md](https://github.com/DangThao195/AIO02_TF3_Phase3/blob/feature/copilot/AIE2/shopping-copilot/docs/ADR/sub_adr/0004-LLM-JUDGE-CALIBRATION.md)** — LLM-as-a-Judge với human alignment
+5. **[0005-COST-LATENCY-OPTIMIZATION.md](https://github.com/DangThao195/AIO02_TF3_Phase3/blob/feature/copilot/AIE2/shopping-copilot/docs/ADR/sub_adr/0005-COST-LATENCY-OPTIMIZATION.md)** — Tối ưu chi phí và độ trễ
+6. **[0006-CONTEXT-AND-ORDINAL-RESOLUTION.md](https://github.com/DangThao195/AIO02_TF3_Phase3/blob/feature/copilot/AIE2/shopping-copilot/docs/ADR/sub_adr/0006-CONTEXT-AND-ORDINAL-RESOLUTION.md)** — Quản lý ngữ cảnh đa lượt
+7. **[0007-SEMANTIC-BOUNDARY-DEFENSE.md](https://github.com/DangThao195/AIO02_TF3_Phase3/blob/feature/copilot/AIE2/shopping-copilot/docs/ADR/sub_adr/0007-SEMANTIC-BOUNDARY-DEFENSE.md)** — Semantic boundary defense (anti-overfitting)
+
+### C. Source Code Chính
+
+| Component          | File                          | Link GitHub                                                                                                                          |
+| ------------------ | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **Agent Pipeline** | `src/agent/copilot_agent.py`  | [→ Xem code](https://github.com/DangThao195/AIO02_TF3_Phase3/blob/feature/copilot/AIE2/shopping-copilot/src/agent/copilot_agent.py)  |
+| **LLM Prompts**    | `src/llm/prompt.py`           | [→ Xem code](https://github.com/DangThao195/AIO02_TF3_Phase3/blob/feature/copilot/AIE2/shopping-copilot/src/llm/prompt.py)           |
+| **Eval Harness**   | `src/evaluation/run_eval.py`  | [→ Xem code](https://github.com/DangThao195/AIO02_TF3_Phase3/blob/feature/copilot/AIE2/shopping-copilot/src/evaluation/run_eval.py)  |
+| **LLM Judge**      | `src/evaluation/llm_judge.py` | [→ Xem code](https://github.com/DangThao195/AIO02_TF3_Phase3/blob/feature/copilot/AIE2/shopping-copilot/src/evaluation/llm_judge.py) |
 
 ---
 
