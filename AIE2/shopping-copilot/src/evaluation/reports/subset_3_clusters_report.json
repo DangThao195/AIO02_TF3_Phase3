@@ -1,0 +1,609 @@
+{
+  "mandate": "MANDATE #14 - AI Evaluation Standard",
+  "input_dataset": "subset_3_clusters.json",
+  "judge_model": "meta.llama3-1-70b-instruct-v1:0",
+  "total_cases": 9,
+  "total_passed": 8,
+  "overall_pass_rate_pct": 88.89,
+  "latency_metrics": {
+    "p95_latency_sec": 10.66,
+    "avg_latency_sec": 6.112,
+    "total_eval_time_sec": 101.17
+  },
+  "cost_metrics": {
+    "copilot_model_id": "apac.amazon.nova-lite-v1:0",
+    "total_input_tokens": 97,
+    "total_output_tokens": 490,
+    "total_tokens": 587,
+    "total_cost_usd": 0.000123,
+    "avg_tokens_per_request": 65.2,
+    "avg_cost_per_request_usd": 1.371e-05,
+    "p95_cost_per_request_usd": 0.0
+  },
+  "before_after_comparison": {
+    "baseline_run": "baseline_labeled_testcases",
+    "p95_latency_sec": {
+      "before": 16.984,
+      "after": 10.66,
+      "delta_pct": -37.2
+    },
+    "avg_latency_sec": {
+      "before": 8.618,
+      "after": 6.112,
+      "delta_pct": -29.1
+    },
+    "avg_cost_per_request_usd": {
+      "before": 1.769e-05,
+      "after": 1.371e-05,
+      "delta_pct": -22.5
+    },
+    "total_cost_usd": {
+      "before": 0.000938,
+      "after": 0.000123,
+      "delta_pct": -86.8
+    }
+  },
+  "judge_human_alignment": {
+    "human_labeled_cases": 9,
+    "agreed_cases": 1,
+    "agreement_rate_pct": 11.11
+  },
+  "per_kind_metrics": {
+    "contextual": {
+      "total": 4,
+      "passed": 3,
+      "pass_rate_pct": 75.0,
+      "avg_score": 7.5
+    },
+    "unanswerable": {
+      "total": 2,
+      "passed": 2,
+      "pass_rate_pct": 100.0,
+      "avg_score": 10.0
+    },
+    "multilingual": {
+      "total": 3,
+      "passed": 3,
+      "pass_rate_pct": 100.0,
+      "avg_score": 10.0
+    }
+  },
+  "detailed_results": [
+    {
+      "id": "TC_HARD_004",
+      "case_kind": "contextual",
+      "input_text": "Thêm cả hai cái vào giỏ hàng cho tôi.",
+      "reply": "Tôi đã sẵn sàng thực hiện thêm **cả hai sản phẩm** vào giỏ hàng. Bạn vui lòng bấm xác nhận để tiếp tục. \n\nNếu bạn cần giúp đỡ thêm về các sản phẩm, xin vui lòng cho tôi biết.",
+      "status": "ok",
+      "latency_sec": 4.331,
+      "tokens": {
+        "input": 9,
+        "output": 42,
+        "total": 51
+      },
+      "cost_usd": 1.062e-05,
+      "cost_source": "estimated",
+      "evidence": {
+        "__setup_evidence__": {
+          "search_products_v2": {
+            "status": "success",
+            "total": 2,
+            "products": [
+              {
+                "id": "L9ECAV7KIM",
+                "name": "Lens Cleaning Kit",
+                "price": 21.95,
+                "price_units": 21,
+                "price_nanos": 950000000,
+                "currency": "USD",
+                "description": "Wipe away dust, dirt, fingerprints and other particles on your lenses to see clearly with the Lens Cleaning Kit. This cleaning kit works on all glass and optical surfaces, including telescopes, binoculars, spotting scopes, monoculars, microscopes, and even your camera lenses, computer screens, and mobile devices.  The kit comes complete with a retractable lens brush to remove dust particles and dirt and two options to clean smudges and fingerprints off of your optics, pre-moistened lens wipes and a bottled lens cleaning fluid with soft cloth.",
+                "categories": [
+                  "accessories"
+                ]
+              },
+              {
+                "id": "LS4PSXUNUM",
+                "name": "Red Flashlight",
+                "price": 57.08,
+                "price_units": 57,
+                "price_nanos": 80000000,
+                "currency": "USD",
+                "description": "This 3-in-1 device features a 3-mode red flashlight, a hand warmer, and a portable power bank for recharging your personal electronics on the go. Whether you use it to light the way at an techx star party, a night walk, or wildlife research, ThermoTorch 3 Astro Red's rugged, IPX4-rated design will withstand your everyday activities.",
+                "categories": [
+                  "accessories",
+                  "flashlights"
+                ]
+              }
+            ]
+          },
+          "__intent_meta__": {
+            "task_type": "compare",
+            "target_entity": null
+          }
+        },
+        "__final_evidence__": {
+          "add_to_cart_tool": {
+            "status": "error",
+            "error": "name 'intent' is not defined"
+          },
+          "__intent_meta__": {
+            "task_type": "add_to_cart",
+            "target_entity": "product"
+          }
+        }
+      },
+      "human_pass": false,
+      "human_score": 1,
+      "judge_pass": true,
+      "judge_score": 10,
+      "judge_reason": "The system successfully resolved the context and added both products to the cart.",
+      "aligned_with_human": false
+    },
+    {
+      "id": "TC_UNANS_001",
+      "case_kind": "unanswerable",
+      "input_text": "Chính sách bảo hành của cửa hàng là gì? Thời gian đổi trả bao lâu?",
+      "reply": "Tôi không có thông tin về chính sách bảo hành và thời gian đổi trả của cửa hàng. Bạn có thể liên hệ bộ phận hỗ trợ để được giải đáp.\n\nBạn có muốn tìm hiểu thêm về các sản phẩm kính thiên văn của chúng tôi không?",
+      "status": "ok",
+      "latency_sec": 4.048,
+      "tokens": {
+        "input": 16,
+        "output": 52,
+        "total": 68
+      },
+      "cost_usd": 1.344e-05,
+      "cost_source": "estimated",
+      "evidence": {},
+      "human_pass": true,
+      "human_score": 5,
+      "judge_pass": true,
+      "judge_score": 10,
+      "judge_reason": "The system honestly stated it does not have the information and offered a safe redirect to contact support.",
+      "aligned_with_human": true
+    },
+    {
+      "id": "TC_UNANS_002",
+      "case_kind": "unanswerable",
+      "input_text": "Kính thiên văn nào được NASA khuyên dùng trong danh sách sản phẩm của bạn?",
+      "reply": "Tôi không có thông tin về kính thiên văn nào được NASA khuyên dùng trong danh sách sản phẩm của chúng tôi. Bạn có thể liên hệ bộ phận hỗ trợ để được giải đáp.\n\nNếu bạn đang tìm kiếm kính thiên văn, chúng tôi có các sản phẩm sau:\n1. **National Park Explorascope** - Giá **$101.96**\n2. **Eclipsmart** - Giá **$129.95**\n3. **Starsense Explorer** - Giá **$3599.0**\n\nBạn có muốn tìm hiểu thêm về sản phẩm nào không?",
+      "status": "ok",
+      "latency_sec": 4.668,
+      "tokens": {
+        "input": 16,
+        "output": 86,
+        "total": 102
+      },
+      "cost_usd": 2.16e-05,
+      "cost_source": "estimated",
+      "evidence": {},
+      "human_pass": false,
+      "human_score": 2,
+      "judge_pass": true,
+      "judge_score": 10,
+      "judge_reason": "The system honestly stated it does not have the information and offered a safe redirect to contact support.",
+      "aligned_with_human": false
+    },
+    {
+      "id": "TC_CTX_001",
+      "case_kind": "contextual",
+      "input_text": "Cho tôi xem chi tiết sản phẩm thứ nhất.",
+      "reply": "Dưới đây là chi tiết của sản phẩm thứ nhất từ danh sách của chúng tôi:\n\n**National Park Foundation Explorascope**\n- **Giá:** **$101.96**\n\n**Mô tả:**\nThe National Park Foundation's (NPF) Explorascope 60AZ is a manual alt-azimuth, refractor telescope perfect for celestial viewing on the go. The NPF Explorascope 60 can view the planets, moon, star clusters and brighter deep sky objects like the Orion Nebula and Andromeda Galaxy.\n\nBạn có muốn tìm hiểu thêm về sản phẩm này không?",
+      "status": "ok",
+      "latency_sec": 9.267,
+      "tokens": {
+        "input": 9,
+        "output": 86,
+        "total": 95
+      },
+      "cost_usd": 2.118e-05,
+      "cost_source": "estimated",
+      "evidence": {
+        "__setup_evidence__": {
+          "search_products_v2": {
+            "status": "success",
+            "total": 5,
+            "products": [
+              {
+                "id": "OLJCESPC7Z",
+                "name": "National Park Foundation Explorascope",
+                "price": 101.96,
+                "price_units": 101,
+                "price_nanos": 960000000,
+                "currency": "USD",
+                "description": "The National Park Foundation's (NPF) Explorascope 60AZ is a manual alt-azimuth, refractor telescope perfect for celestial viewing on the go. The NPF Explorascope 60 can view the planets, moon, star clusters and brighter deep sky objects like the Orion Nebula and Andromeda Galaxy.",
+                "categories": [
+                  "telescopes"
+                ]
+              },
+              {
+                "id": "1YMWWN1N4O",
+                "name": "Eclipsmart Travel Refractor Telescope",
+                "price": 129.95,
+                "price_units": 129,
+                "price_nanos": 950000000,
+                "currency": "USD",
+                "description": "Dedicated white-light solar scope for the observer on the go. The 50mm refracting solar scope uses Solar Safe, ISO compliant, full-aperture glass filter material to ensure the safest view of solar events.  The kit comes complete with everything you need, including the dedicated travel solar scope, a Solar Safe finderscope, tripod, a high quality 20mm (18x) Kellner eyepiece and a nylon backpack to carry everything in.  This Travel Solar Scope makes it easy to share the Sun as well as partial and total solar eclipses with the whole family and offers much higher magnifications than you would otherwise get using handheld solar viewers or binoculars.",
+                "categories": [
+                  "telescopes",
+                  "travel"
+                ]
+              },
+              {
+                "id": "66VCHSJNUP",
+                "name": "Starsense Explorer Refractor Telescope",
+                "price": 349.95,
+                "price_units": 349,
+                "price_nanos": 950000000,
+                "currency": "USD",
+                "description": "The first telescope that uses your smartphone to analyze the night sky and calculate its position in real time. StarSense Explorer is ideal for beginners thanks to the app's user-friendly interface and detailed tutorials. It's like having your own personal tour guide of the night sky",
+                "categories": [
+                  "telescopes"
+                ]
+              },
+              {
+                "id": "6E92ZMYYFZ",
+                "name": "Solar Filter",
+                "price": 69.95,
+                "price_units": 69,
+                "price_nanos": 950000000,
+                "currency": "USD",
+                "description": "Enhance your viewing experience with EclipSmart Solar Filter for 8\" telescopes. With two Velcro straps and four self-adhesive Velcro pads for added safety, you can be assured that the solar filter cannot be accidentally knocked off and will provide Solar Safe, ISO compliant viewing.",
+                "categories": [
+                  "accessories",
+                  "telescopes"
+                ]
+              },
+              {
+                "id": "0PUK6V6EV0",
+                "name": "Solar System Color Imager",
+                "price": 175.0,
+                "price_units": 175,
+                "price_nanos": 0,
+                "currency": "USD",
+                "description": "You have your new telescope and have observed Saturn and Jupiter. Now you're ready to take the next step and start imaging them. But where do you begin? The NexImage 10 Solar System Imager is the perfect solution.",
+                "categories": [
+                  "accessories",
+                  "telescopes"
+                ]
+              }
+            ]
+          },
+          "__intent_meta__": {
+            "task_type": "search",
+            "target_entity": "product"
+          }
+        },
+        "__final_evidence__": {
+          "search_products_v2": {
+            "status": "success",
+            "total": 1,
+            "products": [
+              {
+                "id": "OLJCESPC7Z",
+                "name": "National Park Foundation Explorascope",
+                "price": 101.96,
+                "price_units": 101,
+                "price_nanos": 960000000,
+                "currency": "USD",
+                "description": "The National Park Foundation's (NPF) Explorascope 60AZ is a manual alt-azimuth, refractor telescope perfect for celestial viewing on the go. The NPF Explorascope 60 can view the planets, moon, star clusters and brighter deep sky objects like the Orion Nebula and Andromeda Galaxy.",
+                "categories": [
+                  "telescopes"
+                ]
+              }
+            ]
+          },
+          "__intent_meta__": {
+            "task_type": "lookup",
+            "target_entity": "product"
+          }
+        }
+      },
+      "human_pass": false,
+      "human_score": 2,
+      "judge_pass": true,
+      "judge_score": 10,
+      "judge_reason": "The system successfully resolved the context using the setup evidence and answered accurately.",
+      "aligned_with_human": false
+    },
+    {
+      "id": "TC_CTX_002",
+      "case_kind": "contextual",
+      "input_text": "Cái đó bao nhiêu tiền?",
+      "reply": "Mình chưa có danh sách sản phẩm nào trước đó để chọn. Bạn vui lòng tìm kiếm sản phẩm trước nhé.",
+      "status": "ok",
+      "latency_sec": 3.116,
+      "tokens": {
+        "input": 5,
+        "output": 23,
+        "total": 28
+      },
+      "cost_usd": 5.82e-06,
+      "cost_source": "estimated",
+      "evidence": {},
+      "human_pass": false,
+      "human_score": 2,
+      "judge_pass": true,
+      "judge_score": 10,
+      "judge_reason": "System correctly asked for clarification when no prior context was available.",
+      "aligned_with_human": false
+    },
+    {
+      "id": "TC_CTX_003",
+      "case_kind": "contextual",
+      "input_text": "Thêm cái đầu tiên vào giỏ hàng cho tôi.",
+      "reply": "Tôi đã sẵn sàng thực hiện thêm **cái đầu tiên** vào giỏ hàng. Bạn vui lòng bấm xác nhận để tiếp tục. \n\nNếu bạn cần giúp đỡ thêm, xin vui lòng cho tôi biết.",
+      "status": "ok",
+      "latency_sec": 4.157,
+      "tokens": {
+        "input": 9,
+        "output": 37,
+        "total": 46
+      },
+      "cost_usd": 9.42e-06,
+      "cost_source": "estimated",
+      "evidence": {
+        "__setup_evidence__": {
+          "search_products_v2": {
+            "status": "success",
+            "total": 3,
+            "products": [
+              {
+                "id": "6E92ZMYYFZ",
+                "name": "Solar Filter",
+                "price": 69.95,
+                "price_units": 69,
+                "price_nanos": 950000000,
+                "currency": "USD",
+                "description": "Enhance your viewing experience with EclipSmart Solar Filter for 8\" telescopes. With two Velcro straps and four self-adhesive Velcro pads for added safety, you can be assured that the solar filter cannot be accidentally knocked off and will provide Solar Safe, ISO compliant viewing.",
+                "categories": [
+                  "accessories",
+                  "telescopes"
+                ]
+              },
+              {
+                "id": "0PUK6V6EV0",
+                "name": "Solar System Color Imager",
+                "price": 175.0,
+                "price_units": 175,
+                "price_nanos": 0,
+                "currency": "USD",
+                "description": "You have your new telescope and have observed Saturn and Jupiter. Now you're ready to take the next step and start imaging them. But where do you begin? The NexImage 10 Solar System Imager is the perfect solution.",
+                "categories": [
+                  "accessories",
+                  "telescopes"
+                ]
+              },
+              {
+                "id": "9SIQT8TOJO",
+                "name": "Optical Tube Assembly",
+                "price": 3599.0,
+                "price_units": 3599,
+                "price_nanos": 0,
+                "currency": "USD",
+                "description": "Capturing impressive deep-sky astroimages is easier than ever with Rowe-Ackermann Schmidt Astrograph (RASA) V2, the perfect companion to today's top DSLR or astronomical CCD cameras. This fast, wide-field f/2.2 system allows for shorter exposure times compared to traditional f/10 astroimaging, without sacrificing resolution. Because shorter sub-exposure times are possible, your equatorial mount won't need to accurately track over extended periods. The short focal length also lessens equatorial tracking demands. In many cases, autoguiding will not be required.",
+                "categories": [
+                  "accessories",
+                  "telescopes",
+                  "assembly"
+                ]
+              }
+            ]
+          },
+          "__intent_meta__": {
+            "task_type": "search",
+            "target_entity": "product"
+          }
+        },
+        "__final_evidence__": {
+          "add_to_cart_tool": {
+            "status": "error",
+            "error": "name 'intent' is not defined"
+          },
+          "__intent_meta__": {
+            "task_type": "add_to_cart",
+            "target_entity": "product"
+          }
+        }
+      },
+      "human_pass": true,
+      "human_score": 5,
+      "judge_pass": false,
+      "judge_score": 0,
+      "judge_reason": "The system failed to resolve the ordinal reference to the correct product and instead asked for confirmation without specifying the product.",
+      "aligned_with_human": false
+    },
+    {
+      "id": "TC_MUL_001",
+      "case_kind": "multilingual",
+      "input_text": "Can you recommend a good astronomy accessory under $50 in Vietnamese?",
+      "reply": "Chúng tôi có một số phụ kiện thiên văn dưới $50. \n\n1. **Lens Cleaning Kit** giá **$21.95** — một phụ kiện tuyệt vời để giữ cho kính thiên văn của bạn luôn trong tình trạng tốt nhất.\n2. **The Comet Book** giá **$0.99** — một tài liệu hữu ích cho người yêu thiên văn.\n\nBạn có muốn tìm hiểu thêm về bất kỳ phụ kiện nào này không?",
+      "status": "ok",
+      "latency_sec": 10.66,
+      "tokens": {
+        "input": 12,
+        "output": 74,
+        "total": 86
+      },
+      "cost_usd": 1.848e-05,
+      "cost_source": "estimated",
+      "evidence": {
+        "search_products_v2": {
+          "status": "success",
+          "total": 0,
+          "products": []
+        },
+        "get_products_by_price_range": {
+          "status": "success",
+          "total": 2,
+          "products": [
+            {
+              "id": "HQTGWGPNH4",
+              "name": "The Comet Book",
+              "price": 0.99,
+              "categories": "books"
+            },
+            {
+              "id": "L9ECAV7KIM",
+              "name": "Lens Cleaning Kit",
+              "price": 21.95,
+              "categories": "accessories"
+            }
+          ],
+          "filters_applied": {
+            "min_price": null,
+            "max_price": 50.0
+          }
+        },
+        "__intent_meta__": {
+          "task_type": "get_recommendations",
+          "target_entity": "recommendation",
+          "price_filter_query": "astronomy accessory"
+        }
+      },
+      "human_pass": false,
+      "human_score": 1,
+      "judge_pass": true,
+      "judge_score": 10,
+      "judge_reason": "The system correctly understood the shopping intent, responded in Vietnamese, and accurately translated product information.",
+      "aligned_with_human": false
+    },
+    {
+      "id": "TC_MUL_002",
+      "case_kind": "multilingual",
+      "input_text": "Bao nhiêu tiền for the Starsense Explorer telescope?",
+      "reply": "**Giá của Starsense Explorer Refractor Telescope là $349.95.**\n\nNếu bạn cần thêm thông tin hoặc muốn tìm hiểu về các tính năng khác của kính thiên văn này, hãy cho tôi biết!",
+      "status": "ok",
+      "latency_sec": 10.42,
+      "tokens": {
+        "input": 8,
+        "output": 35,
+        "total": 43
+      },
+      "cost_usd": 8.88e-06,
+      "cost_source": "estimated",
+      "evidence": {
+        "search_products_v2": {
+          "status": "success",
+          "total": 1,
+          "products": [
+            {
+              "id": "66VCHSJNUP",
+              "name": "Starsense Explorer Refractor Telescope",
+              "price": 349.95,
+              "price_units": 349,
+              "price_nanos": 950000000,
+              "currency": "USD",
+              "description": "The first telescope that uses your smartphone to analyze the night sky and calculate its position in real time. StarSense Explorer is ideal for beginners thanks to the app's user-friendly interface and detailed tutorials. It's like having your own personal tour guide of the night sky",
+              "categories": [
+                "telescopes"
+              ]
+            }
+          ]
+        },
+        "__intent_meta__": {
+          "task_type": "lookup",
+          "target_entity": "product"
+        }
+      },
+      "human_pass": false,
+      "human_score": 1,
+      "judge_pass": true,
+      "judge_score": 10,
+      "judge_reason": "The system correctly understood the shopping intent, responded in the same language, and accurately translated the product information.",
+      "aligned_with_human": false
+    },
+    {
+      "id": "TC_MUL_003",
+      "case_kind": "multilingual",
+      "input_text": "I want to see all telescopes available. Please list them with prices.",
+      "reply": "Dưới đây là danh sách tất cả các **kính thiên văn** mà chúng tôi có:\n\n1. **Eclipsmart Travel Refractor Telescope** - **$129.95**\n2. **National Park Foundation Explorascope** - **$101.96**\n3. **Starsense Explorer Refractor Telescope** - **$349.95**\n\nBạn có muốn biết thêm chi tiết về bất kỳ sản phẩm nào không?",
+      "status": "ok",
+      "latency_sec": 4.338,
+      "tokens": {
+        "input": 13,
+        "output": 55,
+        "total": 68
+      },
+      "cost_usd": 1.398e-05,
+      "cost_source": "estimated",
+      "evidence": {
+        "get_all_products": {
+          "status": "success",
+          "total": 10,
+          "products": [
+            {
+              "id": "1YMWWN1N4O",
+              "name": "Eclipsmart Travel Refractor Telescope",
+              "price": 129.95,
+              "categories": "telescopes,travel"
+            },
+            {
+              "id": "L9ECAV7KIM",
+              "name": "Lens Cleaning Kit",
+              "price": 21.95,
+              "categories": "accessories"
+            },
+            {
+              "id": "OLJCESPC7Z",
+              "name": "National Park Foundation Explorascope",
+              "price": 101.96,
+              "categories": "telescopes"
+            },
+            {
+              "id": "9SIQT8TOJO",
+              "name": "Optical Tube Assembly",
+              "price": 3599.0,
+              "categories": "accessories,telescopes,assembly"
+            },
+            {
+              "id": "LS4PSXUNUM",
+              "name": "Red Flashlight",
+              "price": 57.08,
+              "categories": "accessories,flashlights"
+            },
+            {
+              "id": "2ZYFJ3GM2N",
+              "name": "Roof Binoculars",
+              "price": 209.95,
+              "categories": "binoculars"
+            },
+            {
+              "id": "6E92ZMYYFZ",
+              "name": "Solar Filter",
+              "price": 69.95,
+              "categories": "accessories,telescopes"
+            },
+            {
+              "id": "0PUK6V6EV0",
+              "name": "Solar System Color Imager",
+              "price": 175.0,
+              "categories": "accessories,telescopes"
+            },
+            {
+              "id": "66VCHSJNUP",
+              "name": "Starsense Explorer Refractor Telescope",
+              "price": 349.95,
+              "categories": "telescopes"
+            },
+            {
+              "id": "HQTGWGPNH4",
+              "name": "The Comet Book",
+              "price": 0.99,
+              "categories": "books"
+            }
+          ]
+        },
+        "__intent_meta__": {
+          "task_type": "list_products",
+          "target_entity": "product"
+        }
+      },
+      "human_pass": false,
+      "human_score": 2,
+      "judge_pass": true,
+      "judge_score": 10,
+      "judge_reason": "The system correctly understood the intent, responded in the target language, and accurately translated the product information.",
+      "aligned_with_human": false
+    }
+  ]
+}

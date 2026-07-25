@@ -1,6 +1,6 @@
 """
 restart_tunnels.py - Khởi động lại SSM EKS/RDS Tunnel và tất cả kubectl port-forwards.
-Có Watchdog loop tự phát hiện process chết và in cảnh báo.
+Có Auto-Healing Watchdog: Tự động khởi động lại (auto-restart) khi SSM Session hoặc port-forward bị ngắt/chết!
 """
 import os
 import subprocess
@@ -31,6 +31,7 @@ SERVICES = [
     ("deployment/shipping",        50052, 8080),
 ]
 
+
 def get_bastion_and_endpoint():
     session = boto3.Session(profile_name=PROFILE)
     ec2 = session.client("ec2", region_name=REGION)
@@ -53,8 +54,35 @@ def check_port(port: int, host: str = "127.0.0.1") -> bool:
     return ok
 
 
+def launch_ssm_eks(bastion_id, eks_endpoint, env):
+    return subprocess.Popen([
+        "aws", "ssm", "start-session",
+        "--target", bastion_id,
+        "--document-name", "AWS-StartPortForwardingSessionToRemoteHost",
+        "--parameters", f"host={eks_endpoint},portNumber=443,localPortNumber=8443",
+        "--region", REGION,
+    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)
+
+
+def launch_ssm_rds(bastion_id, env):
+    return subprocess.Popen([
+        "aws", "ssm", "start-session",
+        "--target", bastion_id,
+        "--document-name", "AWS-StartPortForwardingSessionToRemoteHost",
+        "--parameters", f"host={RDS_HOST},portNumber={RDS_PORT},localPortNumber={RDS_LOCAL}",
+        "--region", REGION,
+    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)
+
+
+def launch_port_forward(res, local_port, remote_port, env):
+    return subprocess.Popen(
+        ["kubectl", "port-forward", res, f"{local_port}:{remote_port}", "-n", NAMESPACE],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env,
+    )
+
+
 def main():
-    print("=== RESTART TUNNELS & PORT-FORWARDS (WITH WATCHDOG) ===\n")
+    print("=== RESTART TUNNELS & PORT-FORWARDS (WITH AUTO-HEALING WATCHDOG) ===\n")
     env = os.environ.copy()
 
     print("[1] Resolving Bastion & EKS endpoint ...")
@@ -64,25 +92,13 @@ def main():
 
     # ── SSM EKS API Tunnel (8443) ────────────────────────────
     print("\n[2] Launching SSM EKS API Tunnel -> localhost:8443 ...")
-    ssm_eks = subprocess.Popen([
-        "aws", "ssm", "start-session",
-        "--target", bastion_id,
-        "--document-name", "AWS-StartPortForwardingSessionToRemoteHost",
-        "--parameters", f"host={eks_endpoint},portNumber=443,localPortNumber=8443",
-        "--region", REGION,
-    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)
-    print(f"    PID: {ssm_eks.pid} — Waiting 6s for tunnel to come up ...")
-    time.sleep(6)
+    ssm_eks = launch_ssm_eks(bastion_id, eks_endpoint, env)
+    print(f"    PID: {ssm_eks.pid} — Waiting 5s for tunnel to come up ...")
+    time.sleep(5)
 
     # ── SSM RDS Tunnel (5433) ────────────────────────────────
     print(f"\n[3] Launching SSM RDS Tunnel -> localhost:{RDS_LOCAL} ...")
-    ssm_rds = subprocess.Popen([
-        "aws", "ssm", "start-session",
-        "--target", bastion_id,
-        "--document-name", "AWS-StartPortForwardingSessionToRemoteHost",
-        "--parameters", f"host={RDS_HOST},portNumber={RDS_PORT},localPortNumber={RDS_LOCAL}",
-        "--region", REGION,
-    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)
+    ssm_rds = launch_ssm_rds(bastion_id, env)
     print(f"    PID: {ssm_rds.pid}")
 
     # ── Update kubeconfig ────────────────────────────────────
@@ -103,14 +119,11 @@ def main():
     print("\n[5] Launching kubectl port-forwards ...")
     pf_procs = {}
     for res, local_port, remote_port in SERVICES:
-        p = subprocess.Popen(
-            ["kubectl", "port-forward", res, f"{local_port}:{remote_port}", "-n", NAMESPACE],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env,
-        )
+        p = launch_port_forward(res, local_port, remote_port, env)
         pf_procs[(res, local_port, remote_port)] = p
         print(f"    {res:45s} {local_port}:{remote_port}  PID={p.pid}")
 
-    time.sleep(8)
+    time.sleep(6)
 
     # ── Port connectivity check ──────────────────────────────
     print("\n[6] Port connectivity check:")
@@ -119,27 +132,43 @@ def main():
         icon = "OK" if status == "LISTENING" else "!!"
         print(f"    [{icon}] localhost:{port:5d} -> {status}")
 
-    print("\n[DONE] All services up. Watchdog active — checking every 60s.")
+    print("\n[DONE] All services up. Auto-Healing Watchdog active — checking every 15s.")
     print("       Press Ctrl+C to stop all tunnels and port-forwards.\n")
 
-    # ── Watchdog loop ────────────────────────────────────────
-    all_procs = {"ssm_eks": ssm_eks, "ssm_rds": ssm_rds}
-    all_procs.update({f"{res}:{lp}": p for (res, lp, rp), p in pf_procs.items()})
+    # ── Auto-Healing Watchdog loop ────────────────────────────
+    procs_meta = {
+        "ssm_eks": ("ssm_eks", None),
+        "ssm_rds": ("ssm_rds", None),
+    }
+    for res, lp, rp in SERVICES:
+        procs_meta[f"{res}:{lp}"] = ("pf", (res, lp, rp))
+
+    active_procs = {
+        "ssm_eks": ssm_eks,
+        "ssm_rds": ssm_rds,
+    }
+    for (res, lp, rp), p in pf_procs.items():
+        active_procs[f"{res}:{lp}"] = p
 
     try:
         while True:
-            time.sleep(60)
-            dead = [(name, p) for name, p in all_procs.items() if p.poll() is not None]
-            if dead:
-                print(f"\n[WATCHDOG] {len(dead)} process(es) died:")
-                for name, _ in dead:
-                    print(f"  !! {name} exited")
-                print("  -> Run this script again to restart all tunnels.")
-            else:
-                print(f"[WATCHDOG] All {len(all_procs)} processes alive.")
+            time.sleep(15)
+            for name, p in list(active_procs.items()):
+                if p.poll() is not None:
+                    print(f"[WATCHDOG AUTO-HEAL] Process '{name}' (PID {p.pid}) died. Re-launching immediately...")
+                    ptype, pmeta = procs_meta[name]
+                    if ptype == "ssm_eks":
+                        new_p = launch_ssm_eks(bastion_id, eks_endpoint, env)
+                    elif ptype == "ssm_rds":
+                        new_p = launch_ssm_rds(bastion_id, env)
+                    elif ptype == "pf":
+                        res, lp, rp = pmeta
+                        new_p = launch_port_forward(res, lp, rp, env)
+                    active_procs[name] = new_p
+                    print(f"  ✅ Re-launched '{name}' -> New PID {new_p.pid}")
     except KeyboardInterrupt:
         print("\n[SHUTDOWN] Terminating all tunnels and port-forwards ...")
-        for p in list(all_procs.values()):
+        for p in list(active_procs.values()):
             try:
                 p.terminate()
             except Exception:

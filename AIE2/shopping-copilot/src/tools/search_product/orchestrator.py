@@ -23,6 +23,15 @@ class SearchOrchestrator:
         if not query:
             return SearchResult(query="", error="Query is empty")
 
+        # Translate Vietnamese phrases to English before any processing.
+        # Do this here (orchestrator level) as a safety net in case
+        # entity_extractor's pycache doesn't pick up the latest changes.
+        translated = self.flow1.extractor._translate_vi(query)
+        if translated != query:
+            import logging
+            logging.getLogger(__name__).info(f"[SEARCH_ORCH] VI→EN translation: '{query}' -> '{translated}'")
+            query = translated
+
         s_schema = tracer.time("SchemaLoader")
         schema_context = self.schema_loader.to_prompt_text()
         num_tables = schema_context.count("Table:")
@@ -30,6 +39,8 @@ class SearchOrchestrator:
 
         sql_start = tracer.time("Flow1: SQL Matching")
         flow1_result = await self.flow1.run(query)
+        import logging
+        logging.getLogger(__name__).info(f"[SEARCH_ORCH] flow1 result: intent={flow1_result.get('intent')}, sql={flow1_result.get('sql', '')[:200]}, count={len(flow1_result.get('results', []))}")
         intent = flow1_result.get("intent", "product_search")
 
         if intent == "category_listing":
@@ -77,12 +88,22 @@ class SearchOrchestrator:
         products: List[ScoredProduct] = []
         for r in flow1_result.get("results", []):
             try:
+                raw_cats = r.get("categories", [])
+                cats_list = []
+                if isinstance(raw_cats, str):
+                    cats_list = [c.strip() for c in raw_cats.split(",") if c.strip()]
+                elif isinstance(raw_cats, (list, tuple)):
+                    cats_list = [str(c) for c in raw_cats]
+
                 product = Product(
                     id=str(r.get("id", "")),
                     name=str(r.get("name", "")),
                     description=str(r.get("description", "")),
-                    categories=list(r.get("categories", [])),
-                    price_usd=Money(units=int(r.get("price_units", 0))),
+                    categories=cats_list,
+                    price_usd=Money(
+                        units=int(r.get("price_units", 0)),
+                        nanos=int(r.get("price_nanos", 0)),
+                    ),
                 )
                 products.append(ScoredProduct(product=product, score=0.0, source="sql", strategy_name="sql_matching"))
             except Exception:

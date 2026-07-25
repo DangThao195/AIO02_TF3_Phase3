@@ -20,38 +20,60 @@ class SQLQueryExecutor:
             self._initialized = False
             raise e
 
+    _PG_UNREACHABLE = False
+
     def execute(self, query: str, limit: int = 15) -> List[Dict[str, Any]]:
+        self._validate_query(query)
+
+        # If running in mock mode or PostgreSQL previously failed, skip PostgreSQL and query SQLite directly.
+        import os
+        if os.getenv("MOCK_EKS") == "true" or SQLQueryExecutor._PG_UNREACHABLE:
+            return self._execute_sqlite(query, limit)
+
         try:
             self.ensure_initialized()
-        except Exception:
-            pass
-        self._validate_query(query)
-        try:
             with get_conn() as conn:
                 cur = conn.cursor()
                 cur.execute(query)
                 rows = cur.fetchall()
                 columns = [desc[0] for desc in cur.description or []]
-                results = [dict(zip(columns, row)) for row in rows[:limit]]
-                return results
+                return [dict(zip(columns, row)) for row in rows[:limit]]
         except Exception as e:
-            # Retry once with fresh pool if initial connection was stale/failed
-            try:
-                self._initialized = False
-                init_pool()
-                with get_conn() as conn:
-                    cur = conn.cursor()
-                    cur.execute(query)
-                    rows = cur.fetchall()
-                    columns = [desc[0] for desc in cur.description or []]
-                    self._initialized = True
-                    return [dict(zip(columns, row)) for row in rows[:limit]]
-            except Exception as retry_exc:
-                raise RuntimeError(
-                    f"Cannot execute SQL query — PostgreSQL EKS not reachable. "
-                    f"Please start port-forward (kubectl port-forward svc/postgresql 5433:5432 -n techx-tf3). "
-                    f"Original error: {retry_exc}"
-                ) from retry_exc
+            SQLQueryExecutor._PG_UNREACHABLE = True
+            import logging
+            logging.getLogger(__name__).warning(f"PostgreSQL connection failed ({e}). Falling back to SQLite...")
+            return self._execute_sqlite(query, limit)
+
+    def _execute_sqlite(self, query: str, limit: int = 15) -> List[Dict[str, Any]]:
+        import sqlite3
+        import os
+        from pathlib import Path
+
+        db_path = os.getenv("SHOPPING_DB_PATH")
+        if not db_path:
+            base = Path(__file__).resolve()
+            for parent in [base.parents[4], base.parents[3], base.parents[2], base.parents[1], Path.cwd()]:
+                cand1 = parent / "server-test" / "shopping.db"
+                cand2 = parent / "shopping.db"
+                if cand1.exists():
+                    db_path = str(cand1)
+                    break
+                if cand2.exists():
+                    db_path = str(cand2)
+                    break
+
+        if not db_path or not os.path.exists(db_path):
+            raise RuntimeError(f"Cannot execute SQL — PostgreSQL failed and SQLite DB not found at {db_path}")
+
+        conn = sqlite3.connect(db_path)
+        try:
+            cur = conn.cursor()
+            cur.execute(query)
+            rows = cur.fetchall()
+            columns = [desc[0] for desc in cur.description or []]
+            return [dict(zip(columns, row)) for row in rows[:limit]]
+        finally:
+            conn.close()
 
     def _validate_query(self, query: str) -> None:
         normalized = (query or "").strip()

@@ -46,7 +46,8 @@ class SQLBuilder:
         if op == "like":
             if isinstance(column, list):
                 return None
-            return self._like_clause(column, str(value[0]).lower())
+            val = str(value[0]).lower().rstrip("s")
+            return self._like_clause(column, val)
         if op == "<=":
             if isinstance(column, list):
                 return None
@@ -57,12 +58,36 @@ class SQLBuilder:
             return f"{column} >= {int(value[0])}"
         if op == "contains":
             columns = column if isinstance(column, list) else [column]
-            keyword_terms = []
+            _VI_EN_MAP = {
+                "kính thiên văn": "telescope",
+                "kinh thien van": "telescope",
+                "kính khúc xạ": "refractor telescope",
+                "phụ kiện thiên văn": "astronomy accessory",
+                "phụ kiện": "accessory",
+                "đèn pin": "flashlight",
+                "bộ vệ sinh": "cleaning kit",
+                "sách": "book",
+            }
+            # Collect all individual word tokens from all keywords
+            word_tokens = []
             for keyword in value:
-                escaped = self._escape_value(str(keyword).lower())
-                column_terms = [f"lower({col}) LIKE '%{escaped}%'" for col in columns]
-                keyword_terms.append(" OR ".join(column_terms))
-            return " OR ".join(keyword_terms)
+                kw_str = str(keyword).lower()
+                for vi_term, en_term in _VI_EN_MAP.items():
+                    if vi_term in kw_str:
+                        kw_str = kw_str.replace(vi_term, en_term)
+                for word in kw_str.split():
+                    w_clean = self._escape_value(word.strip())
+                    if len(w_clean) > 2 and w_clean not in word_tokens:
+                        word_tokens.append(w_clean)
+            if not word_tokens:
+                word_tokens = [self._escape_value(str(v).lower()) for v in value]
+
+            # Require each word token to match in at least one column (AND logic across words)
+            token_clauses = []
+            for token in word_tokens:
+                column_terms = [f"lower({col}) LIKE '%{token}%'" for col in columns]
+                token_clauses.append(f"({' OR '.join(column_terms)})")
+            return " AND ".join(token_clauses)
         return None
 
     def _like_clause(self, column: str, value: str) -> str:

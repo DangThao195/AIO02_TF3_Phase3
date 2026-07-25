@@ -108,36 +108,50 @@ class BedrockRAGStrategy(SearchStrategy):
         return scored_products
 
     def _resolve_product_details(self, product_id: str, chunk_text: str) -> Product:
-        """Resolve product details from PostgreSQL EKS. Falls back to parsing RAG chunk text."""
+        """Resolve product details from PostgreSQL catalog. Falls back to parsing RAG chunk text."""
         try:
-            init_pool()
-            with get_conn() as conn:
-                cur = conn.cursor()
-                cur.execute(
-                    "SELECT name, description, categories, price_units, price_nanos FROM products WHERE id = %s",
-                    (product_id,)
-                )
-                row = cur.fetchone()
-                if row:
-                    cats = [c.strip() for c in row[2].split(",") if c.strip()] if row[2] else []
-                    return Product(
-                        id=product_id,
-                        name=row[0],
-                        description=row[1] or "",
-                        categories=cats,
-                        price_usd=Money(units=row[3] if row[3] is not None else 0,
-                                        nanos=row[4] if row[4] is not None else 0)
+            from src.database.connect import DBConfig
+            import psycopg2
+            cfg = DBConfig()
+            conn = psycopg2.connect(**cfg.get_connect_kwargs())
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT name, description, categories, price_units, price_nanos FROM products WHERE id = %s",
+                        (product_id,)
                     )
+                    row = cur.fetchone()
+                    if row:
+                        raw_cat = row[2]
+                        cats = [c.strip() for c in raw_cat.split(",") if c.strip()] if isinstance(raw_cat, str) else (list(raw_cat) if raw_cat else [])
+                        conn.close()
+                        return Product(
+                            id=product_id,
+                            name=row[0],
+                            description=row[1] or "",
+                            categories=cats,
+                            price_usd=Money(units=row[3] if row[3] is not None else 0,
+                                            nanos=row[4] if row[4] is not None else 0)
+                        )
+            conn.close()
         except Exception:
             pass
 
-        # Parse from RAG chunk text (no local DB fallback)
-        name_match = re.search(r"Product\s+Name:\s*(.*)", chunk_text, re.IGNORECASE)
-        price_match = re.search(r"Price:\s*(\d+)", chunk_text, re.IGNORECASE)
-        cat_match = re.search(r"Category:\s*(.*)", chunk_text, re.IGNORECASE)
+        # Parse from RAG chunk text fallback
+        name_match = re.search(r"(?:Product\s+Name|Name|Title|Product):\s*([^\n\r]+)", chunk_text, re.IGNORECASE)
+        price_match = re.search(r"Price:\s*\$?(\d+(?:\.\d+)?)", chunk_text, re.IGNORECASE)
+        cat_match = re.search(r"Categor(?:y|ies):\s*([^\n\r]+)", chunk_text, re.IGNORECASE)
 
         name = name_match.group(1).strip() if name_match else f"Product {product_id}"
-        price = int(price_match.group(1).strip()) if price_match else 0
+        units, nanos = 0, 0
+        if price_match:
+            try:
+                val = float(price_match.group(1).strip())
+                units = int(val)
+                nanos = int(round((val - units) * 1e9))
+            except Exception:
+                pass
+
         categories = [c.strip() for c in cat_match.group(1).split(",") if c.strip()] if cat_match else []
 
         return Product(
@@ -145,5 +159,5 @@ class BedrockRAGStrategy(SearchStrategy):
             name=name,
             description=chunk_text[:200],
             categories=categories,
-            price_usd=Money(units=price)
+            price_usd=Money(units=units, nanos=nanos)
         )

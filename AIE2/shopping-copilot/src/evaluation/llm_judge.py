@@ -266,7 +266,7 @@ class LLMJudge:
         region: Optional[str] = None,
     ):
         self.model_id = model_id or os.getenv("JUDGE_MODEL_ID", "meta.llama3-1-70b-instruct-v1:0")
-        self.region = region or os.getenv("BEDROCK_REGION", "us-west-2")
+        self.region = region or os.getenv("JUDGE_BEDROCK_REGION", "us-west-2")
         self._client = None
 
     def _get_client(self):

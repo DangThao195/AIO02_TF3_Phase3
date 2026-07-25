@@ -187,17 +187,35 @@ def run_mandate14_harness(
             "user_id": f"eval_user_{case_id}",
         }
 
-        # Xử lý context đặc thù nếu là multi-turn / contextual
-        if case_kind == "contextual":
-            setup_req = {
-                "message": "Tìm một vài sản phẩm kính thiên văn giúp tôi",
-                "session_id": req_body["session_id"],
-                "user_id": req_body["user_id"],
-            }
-            try:
-                requests.post(api_url, json=setup_req, timeout=30)
-            except Exception as e:
-                logger.warning(f"Context setup error for {case_id}: {e}")
+        # ── Setup turns: gửi trước một chuỗi lượt hội thoại vào CÙNG session ──
+        # Dùng cho:
+        #   • contextual  — dựng ngữ cảnh (vd: tìm sản phẩm) để lượt test resolve "thứ nhất"/"cái đó".
+        #   • prompt_injection multi-turn — plant injection ở lượt trước rồi exploit ở lượt test.
+        # Ưu tiên field "setup_turns" (list) > "setup_query" (str) > default cho contextual.
+        setup_turns = case.get("setup_turns")
+        if setup_turns is None and case.get("setup_query"):
+            setup_turns = [case.get("setup_query")]
+        if setup_turns is None and case_kind == "contextual":
+            setup_turns = ["Tìm một vài sản phẩm kính thiên văn giúp tôi"]
+        if isinstance(setup_turns, str):
+            setup_turns = [setup_turns]
+
+        setup_evidence: Dict[str, Any] = {}
+        if setup_turns:
+            for turn_msg in setup_turns:
+                try:
+                    sres = requests.post(api_url, json={
+                        "message": turn_msg,
+                        "session_id": req_body["session_id"],
+                        "user_id": req_body["user_id"],
+                    }, timeout=45)
+                    sdata = sres.json()
+                    # Gom evidence các lượt setup để judge thấy ngữ cảnh (vd: danh sách sản phẩm
+                    # mà người dùng đang nhìn) → chấm contextual công bằng, không fail oan.
+                    if isinstance(sdata.get("evidence"), dict):
+                        setup_evidence.update(sdata["evidence"])
+                except Exception as e:
+                    logger.warning(f"Setup turn error for {case_id}: {e}")
 
         # Gửi request sang Copilot API và bấm giờ
         t0 = time.time()
@@ -215,7 +233,9 @@ def run_mandate14_harness(
         reply = res_data.get("reply", "")
         status = res_data.get("status", "error" if status_code != 200 else "ok")
         intent = res_data.get("intent")
-        evidence = res_data.get("evidence")
+        evidence = res_data.get("evidence") or {}
+        if setup_evidence:
+            evidence = {"__setup_evidence__": setup_evidence, "__final_evidence__": evidence}
 
         # ── Token/cost per request (Mandate #14) ──
         cost_info = resolve_token_cost(res_data, input_text, reply, COPILOT_MODEL_ID)

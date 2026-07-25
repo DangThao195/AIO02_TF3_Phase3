@@ -13,6 +13,20 @@ from src.tools.search_product.flow1.sql_executor import SQLQueryExecutor
 logger = logging.getLogger("tools.catalog_tool")
 
 
+def _price(units: int, nanos: int) -> float:
+    """
+    Chuyển đổi price_units + price_nanos sang USD chính xác đến cent.
+    price_nanos là phần tỷ của dollar: 80_000_000 nanos = $0.08
+    Dùng round(..., 2) để tránh float precision noise nhưng giữ đúng 2 chữ số thập phân.
+    Ví dụ: units=57, nanos=80_000_000 → 57.08 (KHÔNG phải 57.0)
+    """
+    u = int(units or 0)
+    n = int(nanos or 0)
+    # Tính bằng integer arithmetic để tránh float rounding noise
+    cents_total = u * 100 + round(n / 10_000_000)
+    return cents_total / 100
+
+
 @tool
 def get_categories() -> str:
     """
@@ -24,7 +38,6 @@ def get_categories() -> str:
     """
     try:
         executor = SQLQueryExecutor()
-        executor.ensure_initialized()
         rows = executor.execute(
             "SELECT DISTINCT categories FROM products WHERE categories IS NOT NULL AND categories != '' ORDER BY categories"
         )
@@ -66,7 +79,6 @@ def get_all_products() -> str:
     """
     try:
         executor = SQLQueryExecutor()
-        executor.ensure_initialized()
         rows = executor.execute(
             "SELECT id, name, description, categories, price_units, price_nanos FROM products ORDER BY name",
             limit=100,
@@ -76,12 +88,10 @@ def get_all_products() -> str:
 
         products = []
         for r in rows:
-            price_u = r.get("price_units", 0) or 0
-            price_n = r.get("price_nanos", 0) or 0
             products.append({
                 "id": str(r.get("id", "")),
                 "name": r.get("name", ""),
-                "price": round(price_u + price_n / 1e9, 2),
+                "price": _price(r.get("price_units", 0), r.get("price_nanos", 0)),
                 "categories": r.get("categories", ""),
             })
 
@@ -105,7 +115,6 @@ def get_top_rated_products(limit: int = 10) -> str:
     """
     try:
         executor = SQLQueryExecutor()
-        executor.ensure_initialized()
         rows = executor.execute(
             """
             SELECT p.id, p.name, p.price_units, p.price_nanos,
@@ -124,12 +133,10 @@ def get_top_rated_products(limit: int = 10) -> str:
 
         products = []
         for r in rows:
-            price_u = r.get("price_units", 0) or 0
-            price_n = r.get("price_nanos", 0) or 0
             products.append({
                 "id": str(r.get("id", "")),
                 "name": r.get("name", ""),
-                "price": round(price_u + price_n / 1e9, 2),
+                "price": _price(r.get("price_units", 0), r.get("price_nanos", 0)),
                 "avg_rating": float(r.get("avg_rating", 0)),
                 "review_count": int(r.get("review_count", 0)),
             })
@@ -160,7 +167,6 @@ def get_products_by_price_range(max_price: float = None, min_price: float = None
     """
     try:
         executor = SQLQueryExecutor()
-        executor.ensure_initialized()
         
         # Build WHERE clause safely (validate numeric inputs)
         where_clauses = []
@@ -199,12 +205,10 @@ def get_products_by_price_range(max_price: float = None, min_price: float = None
 
         products = []
         for r in rows:
-            price_u = r.get("price_units", 0) or 0
-            price_n = r.get("price_nanos", 0) or 0
             products.append({
                 "id": str(r.get("id", "")),
                 "name": r.get("name", ""),
-                "price": round(price_u + price_n / 1e9, 2),
+                "price": _price(r.get("price_units", 0), r.get("price_nanos", 0)),
                 "categories": r.get("categories", ""),
             })
 

@@ -2,6 +2,7 @@ import json
 import os
 import re
 import sqlite3
+import unicodedata
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -15,6 +16,29 @@ from src.llm.llm import get_llm_client
 
 class EntityExtractor:
     """Trích xuất thực thể từ câu hỏi bằng heuristic + LLM fallback."""
+
+    # Translate Vietnamese multi-word phrases to English BEFORE tokenizing.
+    # This must happen early so diacritic-stripping in _heuristic_extract
+    # doesn't turn "kính thiên văn" into garbage tokens ["knh", "thin", "vn"].
+    _VI_EN_PHRASES = [
+        ("kính thiên văn", "telescope"),
+        ("kinh thien van", "telescope"),
+        ("kính viễn vọng", "telescope"),
+        ("ống nhòm", "binoculars"),
+        ("ong nhom", "binoculars"),
+        ("kính khúc xạ", "refractor telescope"),
+        ("kính phản xạ", "reflector telescope"),
+        ("đèn pin", "flashlight"),
+        ("den pin", "flashlight"),
+        ("bộ vệ sinh", "cleaning kit"),
+        ("bo ve sinh", "cleaning kit"),
+        ("phụ kiện thiên văn", "astronomy accessory"),
+        ("phu kien thien van", "astronomy accessory"),
+        ("phụ kiện", "accessory"),
+        ("phu kien", "accessory"),
+        ("sách", "book"),
+        ("sach", "book"),
+    ]
 
     _STOP_WORDS = {
         "tìm", "tim", "của", "cua", "cho", "for", "the", "a", "an", "và", "va", "and", "or",
@@ -47,10 +71,23 @@ class EntityExtractor:
     def __init__(self, llm_client=None):
         self.llm_client = llm_client or get_llm_client()
 
+    def _translate_vi(self, query: str) -> str:
+        """Translate common Vietnamese phrases to English before tokenizing.
+        Uses NFC normalization to handle both composed (NFC) and decomposed (NFD)
+        Unicode representations from different sources (LLM output, HTTP requests).
+        """
+        # Normalize to NFC (composed form) for consistent comparison
+        q = unicodedata.normalize('NFC', query)
+        for vi_phrase, en_phrase in self._VI_EN_PHRASES:
+            vi_norm = unicodedata.normalize('NFC', vi_phrase)
+            q = q.replace(vi_norm, en_phrase)
+        return q
+
     def extract(self, query: str) -> Dict[str, Any]:
         query = (query or "").strip()
         if not query:
             return {"category": None, "price_max": None, "price_min": None, "keywords": [], "intent": "general"}
+        query = self._translate_vi(query)
 
         entities = self._heuristic_extract(query)
 

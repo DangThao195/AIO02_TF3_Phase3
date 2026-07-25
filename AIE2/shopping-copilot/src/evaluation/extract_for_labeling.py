@@ -13,16 +13,19 @@ QUY TRÌNH 3 BƯỚC
   Bước 1 — Chạy harness để thu reply thật (cần server chạy ở :8001):
       python -m src.evaluation.run_eval --input src/evaluation/datasets/labeled_testcases.json
 
-  Bước 2 — Trích xuất sheet để chấm (từ report vừa tạo):
+  Bước 2 — Trích xuất sheet để chấm (với evidence từ DB ground truth thay vì tool-fetched):
       python -m src.evaluation.extract_for_labeling extract \
-          --report src/evaluation/reports/labeled_testcases_report.json \
-          --out    src/evaluation/reports/labeling_sheet.json
+          --report       src/evaluation/reports/labeled_testcases_report.json \
+          --out          src/evaluation/reports/labeling_sheet.json \
+          --ground-truth src/evaluation/reports/db_ground_truth.json
+
+      Nếu không truyền --ground-truth thì fallback về evidence từ report (tool-fetched).
 
       → Mở labeling_sheet.json (hoặc labeling_sheet.csv), với MỖI case bạn điền:
           "human_pass":   true / false
           "human_score":  0-10
           "human_reason": "lý do bạn chấm dựa trên reply + evidence"
-        Các trường "input_text", "reply", "evidence", "rubric_hint" là READ-ONLY để bạn tham chiếu.
+        Các trường "input_text", "reply", "evidence_ref", "rubric_hint" là READ-ONLY để bạn tham chiếu.
 
   Bước 3 — Merge nhãn đã chấm ngược vào dataset:
       python -m src.evaluation.extract_for_labeling merge \
@@ -48,9 +51,10 @@ if hasattr(sys.stdout, "reconfigure"):
 
 import csv
 import json
+import re
 import argparse
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 # Gợi ý tiêu chí chấm cho từng kind — chèn vào sheet để reviewer không phải nhớ.
 RUBRIC_HINTS: Dict[str, str] = {
@@ -78,8 +82,90 @@ def _dump_json(path: Path, data: Any) -> None:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 
-def cmd_extract(report_path: Path, out_path: Path) -> None:
-    """Trích xuất sheet chấm nhãn từ report (đọc reply + evidence thật)."""
+# Case kinds không cần tra DB — chỉ kiểm tra hành vi an toàn
+_BEHAVIORAL_KINDS = {"prompt_injection", "pii_leakage", "action_guard"}
+
+
+def _build_gt_evidence(case: Dict[str, Any], gt: Dict[str, Any]) -> str:
+    """
+    Tra db_ground_truth.json và build evidence_ref phù hợp cho case.
+    - Behavioral cases → ghi chú behavioral_check.
+    - Còn lại: tìm sản phẩm nào được nhắc tên trong input_text, lấy product + reviews.
+      Nếu không match → trả toàn bộ catalog (dành cho query "liệt kê tất cả", ...).
+    """
+    kind = case.get("case_kind", "")
+    input_text: str = case.get("input_text", "") + " ".join(case.get("setup_turns", []))
+
+    if kind in _BEHAVIORAL_KINDS:
+        return json.dumps({
+            "_expected_type": "behavioral_check",
+            "_note": "No DB lookup required. Expected: system handles safely per rubric."
+        }, ensure_ascii=False)
+
+    products: List[Dict] = gt.get("products", [])
+    reviews_map: Dict = gt.get("reviews", {})
+    avg_scores: Dict = gt.get("avg_scores", {})
+
+    # Tìm sản phẩm được nhắc đến trong input_text (case-insensitive)
+    # Bỏ các từ quá chung chung
+    stop_words = {"telescope", "refractor", "the", "kit", "filter", "assembly", "tube", "book"}
+    matched = []
+    for p in products:
+        name = p.get("name", "")
+        # Tách các từ đặc trưng (độ dài > 3 và không nằm trong stop_words)
+        distinctive_words = [w for w in name.split() if len(w) > 3 and w.lower() not in stop_words]
+        # Match nếu câu hỏi chứa full name hoặc từ đặc trưng
+        if re.search(re.escape(name), input_text, re.IGNORECASE) or any(re.search(r'\b' + re.escape(w) + r'\b', input_text, re.IGNORECASE) for w in distinctive_words):
+            matched.append(p)
+
+    # Nếu không match sản phẩm cụ thể → dùng toàn bộ catalog (query tổng quát)
+    target_products = matched if matched else products
+
+    # Gắn avg_score + reviews vào mỗi product
+    ev_products = []
+    for p in target_products:
+        pid = p.get("id", "")
+        enriched = dict(p)
+        enriched["avg_score"] = avg_scores.get(pid, {}).get("avg_score")
+        enriched["review_count"] = avg_scores.get(pid, {}).get("review_count", 0)
+        enriched["reviews"] = reviews_map.get(pid, [])
+        ev_products.append(enriched)
+
+    ev_obj = {
+        "_source": "db_ground_truth",
+        "_matched": len(matched) > 0,
+        "products": ev_products
+    }
+    # Chuyển thành JSON string
+    ev_str = json.dumps(ev_obj, ensure_ascii=False, indent=2)
+    if len(ev_str) > 3500:
+        # Nếu quá dài, chỉ giữ các thông tin cốt lõi
+        ev_summary = {
+            "_source": "db_ground_truth",
+            "_note": f"Truncated for display ({len(ev_products)} products matched)",
+            "products": [
+                {
+                    "id": p.get("id"),
+                    "name": p.get("name"),
+                    "price": p.get("price"),
+                    "avg_score": p.get("avg_score"),
+                    "review_count": p.get("review_count"),
+                    "reviews_sample": p.get("reviews", [])[:2]
+                }
+                for p in ev_products
+            ]
+        }
+        ev_str = json.dumps(ev_summary, ensure_ascii=False, indent=2)
+
+    return ev_str
+
+
+def cmd_extract(report_path: Path, out_path: Path, ground_truth_path: Optional[Path] = None) -> None:
+    """Trích xuất sheet chấm nhãn.
+
+    Nếu ground_truth_path được cung cấp, evidence_ref sẽ được lấy từ DB ground truth
+    (db_ground_truth.json) thay vì evidence tool-fetched trong report.
+    """
     report = _load_json(report_path)
     detailed = report.get("detailed_results")
     if not detailed:
@@ -88,17 +174,52 @@ def cmd_extract(report_path: Path, out_path: Path) -> None:
             f"Hãy chạy run_eval.py để tạo report trước."
         )
 
+    # Load ground truth nếu có
+    gt: Optional[Dict] = None
+    if ground_truth_path and ground_truth_path.exists():
+        gt = _load_json(ground_truth_path)
+        print(f"📦 Dùng DB ground truth: {ground_truth_path.name} "
+              f"({len(gt.get('products', []))} products, {len(gt.get('reviews', {}))} product-reviews)")
+    else:
+        if ground_truth_path:
+            print(f"⚠️  Không tìm thấy {ground_truth_path} — fallback evidence từ report.")
+        else:
+            print("ℹ️  Không có --ground-truth → dùng evidence tool-fetched từ report.")
+
+    # Build index từ report để tra case_kind và setup_turns (không có trong report detail)
+    # Thử load dataset gốc để lấy setup_turns
+    dataset_path = report_path.parent.parent / "datasets" / "labeled_testcases.json"
+    dataset_index: Dict[str, Dict] = {}
+    if dataset_path.exists():
+        for tc in _load_json(dataset_path):
+            dataset_index[tc["id"]] = tc
+
     sheet: List[Dict[str, Any]] = []
+    gt_used = 0
+    fallback_used = 0
+
     for r in detailed:
+        cid = r.get("id", "")
         kind = r.get("case_kind", "single_intent")
-        evidence = r.get("evidence")
-        # Rút gọn evidence để sheet dễ đọc (giữ nguyên nếu ngắn)
-        ev_str = json.dumps(evidence, ensure_ascii=False) if evidence else "None"
-        if len(ev_str) > 1500:
-            ev_str = ev_str[:1500] + " …[truncated]"
+
+        # Build evidence_ref
+        if gt is not None:
+            # Merge case info từ dataset để có setup_turns
+            case_info = dict(r)
+            if cid in dataset_index:
+                case_info["setup_turns"] = dataset_index[cid].get("setup_turns", [])
+            ev_str = _build_gt_evidence(case_info, gt)
+            gt_used += 1
+        else:
+            # Fallback: dùng evidence từ report (tool-fetched)
+            evidence = r.get("evidence")
+            ev_str = json.dumps(evidence, ensure_ascii=False) if evidence else "None"
+            if len(ev_str) > 1500:
+                ev_str = ev_str[:1500] + " …[truncated]"
+            fallback_used += 1
 
         sheet.append({
-            "id": r.get("id"),
+            "id": cid,
             "case_kind": kind,
             # ── READ-ONLY: tham chiếu để chấm ──
             "input_text": r.get("input_text", ""),
@@ -128,7 +249,11 @@ def cmd_extract(report_path: Path, out_path: Path) -> None:
                 "", "", ""
             ])
 
-    print(f"✅ Đã xuất {len(sheet)} case cần chấm:")
+    print(f"\n✅ Đã xuất {len(sheet)} case cần chấm:")
+    if gt is not None:
+        print(f"   • Evidence: DB ground truth ({gt_used} cases) ← nguồn tin cậy")
+    else:
+        print(f"   • Evidence: tool-fetched từ report ({fallback_used} cases) ← có thể sai")
     print(f"   • JSON: {out_path}")
     print(f"   • CSV : {csv_path}")
     print(f"\n👉 Mở file, điền human_pass (true/false) + human_score (0-10) + human_reason cho từng case.")
@@ -173,6 +298,47 @@ def cmd_merge(sheet_path: Path, dataset_path: Path) -> None:
 
     unlabeled = [c.get("id") for c in dataset if c.get("label_source") != "human_verified"]
     print(f"✅ Đã merge {merged} nhãn người vào {dataset_path.name}")
+
+    # Tự động đồng bộ sang report nếu file report tồn tại
+    report_path = sheet_path.parent / "labeled_testcases_report.json"
+    if report_path.exists():
+        try:
+            report = _load_json(report_path)
+            detailed_results = report.get("detailed_results", [])
+            agreed_count = 0
+            human_labeled_count = 0
+
+            for res in detailed_results:
+                cid = res.get("id")
+                if cid in labels_by_id:
+                    h_info = labels_by_id[cid]
+                    res["human_pass"] = h_info["human_pass"]
+                    res["human_score"] = h_info["human_score"]
+                    res["human_reason"] = h_info["human_reason"]
+                    res["label_source"] = h_info["label_source"]
+
+                    j_pass = res.get("judge_pass")
+                    h_pass = h_info["human_pass"]
+                    if h_pass is not None:
+                        human_labeled_count += 1
+                        is_aligned = (j_pass == h_pass)
+                        res["human_aligned"] = is_aligned
+                        if is_aligned:
+                            agreed_count += 1
+
+            agreement_rate = round((agreed_count / human_labeled_count * 100), 2) if human_labeled_count > 0 else 0.0
+            report["judge_human_alignment"] = {
+                "total_cases": len(detailed_results),
+                "human_labeled_cases": human_labeled_count,
+                "agreed_cases": agreed_count,
+                "disagreed_cases": len(detailed_results) - agreed_count,
+                "agreement_rate_pct": agreement_rate
+            }
+            _dump_json(report_path, report)
+            print(f"🔄 Đã tự động đồng bộ sang {report_path.name} (Judge ↔ Human Alignment: {agreement_rate}%)")
+        except Exception as e:
+            print(f"⚠️  Không thể đồng bộ tự động sang report: {e}")
+
     if unlabeled:
         print(f"⚠️  Còn {len(unlabeled)} case CHƯA có nhãn người xác nhận:")
         print(f"    {', '.join(str(x) for x in unlabeled[:30])}")
@@ -188,6 +354,11 @@ def main():
     p_ex = sub.add_parser("extract", help="Trích xuất sheet chấm nhãn từ report")
     p_ex.add_argument("--report", required=True, help="Đường dẫn report JSON (từ run_eval.py)")
     p_ex.add_argument("--out", default="src/evaluation/reports/labeling_sheet.json", help="File sheet xuất ra")
+    p_ex.add_argument(
+        "--ground-truth",
+        default="src/evaluation/reports/db_ground_truth.json",
+        help="File DB ground truth JSON (từ scripts/export_db_to_json.py). Dùng làm evidence chuẩn thay thế tool-fetched."
+    )
 
     p_mg = sub.add_parser("merge", help="Merge nhãn người từ sheet vào dataset")
     p_mg.add_argument("--sheet", required=True, help="Sheet JSON đã điền nhãn người")
@@ -196,7 +367,8 @@ def main():
     args = parser.parse_args()
 
     if args.command == "extract":
-        cmd_extract(Path(args.report), Path(args.out))
+        gt_path = Path(args.ground_truth) if args.ground_truth else None
+        cmd_extract(Path(args.report), Path(args.out), gt_path)
     elif args.command == "merge":
         cmd_merge(Path(args.sheet), Path(args.dataset))
 
