@@ -12,7 +12,7 @@ Tài liệu này tổng hợp toàn bộ bằng chứng nghiệm thu, kết qu�
 ---
 
 ## 🔗 2. Các Commit & PR Liên Quan
-*   **Commit Dọn Sạch Thư Mục AIE1 trên Main:** [c13f655](https://github.com/DangThao195/AIO02_TF3_Phase3/commit/c13f655)
+*   **Commit Tích Hợp Thư Mục AIE1 Lên Main (Sau khi dọn sạch và rollback để tránh ảnh hưởng nhóm khác):** [c13f655690724ba8b3317ae5988ef2f3d7536d11](https://github.com/DangThao195/AIO02_TF3_Phase3/commit/c13f655690724ba8b3317ae5988ef2f3d7536d11) (Thời gian: `2026-07-24 13:14:58` - Chỉ cập nhật thư mục AIE1 của nhóm)
 *   **Commit Baseline Dữ Liệu Đo Lường:** [9012b61](https://github.com/DangThao195/AIO02_TF3_Phase3/commit/9012b61) (Lưu trữ `cost_latency_baseline` JSON và Markdown)
 *   **Commit Tái Cấu Trúc File & Sửa Liên Kết:** [ab5913c](https://github.com/DangThao195/AIO02_TF3_Phase3/commit/ab5913c) (Di chuyển các file guide/todo vào docs)
 *   **Nhánh làm việc chính thức:** `feature/product-review`
