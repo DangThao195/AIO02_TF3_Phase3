@@ -1,0 +1,9 @@
+**/venv/**
+**/node_modules/**
+**/.venv/**
+venv/
+.venv/
+node_modules/
+AIE1/techx-corp-platform/src/product-reviews/venv/
+AIE2/techx-corp-platform/src/product-reviews/venv/
+AIOps/techx-corp-platform/src/product-reviews/venv/

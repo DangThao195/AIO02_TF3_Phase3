@@ -10,14 +10,14 @@ cập nhật; nó có giá trị bằng đúng mức nó phản ánh đúng th�
 Phase 3 không phát brief. TF3 tiếp quản một storefront thương mại điện tử microservice
 đang "sống" (TechX Corp), phải tự đánh giá, tự ưu tiên, vận hành dưới ràng buộc thật
 (ngân sách, SLO, sự cố do BTC bơm vào), và bảo vệ mọi quyết định bằng ADR/postmortem ký tên.
-Chi tiết đầy đủ: [`phase3 - information/RULES.md`](phase3%20-%20information/RULES.md).
+Chi tiết đầy đủ: [`AIE1/RULES.md`](AIE1/RULES.md).
 
 **Đọc trước khi làm bất cứ việc gì kỹ thuật trong repo này:**
-- [`phase3 - information/RULES.md`](phase3%20-%20information/RULES.md) — luật chơi, đặc biệt mục Luật chơi (điều khoản disqualify)
-- [`phase3 - information/onboarding/ARCHITECTURE.md`](phase3%20-%20information/onboarding/ARCHITECTURE.md)
-- [`phase3 - information/onboarding/SLO.md`](phase3%20-%20information/onboarding/SLO.md)
-- [`phase3 - information/onboarding/BUDGET.md`](phase3%20-%20information/onboarding/BUDGET.md)
-- [`phase3 - information/onboarding/INCIDENT_HISTORY.md`](phase3%20-%20information/onboarding/INCIDENT_HISTORY.md)
+- [`AIE1/RULES.md`](AIE1/RULES.md) — luật chơi, đặc biệt mục Luật chơi (điều khoản disqualify)
+- [`AIE1/onboarding/ARCHITECTURE.md`](AIE1/onboarding/ARCHITECTURE.md)
+- [`AIE1/onboarding/SLO.md`](AIE1/onboarding/SLO.md)
+- [`AIE1/onboarding/BUDGET.md`](AIE1/onboarding/BUDGET.md)
+- [`AIE1/onboarding/INCIDENT_HISTORY.md`](AIE1/onboarding/INCIDENT_HISTORY.md)
 
 ## Luật cấm tuyệt đối — disqualify nếu vi phạm
 
@@ -47,9 +47,9 @@ tuần nào ở mục Trạng thái bên dưới.
   Terraform (`infra/`), image build/push bởi CDO01 lên ECR `techx-corp` (tag `d2bc367`), Helm
   release `techx-corp` trong namespace `techx-tf3`. 28/28 pod Running, storefront + AI review
   verify OK, flagd sync token đã kết nối nguồn trung tâm BTC.
-  - Lưu ý triển khai: **không dùng** `values-observability.yaml` + `values-app-stamp.yaml` cùng lúc
+  - Lưu ý triển khai: **không dùng** `AIE1/deploy/values-observability.yaml` + `AIE1/deploy/values-app-stamp.yaml` cùng lúc
     (2 file này dành cho 2 lần deploy tách namespace riêng — dùng chung sẽ tắt hết pod). Deploy
-    baseline chỉ cần chart mặc định (đã tự bật cả app + observability) + `values-flagd-sync.yaml`.
+    baseline chỉ cần chart mặc định (đã tự bật cả app + observability) + `AIE1/deploy/values-flagd-sync.yaml`.
 - **Backlog ưu tiên**: *(chưa dựng / link file khi có)*
 - **Hạ tầng**: Terraform state ở S3 `techx-corp-tf3-terraform-state` (lock: DynamoDB
   `techx-corp-tf3-terraform-lock`). `infra/terraform.tfvars` (gitignored, không commit) cần điền
@@ -57,7 +57,7 @@ tuần nào ở mục Trạng thái bên dưới.
 - **CI/CD**: secret-scanning đã bật (gitleaks pre-commit hook + GitHub Actions gate trên
   `push`/`PR` vào `main`) — xem [README.md](README.md). Branch protection cho `main`
   (require PR + status check `gitleaks`) **đã đề xuất, cần bật thủ công trên GitHub**.
-- **Mandates đang mở**: xem [`phase3 - information/mandates/`](phase3%20-%20information/mandates/) — trống lúc đầu, BTC thả vào khi có hiệu lực.
+- **Mandates đang mở**: xem [`AIE1/mandates/`](AIE1/mandates/) — trống lúc đầu, BTC thả vào khi có hiệu lực.
 
 ## Phát hiện kỹ thuật đã xác nhận qua đọc code (không phải suy đoán)
 
@@ -76,8 +76,7 @@ service dưới `techx-corp-platform/src/`, dùng làm bằng chứng cho backlo
 - **`product-catalog` (Go)**: mở DB qua `database/sql` nhưng không set
   `MaxOpenConns`/`MaxIdleConns` — mặc định unlimited, có thể làm cạn `max_connections` của
   Postgres khi tải cao (khớp INC-1, góc nhìn khác: thiếu trần phía client thay vì pool nhỏ).
-- **`product-reviews` (Python)**: `psycopg2.connect()` mở mới cho **mỗi request**, không hề
-  có connection pool — đây là service đứng sau tính năng AI chủ lực (tóm tắt review).
+- **`product-reviews` (Python)**: Sử dụng connection pool `ThreadedConnectionPool` (5-30 connections) để quản lý kết nối hiệu quả, nhưng cần tối ưu hóa logic giải phóng kết nối để tránh quá tải DB.
 - **`checkout.PlaceOrder`**: charge thẻ (`chargeCard`) xảy ra **trước** khi gọi
   `shipOrder`; nếu `shipOrder` lỗi sau khi đã charge thành công, hàm trả lỗi ngay,
   **không có logic hoàn tiền/rollback** — khách bị trừ tiền nhưng đơn coi như thất bại.
@@ -91,13 +90,13 @@ service dưới `techx-corp-platform/src/`, dùng làm bằng chứng cho backlo
 ## Quy ước làm việc trong repo này
 
 - Không push thẳng `main` — làm nhánh + PR (`gitleaks` status check phải xanh).
-- Cài hook secret-scanning sau khi clone: `bash scripts/setup-hooks.sh`.
+- Cài hook secret-scanning sau khi clone: Dự án không đi kèm script `setup-hooks.sh`, cần cài đặt và quét `gitleaks` thủ công.
 - ADR cho mọi quyết định hạ tầng lớn, postmortem ký tên sau mỗi sự cố — thư mục lưu:
-  *(chưa tạo `docs/adr/` và `docs/postmortem/` — tạo khi bắt đầu có quyết định thật)*.
+  *Thư mục `AIE1/docs/adr/` đã có sẵn 7 ADR (0001-0007), thư mục `AIE1/docs/postmortem/` chưa tạo.*.
 
 ## Hướng dẫn cho Claude Code ở các phiên sau
 
-- Luôn ưu tiên đọc file này trước, sau đó mới đọc sâu vào `phase3 - information/` nếu cần
+- Luôn ưu tiên đọc file này trước, sau đó mới đọc sâu vào `AIE1/` nếu cần
   chi tiết luật/kiến trúc/SLO.
 - Nếu người dùng nói "trụ của mình", "team mình", ngầm hiểu là CDO02 trừ khi họ nói khác.
 - Khi thực hiện thay đổi hạ tầng thật (Helm, K8s, CI), luôn nhắc nhở về luật flagd/secret ở
