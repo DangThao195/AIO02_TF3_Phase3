@@ -13,7 +13,7 @@ Tài liệu này tổng hợp chi tiết các điểm nghẽn hiệu năng, đ�
 | 3 | **Thiếu Timeout gRPC gọi Product Catalog** | $O(\infty)$ nếu Catalog Service bị treo | $O(\text{timeout})$ ngắt sớm | Cao | **P0 (Khẩn cấp)** | **Đã triển khai** |
 | 4 | **Thiếu Timeout cho AWS Bedrock Client** | $O(\text{default } 60\text{s})$ chờ phản hồi | $O(\text{timeout } 3\text{s}\text{-}10\text{s})$ | Cao | **P1 (Cao)** | **Đã triển khai** |
 | 5 | **Ghi Log đồng bộ trong vòng lặp đọc Reviews** | **1 vòng lặp:** $O(N)$ log I/O tuần tự | $O(1)$ log tổng thể (không lặp) | Trung bình | **P1 (Cao)** | **Đã triển khai** |
-| 6 | **Quét Regex Guardrail tuần tự mọi Review** | **1 vòng lặp:** $O(N \times R \times L)$ với $R$ regex, độ dài $L$ | $O(1)$ amortized (dùng Cache) | Trung bình | **P2 (Trung bình)**| **Tạm hoãn để tradeoff cùng LLM Cache** |
+| 6 | **Quét Regex Guardrail tuần tự mọi Review** | **1 vòng lặp:** $O(N \times R \times L)$ với $R$ regex, độ dài $L$ | $O(1)$ amortized (dùng Cache) | Trung bình | **P2 (Trung bình)**| **Đã triển khai** |
 | 7 | **Xử lý tuần tự các Tool Calls (OpenAI)** | **1 vòng lặp:** $O(\sum D_i)$ (tổng độ trễ các tools) | $O(\max D_i)$ (chạy song song) | Thấp | **P2 (Trung bình)**| **Đã triển khai** |
 
 *Chú thích:* 
@@ -115,10 +115,10 @@ Tài liệu này tổng hợp chi tiết các điểm nghẽn hiệu năng, đ�
   Với mỗi review trong số $N$ reviews, mã nguồn thực hiện quét toàn bộ $R$ regex patterns (28+ mẫu). Với mỗi pattern, thuật toán thực hiện tìm kiếm trên chuỗi độ dài $L$. Đây là tác vụ ngốn CPU (CPU-bound) cực kỳ lớn khi một sản phẩm hot có hàng trăm hoặc hàng nghìn review ($N \gg 100$).
 * **Sau khi tối ưu:** Độ phức tạp giảm xuống còn $O(N)$ (nếu dùng Cache chỉ tốn $O(1)$ lookup trong bộ nhớ cho mỗi review đã quét qua), hoặc giảm về $O(1)$ trên luồng đọc nếu quét khi ghi.
 * **Hệ quả khi tải cao:** CPU tăng cao đột biến, kéo dài thời gian phản hồi của dịch vụ AI RAG.
-* **Trạng thái Trade-off (Tạm hoãn):** 
+* **Trạng thái (Đã triển khai):** 
   > [!NOTE]
-  > **Tạm hoãn để phối hợp thiết kế cùng Tầng Caching Dịch Vụ ([0006-PRODUCT-REVIEW-SERVER-CACHING-DESIGN.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/analysis/0006-PRODUCT-REVIEW-SERVER-CACHING-DESIGN.md)):**
-  * Sẽ được cân nhắc tradeoff kỹ hơn giữa **Phương án A: Caching trên RAM (lru_cache Python hoặc Redis)** và **Phương án B: Thêm cột `is_safe` vào DB** (chạy quét 1 lần duy nhất lúc ghi review mới để đưa trễ luồng đọc về hẳn $O(1)$ không tốn RAM).
+  > **Quyết định thiết kế theo [0006-PRODUCT-REVIEW-SERVER-CACHING-DESIGN.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/analysis/0006-PRODUCT-REVIEW-SERVER-CACHING-DESIGN.md):**
+  * Đã áp dụng **Phương án B (DB Column)**: Thêm cột `is_safe` vào database và thực hiện quét Regex khi ghi review. Ở luồng đọc, SQL query được cập nhật thành `WHERE is_safe = TRUE` để đưa trễ luồng đọc về hẳn $O(1)$ mà không tốn RAM/CPU của server gRPC khi request.
 
 ---
 
