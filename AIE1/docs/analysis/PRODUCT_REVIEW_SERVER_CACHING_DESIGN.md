@@ -530,9 +530,9 @@ Nhóm AIE1 đã hoàn thành triển khai thực tế và kiểm chứng toàn d
 | **OTel Trace ID (Mandate #24)** | **Hoàn thành** | Trả trace ID qua gRPC trailing metadata `trace-id` cho client. |
 | **Trace Logger (Mandate #24)** | **Hoàn thành** | Ghi nhận chi tiết trace (model, tokens, cost, latency, outcome) lưu trong Redis `trace:{trace_id}` có TTL 24h và mask PII. |
 | **HTTP Sidecar Server (Mandate #24)** | **Hoàn thành** | Chạy phụ luồng HTTP server trên cổng `8086` cung cấp `POST /replay` và `GET /trace/<trace_id>`. |
-| **Circuit Breaker (Mandate #25)** | **Hoàn thành** | Tự động chuyển trạng thái `OPEN` (bypass LLM sang Postgres cache/fallback) sau 5 lỗi liên tiếp trong 30 giây. |
-| **Arguments Validation (Mandate #25)** | **Hoàn thành** | Bọc khối parse `json.loads` trong `JSONDecodeError` để tránh crash gRPC server, và validate kiểu dữ liệu của `product_id`. |
-| **Simulation Endpoint (Mandate #25)** | **Hoàn thành** | Thêm API `POST /inject` trên cổng `8086` để giả lập lỗi 429/timeout hoặc sinh arguments rác phục vụ test. |
+| **Circuit Breaker (Mandate #25)** | *Chưa triển khai* | Được đưa vào backlog cải tiến tiếp theo (quản lý trạng thái OPEN/CLOSED/HALF-OPEN). |
+| **Arguments Validation (Mandate #25)** | *Chưa triển khai* | Được đưa vào backlog cải tiến tiếp theo (validate kiểu dữ liệu product_id). |
+| **Simulation Endpoint (Mandate #25)** | *Chưa triển khai* | Được đưa vào backlog cải tiến tiếp theo (endpoint giả lập lỗi /inject). |
 
 ### 8.2. Kết Quả Đo Lường Baseline
 

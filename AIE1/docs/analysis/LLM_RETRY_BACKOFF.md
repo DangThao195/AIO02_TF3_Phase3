@@ -123,7 +123,6 @@ def execute_llm_call_with_retry(client, model, messages, tools=None):
             tool_choice="auto" if tools else None,
             timeout=10.0
         )
-    else:
         # Gọi qua boto3 Bedrock Converse API
         return client.converse(
             modelId=model,
@@ -131,4 +130,13 @@ def execute_llm_call_with_retry(client, model, messages, tools=None):
             toolConfig={"tools": tools} if tools else None,
             inferenceConfig={"temperature": 0.0, "maxTokens": 500}
         )
+
+---
+
+## 6. Hiện trạng Triển khai thực tế
+
+Cơ chế Thử lại (Retry) bằng thư viện `tenacity` đã được tích hợp thành công vào [fallback.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/guardrails/fallback.py):
+
+* **Đúng với thông số thiết kế:** Thử lại tối đa 3 lần (`MAX_RETRIES = 3`), thời gian chờ ban đầu 1 giây (`BASE_DELAY = 1.0`), thời gian chờ tối đa 8 giây (`MAX_DELAY = 8.0`) sử dụng thuật toán Full Jitter (`wait_random_exponential`).
+* **Định tuyến Fallback thực tế:** Khi tất cả các lần retry kiệt sức hoặc gặp lỗi không thể retry, hệ thống kích hoạt fallback trả thẳng về thông báo lỗi tĩnh của Tầng 3 (`FALLBACK_SUMMARY_MESSAGE = "The AI is busy right now. Please try again later."`). Tầng 2 (PostgreSQL Cache/Static Summary) chưa được triển khai ở runtime để tránh hiển thị reviews tóm tắt lỗi thời.
 ```
