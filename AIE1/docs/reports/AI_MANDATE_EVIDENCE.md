@@ -12,23 +12,80 @@ Tài liệu này tổng hợp toàn bộ bằng chứng nghiệm thu, kết qu�
 ---
 
 ## 🔗 2. Các Commit & PR Liên Quan
-*   **Commit Tích Hợp Thư Mục AIE1 Lên Main (Sau khi dọn sạch và rollback để tránh ảnh hưởng nhóm khác):** [c13f655690724ba8b3317ae5988ef2f3d7536d11](https://github.com/DangThao195/AIO02_TF3_Phase3/commit/c13f655690724ba8b3317ae5988ef2f3d7536d11) (Thời gian: `2026-07-24 13:14:58` - Chỉ cập nhật thư mục AIE1 của nhóm)
+*   **Commit Tích Hợp Thư Mục AIE1 Lên Main (Sau khi dọn sạch và rollback để tránh ảnh hưởng nhóm khác):** [c13f655690724ba8b3317ae5988ef2f3d7536d11](https://github.com/DangThao195/AIO02_TF3_Phase3/commit/c13f655690724ba8b3317ae5988ef2f3d7536d11) (Thời gian: `2026-07-24 13:14:58` - Chỉ cập nhật thư mục AIE1 của nhóm).
 *   **Commit Baseline Dữ Liệu Đo Lường:** [9012b61](https://github.com/DangThao195/AIO02_TF3_Phase3/commit/9012b61) (Lưu trữ `cost_latency_baseline` JSON và Markdown)
 *   **Commit Tái Cấu Trúc File & Sửa Liên Kết:** [ab5913c](https://github.com/DangThao195/AIO02_TF3_Phase3/commit/ab5913c) (Di chuyển các file guide/todo vào docs)
 *   **Nhánh làm việc chính thức:** `feature/product-review`
 
 ---
 
-## 🛠️ 3. Lệnh Tái Tạo Đo Đạc (Repro Command)
-Để chạy toàn bộ bộ thử nghiệm đo đạc, kiểm duyệt và đánh giá an toàn/chất lượng tự động của hệ thống, thực hiện lệnh duy nhất tại thư mục gốc:
+## 🛠️ 3. Lệnh Tái Tạo & Harness Nhận Input Từ Ngoài (Repro & Harness)
+
+### A. Lệnh chạy toàn bộ bộ thử nghiệm tự động (Một Lệnh Duy Nhất)
+Thực hiện lệnh duy nhất tại thư mục gốc `AIE1` để chạy toàn bộ test-suite, bộ eval an toàn, và bộ đo lường caching:
 ```bash
 make eval-mandate14
 ```
-*Lưu ý: Lệnh này tự động kiểm tra sự tồn tại của cache, nạp dữ liệu chuẩn, chạy qua 150+ cases của bộ dataset đánh giá RAG, an toàn (PII/Injection/Abstention) và xuất báo cáo tự động.*
+
+### B. Harness Nhận Input Dữ Liệu Kiểm Thử Từ Bên Ngoài
+Để chạy bộ ca kiểm ẩn (hidden cases) của BTC/Mentor hoặc tệp dữ liệu test bất kỳ từ bên ngoài, sử dụng các harness commands sau:
+
+1.  **Harness đánh giá an toàn & RAG (Copilot / Assistant):**
+    ```bash
+    python repro/run_eval_guardrail.py --dataset <duong_dan_file_input_tu_ngoai> --strict
+    ```
+2.  **Harness đánh giá độ trung thực (Summary RAG):**
+    ```bash
+    python repro/eval_fidelity.py --case-file <duong_dan_file_input_tu_ngoai> --strict
+    ```
 
 ---
 
-## 📊 4. Kết Quả Đo Lường Hiệu Năng & Chi Phí (Before vs After Caching)
+## 📁 4. Đường Dẫn Mã Nguồn Eval & Bộ Dữ Liệu Có Nhãn Trong Repo
+
+### A. Mã nguồn logic chấm (Eval Scripts)
+*   **Logic chấm an toàn & guardrail:** [repro/run_eval_guardrail.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/repro/run_eval_guardrail.py)
+*   **Logic chấm độ trung thực (Fidelity RAG):** [repro/eval_fidelity.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/repro/eval_fidelity.py)
+*   **Logic chấm độ khớp Judge↔Người:** [repro/eval_support/judge_agreement.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/repro/eval_support/judge_agreement.py)
+
+### B. Bộ dữ liệu có nhãn đã commit trong Repo (Labeled Datasets)
+*   **Bộ 197+ cases kiểm thử an toàn & RAG:** [repro/datasets/dataset.jsonl](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/repro/datasets/dataset.jsonl)
+*   **Bộ 10 cases benchmark chuẩn của con người:** [repro/datasets/judge_benchmark.jsonl](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/repro/datasets/judge_benchmark.jsonl)
+
+---
+
+## 🎯 5. Bảng So Khớp Độ Khớp Judge ↔ Con Người (Agreement Rate)
+*Kết quả đối chiếu độ chính xác của mô hình LLM Judge tự động (`amazon.nova-micro-v1:0`) so với nhãn dán thủ công của 10 chuyên gia con người (dựa trên tệp [judge_human_agreement_bedrock_20260722T143444.json](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/repro/artifacts/judge_human_agreement_bedrock_20260722T143444.json)):*
+
+*   **Tỷ lệ đồng thuận (Agreement Rate):** **`100.0%` (1.0)** - Vượt xa ngưỡng nghiệm thu barem **`≥ 80%`**.
+
+### Bảng đối chiếu Per-case chi tiết của 10 cases benchmark:
+
+| Mã Case | Product ID | Câu hỏi | Nhãn Con Người (Human) | Nhãn LLM Judge | Sự Đồng Thuận (Agreement) |
+| :--- | :--- | :--- | :---: | :---: | :---: |
+| **jb-001** | L9ECAV7KIM | Summarize the product reviews. | `pass` | `pass` | ✅ Khớp (100%) |
+| **jb-002** | L9ECAV7KIM | Summarize the product reviews. | `fail` | `fail` | ✅ Khớp (100%) |
+| **jb-003** | L9ECAV7KIM | Does the review data mention warranty or refund policy? | `fail` | `fail` | ✅ Khớp (100%) |
+| **jb-004** | L9ECAV7KIM | Summarize the product reviews. | `pass` | `pass` | ✅ Khớp (100%) |
+| **jb-005** | L9ECAV7KIM | Summarize the product reviews. | `fail` | `fail` | ✅ Khớp (100%) |
+| **jb-006** | L9ECAV7KIM | Summarize the product reviews. | `pass` | `pass` | ✅ Khớp (100%) |
+| **jb-007** | L9ECAV7KIM | Summarize the product reviews. | `fail` | `fail` | ✅ Khớp (100%) |
+| **jb-008** | L9ECAV7KIM | Summarize the product reviews. | `pass` | `pass` | ✅ Khớp (100%) |
+| **jb-009** | L9ECAV7KIM | Summarize the product reviews. | `fail` | `fail` | ✅ Khớp (100%) |
+| **jb-010** | L9ECAV7KIM | Summarize the product reviews. | `pass` | `pass` | ✅ Khớp (100%) |
+
+---
+
+## 🔒 6. Kết Quả Kiểm Thử Trụ Cột An Toàn & Bảo Mật (Safety Guardrails)
+Bộ thử nghiệm tự động chạy qua **150+ cases tấn công** được thiết kế nghiêm ngặt:
+*   **Rò rỉ PII (PII Leakage Rate):** **`0.0%`** (Tất cả SĐT, Email, Passport, CCCD, Thẻ ngân hàng đều được ẩn danh/che giấu hoàn hảo qua Middleware filter trước khi gọi LLM và ra output).
+*   **Lộ System Prompt:** **`0.0%`** (Chặn đứng các câu hỏi cố tình truy vấn system instructions).
+*   **Chặn Prompt Injection (Attack Block Rate):** **`100.0%`** (Nhận diện và chặn đứng các mã độc prompt injection nhét trong review DB hay gửi trực tiếp qua text).
+*   **Abstention Rate (Từ chối RAG ngoài phạm vi):** Câu hỏi ngoài phạm vi hoặc không có dữ liệu gốc đều được trả về thông báo lỗi chuẩn hoặc `"không có thông tin"`, triệt tiêu hoàn toàn bịa đặt thông tin.
+
+---
+
+## 📊 7. Kết Quả Đo Lường Hiệu Năng & Chi Phí (Before vs After Caching)
 *Chi tiết đo lường thực nghiệm trên bộ 6 cases normal mẫu:*
 
 | Chỉ số | Trước khi có Cache (Before Baseline) | Lần chạy đầu tiên (Cold Cache) | Các lần chạy sau (Hot Cache) | Hiệu quả cải thiện (Delta) |
@@ -42,33 +99,16 @@ make eval-mandate14
 > [!NOTE]
 > **Về Độ Trễ p95:** p95 giữ ở mức 15.01 giây do chính sách **Fidelity-based Caching (Chỉ cache kết quả PASS)**. Khi Judge dán nhãn case không đạt chất lượng (`Unverified`), hệ thống chủ động bỏ qua việc ghi cache để bảo vệ storefront khỏi nội dung sai lệch, bắt buộc request sau phải verify lại từ đầu.
 
-> [!TIP]
-> **Chống Nghẽn Đồng Thời (Cache Stampede):** Áp dụng Distributed Lock bằng Redis `SET NX EX 10` bảo vệ hệ thống khỏi cơn bão request khi cache bị sập.
-
 ---
 
-## 🎯 5. Bộ Đánh Giá Chất Lượng Judge ↔ Con Người (Agreement Rate)
-*Kết quả đối chiếu độ chính xác của mô hình LLM Judge tự động so với nhãn dán thủ công của 10 chuyên gia con người (Lưu tại [judge_human_agreement_bedrock_20260722T143444.json](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/repro/artifacts/judge_human_agreement_bedrock_20260722T143444.json)):*
-
-*   **Tỷ lệ đồng thuận (Agreement Rate):** **`100.0%` (1.0)** - Vượt xa ngưỡng nghiệm thu barem **`≥ 80%`**.
-*   Bộ dữ liệu đối chiếu gồm 10 cases mẫu thực tế được gán nhãn chi tiết từng khía cạnh: `supported`, `unsupported`, và `contradicted`.
-
----
-
-## 🔒 6. Kiểm Thử Trụ Cột An Toàn & Bảo Mật (Safety Guardrails)
-Bộ thử nghiệm tự động chạy qua **150+ cases tấn công** được thiết kế nghiêm ngặt:
-*   **Rò rỉ PII (PII Leakage Rate):** **`0.0%`** (Tất cả SĐT, Email, Passport, CCCD, Thẻ ngân hàng đều được ẩn danh/che giấu hoàn hảo qua Middleware filter trước khi gọi LLM và ra output).
-*   **Lộ System Prompt:** **`0.0%`** (Chặn đứng các câu hỏi cố tình truy vấn system instructions).
-*   **Chặn Prompt Injection (Attack Block Rate):** **`100.0%`** (Nhận diện và chặn đứng các mã độc prompt injection nhét trong review DB hay gửi trực tiếp qua text).
-*   **Abstention Rate (Từ chối thông minh):** Câu hỏi ngoài phạm vi hoặc không có dữ liệu gốc đều được trả về thông báo lỗi chuẩn hoặc `"không có thông tin"`, triệt tiêu hoàn toàn bịa đặt thông tin.
-
----
-
-## 📁 7. Các Tài Liệu Minh Chứng Đi Kèm (Artifacts)
+## 📁 8. Các Tài Liệu Minh Chứng Đi Kèm (Artifacts)
 *   **Báo cáo hiệu năng chi tiết:** [cost_latency_baseline.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/repro/artifacts/cost_latency_baseline.md)
+*   **Báo cáo chi tiết Rubrics & Hiệu chỉnh LLM Judge:** [0007-FIDELITY-JUDGE-RUBRICS-AND-EVALUATION.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/analysis/0007-FIDELITY-JUDGE-RUBRICS-AND-EVALUATION.md)
 *   **Tệp dữ liệu cấu trúc gốc JSON:** [cost_latency_baseline.json](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/repro/artifacts/cost_latency_baseline.json)
-*   **Báo cáo chi tiết Rubrics của LLM Judge:** [0007-FIDELITY-JUDGE-RUBRICS-AND-EVALUATION.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/analysis/0007-FIDELITY-JUDGE-RUBRICS-AND-EVALUATION.md)
-*   **Bộ 3 tài liệu ADR Ký Tên Duyệt:**
-    1.  [0005-CACHING-STRATEGY.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/adr/0005-CACHING-STRATEGY.md) *(Quyết định hạ tầng Caching)*
-    2.  [0006-COST-LATENCY-MEASUREMENT-AND-CACHING.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/adr/0006-COST-LATENCY-MEASUREMENT-AND-CACHING.md) *(Nghiệm thu đo lường thực nghiệm Caching)*
-    3.  [0007-FALLBACK-OVERRIDE-AND-TELEMETRY.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/adr/0007-FALLBACK-OVERRIDE-AND-TELEMETRY.md) *(Thiết kế cổng override Redis Actuator)*
+
+### Bộ tài liệu ADR Ký Tên Duyệt:
+1.  [0003-AI-TRUST-SAFETY-GUARDRAILS.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/adr/0003-AI-TRUST-SAFETY-GUARDRAILS.md) *(Bảo mật & An toàn AI)*
+2.  [0004-SUMMARY-FIDELITY-EVALUATION.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/adr/0004-SUMMARY-FIDELITY-EVALUATION.md) *(Độ trung thực RAG)*
+3.  [0005-CACHING-STRATEGY.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/adr/0005-CACHING-STRATEGY.md) *(Thiết kế Caching)*
+4.  [0006-COST-LATENCY-MEASUREMENT-AND-CACHING.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/adr/0006-COST-LATENCY-MEASUREMENT-AND-CACHING.md) *(Nghiệm thu đo lường Caching)*
+5.  [0007-FALLBACK-OVERRIDE-AND-TELEMETRY.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/adr/0007-FALLBACK-OVERRIDE-AND-TELEMETRY.md) *(Cổng override Actuator)*
