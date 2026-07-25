@@ -44,6 +44,9 @@ class AnomalyDetector:
                 if key.endswith("_iforest.joblib"):
                     filename = os.path.basename(key)
                     local_path = os.path.join(self.models_dir, filename)
+                    if os.path.exists(local_path):
+                        logger.info(f"Model {filename} cached locally, skipping download.")
+                        continue
                     logger.info(f"Downloading model {key} from S3 to {local_path}...")
                     s3.download_file(self.s3_bucket, key, local_path)
             logger.info("Successfully downloaded all latest models from S3.")
@@ -409,6 +412,9 @@ class AnomalyDetector:
                         for service_name, s3_path in manifest.get("model_paths", {}).items():
                             s3_key = s3_path.replace("models/", "")
                             local_path = os.path.join(self.models_dir, f"{service_name}_iforest.joblib")
+                            if os.path.exists(local_path):
+                                logger.info(f"Model for {service_name} cached locally at {local_path}, skipping S3 download.")
+                                continue
                             logger.info(f"Downloading model for {service_name} from s3://{self.s3_bucket}/{s3_key}...")
                             s3.download_file(self.s3_bucket, s3_key, local_path)
                         manifest_loaded = True
