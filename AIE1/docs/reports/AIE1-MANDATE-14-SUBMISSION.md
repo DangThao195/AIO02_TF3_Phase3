@@ -30,7 +30,7 @@ make eval-mandate14
 ### B. Harness Nhận Input Dữ Liệu Kiểm Thử Từ Bên Ngoài
 Để chạy bộ ca kiểm ẩn (hidden cases) của BTC/Mentor hoặc tệp dữ liệu test bất kỳ từ bên ngoài, sử dụng các harness commands sau:
 
-1.  **Harness đánh giá an toàn & RAG (Copilot / Assistant):**
+1.  **Harness đánh giá an toàn & RAG (Product AI Assistant):**
     ```bash
     python repro/run_eval_guardrail.py --dataset <duong_dan_file_input_tu_ngoai> --strict
     ```
