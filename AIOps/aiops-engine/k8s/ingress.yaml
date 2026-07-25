@@ -7,7 +7,7 @@ metadata:
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
-    alb.ingress.kubernetes.io/healthcheck-path: /healthz
+    alb.ingress.kubernetes.io/healthcheck-path: /readyz
 spec:
   ingressClassName: alb
   rules:
@@ -19,4 +19,4 @@ spec:
           service:
             name: aiops-engine
             port:
-              number: 8000
+              number: 80

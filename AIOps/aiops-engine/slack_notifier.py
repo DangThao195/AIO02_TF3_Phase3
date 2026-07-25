@@ -139,7 +139,7 @@ class SlackNotifier:
                                 },
                                 "style": "primary",
                                 "value": "approve",
-                                "action_id": f"approve_{incident_id}"
+                                "action_id": f"approve_{incident_id}_{culprit_service}"
                             },
                             {
                                 "type": "button",
@@ -149,7 +149,7 @@ class SlackNotifier:
                                     "emoji": True
                                 },
                                 "value": "reject",
-                                "action_id": f"reject_{incident_id}"
+                                "action_id": f"reject_{incident_id}_{culprit_service}"
                             },
                             {
                                 "type": "button",
@@ -160,7 +160,7 @@ class SlackNotifier:
                                 },
                                 "style": "danger",
                                 "value": "emergency_stop",
-                                "action_id": f"emergency_stop_{incident_id}"
+                                "action_id": f"emergency_stop_{incident_id}_{culprit_service}"
                             }
                         ]
                     }

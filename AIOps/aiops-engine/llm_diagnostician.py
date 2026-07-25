@@ -255,10 +255,16 @@ Clustered Log Templates:
 [TASK]
 1. Phân tích nguyên nhân sự cố hiện tại. Đối chiếu với các sự cố lịch sử (INC-1, INC-2, INC-3, INC-4, INC-5, INC-6, INC-7, INC-8) xem có trùng khớp mẫu hành vi không.
 2. BẮT BUỘC TRÍCH DẪN NGUỒN (Citation): Trong nội dung phân tích (đặc biệt là phần "Nguyên nhân" và "matched_incident"), bạn bắt buộc phải ghi rõ nguồn trích dẫn sự cố lịch sử tương đồng nhất lấy từ Knowledge Base. Ví dụ: "(Nguồn tham chiếu: INC-4 từ Bedrock Knowledge Base)".
-3. Lưu ý đặc biệt: 
-   - INC-1: Quá tải DB connection pool của product-catalog. Khắc phục: đề xuất proposed_action = "scale", và action_command = "kubectl -n techx-tf3 scale deploy/product-catalog --replicas=1".
-   - INC-2: Lỗi mất state do Single-replica khi Pod rescheduled, KHÔNG PHẢI lỗi OOM. Nếu là INC-2, đề xuất proposed_action = "none", tuyệt đối không restart pod tự động vì restart sẽ làm mất sạch dữ liệu giỏ hàng.
-   - INC-3: Lỗi EventStream gRPC status 4 (timeout) giữa fraud-detection va flagd. Khắc phục: đề xuất proposed_action = "cache-flush" (nhưng sử dụng scale command) và action_command = "kubectl -n techx-tf3 scale deploy/fraud-detection --replicas=1".
+3. Quy tắc hạ tầng K8s CDO Runbook (BẮT BUỘC LLM TUÂN THỦ TẠO LỆNH K8S CHUẨN XÁC):
+   - Với dịch vụ 'checkout': Lệnh khắc phục BẮT BUỘC là:
+     action_command = "kubectl -n techx-tf3 rollout restart deployment/checkout"
+     rollback_command = "kubectl -n techx-tf3 rollout undo deployment/checkout"
+   - Với các dịch vụ gRPC (payment, product-reviews, recommendation, product-catalog): Do kết nối gRPC (HTTP/2) ngầm kéo dài lâu dài, lệnh khắc phục BẮT BUỘC là 'rollout restart' để buộc client kết nối lại pod mới:
+     action_command = "kubectl -n techx-tf3 rollout restart deployment/{{service}}"
+     rollback_command = "kubectl -n techx-tf3 rollout undo deployment/{{service}}"
+   - Với các dịch vụ HTTP thuần (frontend, frontend-proxy, email, shipping): 
+     action_command = "kubectl -n techx-tf3 scale deploy/{{service}} --replicas=2"
+     rollback_command = "kubectl -n techx-tf3 scale deploy/{{service}} --replicas=1"
 4. Xác định Vùng ảnh hưởng (Blast Radius): Bạn phải chỉ rõ các microservice nào khác trong hệ thống có thể bị ảnh hưởng dây chuyền và giải thích chi tiết chúng bị ảnh hưởng như thế nào (ví dụ: bị tăng độ trễ lan truyền, nhận lỗi gRPC/HTTP 5xx, hoặc bị tắc nghẽn hàng đợi).
 5. Phân tích "analysis" trong JSON trả về bắt buộc phải là một phân tích kỹ thuật SRE chuyên nghiệp (bằng TIẾNG VIỆT) được trình bày dưới dạng DÀNH RIÊNG CHO ĐẦU MỤC (Bullet Points) ngắn gọn, rõ ràng theo đúng cấu trúc sau:
    * **Hiện tượng**: <Mô tả cực kỳ ngắn gọn hiện tượng, ví dụ: Vỡ SLO latency hoặc nghẽn giao dịch>
@@ -278,7 +284,7 @@ Trả về kết quả ở định dạng JSON duy nhất như sau:
   "analysis": "Phân tích kỹ thuật chi tiết chứa đầy đủ dẫn chứng cuộc gọi Jaeger, log Drain3, thuật toán metric và phân tích Vùng ảnh hưởng (Blast Radius)...",
   "matched_incident": "INC-1" hoặc "INC-2" hoặc "INC-3" hoặc "INC-4" hoặc "INC-5" hoặc "INC-6" hoặc "INC-7" hoặc "INC-8" hoặc "None",
   "proposed_action": "scale" hoặc "restart" || "toggle-tf-flag" || "cache-flush" || "breaker-force" || "none",
-  "action_command": "kubectl -n techx-tf3 scale deploy/... hoặc lệnh tương ứng để khắc phục",
+  "action_command": "kubectl -n techx-tf3 rollout restart deployment/... hoặc lệnh tương ứng",
   "rollback_command": "lệnh rollback khôi phục lại trạng thái cũ của deployment/service nếu lệnh khắc phục thất bại",
   "confidence_score": số thực float từ 0.0 đến 1.0
 }}

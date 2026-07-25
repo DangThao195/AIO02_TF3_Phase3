@@ -61,10 +61,10 @@ def fetch_metrics_from_prometheus(service: str, duration_days: int = 7) -> pd.Da
     start_time = end_time - timedelta(days=duration_days)
     
     queries = {
-        "rps": f'sum(rate(traces_span_metrics_calls_total{{service_name="{service}", span_kind="SPAN_KIND_SERVER"}}[5m]))',
-        "error_rate": f'(sum(rate(traces_span_metrics_calls_total{{service_name="{service}", span_kind="SPAN_KIND_SERVER", status_code="STATUS_CODE_ERROR"}}[5m])) or vector(0))',
+        "rps": f'sum(rate(traces_span_metrics_calls_total{{service_name="{service}"}}[5m]))',
+        "error_rate": f'(sum(rate(traces_span_metrics_calls_total{{service_name="{service}", status_code="STATUS_CODE_ERROR"}}[5m])) or vector(0))',
         "client_error_rate": f'vector(0)',
-        "latency_p90": f'(histogram_quantile(0.90, sum(rate(traces_span_metrics_duration_milliseconds_bucket{{service_name="{service}", span_kind="SPAN_KIND_SERVER"}}[5m])) by (le)) or vector(0))',
+        "latency_p90": f'(histogram_quantile(0.90, sum(rate(traces_span_metrics_duration_milliseconds_bucket{{service_name="{service}"}}[5m])) by (le)) or vector(0))',
         "cpu_usage": f'sum(rate(container_cpu_usage_seconds_total{{container="{service}"}}[5m]))',
         "memory_usage": f'sum(container_memory_working_set_bytes{{container="{service}"}}) / sum(container_spec_memory_limit_bytes{{container="{service}"}})',
         "kafka_lag": f'(sum(kafka_consumer_records_lag{{service_name="{service}"}}) or vector(0))'

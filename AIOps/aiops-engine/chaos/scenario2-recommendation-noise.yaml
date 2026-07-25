@@ -1,0 +1,19 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: StressChaos
+metadata:
+  name: recommendation-cpu-noise
+  namespace: techx-tf3
+spec:
+  mode: all
+  duration: 10m
+  selector:
+    namespaces:
+      - techx-tf3
+    labelSelectors:
+      app.kubernetes.io/name: recommendation
+  containerNames:
+    - recommendation
+  stressors:
+    cpu:
+      workers: 2
+      load: 80

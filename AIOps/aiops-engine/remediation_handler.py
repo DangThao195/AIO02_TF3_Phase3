@@ -40,11 +40,17 @@ class RemediationHandler:
 
     def execute_k8s_command(self, command: str, dry_run: bool = False) -> bool:
         """
-        Thực thi lệnh K8s. Sử dụng --dry-run=server để test an toàn.
+        Thực thi lệnh K8s. Hỗ trợ dry-run kiểm tra an toàn trước khi thực thi.
         """
         full_command = command
         if dry_run:
-            full_command += " --dry-run=client"
+            if "rollout restart" in command or "rollout undo" in command:
+                # rollout restart/undo không hỗ trợ --dry-run=client, dùng kubectl get để kiểm tra sự tồn tại của resource
+                parts = command.split()
+                target = parts[-1]
+                full_command = f"kubectl -n techx-tf3 get {target}"
+            else:
+                full_command += " --dry-run=client"
 
         logger.info(f"Executing command: {full_command}")
         
