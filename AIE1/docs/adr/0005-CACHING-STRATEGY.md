@@ -3,7 +3,7 @@
 * **Trạng thái:** Đã phê duyệt
 * **Tác giả:** Kiên (AIE1) & Khoa (Leader AIE1)
 * **Ngày tạo:** 2026-07-17
-* **Tài liệu thiết kế chi tiết:** [PRODUCT_REVIEW_SERVER_CACHING_DESIGN.md](../analysis/PRODUCT_REVIEW_SERVER_CACHING_DESIGN.md)
+* **Tài liệu thiết kế chi tiết:** [0006-PRODUCT-REVIEW-SERVER-CACHING-DESIGN.md](../analysis/0006-PRODUCT-REVIEW-SERVER-CACHING-DESIGN.md)
 
 ---
 
@@ -16,7 +16,7 @@ Theo [Chỉ thị số 6](../../mandates/MANDATE-06-ai-trust-safety.md) từ Ban
 3. **Guardrail/eval không được kéo p95 vỡ SLO** (Performance).
 4. **Chứng minh bằng eval, có log kiểm toán** — không bằng lời (Auditability).
 
-Sau khi hoàn thành triển khai các biện pháp tối ưu hiệu năng cốt lõi (xem [PRODUCT_REVIEWS_BOTTLENECK_ANALYSIS.md](../analysis/PRODUCT_REVIEWS_BOTTLENECK_ANALYSIS.md)), nhóm xác định **hai điểm nghẽn còn lại** cần giải quyết bằng Caching:
+Sau khi hoàn thành triển khai các biện pháp tối ưu hiệu năng cốt lõi (xem [0001-PRODUCT-REVIEWS-BOTTLENECK-ANALYSIS.md](../analysis/0001-PRODUCT-REVIEWS-BOTTLENECK-ANALYSIS.md)), nhóm xác định **hai điểm nghẽn còn lại** cần giải quyết bằng Caching:
 
 | Điểm nghẽn | Loại | Latency trung bình | Nguyên nhân gốc |
 | :--- | :--- | :--- | :--- |
@@ -74,7 +74,7 @@ Thiết kế và tích hợp **kiến trúc Caching hai tầng bổ trợ lẫn 
 
 ### 3.2. Tại sao chọn DB Column `is_safe` cho Regex Cache (không phải RAM/Redis)?
 
-Ba phương án đã được đánh giá chi tiết (xem [PRODUCT_REVIEW_SERVER_CACHING_DESIGN.md § 3.2](../analysis/PRODUCT_REVIEW_SERVER_CACHING_DESIGN.md)):
+Ba phương án đã được đánh giá chi tiết (xem [0006-PRODUCT-REVIEW-SERVER-CACHING-DESIGN.md § 3.2](../analysis/0006-PRODUCT-REVIEW-SERVER-CACHING-DESIGN.md)):
 
 | Tiêu chí | Phương án A (RAM/Redis) | **Phương án B (DB Column)** | Phương án C (Chỉ LLM Cache) |
 | :--- | :--- | :--- | :--- |
@@ -143,9 +143,9 @@ Phương án B triệt tiêu hoàn toàn tác vụ quét Regex CPU-bound khỏi 
 
 | Tài liệu | Mô tả |
 | :--- | :--- |
-| [PRODUCT_REVIEW_SERVER_CACHING_DESIGN.md](../analysis/PRODUCT_REVIEW_SERVER_CACHING_DESIGN.md) | Thiết kế kỹ thuật chi tiết: kiến trúc, trade-off analysis, code minh họa, phân tích rủi ro |
+| [0006-PRODUCT-REVIEW-SERVER-CACHING-DESIGN.md](../analysis/0006-PRODUCT-REVIEW-SERVER-CACHING-DESIGN.md) | Thiết kế kỹ thuật chi tiết: kiến trúc, trade-off analysis, code minh họa, phân tích rủi ro |
 | [LLM_CACHING_DESIGN.md](../analysis/LLM_CACHING_DESIGN.md) | Tài liệu thiết kế LLM Caching ban đầu |
-| [PRODUCT_REVIEWS_BOTTLENECK_ANALYSIS.md](../analysis/PRODUCT_REVIEWS_BOTTLENECK_ANALYSIS.md) | Phân tích điểm nghẽn hiệu năng tổng thể dịch vụ product-reviews |
+| [0001-PRODUCT-REVIEWS-BOTTLENECK-ANALYSIS.md](../analysis/0001-PRODUCT-REVIEWS-BOTTLENECK-ANALYSIS.md) | Phân tích điểm nghẽn hiệu năng tổng thể dịch vụ product-reviews |
 | [ADR 0001 — Chọn Bedrock Nova Lite](./0001-CHOOSE-BEDROCK-NOVA-LITE.md) | Quyết định chọn model LLM chính |
 | [ADR 0003 — Guardrails & Eval](./0003-AI-TRUST-SAFETY-GUARDRAILS.md) | Thiết kế hệ thống Guardrails đa tầng |
 | [ADR 0004 — Summary Fidelity Evaluation](./0004-SUMMARY-FIDELITY-EVALUATION.md) | Bộ đánh giá độ trung thực — tích hợp làm Cache Policy gate |

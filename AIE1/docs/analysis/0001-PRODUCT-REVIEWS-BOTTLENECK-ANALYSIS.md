@@ -117,7 +117,7 @@ Tài liệu này tổng hợp chi tiết các điểm nghẽn hiệu năng, đ�
 * **Hệ quả khi tải cao:** CPU tăng cao đột biến, kéo dài thời gian phản hồi của dịch vụ AI RAG.
 * **Trạng thái Trade-off (Tạm hoãn):** 
   > [!NOTE]
-  > **Tạm hoãn để phối hợp thiết kế cùng Tầng Caching Dịch Vụ ([PRODUCT_REVIEW_SERVER_CACHING_DESIGN.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/analysis/PRODUCT_REVIEW_SERVER_CACHING_DESIGN.md)):**
+  > **Tạm hoãn để phối hợp thiết kế cùng Tầng Caching Dịch Vụ ([0006-PRODUCT-REVIEW-SERVER-CACHING-DESIGN.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/analysis/0006-PRODUCT-REVIEW-SERVER-CACHING-DESIGN.md)):**
   * Sẽ được cân nhắc tradeoff kỹ hơn giữa **Phương án A: Caching trên RAM (lru_cache Python hoặc Redis)** và **Phương án B: Thêm cột `is_safe` vào DB** (chạy quét 1 lần duy nhất lúc ghi review mới để đưa trễ luồng đọc về hẳn $O(1)$ không tốn RAM).
 
 ---

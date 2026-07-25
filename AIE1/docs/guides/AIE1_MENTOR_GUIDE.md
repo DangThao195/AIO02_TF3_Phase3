@@ -34,12 +34,12 @@ Nhóm AIE1 đã nghiên cứu, thử nghiệm và xây dựng kế hoạch nâng
 ### A. Tích Hợp Trực Tiếp AWS Bedrock SDK (boto3)
 * **Mục tiêu**: Loại bỏ hoàn toàn Pod trung gian LiteLLM để giảm 1 hop mạng, **tối ưu hóa độ trễ (Latency)** và **tăng độ tin cậy**.
 * **Giải pháp**: Xây dựng cơ chế định tuyến đa Client (Dual-Engine Routing) bằng biến môi trường `LLM_PROVIDER` (`openai` hoặc `bedrock`). Mã nguồn hỗ trợ cả OpenAI client cũ và SDK `boto3` mới (sử dụng AWS Converse API và tự động ánh xạ Tool Schema).
-* **Tài liệu đề xuất chi tiết**: Xem tại **[AIE1/docs/analysis/BEDROCK_INTEGRATION_PROPOSAL.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIE1/docs/analysis/BEDROCK_INTEGRATION_PROPOSAL.md)**.
+* **Tài liệu đề xuất chi tiết**: Xem tại **[AIE1/docs/analysis/0004-BEDROCK-INTEGRATION-PROPOSAL.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIE1/docs/analysis/0004-BEDROCK-INTEGRATION-PROPOSAL.md)**.
 
 ### B. Bộ Đánh Giá Độ Trung Thực (Fidelity Evaluation)
 * **Mục tiêu**: Phát hiện tự động các trường hợp LLM bị ảo giác (hallucination) hoặc tóm tắt sai dữ liệu review gốc của PostgreSQL.
 * **Giải pháp**: Viết script đánh giá chất lượng **[AIE1/repro/eval_fidelity.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIE1/repro/eval_fidelity.py)** so khớp dữ liệu tóm tắt với Ground Truth (Fact Sheet) sử dụng LLM làm Judge.
-* **Phân tích điểm nghẽn**: Nhóm đã phát hiện và đề xuất hướng giải quyết cho **4 điểm nghẽn lớn** của bộ eval hiện tại (như bất nhất Ground Truth, nhạy cảm với dải số). Chi tiết xem tại **[AIE1/docs/analysis/EVALUATION_BOTTLENECKS.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIE1/docs/analysis/EVALUATION_BOTTLENECKS.md)**.
+* **Phân tích điểm nghẽn**: Nhóm đã phát hiện và đề xuất hướng giải quyết cho **4 điểm nghẽn lớn** của bộ eval hiện tại (như bất nhất Ground Truth, nhạy cảm với dải số). Chi tiết xem tại **[AIE1/docs/analysis/0002-EVALUATION-BOTTLENECKS.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIE1/docs/analysis/0002-EVALUATION-BOTTLENECKS.md)**.
 
 ### C. AI Guardrails (Bảo Mật & Lọc PII)
 * **Mục tiêu**: Ngăn chặn Prompt Injection và bảo vệ dữ liệu cá nhân của khách hàng.
@@ -61,7 +61,7 @@ Nhóm AIE1 đã nghiên cứu, thử nghiệm và xây dựng kế hoạch nâng
 ### F. Thử Lại & Trễ Lũy Thừa (Retry & Exponential Backoff)
 * **Mục tiêu**: Nâng cao tính chống chịu lỗi trước các lỗi mạng tạm thời hoặc Bedrock Rate Limit (HTTP 429).
 * **Giải pháp**: Tích hợp thuật toán Exponential Backoff với Jitter qua decorator `tenacity` để tự động thử lại 3 lần trước khi kích hoạt Fallback.
-* **Tài liệu đề xuất chi tiết**: Xem tại **[AIE1/docs/analysis/LLM_RETRY_BACKOFF.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIE1/docs/analysis/LLM_RETRY_BACKOFF.md)**.
+* **Tài liệu đề xuất chi tiết**: Xem tại **[AIE1/docs/analysis/0003-LLM-RETRY-BACKOFF.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIE1/docs/analysis/0003-LLM-RETRY-BACKOFF.md)**.
 
 ### G. Phản Hồi Dạng Luồng (Streaming Response)
 * **Mục tiêu**: Giảm thiểu thời gian nhận ký tự đầu tiên (TTFT) xuống dưới 200ms để tăng UX.
@@ -87,10 +87,10 @@ Toàn bộ các tài liệu và phần việc liên quan của nhóm AIE1 đư�
 * **[AIE1/AI_BASELINE_EVAL.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIE1/AI_BASELINE_EVAL.md)**: Nhật ký đo đạc Baseline (độ trễ, chi phí token), thiết kế Guardrails và Backlog cải tiến.
 * **[AIE1/docs/adr/](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIE1/docs/adr)**: Quyết định thiết kế kiến trúc (ADR 0001 và ADR 0002).
 * **[AIE1/docs/analysis/](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIE1/docs/analysis)**: Các báo cáo phân tích thiết kế bao gồm:
-  * Lỗi hệ thống đánh giá: **[EVALUATION_BOTTLENECKS.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIE1/docs/analysis/EVALUATION_BOTTLENECKS.md)**
-  * Tích hợp `boto3` trực tiếp: **[BEDROCK_INTEGRATION_PROPOSAL.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIE1/docs/analysis/BEDROCK_INTEGRATION_PROPOSAL.md)**
+  * Lỗi hệ thống đánh giá: **[0002-EVALUATION-BOTTLENECKS.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIE1/docs/analysis/0002-EVALUATION-BOTTLENECKS.md)**
+  * Tích hợp `boto3` trực tiếp: **[0004-BEDROCK-INTEGRATION-PROPOSAL.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIE1/docs/analysis/0004-BEDROCK-INTEGRATION-PROPOSAL.md)**
   * Thiết kế Caching: **[LLM_CACHING_DESIGN.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIE1/docs/analysis/LLM_CACHING_DESIGN.md)**
-  * Thử lại và trễ lũy thừa: **[LLM_RETRY_BACKOFF.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIE1/docs/analysis/LLM_RETRY_BACKOFF.md)**
+  * Thử lại và trễ lũy thừa: **[0003-LLM-RETRY-BACKOFF.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIE1/docs/analysis/0003-LLM-RETRY-BACKOFF.md)**
   * Phản hồi dạng luồng: **[LLM_STREAMING.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIE1/docs/analysis/LLM_STREAMING.md)**
   * Đăng ký công cụ động: **[LLM_DYNAMIC_TOOL_REGISTRY.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIE1/docs/analysis/LLM_DYNAMIC_TOOL_REGISTRY.md)**
   * Bộ nhớ hội thoại: **[LLM_CONVERSATION_MEMORY.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIE1/docs/analysis/LLM_CONVERSATION_MEMORY.md)**

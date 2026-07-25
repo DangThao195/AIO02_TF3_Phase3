@@ -874,12 +874,12 @@ Dưới đây là danh sách các giải pháp kỹ thuật và hiện trạng c
 ### 🔑 A. Tầng Kết Nối & Multi-Provider
 | STT | Giải pháp Kỹ thuật | Lý do / Lợi ích | Rủi ro | Tác động | Tài liệu | Trạng thái |
 | :---: | :--- | :--- | :---: | :---: | :--- | :--- |
-| **1** | **Tích hợp SDK `boto3`** | Thay thế `OpenAI` client bằng SDK `boto3` Bedrock, loại bỏ hoàn toàn LiteLLM Proxy. | 2 | **High** | [PROPOSAL](docs/analysis/BEDROCK_INTEGRATION_PROPOSAL.md) | **Đã hoàn thành** / Chạy thực tế |
+| **1** | **Tích hợp SDK `boto3`** | Thay thế `OpenAI` client bằng SDK `boto3` Bedrock, loại bỏ hoàn toàn LiteLLM Proxy. | 2 | **High** | [PROPOSAL](docs/analysis/0004-BEDROCK-INTEGRATION-PROPOSAL.md) | **Đã hoàn thành** / Chạy thực tế |
 
 ### 🛡️ B. Độ Tin Cậy & Chịu Lỗi (Reliability)
 |  STT  | Giải pháp Kỹ thuật           | Lý do / Lợi ích                                                               | Rủi ro | Tác động | Tài liệu                                        | Trạng thái          |
 | :---: | :--------------------------- | :---------------------------------------------------------------------------- | :----: | :------: | :---------------------------------------------- | :------------------ |
-| **2** | **Thử lại & Trễ lũy thừa**   | Tự động retry 3 lần (Backoff + Jitter) khi gặp lỗi mạng/Rate limit (429/500). |   2    | **High** | [RETRY](docs/analysis/LLM_RETRY_BACKOFF.md)     | **Đã hoàn thành** / Chạy thực tế |
+| **2** | **Thử lại & Trễ lũy thừa**   | Tự động retry 3 lần (Backoff + Jitter) khi gặp lỗi mạng/Rate limit (429/500). |   2    | **High** | [RETRY](docs/analysis/0003-LLM-RETRY-BACKOFF.md)     | **Đã hoàn thành** / Chạy thực tế |
 | **3** | **Graceful Fallback 3 tầng** | Bọc LLM call để tự động chuyển hướng: LLM → Postgres Cache → Static Msg.      |   1    | **High** | [FALLBACK](docs/adr/0002-FALLBACK-MECHANISM.md) | **Đã hoàn thành một phần** (Luồng Exception & Lỗi tĩnh) |
 | **16** | **Circuit Breaker tự phục hồi** | Quản lý trạng thái CLOSED/OPEN/HALF-OPEN. Khi LLM sập liên tiếp 5 lần, breaker mở ra 30s để chuyển thẳng sang fallback. |   2    | **High** | [ADR 0007](docs/adr/0007-FALLBACK-OVERRIDE-AND-TELEMETRY.md) | Backlog |
 | **17** | **Chặn Arguments Rác ở Biên** | Bọc parse JSON arguments và validate schema đối số `product_id` trước khi chạy tool, tránh LLM sinh JSON hỏng gây crash. |   1    | **High** | [ADR 0007](docs/adr/0007-FALLBACK-OVERRIDE-AND-TELEMETRY.md) | Backlog |
@@ -912,7 +912,7 @@ Dưới đây là danh sách các giải pháp kỹ thuật và hiện trạng c
 | :----: | :-------------------------- | :----------------------------------------------------------------------------- | :----: | :------: | :---------------------------------------------------- | :------------- |
 | **10** | **Sửa lỗi Product ID Leak** | Thay thế mã sản phẩm trong prompt bằng `"this product"` để tránh LLM echo lại. |   1    | **High** | -                                                     | **Đã hoàn thành** |
 | **11** | **Chuẩn hóa Tool Output**   | Đảm bảo `fetch_product_reviews` trả về `string` để tránh lỗi BadRequest (400). |   1    | **High** | -                                                     | **Đã hoàn thành** |
-| **12** | **Sửa lỗi bộ Eval**         | Khắc phục 4 điểm nghẽn của bộ eval (Ground Truth mismatch, nhạy cảm dải số).   |   3    | **High** | [BOTTLENECK](docs/analysis/EVALUATION_BOTTLENECKS.md) | Backlog        |
+| **12** | **Sửa lỗi bộ Eval**         | Khắc phục 4 điểm nghẽn của bộ eval (Ground Truth mismatch, nhạy cảm dải số).   |   3    | **High** | [BOTTLENECK](docs/analysis/0002-EVALUATION-BOTTLENECKS.md) | Backlog        |
 | **13** | **Giải mã Hex & ROT13**     | Tích hợp bộ giải mã trước khi so khớp regex ở [input_filter.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/guardrails/input_filter.py) để chống bypass. |   2    | **High** | [0003-ADR](docs/adr/0003-AI-TRUST-SAFETY-GUARDRAILS.md) | Backlog |
 | **14** | **Đồng bộ hóa nhãn E2E**    | Trả về đúng nhãn `NO_INFO`/`OUT_OF_SCOPE` để khớp với kịch bản test runner.    |   1    | **High** | [0004-ADR](docs/adr/0004-SUMMARY-FIDELITY-EVALUATION.md) | Backlog |
 | **15** | **Khắc phục lỗi Timeout**   | Điều chỉnh cơ chế retry/timeout để loại bỏ lỗi gRPC `DEADLINE_EXCEEDED`.       |   2    | **High** | [0004-ADR](docs/adr/0004-SUMMARY-FIDELITY-EVALUATION.md) | Backlog |

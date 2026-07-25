@@ -100,7 +100,7 @@ eval-mandate14:
 * **Ưu tiên:** High (P0)
 
 ### Mô tả công việc (Description)
-Triển khai thiết kế bộ nhớ đệm 2 tầng (LLM response cache bằng Redis và Regex filter cache bằng DB Column `is_safe`) theo ADR 0005 để tối ưu hóa latency và chi phí token. Tích hợp các giải pháp chống thừng nghẽn Cache Stampede và Asynchronous Logging cho AWS RDS theo tài liệu [PRODUCT_REVIEW_SERVER_CACHING_DESIGN.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/analysis/PRODUCT_REVIEW_SERVER_CACHING_DESIGN.md). Thực hiện đo đạc đối chứng Cost/Latency trước và sau khi có cache.
+Triển khai thiết kế bộ nhớ đệm 2 tầng (LLM response cache bằng Redis và Regex filter cache bằng DB Column `is_safe`) theo ADR 0005 để tối ưu hóa latency và chi phí token. Tích hợp các giải pháp chống thừng nghẽn Cache Stampede và Asynchronous Logging cho AWS RDS theo tài liệu [0006-PRODUCT-REVIEW-SERVER-CACHING-DESIGN.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/analysis/0006-PRODUCT-REVIEW-SERVER-CACHING-DESIGN.md). Thực hiện đo đạc đối chứng Cost/Latency trước và sau khi có cache.
 
 ### Các tác vụ con (Sub-tasks)
 
