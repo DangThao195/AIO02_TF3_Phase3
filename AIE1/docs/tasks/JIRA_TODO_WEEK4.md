@@ -145,9 +145,9 @@ Hoàn thiện kiến trúc Fallback 3 tầng thực tế theo đúng thiết k�
 
 | Ngày | Khoa (Leader) | Thịnh | Kiên |
 |------|---------------|-------|------|
-| **T2 26/07** | - Thiết lập cờ cache hit/miss qua gRPC metadata (1.1) | - Trích xuất OTel Trace ID qua metadata gRPC (2.1) | - Họp thiết kế logic Circuit Breaker (3.1) |
-| **T3 27/07** | - Sửa hàm `generate_cache_key` cách ly theo `user_id` (1.2) | - Thiết lập trace JSON lưu Redis (2.2) | - Triển khai class `CircuitBreaker` (3.1)<br>- Thiết kế schema bảng `product_summaries` (5.1) |
-| **T4 28/07** | - Đo lường cache hit-rate & latency (1.3) | - Code endpoint `POST /replay` (2.3)<br>- Phân tích prompt Candidate & cases Judge từ chối nhầm (4.1 & 4.2) | - Bọc try-except parse JSON arguments (3.2)<br>- Triển khai logic ghi đè tóm tắt khi LLM Pass (5.2) |
-| **T5 29/07** | - Soạn thảo ADR 0005 (1.3) | - Code endpoint `GET /trace/<trace_id>` (2.3)<br>- Tinh chỉnh prompt Candidate & Judge (4.1 & 4.2) | - Tạo cổng nạp lỗi giả lập `POST /inject` (3.3)<br>- Tích hợp logic fallback Tầng 2 Postgres ở runtime (5.3) |
-| **T6 30/07** | - Kiểm định chéo và hỗ trợ tối ưu hóa caching | - Soạn thảo ADR 0008 (2.4)<br>- Bổ sung edge cases & Chạy test-suite đánh giá (4.3) | - Cập nhật mở rộng ADR 0007 (3.4)<br>- Nghiệm thu liên kết E2E Closed-loop |
-| **T7 31/07** | - Nghiệm thu & Kiểm thử chéo | - Nghiệm thu & Kiểm thử chéo | - Nghiệm thu & Kiểm thử chéo |
+| **T2 26/07** | - Thiết lập cờ cache hit/miss qua gRPC metadata (1.1)<br>- Cách ly cache theo `user_id` (1.2) | - Trích xuất OTel Trace ID qua metadata gRPC (2.1)<br>- Thiết lập trace JSON lưu Redis (2.2)<br>- Dựng HTTP server phụ cổng 8086 (2.3) | - Thiết kế & triển khai class `CircuitBreaker` (3.1)<br>- Validate arguments & bọc try-except JSON tool calls (3.2) |
+| **T3 27/07** | **[DEADLINE T1]**<br>- Đo lường cache hit-rate & latency (1.3)<br>- Viết/cập nhật ADR 0005 (1.3)<br>- Nghiệm thu hoàn tất Ticket 1 (Mandate 23) | **[DEADLINE T2]**<br>- Hoàn thiện HTTP server, code endpoint `/replay` & `/trace` (2.3)<br>- Soạn thảo ADR 0008 (2.4)<br>- Nghiệm thu hoàn tất Ticket 2 (Mandate 24) | **[DEADLINE T3]**<br>- Tạo cổng nạp lỗi giả lập `POST /inject` (3.3)<br>- Viết/cập nhật ADR 0007 (3.4)<br>- Nghiệm thu hoàn tất Ticket 3 (Mandate 25) |
+| **T4 28/07** | - Hỗ trợ review, kiểm định chéo và kiểm thử tích hợp | - Phân tích prompt Candidate & cases Judge từ chối nhầm (4.1 & 4.2) | - Thiết kế schema bảng `product_summaries` (5.1)<br>- Code logic ghi đè tóm tắt khi LLM Pass (5.2) |
+| **T5 29/07** | - Tải kiểm thử (Load test) caching & hỗ trợ team | - Tinh chỉnh prompt Candidate & Judge (4.1 & 4.2) | - Tích hợp fallback Tầng 2 Postgres ở runtime (5.3) |
+| **T6 30/07** | - Nghiệm thu tích hợp & kiểm thử chéo | - Bổ sung edge cases & Chạy test-suite đánh giá (4.3)<br>- Hoàn tất Ticket 4 | - Chạy liên kết e2e Closed-loop với AIOps<br>- Hoàn tất Ticket 5 |
+| **T7 31/07** | - Nghiệm thu tổng thể & Nộp bài | - Nghiệm thu tổng thể & Nộp bài | - Nghiệm thu tổng thể & Nộp bài |
