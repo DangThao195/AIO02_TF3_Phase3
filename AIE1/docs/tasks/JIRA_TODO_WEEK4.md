@@ -1,24 +1,23 @@
 # Kế hoạch Phân chia Công việc Tuần 4 - Nhóm AIE1 (JIRA TODO)
 
-Tài liệu này chứa nội dung chi tiết các công việc tuần 4 (26/07 – 01/08/2026) được chuyển giao từ tuần 3, thiết kế dưới dạng các ticket **JIRA TODO** cho 3 thành viên: **Khoa** (Leader), **Thịnh**, và **Kiên**.
-
-Các ticket này tập trung vào tối ưu hóa Caching nâng cao, hoàn thiện bộ giám sát Observability và nâng cao khả năng chịu lỗi Resilience (Circuit Breaker & Validation).
+Tài liệu này chứa nội dung chi tiết các công việc tuần 4 (26/07 – 01/08/2026) được chuyển giao từ tuần 3 và các backlog quan trọng từ AI Baseline Report, thiết kế dưới dạng các ticket **JIRA TODO** cho 3 thành viên: **Khoa** (Leader), **Thịnh**, và **Kiên**.
 
 ---
 
 ## 📋 PHÂN CHIA CÔNG VIỆC TỔNG QUAN (TUẦN 4)
 
-| Người | Vai trò chính tuần 4 | Phạm vi thực hiện |
-|-------|-------------------|-------------------|
-| **Khoa** | Tối ưu Caching & Cách ly Ranh giới Người dùng | Caching & User Boundary (Mandate #23) |
-| **Thịnh** | Hoàn thiện Trace Logger & Cổng Replay HTTP | LLM Observability & Replay (Mandate #24) |
-| **Kiên** | Hoàn thiện Circuit Breaker tự phục hồi & Chặn Arguments Rác | AI Resilience (Mandate #25) |
+| Ticket | Tên Công Việc | Người thực hiện (Assignee) | Trụ cột ảnh hưởng |
+|:---:|:---|:---:|:---|
+| **T1** | Caching & Ranh giới Người dùng (Mandate #23) | **Khoa (Leader)** | Performance & Caching |
+| **T2** | Observability & Trace log (Mandate #24) | **Thịnh** | Telemetry & Observability |
+| **T3** | Circuit Breaker & Arguments Validation (Mandate #25) | **Kiên** | Resilience & Safety |
+| **T4** | Tối ưu hóa chất lượng LLM & Hiệu chuẩn Prompt Judge | **Thịnh** | Quality & Accuracy |
+| **T5** | Triển khai PostgreSQL Static Summary Fallback (Tầng 2) | **Kiên** | Resilience & Fallback |
 
 ---
 
 ## TICKET 1: Tích hợp Bộ nhớ đệm (Caching) & Đảm bảo Ranh giới Người dùng (MANDATE #23)
 * **Người thực hiện (Assignee):** Khoa (Leader)
-* **Loại công việc:** Task / Story
 * **Epic:** AIE1 - Mandate #23 GenAI Caching & Memory (Tuần 4)
 * **Ưu tiên:** High (P0)
 * **Label Jira:** `ai-mandate`, `m23`
@@ -42,16 +41,10 @@ Tận dụng lớp Caching bằng Redis sẵn có của `product-reviews`. Do d�
   - Lưu kết quả benchmark đối chứng vào tệp tin JSON trong thư mục `repro/artifacts/`.
   - Cập nhật tài liệu quyết định kiến trúc `docs/adr/0005-CACHING-STRATEGY.md` giải thích thuật toán sinh key cách ly theo user và cơ chế invalidation theo `review_version`.
 
-### Tiêu chí nghiệm thu (Acceptance Criteria)
-- [ ] Cờ `cache: hit` hoặc `cache: miss` hoạt động chính xác trên từng request.
-- [ ] Cache được cách ly độc lập theo `user_id` để tránh rò rỉ chéo thông tin.
-- [ ] Có báo cáo số liệu hit-rate và so sánh hiệu năng thực tế.
-
 ---
 
 ## TICKET 2: Dựng Hộp Đen Giám Sát LLM & Cổng Replay/Fetch Trace (MANDATE #24)
 * **Người thực hiện (Assignee):** Thịnh
-* **Loại công việc:** Task / Story
 * **Epic:** AIE1 - Mandate #24 LLM Observability (Tuần 4)
 * **Ưu tiên:** High (P0)
 * **Label Jira:** `ai-mandate`, `m24`
@@ -77,16 +70,10 @@ Xây dựng hệ thống Trace cho mọi cuộc gọi LLM (Candidate + Judge), t
   - Soạn thảo tài liệu quyết định kiến trúc `docs/adr/0008-llm-observability.md` mô tả cấu trúc của bản ghi trace, cơ chế truyền trace-id và cách thức ẩn danh/mask PII.
   - Thống kê và hiển thị chi phí lũy kế, token usage theo model trong view tổng hợp.
 
-### Tiêu chí nghiệm thu (Acceptance Criteria)
-- [ ] Trả về đúng `trace-id` qua metadata gRPC hoặc HTTP replay.
-- [ ] Endpoint `GET /trace/<trace_id>` trả về đúng trace đầy đủ các trường cốt lõi.
-- [ ] Dữ liệu prompt trong trace được che (mask/hash) hoàn toàn các thông tin PII/secret.
-
 ---
 
 ## TICKET 3: Tích hợp Circuit Breaker & Chặn Arguments Rác (MANDATE #25)
 * **Người thực hiện (Assignee):** Kiên
-* **Loại công việc:** Task / Story
 * **Epic:** AIE1 - Mandate #25 AI Resilience & Fallback (Tuần 4)
 * **Ưu tiên:** High (P0)
 * **Label Jira:** `ai-mandate`, `m25`
@@ -110,16 +97,10 @@ Nâng cấp độ bền vững của `product-reviews` khi model bị lỗi (tim
 * **Sub-task 3.4: Soạn thảo ADR 0007 (Mở rộng)**
   - Cập nhật tài liệu `docs/adr/0007-FALLBACK-OVERRIDE-AND-TELEMETRY.md` bổ sung thiết kế Circuit Breaker, mô tả cơ chế validate JSON schema biên cho tool arguments, và kịch bản phục hồi lỗi có kiểm soát.
 
-### Tiêu chí nghiệm thu (Acceptance Criteria)
-- [ ] Khi LLM lỗi liên tục, Circuit Breaker mở ra chặn dội request, hệ thống phản hồi fallback nhanh.
-- [ ] LLM sinh output JSON hỏng hoặc đối số tool rác không làm gRPC server crash, tool không bị thực thi với đối số rác.
-- [ ] Inject lỗi giả lập hoạt động đúng kịch bản test của Mentor.
-
 ---
 
 ## TICKET 4: Tối ưu hóa chất lượng LLM & Hiệu chuẩn Prompt Judge (RAG Quality Optimization)
 * **Người thực hiện (Assignee):** Thịnh
-* **Loại công việc:** Task / Story
 * **Epic:** AIE1 - Tối ưu hóa Hiệu năng & Chất lượng AI (Tuần 4)
 * **Ưu tiên:** High (P1)
 * **Label Jira:** `ai-quality`, `rag-opt`
@@ -139,10 +120,24 @@ Rà soát và cải tiến chất lượng sinh câu trả lời (RAG Accuracy) 
   - Bổ sung các test cases biên vào `dataset.jsonl` (sản phẩm 0 review, sản phẩm có review cực kỳ mâu thuẫn, review chỉ có rating không có text).
   - Chạy thử nghiệm và báo cáo Pass Rate cải thiện sau khi tối ưu hóa Prompt.
 
-### Tiêu chí nghiệm thu (Acceptance Criteria)
-- [ ] Tỷ lệ Pass Rate trên bộ test cases normal chuẩn tăng từ 83.3% lên ≥ 90.0%.
-- [ ] Giảm tỷ lệ Judge từ chối nhầm câu trả lời đúng (False Positive Rate) xuống mức tối thiểu.
-- [ ] Hệ thống xử lý êm ái và an toàn các edge cases mới mà không bị crash.
+---
+
+## TICKET 5: Triển khai PostgreSQL Static Summary Fallback (Tầng 2)
+* **Người thực hiện (Assignee):** Kiên
+* **Epic:** AIE1 - Mandate #22 Closed-Loop Mitigation (Tuần 4)
+* **Ưu tiên:** High (P1)
+* **Label Jira:** `ai-mandate`, `m22`
+
+### Mô tả công việc (Description)
+Hoàn thiện kiến trúc Fallback 3 tầng thực tế theo đúng thiết kế ban đầu tại ADR 0002. Tích hợp tầng 2 bằng cách truy vấn bảng `product_summaries` từ PostgreSQL ở runtime và thực hiện cơ chế ghi đè tóm tắt khi LLM thành công.
+
+### Các tác vụ con (Sub-tasks)
+* **Sub-task 5.1: Thiết kế bảng `product_summaries` (Kiên)**
+  - Tạo cấu trúc bảng lưu trữ các bản tóm tắt tĩnh được phê duyệt: `product_id` (PK), `summary_text`, `rating_distribution`, `review_version`, `updated_at`.
+* **Sub-task 5.2: Triển khai logic ghi đè tóm tắt (Kiên)**
+  - Khi LLM và Judge thành công (Pass), tiến hành lưu/ghi đè bản tóm tắt mới nhất vào bảng `product_summaries` để cập nhật dữ liệu.
+* **Sub-task 5.3: Tích hợp truy vấn Tầng 2 ở runtime (Kiên)**
+  - Cập nhật cơ chế fallback: Khi cuộc gọi LLM Bedrock/OpenAI bị lỗi (gặp ngoại lệ mạng/timeout/Rate limit và Circuit Breaker đang OPEN), trước khi trả về tin nhắn lỗi tĩnh (Tầng 3), hãy thực hiện truy vấn bảng `product_summaries`. Nếu tìm thấy bản tóm tắt cũ của sản phẩm đó → trả về kết quả này (Tầng 2), ngược lại mới trả về generic error message (Tầng 3).
 
 ---
 
@@ -151,8 +146,8 @@ Rà soát và cải tiến chất lượng sinh câu trả lời (RAG Accuracy) 
 | Ngày | Khoa (Leader) | Thịnh | Kiên |
 |------|---------------|-------|------|
 | **T2 26/07** | - Thiết lập cờ cache hit/miss qua gRPC metadata (1.1) | - Trích xuất OTel Trace ID qua metadata gRPC (2.1) | - Họp thiết kế logic Circuit Breaker (3.1) |
-| **T3 27/07** | - Sửa hàm `generate_cache_key` cách ly theo `user_id` (1.2) | - Thiết lập trace JSON lưu Redis (2.2) | - Triển khai class `CircuitBreaker` (3.1) |
-| **T4 28/07** | - Đo lường cache hit-rate & latency (1.3) | - Code endpoint `POST /replay` (2.3)<br>- Phân tích prompt Candidate & cases Judge từ chối nhầm (4.1 & 4.2) | - Bọc try-except parse JSON arguments (3.2) |
-| **T5 29/07** | - Soạn thảo ADR 0005 (1.3) | - Code endpoint `GET /trace/<trace_id>` (2.3)<br>- Tinh chỉnh prompt Candidate & Judge (4.1 & 4.2) | - Tạo cổng nạp lỗi giả lập `POST /inject` (3.3) |
-| **T6 30/07** | - Kiểm định chéo và tối ưu hóa | - Soạn thảo ADR 0008 (2.4)<br>- Bổ sung edge cases & Chạy test-suite đánh giá Pass Rate (4.3) | - Cập nhật mở rộng ADR 0007 (3.4) |
-| **T7 31/07** | - Nghiệm thu & Nghiệm thu | - Nghiệm thu & Nghiệm thu | - Nghiệm thu & Nghiệm thu |
+| **T3 27/07** | - Sửa hàm `generate_cache_key` cách ly theo `user_id` (1.2) | - Thiết lập trace JSON lưu Redis (2.2) | - Triển khai class `CircuitBreaker` (3.1)<br>- Thiết kế schema bảng `product_summaries` (5.1) |
+| **T4 28/07** | - Đo lường cache hit-rate & latency (1.3) | - Code endpoint `POST /replay` (2.3)<br>- Phân tích prompt Candidate & cases Judge từ chối nhầm (4.1 & 4.2) | - Bọc try-except parse JSON arguments (3.2)<br>- Triển khai logic ghi đè tóm tắt khi LLM Pass (5.2) |
+| **T5 29/07** | - Soạn thảo ADR 0005 (1.3) | - Code endpoint `GET /trace/<trace_id>` (2.3)<br>- Tinh chỉnh prompt Candidate & Judge (4.1 & 4.2) | - Tạo cổng nạp lỗi giả lập `POST /inject` (3.3)<br>- Tích hợp logic fallback Tầng 2 Postgres ở runtime (5.3) |
+| **T6 30/07** | - Kiểm định chéo và hỗ trợ tối ưu hóa caching | - Soạn thảo ADR 0008 (2.4)<br>- Bổ sung edge cases & Chạy test-suite đánh giá (4.3) | - Cập nhật mở rộng ADR 0007 (3.4)<br>- Nghiệm thu liên kết E2E Closed-loop |
+| **T7 31/07** | - Nghiệm thu & Kiểm thử chéo | - Nghiệm thu & Kiểm thử chéo | - Nghiệm thu & Kiểm thử chéo |
