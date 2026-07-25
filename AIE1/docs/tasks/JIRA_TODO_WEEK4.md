@@ -8,7 +8,7 @@ Tài liệu này chứa nội dung chi tiết các công việc tuần 4 (26/07 
 
 | Ticket | Tên Công Việc | Người thực hiện (Assignee) | Trụ cột ảnh hưởng |
 |:---:|:---|:---:|:---|
-| **T1** | Caching & Ranh giới Người dùng (Mandate #23) | **Khoa (Leader)** | Performance & Caching |
+| **T1** | Caching & Ranh giới Người dùng (Mandate #23) (Đã xong) | **Khoa (Leader)** | Performance & Caching |
 | **T2** | Observability & Trace log (Mandate #24) | **Thịnh** | Telemetry & Observability |
 | **T3** | Circuit Breaker & Arguments Validation (Mandate #25) | **Kiên** | Resilience & Safety |
 | **T4** | Tối ưu hóa chất lượng LLM & Hiệu chuẩn Prompt Judge | **Thịnh** | Quality & Accuracy |
@@ -16,7 +16,7 @@ Tài liệu này chứa nội dung chi tiết các công việc tuần 4 (26/07 
 
 ---
 
-## TICKET 1: Tích hợp Bộ nhớ đệm (Caching) & Đảm bảo Ranh giới Người dùng (MANDATE #23)
+## TICKET 1: Tích hợp Bộ nhớ đệm (Caching) & Đảm bảo Ranh giới Người dùng (MANDATE #23) (Đã xong)
 * **Người thực hiện (Assignee):** Khoa (Leader)
 * **Epic:** AIE1 - Mandate #23 GenAI Caching & Memory (Tuần 4)
 * **Ưu tiên:** High (P0)
@@ -26,17 +26,17 @@ Tài liệu này chứa nội dung chi tiết các công việc tuần 4 (26/07 
 Tận dụng lớp Caching bằng Redis sẵn có của `product-reviews`. Do dịch vụ `product-reviews` là dạng hỏi đáp đơn lượt (Single-Turn Q&A), Mentor đã xác nhận **không cần triển khai bộ nhớ ngắn hạn và dài hạn (Memory)**. Nhóm chỉ tập trung vào cơ chế trả cờ cache và cách ly cache theo ranh giới người dùng.
 
 ### Các tác vụ con (Sub-tasks)
-* **Sub-task 1.1: Thiết lập cờ trạng thái Cache qua gRPC Metadata (Trailing Headers)**
+* **[x] Sub-task 1.1: Thiết lập cờ trạng thái Cache qua gRPC Metadata (Trailing Headers)**
   - Chỉnh sửa hàm `get_ai_assistant_response` trong `product_reviews_server.py`.
   - Khi có Cache Hit (tìm thấy dữ liệu trong Redis cache), thiết lập trailing metadata `cache = hit` bằng cách gọi `context.set_trailing_metadata([('cache', 'hit')])`.
   - Khi có Cache Miss (gọi LLM và được Judge duyệt), thiết lập trailing metadata `cache = miss` bằng cách gọi `context.set_trailing_metadata([('cache', 'miss')])`.
   - Đảm bảo trong mọi trường hợp rẽ nhánh (bao gồm cả trường hợp deterministic hoặc fallback), cờ `cache: miss` vẫn được trả về đầy đủ mà không gây lỗi runtime.
-* **Sub-task 1.2: Phân tách ranh giới và cách ly Cache theo `user_id`**
+* **[x] Sub-task 1.2: Phân tách ranh giới và cách ly Cache theo `user_id`**
   - Trích xuất `user_id` từ gRPC invocation metadata bằng cách duyệt qua `context.invocation_metadata()` để tìm khóa `x-user-id` hoặc `user-id`.
   - Sửa hàm `generate_cache_key` trong `guardrails/cache.py` để nhận thêm tham số `user_id` (nếu có).
   - Tích hợp `user_id` vào chuỗi băm tạo key: `SHA256(product_id + review_version + model_id + question + user_id)`.
   - Nếu request không chứa `user_id`, sử dụng một giá trị mặc định là `"anonymous"` để tránh lỗi chuỗi `None`.
-* **Sub-task 1.3: Đo lường chỉ số & Soạn thảo ADR 0005**
+* **[x] Sub-task 1.3: Đo lường chỉ số & Soạn thảo ADR 0005**
   - Thực hiện chạy bộ ca test có lặp để đo lường và thống kê `cache hit-rate`, so sánh latency/cost trước/sau cache.
   - Lưu kết quả benchmark đối chứng vào tệp tin JSON trong thư mục `repro/artifacts/`.
   - Cập nhật tài liệu quyết định kiến trúc `docs/adr/0005-CACHING-STRATEGY.md` giải thích thuật toán sinh key cách ly theo user và cơ chế invalidation theo `review_version`.

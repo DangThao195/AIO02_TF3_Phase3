@@ -767,6 +767,14 @@ def get_ai_assistant_response(request_product_id, question, context=None):
             cache_hit=False,
             judge_status_override=None,
         ):
+            status = "hit" if cache_hit else "miss"
+            if context and hasattr(context, "set_trailing_metadata"):
+                try:
+                    context.set_trailing_metadata([("cache", status)])
+                    logger.info(f"[CACHE] Set trailing metadata cache={status}")
+                except Exception as e:
+                    logger.warning(f"Failed to set trailing metadata cache flag: {e}")
+
             ai_assistant_response.response = response_text
             finalized_trace = finalize_runtime_trace(
                 trace_record,
@@ -797,6 +805,18 @@ def get_ai_assistant_response(request_product_id, question, context=None):
             logger.info("Returning deterministic OUT_OF_SCOPE response for product_id:%s", request_product_id)
             return finalize_response(OUT_OF_SCOPE_MESSAGE, outcome="out_of_scope")
 
+        user_id = "anonymous"
+        if context and hasattr(context, "invocation_metadata"):
+            try:
+                metadata = context.invocation_metadata()
+                if metadata:
+                    for key, val in metadata:
+                        if key.lower() in ("x-user-id", "user-id"):
+                            user_id = val
+                            break
+            except Exception as e:
+                logger.warning(f"Failed to read invocation metadata: {e}")
+
         try:
             review_version = get_review_version(request_product_id)
             cache_key = generate_cache_key(
@@ -804,10 +824,11 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                 review_version=review_version,
                 model_id=llm_model,
                 question=safe_question,
+                user_id=user_id,
             )
             cached_data = get_cached_response(cache_key)
             if cached_data:
-                logger.info(f"[CACHE] Hit for product_id: {request_product_id}")
+                logger.info(f"[CACHE] Hit for product_id: {request_product_id} and user_id: {user_id}")
                 trace_record["cache"]["source_trace_id"] = cached_data.get("source_trace_id")
                 trace_record["cache"]["source_response_sha256"] = cached_data.get("source_response_sha256")
                 span.set_attribute("app.cache.hit", True)

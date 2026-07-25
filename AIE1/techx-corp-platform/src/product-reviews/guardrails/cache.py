@@ -58,10 +58,11 @@ def is_fallback_override_active() -> bool:
 
 
 
-def generate_cache_key(product_id: str, review_version: str, model_id: str, question: str) -> str:
+def generate_cache_key(product_id: str, review_version: str, model_id: str, question: str, user_id: Optional[str] = None) -> str:
     """Sinh cache key dưới dạng SHA256 để đảm bảo độ dài cố định và tránh ký tự đặc biệt."""
     normalized_q = " ".join(question.lower().strip().split())
-    raw_key = f"{product_id}:{review_version}:{model_id}:{normalized_q}"
+    uid = user_id if user_id else "anonymous"
+    raw_key = f"{product_id}:{review_version}:{model_id}:{normalized_q}:{uid}"
     return hashlib.sha256(raw_key.encode('utf-8')).hexdigest()
 
 

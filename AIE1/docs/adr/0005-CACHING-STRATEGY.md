@@ -38,7 +38,9 @@ Thiết kế và tích hợp **kiến trúc Caching hai tầng bổ trợ lẫn 
 | Cơ chế | Mô tả |
 | :--- | :--- |
 | **Cache-First Lookup** | Tra cứu cache ngay sau Input Guardrails. Khi Cache Hit → trả kết quả < 1ms, không gọi LLM, không tốn token |
-| **Dynamic Invalidation** | Cache Key = `SHA256(product_id + review_version + model_id + normalize(question))`. Khi có review mới hoặc đổi model → key tự thay đổi → Cache Miss tự động |
+| **Dynamic Invalidation** | Cache Key = `SHA256(product_id + review_version + model_id + normalize(question) + user_id)`. Khi có review mới, đổi model hoặc đổi user → key tự thay đổi → Cache Miss tự động |
+| **Ranh giới Người dùng** | Trích xuất `user_id` từ metadata gRPC (`x-user-id`/`user-id`) và nhúng vào khóa băm Cache Key, ngăn chặn rò rỉ chéo thông tin giữa các tài khoản. Mặc định là `"anonymous"` nếu không truyền |
+| **Cache Status Header** | Trả cờ trạng thái cache qua gRPC metadata trailing headers. Trả `cache: hit` khi cache hit và `cache: miss` khi cache miss hoặc fallback |
 | **Cache Policy chọn lọc** | Chỉ cache khi Fidelity Judge phê duyệt (`approved = true`). Không cache lỗi, fallback, `OUT_OF_SCOPE`, `NO_INFO` |
 | **Metadata đầy đủ** | Lưu kèm `provider`, `model`, `token_usage`, `created_at`, `review_version` phục vụ kiểm toán |
 | **TTL + LRU Eviction** | TTL 24 giờ, eviction policy `allkeys-lru` khi Redis đầy bộ nhớ |
