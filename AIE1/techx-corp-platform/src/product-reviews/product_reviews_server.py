@@ -130,6 +130,7 @@ from guardrails.input_filter import check_input
 from guardrails.output_filter import filter_output
 from guardrails.fallback import with_fallback, handle_exception
 from guardrails.evaluator import evaluate_summary_fidelity
+from guardrails.circuit_breaker import circuit_breaker
 from guardrails.llm_trace import (
     attach_trace_metadata,
     build_runtime_trace_record,
@@ -868,6 +869,17 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                 )
                 product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
                 return finalize_response(FALLBACK_SUMMARY_MESSAGE, outcome="fallback", fallback_reason="redis_override")
+
+            if not circuit_breaker.allow_request():
+                logger.warning(f"[CIRCUIT_BREAKER] Circuit is OPEN, bypassing LLM for product_id: {request_product_id}")
+                span.set_attribute("app.fallback.triggered", True)
+                span.set_attribute("app.fallback.source", "circuit_breaker")
+                product_review_svc_metrics["app_ai_fallback_total"].add(
+                    1,
+                    {"source": "circuit_breaker", "error": "open"},
+                )
+                product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
+                return finalize_response(FALLBACK_SUMMARY_MESSAGE, outcome="fallback", fallback_reason="circuit_breaker_open")
 
             force_err_code = None
             if context:

@@ -177,14 +177,31 @@ def with_fallback(fn):
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
         try:
-            return retryable_fn(*args, **kwargs)
+            res = retryable_fn(*args, **kwargs)
+            try:
+                from guardrails.circuit_breaker import circuit_breaker
+                circuit_breaker.record_success()
+            except Exception:
+                pass
+            return res
         except _NON_RETRYABLE as e:
             # Lỗi không retryable (400/401/403) → fallback ngay, không cần log retry
             logger.error("[FALLBACK] Non-retryable error, skipping retry: %s", e)
+            try:
+                from guardrails.circuit_breaker import circuit_breaker
+                circuit_breaker.record_failure()
+            except Exception:
+                pass
             return handle_exception(e)
         except Exception as e:
             # Hết retry hoặc lỗi bất ngờ → fallback
+            try:
+                from guardrails.circuit_breaker import circuit_breaker
+                circuit_breaker.record_failure()
+            except Exception:
+                pass
             return handle_exception(e)
 
     return wrapper
+
 
