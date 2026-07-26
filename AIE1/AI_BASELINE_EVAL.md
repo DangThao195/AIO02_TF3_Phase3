@@ -869,7 +869,7 @@ _Đề xuất các giải pháp kỹ thuật nâng cấp tầng AI trong các tu
 |  STT  | Giải pháp Kỹ thuật           | Lý do / Lợi ích                                                               | Rủi ro | Tác động | Tài liệu                                        | Trạng thái          |
 | :---: | :--------------------------- | :---------------------------------------------------------------------------- | :----: | :------: | :---------------------------------------------- | :------------------ |
 | **2** | **Thử lại & Trễ lũy thừa**   | Tự động retry 3 lần (Backoff + Jitter) khi gặp lỗi mạng/Rate limit (429/500). |   2    | **High** | [RETRY](docs/analysis/LLM_RETRY_BACKOFF.md)     | Sẵn sàng / Chờ code |
-| **3** | **Graceful Fallback 3 tầng** | Bọc LLM call để tự động chuyển hướng: LLM → Postgres Cache → Static Msg.      |   1    | **High** | [FALLBACK](docs/adr/0002-fallback-mechanism.md) | Đang thiết kế       |
+| **3** | **Graceful Fallback 3 tầng** | Bọc LLM call để tự động chuyển hướng: LLM → Postgres Cache → Static Msg.      |   1    | **High** | [FALLBACK](docs/adr/0002-FALLBACK-MECHANISM.md) | Đang thiết kế       |
 
 ### ⚡ C. Hiệu Năng & Tối Ưu Chi Phí
 |  STT  | Giải pháp Kỹ thuật       | Lý do / Lợi ích                                                                        | Rủi ro |  Tác động  | Tài liệu                                       | Trạng thái          |
@@ -894,7 +894,7 @@ _Đề xuất các giải pháp kỹ thuật nâng cấp tầng AI trong các tu
 | :----: | :-------------------------- | :----------------------------------------------------------------------------- | :----: | :------: | :---------------------------------------------------- | :------------- |
 | **10** | **Sửa lỗi Product ID Leak** | Thay thế mã sản phẩm trong prompt bằng `"this product"` để tránh LLM echo lại. |   1    | **High** | -                                                     | Đang xử lý     |
 | **11** | **Chuẩn hóa Tool Output**   | Đảm bảo `fetch_product_reviews` trả về `string` để tránh lỗi BadRequest (400). |   1    | **High** | -                                                     | Cần xử lý ngay |
-| **12** | **Sửa lỗi bộ Eval**         | Khắc phục 4 điểm nghẽn của bộ eval (Ground Truth mismatch, nhạy cảm dải số).   |   3    | **High** | [BOTTLENECK](docs/analysis/evaluation_bottlenecks.md) | Backlog        |
+| **12** | **Sửa lỗi bộ Eval**         | Khắc phục 4 điểm nghẽn của bộ eval (Ground Truth mismatch, nhạy cảm dải số).   |   3    | **High** | [BOTTLENECK](docs/analysis/EVALUATION_BOTTLENECKS.md) | Backlog        |
 
 
 

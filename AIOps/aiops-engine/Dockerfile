@@ -17,6 +17,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of the application code
 COPY . .
 
+# Grant read/write permissions to non-root user 10001 for S3 model downloads
+RUN chown -R 10001:10001 /app
+
 # Expose port 8000
 EXPOSE 8000
 
