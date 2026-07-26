@@ -131,6 +131,7 @@ from guardrails.output_filter import filter_output
 from guardrails.fallback import with_fallback, handle_exception
 from guardrails.evaluator import evaluate_summary_fidelity
 from guardrails.circuit_breaker import circuit_breaker
+from guardrails.tool_validator import validate_tool_arguments
 from guardrails.llm_trace import (
     attach_trace_metadata,
     build_runtime_trace_record,
@@ -1081,8 +1082,24 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                 futures_list = []
                 with futures.ThreadPoolExecutor(max_workers=len(tool_calls)) as executor:
                     for tool_call in tool_calls:
+                        raw_args = getattr(getattr(tool_call, "function", None), "arguments", "")
+                        is_valid_args, function_args, val_err = validate_tool_arguments(raw_args)
+                        if not is_valid_args:
+                            logger.error(f"[MALFORMED_TOOL_ARGS] Invalid tool arguments: {val_err}")
+                            span.set_attribute("app.fallback.triggered", True)
+                            span.set_attribute("app.fallback.source", "malformed_tool_args")
+                            product_review_svc_metrics["app_ai_fallback_total"].add(
+                                1,
+                                {"source": "malformed_tool_args", "error": val_err or "invalid_schema"},
+                            )
+                            product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
+                            return finalize_response(
+                                FALLBACK_SUMMARY_MESSAGE,
+                                outcome="fallback",
+                                fallback_reason="malformed_tool_args",
+                            )
+
                         function_name = tool_call.function.name
-                        function_args = json.loads(tool_call.function.arguments)
                         logger.info(f"Scheduling tool call: '{function_name}' with arguments: {function_args}")
 
                         if function_name == "fetch_product_reviews":
