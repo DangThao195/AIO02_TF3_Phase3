@@ -267,6 +267,40 @@ Object.keys(FLAGS).forEach(f => {
   cell.querySelector('[data-fire]').addEventListener('click', () => setFlag(f, isArmed(f) ? "off" : armVariant(f), 'button'));
 });
 
+const INJECT_MAP = {
+  productCatalogFailure: "inc1",
+  cartFailure: "inc2",
+  paymentFailure: "inc3",
+  paymentUnreachable: "inc3",
+  llmRateLimitError: "inc4",
+  kafkaQueueProblems: "inc5",
+  recommendationCacheFailure: "inc6",
+  failedReadinessProbe: "inc7",
+  emailMemoryLeak: "inc8",
+  loadGeneratorFloodHomepage: "inc8",
+  adManualGc: "inc8",
+  adHighCpu: "inc8",
+  adFailure: "inc8",
+  llmInaccurateResponse: "incnew"
+};
+
+function notifyBackend(f, variant) {
+  const scenario = variant === "off" ? "stable" : (INJECT_MAP[f] || "stable");
+  console.log(`Sending scenario: ${scenario} for flag: ${f} (${variant})`);
+  
+  fetch(`http://localhost:8000/simulate/inject?scenario=${scenario}`, {
+    method: 'POST',
+    mode: 'cors'
+  })
+  .then(r => r.json())
+  .then(data => {
+    console.log("Backend simulation trigger response:", data);
+  })
+  .catch(err => {
+    console.error("Error connecting to AIOps Engine simulation API:", err);
+  });
+}
+
 function setFlag(f, variant, src){
   const prev = state[f];
   if (prev === variant) return;
@@ -275,6 +309,7 @@ function setFlag(f, variant, src){
   const armed = variant !== "off";
   log(f, armed ? variant : "off", armed);
   updateGauge();
+  notifyBackend(f, variant);
 }
 
 function render(f){
@@ -311,7 +346,12 @@ function renderLog(){
 document.getElementById('resetAll').addEventListener('click', () => {
   let changed = 0;
   Object.keys(FLAGS).forEach(f => { if (isArmed(f)){ state[f]="off"; render(f); changed++; } });
-  if (changed){ const t=new Date().toLocaleTimeString('vi-VN',{hour12:false}); logLines.unshift({t,f:`RESET ${changed} flag`,variant:'off',armed:false,cmd:'# reset all'}); renderLog(); }
+  if (changed){ 
+    const t=new Date().toLocaleTimeString('vi-VN',{hour12:false}); 
+    logLines.unshift({t,f:`RESET ${changed} flag`,variant:'off',armed:false,cmd:'# reset all'}); 
+    renderLog(); 
+    notifyBackend("all", "off");
+  }
   updateGauge();
 });
 
