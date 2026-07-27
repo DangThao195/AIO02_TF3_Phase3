@@ -54,7 +54,7 @@ Bổ sung counter metric mới vào `metrics.py`:
 * **Module:** `guardrails/tool_validator.py`
 * **Hành vi:**
   * Kiểm định tham số đầu vào của tool call (`product_id` và JSON payload) trước khi thực thi.
-  * Đảm bảo `product_id` tuân thủ chuẩn định dạng (chỉ chứa kí tự alphanumeric, `-`, `_`, độ dài 1..64) và ngăn chặn Prompt Injection / SQL Injection / Directory Traversal.
+  * Đảm bảo `product_id` tuân thủ chuẩn định dạng (chỉ chứa kí tự alphanumeric, `-`, `_`, độ dài 1.64) và ngăn chặn Prompt Injection / SQL Injection / Directory Traversal.
   * Trả về kết quả kiểm định `(is_valid, parsed_args, error_reason)`. Khi vi phạm, hủy bỏ tool execution và trả về lỗi schema an toàn.
 
 ### 2.6 HTTP Error Injection Endpoint Schema
