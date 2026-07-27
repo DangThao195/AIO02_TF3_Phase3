@@ -8,7 +8,10 @@ if os.path.exists(env_path):
             line = line.strip()
             if "=" in line and not line.startswith("#"):
                 key, val = line.split("=", 1)
-                os.environ[key.strip()] = val.strip()
+                k = key.strip()
+                v = val.strip()
+                if k not in os.environ:
+                    os.environ[k] = v
 
 # Map external AWS credentials if present in env to standard AWS env vars for boto3
 if os.getenv("EXTERNAL_AWS_ACCESS_KEY_ID"):
@@ -29,13 +32,16 @@ OPENSEARCH_URL = os.getenv("OPENSEARCH_URL", "http://opensearch.techx-tf3.svc.cl
 AWS_REGION = os.getenv("AWS_REGION", "ap-southeast-1")
 BEDROCK_MODEL_ID = os.getenv("BEDROCK_MODEL_ID", "amazon.nova-micro-v1:0")
 BEDROCK_KB_ID = os.getenv("BEDROCK_KB_ID", None)
+S3_BUCKET_NAME = os.getenv("AIOPS_S3_BUCKET", "tf3-aiops-models-197826770971")
 
 # Simulation Sandbox Server URL
 SIMULATION_SERVER_URL = os.getenv("SIMULATION_SERVER_URL", "http://localhost:8000")
 
 
-# Slack/Discord webhook for notifications & Human Approval
+# Slack/Discord webhook & Bot Token for notifications & Human Approval
 SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL", "")
+SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN", "")
+SLACK_CHANNEL_ID = os.getenv("SLACK_CHANNEL_ID", "C0BG2EVQS13")
 
 
 

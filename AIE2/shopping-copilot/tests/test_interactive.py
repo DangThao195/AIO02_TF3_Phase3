@@ -189,8 +189,35 @@ def _setup_grpc_mocks():
     mock_aio_channel = MagicMock()
     mock_aio_channel.close = AsyncMock()
     try:
-        import grpc.aio
-        p = patch("grpc.aio.insecure_channel", return_value=mock_aio_channel)
+        import src.tools.search.strategies
+        p = patch("src.tools.search.strategies.grpc.aio.insecure_channel", return_value=mock_aio_channel)
+        p.start()
+        _patches.append(p)
+        
+        async def async_search_mock(req):
+            return _build_mock_search_response()
+            
+        async def async_list_mock(req):
+            mock_resp = MagicMock()
+            mock_resp.products = []
+            for p in MOCK_PRODUCTS:
+                item = MagicMock()
+                item.id = p["id"]
+                item.name = p["name"]
+                item.description = p["desc"]
+                price = MagicMock()
+                price.units = int(float(p["price"]))
+                price.nanos = int((float(p["price"]) % 1) * 1e9)
+                price.currency_code = p["currency"]
+                item.price_usd = price
+                item.categories = ["vintage"]
+                mock_resp.products.append(item)
+            return mock_resp
+            
+        mock_async_catalog_stub = MagicMock()
+        mock_async_catalog_stub.return_value.SearchProducts = async_search_mock
+        mock_async_catalog_stub.return_value.ListProducts = async_list_mock
+        p = patch("src.tools.search.strategies.demo_pb2_grpc.ProductCatalogServiceStub", mock_async_catalog_stub)
         p.start()
         _patches.append(p)
     except Exception as e:

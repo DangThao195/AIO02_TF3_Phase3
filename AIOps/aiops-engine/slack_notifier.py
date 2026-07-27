@@ -1,13 +1,15 @@
 import requests
 import json
 import logging
-from config import SLACK_WEBHOOK_URL
+from config import SLACK_WEBHOOK_URL, SLACK_BOT_TOKEN, SLACK_CHANNEL_ID
 
 logger = logging.getLogger("AIOpsEngine.SlackNotifier")
 
 class SlackNotifier:
     def __init__(self):
         self.webhook_url = SLACK_WEBHOOK_URL
+        self.bot_token = SLACK_BOT_TOKEN
+        self.channel_id = SLACK_CHANNEL_ID
 
     def send_incident_notification(self, incident_id: str, diagnosis: dict) -> bool:
         analysis_val = diagnosis.get('analysis')
@@ -59,72 +61,147 @@ class SlackNotifier:
             return True
 
 
+        trace_id = diagnosis.get('trace_id') or 'unknown-trace-id'
+        culprit_service = diagnosis.get('culprit_service') or 'unknown-service'
+        trace_analysis = diagnosis.get('trace_analysis') or culprit_service
+        chain_block = f"\n```{trace_analysis}```" if trace_analysis and " -> " in trace_analysis else ""
+        rca_mrkdwn = f"*Phân tích đường đi lỗi (RCA):* Phát hiện bất thường bắt nguồn từ dịch vụ `{culprit_service}`.\n`traceId`: `{trace_id}`{chain_block}"
+
         # Slack Block Kit payload structure
-        payload = {
-            "blocks": [
-                {
-                    "type": "header",
-                    "text": {
-                        "type": "plain_text",
-                        "text": f"🚨 AIOps Incident Alert: {incident_id}",
-                        "emoji": True
-                    }
-                },
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": f"*Nguyên nhân gốc (RCA):*\n{analysis_str}\n\n*Đối chiếu sự cố lịch sử:* `{diagnosis.get('matched_incident')}` | *Độ tự tin quyết định AI:* `{float(diagnosis.get('confidence_score', 1.0)) * 100}%`"
-                    }
-                },
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": f"*Lệnh khắc phục đề xuất:*\n`{diagnosis.get('action_command')}`"
-                    }
-                },
-                {
-                    "type": "actions",
-                    "elements": [
-                        {
-                            "type": "button",
-                            "text": {
-                                "type": "plain_text",
-                                "text": "✅ Approve (Duyệt chạy)",
-                                "emoji": True
-                            },
-                            "style": "primary",
-                            "value": "approve",
-                            "action_id": f"approve_{incident_id}"
-                        },
-                        {
-                            "type": "button",
-                            "text": {
-                                "type": "plain_text",
-                                "text": "❌ Reject (Từ chối)",
-                                "emoji": True
-                            },
-                            "style": "danger",
-                            "value": "reject",
-                            "action_id": f"reject_{incident_id}"
+        if incident_id.startswith("INC-ML-") and not diagnosis.get("action_command"):
+            # Thẻ cảnh báo sớm máy học dạng thông tin thuần túy
+            payload = {
+                "blocks": [
+                    {
+                        "type": "header",
+                        "text": {
+                            "type": "plain_text",
+                            "text": f"⚠️ Proactive ML Warning: {incident_id} (SLO Stable)",
+                            "emoji": True
                         }
-                    ]
-                }
-            ]
-        }
+                    },
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": rca_mrkdwn
+                        }
+                    },
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": f"*Phân tích chi tiết chẩn đoán AI:*\n{analysis_str}"
+                        }
+                    }
+                ]
+            }
+        else:
+            # Thẻ sự cố vỡ SLO đầy đủ kèm nút Approve/Reject tự khắc phục
+            payload = {
+                "blocks": [
+                    {
+                        "type": "header",
+                        "text": {
+                            "type": "plain_text",
+                            "text": f"🚨 AIOps Incident Alert: {incident_id}",
+                            "emoji": True
+                        }
+                    },
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": rca_mrkdwn
+                        }
+                    },
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": f"*Phân tích chi tiết chẩn đoán AI:*\n{analysis_str}\n\n*Đối chiếu sự cố lịch sử:* `{diagnosis.get('matched_incident')}` | *Độ tự tin quyết định AI:* `{float(diagnosis.get('confidence_score', 1.0)) * 100}%`"
+                        }
+                    },
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": f"*Lệnh khắc phục đề xuất:*\n`{diagnosis.get('action_command')}`"
+                        }
+                    },
+                    {
+                        "type": "actions",
+                        "elements": [
+                            {
+                                "type": "button",
+                                "text": {
+                                    "type": "plain_text",
+                                    "text": "✅ Approve (Duyệt chạy)",
+                                    "emoji": True
+                                },
+                                "style": "primary",
+                                "value": "approve",
+                                "action_id": f"approve_{incident_id}_{culprit_service}"
+                            },
+                            {
+                                "type": "button",
+                                "text": {
+                                    "type": "plain_text",
+                                    "text": "❌ Reject (Từ chối)",
+                                    "emoji": True
+                                },
+                                "value": "reject",
+                                "action_id": f"reject_{incident_id}_{culprit_service}"
+                            },
+                            {
+                                "type": "button",
+                                "text": {
+                                    "type": "plain_text",
+                                    "text": "🛑 EMERGENCY STOP",
+                                    "emoji": True
+                                },
+                                "style": "danger",
+                                "value": "emergency_stop",
+                                "action_id": f"emergency_stop_{incident_id}_{culprit_service}"
+                            }
+                        ]
+                    }
+                ]
+            }
 
         try:
-            response = requests.post(
-                self.webhook_url,
-                headers={"Content-Type": "application/json"},
-                data=json.dumps(payload),
-                timeout=10
-            )
-            if response.status_code == 200:
-                logger.info("Sent interactive Slack card successfully.")
-                return True
-            logger.error(f"Failed to send Slack card: {response.status_code} - {response.text}")
+            if self.bot_token and self.channel_id:
+                post_data = {
+                    "channel": self.channel_id,
+                    "blocks": payload["blocks"],
+                    "text": f"🚨 AIOps Incident Alert: {incident_id}"
+                }
+                response = requests.post(
+                    "https://slack.com/api/chat.postMessage",
+                    headers={
+                        "Authorization": f"Bearer {self.bot_token}",
+                        "Content-Type": "application/json"
+                    },
+                    json=post_data,
+                    timeout=10
+                )
+                res_json = response.json()
+                if res_json.get("ok"):
+                    logger.info("Sent interactive Slack card via Bot Token successfully.")
+                    return True
+                logger.error(f"Failed to send Slack card via Bot Token: {res_json}")
+
+            if self.webhook_url and "T00000000" not in self.webhook_url:
+                response = requests.post(
+                    self.webhook_url,
+                    headers={"Content-Type": "application/json"},
+                    data=json.dumps(payload),
+                    timeout=10
+                )
+                if response.status_code == 200:
+                    logger.info("Sent interactive Slack card via Webhook successfully.")
+                    return True
+                logger.error(f"Failed to send Slack card: {response.status_code} - {response.text}")
         except Exception as e:
             logger.error(f"Error sending Slack notification: {str(e)}")
         return False

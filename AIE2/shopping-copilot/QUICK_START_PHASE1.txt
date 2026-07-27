@@ -1,0 +1,102 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                    PHASE 1 QUICK START — 3 STEPS                             ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+📋 CHECKLIST:
+  [x] Code implemented (all files modified)
+  [x] Test suite created (test_phase1_fixes.py)
+  [ ] Port-forward running (Terminal 1)
+  [ ] Uvicorn server running (Terminal 2)
+  [ ] Tests executed (Terminal 3)
+  [ ] All tests passed (3/3)
+  [ ] Baseline re-run (25/25 expected)
+
+─────────────────────────────────────────────────────────────────────────────
+
+📌 STEP 1: START PORT-FORWARD (Terminal 1 — keep open)
+
+cd h:\AIO02_TF3_Phase3\AIE2\shopping-copilot
+python scripts\start_port_forwards.py
+
+Expected output:
+  ✓ product-catalog: localhost:9090 → pod:9090
+  ✓ product-reviews: localhost:9091 → pod:9090
+  ✓ postgres: localhost:5432 → pod:5432
+  All port-forwards established. Press Ctrl+C to stop.
+
+⚠️  KEEP THIS TERMINAL OPEN! If you close it, tests will fail.
+
+─────────────────────────────────────────────────────────────────────────────
+
+📌 STEP 2: START UVICORN SERVER (Terminal 2)
+
+cd h:\AIO02_TF3_Phase3\AIE2\shopping-copilot
+uvicorn src.main:app --port 8001 --reload
+
+Expected output:
+  INFO: Started server process [PID]
+  INFO: Application startup complete.
+  INFO: Uvicorn running on http://0.0.0.0:8001
+
+─────────────────────────────────────────────────────────────────────────────
+
+📌 STEP 3: RUN TESTS (Terminal 3)
+
+cd h:\AIO02_TF3_Phase3\AIE2\shopping-copilot
+python test_phase1_fixes.py
+
+Expected output:
+  ================================================================================
+  TEST SUMMARY
+  ================================================================================
+  ✓ PASS: test1_refractor_clarification
+  ✓ PASS: test2_price_filter
+  ✓ PASS: test3_best_rated
+
+  Overall: 3/3 tests passed (100%)
+
+  🎉 All Phase 1 fixes validated successfully!
+
+─────────────────────────────────────────────────────────────────────────────
+
+❌ TROUBLESHOOTING:
+
+Problem: "Connection Error: Cannot connect to API"
+→ Fix: Check Terminal 2 (uvicorn not running)
+
+Problem: Test returns "không có thông tin"
+→ Fix: Check Terminal 1 (port-forward not running)
+
+Problem: Test 1 fails (still listing refractor as reflector)
+→ Fix: Clear cache → rm -f data/cache.json data/session.json
+
+Problem: All tests fail
+→ Fix: Verify both Terminal 1 and 2 are running, then retry
+
+─────────────────────────────────────────────────────────────────────────────
+
+✅ AFTER TESTS PASS:
+
+Re-run baseline evaluation:
+  cd h:\AIO02_TF3_Phase3\AIE2\shopping-copilot\src\evaluation
+  python run_eval.py --config baseline_guardrails.json --output phase1_report.json
+
+Expected improvement:
+  Before: 24/25 pass (96%)
+  After:  25/25 pass (100%)  ← TARGET
+
+─────────────────────────────────────────────────────────────────────────────
+
+📚 DETAILED DOCS:
+  - Test execution guide: RUN_PHASE1_TESTS.md
+  - Implementation details: PHASE1_IMPLEMENTATION_SUMMARY.md
+  - Full roadmap: OPTIMIZATION_ROADMAP.md
+
+─────────────────────────────────────────────────────────────────────────────
+
+🚀 NEXT PHASE (after 25/25):
+  Phase 2: Multi-turn conversation memory
+  Phase 3: Proactive recommendations
+  Phase 4: Full evaluation suite + optimization
+
+╚══════════════════════════════════════════════════════════════════════════════╝

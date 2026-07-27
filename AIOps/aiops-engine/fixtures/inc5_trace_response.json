@@ -8,7 +8,7 @@
           "spanID": "proxy-span",
           "operationName": "op_frontend-proxy",
           "processID": "p-frontend-proxy",
-          "duration": 49000,
+          "duration": 27000,
           "tags": [],
           "references": []
         },
@@ -17,7 +17,7 @@
           "spanID": "frontend-span",
           "operationName": "op_frontend",
           "processID": "p-frontend",
-          "duration": 96000,
+          "duration": 102000,
           "tags": [],
           "references": [
             {
@@ -32,7 +32,7 @@
           "spanID": "reviews-span",
           "operationName": "op_product-reviews",
           "processID": "p-product-reviews",
-          "duration": 106000,
+          "duration": 108000,
           "tags": [],
           "references": [
             {
@@ -47,7 +47,7 @@
           "spanID": "llm-span",
           "operationName": "op_llm",
           "processID": "p-llm",
-          "duration": 93000,
+          "duration": 66000,
           "tags": [],
           "references": [
             {
@@ -77,7 +77,7 @@
           "spanID": "db-span",
           "operationName": "op_postgresql",
           "processID": "p-postgresql",
-          "duration": 67000,
+          "duration": 109000,
           "tags": [],
           "references": [
             {
@@ -92,7 +92,7 @@
           "spanID": "cart-span",
           "operationName": "op_cart",
           "processID": "p-cart",
-          "duration": 55000,
+          "duration": 124000,
           "tags": [],
           "references": [
             {
@@ -107,7 +107,7 @@
           "spanID": "valkey-span",
           "operationName": "op_valkey-cart",
           "processID": "p-valkey-cart",
-          "duration": 38000,
+          "duration": 122000,
           "tags": [],
           "references": [
             {
@@ -122,7 +122,7 @@
           "spanID": "checkout-span",
           "operationName": "op_checkout",
           "processID": "p-checkout",
-          "duration": 64000,
+          "duration": 97000,
           "tags": [],
           "references": [
             {
@@ -137,7 +137,7 @@
           "spanID": "payment-span",
           "operationName": "op_payment",
           "processID": "p-payment",
-          "duration": 59000,
+          "duration": 65000,
           "tags": [],
           "references": [
             {
@@ -152,7 +152,7 @@
           "spanID": "shipping-span",
           "operationName": "op_shipping",
           "processID": "p-shipping",
-          "duration": 133000,
+          "duration": 106000,
           "tags": [],
           "references": [
             {
@@ -167,7 +167,7 @@
           "spanID": "currency-span",
           "operationName": "op_currency",
           "processID": "p-currency",
-          "duration": 77000,
+          "duration": 111000,
           "tags": [],
           "references": [
             {
@@ -179,10 +179,25 @@
         },
         {
           "traceID": "inc5-rich-trace-id",
+          "spanID": "fraud-span",
+          "operationName": "op_fraud-detection",
+          "processID": "p-fraud-detection",
+          "duration": 90000,
+          "tags": [],
+          "references": [
+            {
+              "refType": "CHILD_OF",
+              "spanID": "frontend-span",
+              "traceID": "inc5-rich-trace-id"
+            }
+          ]
+        },
+        {
+          "traceID": "inc5-rich-trace-id",
           "spanID": "accounting-span",
           "operationName": "op_accounting",
           "processID": "p-accounting",
-          "duration": 5362000,
+          "duration": 5443000,
           "tags": [
             {
               "key": "error",
@@ -234,6 +249,9 @@
         },
         "p-currency": {
           "serviceName": "currency"
+        },
+        "p-fraud-detection": {
+          "serviceName": "fraud-detection"
         },
         "p-accounting": {
           "serviceName": "accounting"

@@ -37,7 +37,7 @@ _CACHE_TTL_MAP = {
     "convert_currency_tool":     60,   # 1 phút
 }
 _CACHE_DEFAULT_TTL = 300
-_NEVER_CACHE = {"add_to_cart_tool", "get_cart_tool", "get_shipping_quote_tool", "search_products_v2", "search_products_tool"}
+_NEVER_CACHE = {"add_to_cart_tool", "get_cart_tool", "get_shipping_quote_tool"}
 
 
 def _now_iso() -> str:

@@ -157,3 +157,87 @@ class RCAEngine:
             logger.error(f"Error fetching latest trace ID for {service_name}: {str(e)}")
         return "5ee48b0"  # Fallback to standard mock trace ID
 
+    def build_error_dependency_chain(self, trace_data: dict, culprit_service: str) -> str:
+        """
+        Xây dựng chuỗi liên kết lỗi (Dependency Chain) từ root span đến culprit_service.
+        """
+        if not trace_data or "data" not in trace_data or not trace_data["data"]:
+            return culprit_service
+
+        spans = trace_data["data"][0].get("spans", [])
+        processes = trace_data["data"][0].get("processes", {})
+
+        # Map spanID to parent spanID and serviceName
+        span_to_parent = {}
+        span_to_service = {}
+        error_spans = []
+
+        for span in spans:
+            sid = span["spanID"]
+            pid = span["processID"]
+            svc = processes.get(pid, {}).get("serviceName", "unknown")
+            span_to_service[sid] = svc
+
+            # Check if error
+            is_error = False
+            for tag in span.get("tags", []):
+                if tag.get("key") == "error" and tag.get("value") is True:
+                    is_error = True
+                    break
+            if is_error:
+                error_spans.append(span)
+
+            # References
+            for ref in span.get("references", []):
+                if ref.get("refType") == "CHILD_OF":
+                    span_to_parent[sid] = ref["spanID"]
+
+        if not error_spans:
+            return culprit_service
+
+        # Find the deepest error span (culprit)
+        parent_child_map = {}
+        for sid, parent_id in span_to_parent.items():
+            if parent_id not in parent_child_map:
+                parent_child_map[parent_id] = []
+            parent_child_map[parent_id].append(sid)
+
+        def get_span_depth(sid, current_depth=0):
+            depths = [current_depth]
+            for pid, children in parent_child_map.items():
+                if sid in children:
+                    depths.append(get_span_depth(pid, current_depth + 1))
+            return max(depths)
+
+        deepest_error_span = None
+        max_depth = -1
+        for span in error_spans:
+            sid = span["spanID"]
+            depth = get_span_depth(sid)
+            if depth > max_depth:
+                max_depth = depth
+                deepest_error_span = span
+
+        if not deepest_error_span:
+            return culprit_service
+
+        # Trace from deepest error span back to the root
+        path = []
+        curr_id = deepest_error_span["spanID"]
+        while curr_id:
+            svc = span_to_service.get(curr_id, "unknown")
+            path.append(svc)
+            curr_id = span_to_parent.get(curr_id)
+
+        # Reverse to get root -> child path
+        path.reverse()
+
+        # Remove consecutive duplicates to make it clean
+        clean_path = []
+        for svc in path:
+            if not clean_path or clean_path[-1] != svc:
+                clean_path.append(svc)
+
+        return " -> ".join(clean_path)
+
+

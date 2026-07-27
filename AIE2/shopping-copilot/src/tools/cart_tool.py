@@ -91,16 +91,6 @@ def add_to_cart_tool(user_id: str, product_id: str, quantity: int) -> str:
         except Exception:
             pass
 
-        if product_name == product_id:
-            try:
-                from src.tools.search_product.flow1.sql_executor import SQLQueryExecutor
-                executor = SQLQueryExecutor()
-                rows = executor.execute(f"SELECT name FROM products WHERE id = '{product_id}'")
-                if rows and rows[0].get("name"):
-                    product_name = rows[0]["name"]
-            except Exception:
-                pass
-
         return json.dumps({
             "status": "pending",
             # FIX #6: Use Vietnamese-friendly confirmation message

@@ -2,7 +2,7 @@
 
 > [!NOTE]
 > * **Trạng thái:** Đã phê duyệt (Approved)
-> * **Tác giả:** Tuấn (Leader AIE2)
+> * **Tác giả:** Bùi Lê Tuấn
 > * **Ngày tạo:** 2026-07-15
 > * **Ngày cập nhật:** 2026-07-20
 > * **Dự án:** AIE2 - Shopping Copilot (Task Force 2)

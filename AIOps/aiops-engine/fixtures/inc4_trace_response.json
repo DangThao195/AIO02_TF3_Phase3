@@ -8,7 +8,7 @@
           "spanID": "proxy-span",
           "operationName": "op_frontend-proxy",
           "processID": "p-frontend-proxy",
-          "duration": 134000,
+          "duration": 128000,
           "tags": [],
           "references": []
         },
@@ -17,7 +17,7 @@
           "spanID": "frontend-span",
           "operationName": "op_frontend",
           "processID": "p-frontend",
-          "duration": 70000,
+          "duration": 97000,
           "tags": [],
           "references": [
             {
@@ -32,7 +32,7 @@
           "spanID": "reviews-span",
           "operationName": "op_product-reviews",
           "processID": "p-product-reviews",
-          "duration": 110000,
+          "duration": 109000,
           "tags": [
             {
               "key": "error",
@@ -58,7 +58,7 @@
           "spanID": "llm-span",
           "operationName": "op_llm",
           "processID": "p-llm",
-          "duration": 5396000,
+          "duration": 5322000,
           "tags": [
             {
               "key": "error",
@@ -84,7 +84,7 @@
           "spanID": "catalog-span",
           "operationName": "op_product-catalog",
           "processID": "p-product-catalog",
-          "duration": 76000,
+          "duration": 95000,
           "tags": [],
           "references": [
             {
@@ -99,7 +99,7 @@
           "spanID": "db-span",
           "operationName": "op_postgresql",
           "processID": "p-postgresql",
-          "duration": 80000,
+          "duration": 61000,
           "tags": [],
           "references": [
             {
@@ -114,7 +114,7 @@
           "spanID": "cart-span",
           "operationName": "op_cart",
           "processID": "p-cart",
-          "duration": 68000,
+          "duration": 120000,
           "tags": [],
           "references": [
             {
@@ -129,7 +129,7 @@
           "spanID": "valkey-span",
           "operationName": "op_valkey-cart",
           "processID": "p-valkey-cart",
-          "duration": 35000,
+          "duration": 121000,
           "tags": [],
           "references": [
             {
@@ -144,7 +144,7 @@
           "spanID": "checkout-span",
           "operationName": "op_checkout",
           "processID": "p-checkout",
-          "duration": 126000,
+          "duration": 116000,
           "tags": [],
           "references": [
             {
@@ -159,7 +159,7 @@
           "spanID": "payment-span",
           "operationName": "op_payment",
           "processID": "p-payment",
-          "duration": 90000,
+          "duration": 103000,
           "tags": [],
           "references": [
             {
@@ -174,7 +174,7 @@
           "spanID": "shipping-span",
           "operationName": "op_shipping",
           "processID": "p-shipping",
-          "duration": 98000,
+          "duration": 123000,
           "tags": [],
           "references": [
             {
@@ -189,7 +189,7 @@
           "spanID": "currency-span",
           "operationName": "op_currency",
           "processID": "p-currency",
-          "duration": 32000,
+          "duration": 59000,
           "tags": [],
           "references": [
             {
@@ -201,10 +201,25 @@
         },
         {
           "traceID": "inc4-rich-trace-id",
+          "spanID": "fraud-span",
+          "operationName": "op_fraud-detection",
+          "processID": "p-fraud-detection",
+          "duration": 29000,
+          "tags": [],
+          "references": [
+            {
+              "refType": "CHILD_OF",
+              "spanID": "frontend-span",
+              "traceID": "inc4-rich-trace-id"
+            }
+          ]
+        },
+        {
+          "traceID": "inc4-rich-trace-id",
           "spanID": "accounting-span",
           "operationName": "op_accounting",
           "processID": "p-accounting",
-          "duration": 133000,
+          "duration": 66000,
           "tags": [],
           "references": []
         }
@@ -245,6 +260,9 @@
         },
         "p-currency": {
           "serviceName": "currency"
+        },
+        "p-fraud-detection": {
+          "serviceName": "fraud-detection"
         },
         "p-accounting": {
           "serviceName": "accounting"
