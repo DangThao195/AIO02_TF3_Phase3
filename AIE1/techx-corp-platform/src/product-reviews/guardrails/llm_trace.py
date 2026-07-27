@@ -24,6 +24,7 @@ from guardrails.cache import redis_client
 logger = logging.getLogger("guardrails.llm_trace")
 
 TRACE_KEY_PREFIX = "product_reviews:llm_trace:"
+TRACE_REPLAY_KEY_PREFIX = "trace:"
 TRACE_TTL_SECONDS = int(os.environ.get("PRODUCT_REVIEWS_TRACE_TTL_SECONDS", "86400"))
 TRACE_ID_RE = re.compile(r"^[A-Za-z0-9_.:-]{8,128}$")
 
@@ -260,6 +261,10 @@ def _trace_key(trace_id: str) -> str:
     return f"{TRACE_KEY_PREFIX}{trace_id}"
 
 
+def _trace_replay_key(trace_id: str) -> str:
+    return f"{TRACE_REPLAY_KEY_PREFIX}{trace_id}"
+
+
 def write_llm_trace(record: Dict[str, Any], ttl_seconds: int = TRACE_TTL_SECONDS) -> bool:
     """Persist a trace record to Redis. Fail-open by design."""
     if not redis_client:
@@ -269,8 +274,16 @@ def write_llm_trace(record: Dict[str, Any], ttl_seconds: int = TRACE_TTL_SECONDS
         logger.warning("Skipping LLM trace write due to invalid trace_id=%r", trace_id)
         return False
     try:
-        redis_client.setex(_trace_key(trace_id), ttl_seconds, json.dumps(record, ensure_ascii=False))
-        logger.info("LLM_TRACE_SAVED trace_id=%s redis_key=%s ttl_seconds=%s", trace_id, _trace_key(trace_id), ttl_seconds)
+        payload = json.dumps(record, ensure_ascii=False)
+        redis_client.setex(_trace_key(trace_id), ttl_seconds, payload)
+        redis_client.setex(_trace_replay_key(trace_id), ttl_seconds, payload)
+        logger.info(
+            "LLM_TRACE_SAVED trace_id=%s redis_keys=%s,%s ttl_seconds=%s",
+            trace_id,
+            _trace_key(trace_id),
+            _trace_replay_key(trace_id),
+            ttl_seconds,
+        )
         return True
     except Exception as exc:
         logger.warning("Failed to write LLM trace to Redis: %s", exc)

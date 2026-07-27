@@ -118,7 +118,16 @@ from grpc_health.v1 import health_pb2
 from grpc_health.v1 import health_pb2_grpc
 from grpc_health.v1 import health
 from database import fetch_product_reviews, fetch_product_reviews_from_db, fetch_avg_product_review_score_from_db, get_review_version
-from guardrails.cache import generate_cache_key, get_cached_response, set_cached_response, should_cache, acquire_lock, release_lock, is_fallback_override_active
+from guardrails.cache import (
+    acquire_lock,
+    generate_cache_key,
+    get_cached_response,
+    is_fallback_override_active,
+    redis_client,
+    release_lock,
+    set_cached_response,
+    should_cache,
+)
 
 from openfeature import api
 from openfeature.contrib.provider.flagd import FlagdProvider
@@ -1261,8 +1270,28 @@ def handle_shutdown_signal(signum, frame):
     shutdown_event.set()
 
 
+class _ReplayContext:
+    """Minimal gRPC-like context used by the local HTTP replay endpoint."""
+
+    def __init__(self, metadata=None):
+        self._metadata = tuple(metadata or ())
+        self._trailing_metadata = tuple()
+
+    def invocation_metadata(self):
+        return self._metadata
+
+    def set_trailing_metadata(self, metadata):
+        self._trailing_metadata = tuple(metadata or ())
+
+    def trace_id(self):
+        for key, value in self._trailing_metadata:
+            if str(key).lower() == "x-trace-id":
+                return value
+        return None
+
+
 class LLMTraceHTTPHandler(BaseHTTPRequestHandler):
-    """Small debug endpoint for fetching black-box LLM traces by trace id."""
+    """Internal HTTP handler for replaying AI requests and fetching traces."""
 
     def _send_json(self, status_code, payload):
         body = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
@@ -1272,37 +1301,143 @@ class LLMTraceHTTPHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def do_GET(self):
+    def _send_raw_json(self, status_code, payload):
+        if isinstance(payload, str):
+            body = payload.encode("utf-8")
+        else:
+            body = payload or b"{}"
+        self.send_response(status_code)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _authorized(self):
         expected_token = os.environ.get("PRODUCT_REVIEWS_TRACE_HTTP_TOKEN", "").strip()
-        if expected_token:
-            provided_token = (
-                self.headers.get("x-trace-token", "").strip()
-                or self.headers.get("authorization", "").replace("Bearer ", "", 1).strip()
-            )
-            if not secrets.compare_digest(provided_token, expected_token):
-                self._send_json(401, {"error": "unauthorized"})
-                return
+        if not expected_token:
+            return True
+        auth_header = self.headers.get("authorization", "").strip()
+        provided_token = self.headers.get("x-trace-token", "").strip()
+        if not provided_token and auth_header.lower().startswith("bearer "):
+            provided_token = auth_header[7:].strip()
+        return secrets.compare_digest(provided_token, expected_token)
+
+    def _read_json_body(self):
+        try:
+            content_length = int(self.headers.get("content-length", "0"))
+        except ValueError:
+            raise ValueError("invalid content-length")
+        if content_length <= 0:
+            raise ValueError("missing JSON body")
+        if content_length > 16 * 1024:
+            raise ValueError("JSON body too large")
+        raw_body = self.rfile.read(content_length)
+        try:
+            return json.loads(raw_body.decode("utf-8"))
+        except Exception as exc:
+            raise ValueError("invalid JSON body") from exc
+
+    def _read_raw_trace_payload(self, trace_id):
+        if not redis_client:
+            return None
+        return redis_client.get(f"trace:{trace_id}")
+
+    def do_GET(self):
+        if not self._authorized():
+            self._send_json(401, {"error": "unauthorized"})
+            return
 
         parsed = urlparse(self.path)
-        prefix = "/debug/llm-traces/"
-        if not parsed.path.startswith(prefix):
+        trace_prefix = "/trace/"
+        debug_prefix = "/debug/llm-traces/"
+
+        if parsed.path.startswith(trace_prefix):
+            trace_id = parsed.path[len(trace_prefix):].strip()
+            try:
+                raw_trace = self._read_raw_trace_payload(trace_id)
+            except Exception as exc:
+                logger.warning("Failed to fetch raw LLM trace %s from Redis: %s", trace_id, exc)
+                self._send_json(503, {"error": "trace_store_unavailable"})
+                return
+            if not raw_trace:
+                self._send_json(404, {"error": "trace_not_found", "trace_id": trace_id})
+                return
+            self._send_raw_json(200, raw_trace)
+            return
+
+        if parsed.path.startswith(debug_prefix):
+            trace_id = parsed.path[len(debug_prefix):].strip()
+            trace_record = read_llm_trace(trace_id)
+            if trace_record is None:
+                self._send_json(404, {"error": "trace_not_found", "trace_id": trace_id})
+                return
+
+            self._send_json(200, trace_record)
+            return
+
+        self._send_json(404, {"error": "not_found"})
+
+    def do_POST(self):
+        if not self._authorized():
+            self._send_json(401, {"error": "unauthorized"})
+            return
+
+        parsed = urlparse(self.path)
+        if parsed.path != "/replay":
             self._send_json(404, {"error": "not_found"})
             return
 
-        trace_id = parsed.path[len(prefix):].strip()
-        trace_record = read_llm_trace(trace_id)
-        if trace_record is None:
-            self._send_json(404, {"error": "trace_not_found", "trace_id": trace_id})
-            return
+        try:
+            payload = self._read_json_body()
+            question = str(payload.get("question") or "").strip()
+            product_id = str(payload.get("product_id") or "").strip()
+            user_id = str(payload.get("user_id") or "").strip()
+            session_id = str(payload.get("session_id") or "").strip()
+            if not question or not product_id:
+                raise ValueError("question and product_id are required")
 
-        self._send_json(200, trace_record)
+            metadata = []
+            if user_id:
+                metadata.append(("x-replay-user-id", user_id))
+            if session_id:
+                metadata.append(("x-replay-session-id", session_id))
+            replay_context = _ReplayContext(metadata)
+
+            response = get_ai_assistant_response(product_id, question, replay_context)
+            trace_id = replay_context.trace_id()
+            cache_status = "miss"
+            if trace_id:
+                try:
+                    raw_trace = self._read_raw_trace_payload(trace_id)
+                    if raw_trace:
+                        if isinstance(raw_trace, bytes):
+                            raw_trace = raw_trace.decode("utf-8")
+                        trace_record = json.loads(raw_trace)
+                        if (trace_record.get("cache") or {}).get("hit"):
+                            cache_status = "hit"
+                except Exception as exc:
+                    logger.warning("Unable to derive replay cache status for trace_id=%s: %s", trace_id, exc)
+
+            self._send_json(
+                200,
+                {
+                    "response": response.response,
+                    "cache": cache_status,
+                    "trace_id": trace_id,
+                },
+            )
+        except ValueError as exc:
+            self._send_json(400, {"error": "bad_request", "message": str(exc)})
+        except Exception as exc:
+            logger.exception("HTTP replay request failed: %s", exc)
+            self._send_json(500, {"error": "replay_failed"})
 
     def log_message(self, format, *args):
         logger.info("LLM_TRACE_HTTP " + format, *args)
 
 
 def start_llm_trace_http_server():
-    port_value = os.environ.get("PRODUCT_REVIEWS_TRACE_HTTP_PORT", "").strip()
+    port_value = os.environ.get("PRODUCT_REVIEWS_TRACE_HTTP_PORT", "8086").strip()
     if not port_value:
         logger.info("LLM trace HTTP endpoint disabled; set PRODUCT_REVIEWS_TRACE_HTTP_PORT to enable it.")
         return None

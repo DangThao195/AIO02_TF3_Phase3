@@ -24,11 +24,15 @@ Add a runtime trace layer for `AskProductAIAssistant`:
 1. Extract the current OpenTelemetry trace id inside
    `get_ai_assistant_response()` and return it to the caller as gRPC trailing
    metadata `x-trace-id`.
-2. Persist a black-box trace record to Redis under:
+2. Persist a black-box trace record to Redis under both keys:
 
    ```text
    product_reviews:llm_trace:{trace_id}
+   trace:{trace_id}
    ```
+
+   `product_reviews:llm_trace:{trace_id}` is the namespaced internal key.
+   `trace:{trace_id}` is the replay/fetch key required by the HTTP trace task.
 
 3. Store only audit-safe metadata:
 
@@ -44,15 +48,32 @@ Add a runtime trace layer for `AskProductAIAssistant`:
 
 4. Do not store raw prompts, raw reviews, raw user question, raw model answer,
    credentials, or product catalog payloads in the trace record.
-5. Provide an optional HTTP trace fetch endpoint:
+5. Provide an optional HTTP handler based on the standard library
+   `http.server.BaseHTTPRequestHandler`, served by `ThreadingHTTPServer` on a
+   daemon `threading.Thread`. The default trace HTTP port is `8086`.
+
+6. Provide the HTTP endpoints required for internal runtime replay/audit:
+
+   ```text
+   POST /replay
+   GET /trace/{trace_id}
+   ```
+
+   `POST /replay` accepts `{question, product_id, user_id, session_id}`, calls
+   the same internal `get_ai_assistant_response()` runtime path used by gRPC,
+   and returns `{"response": "...", "cache": "hit|miss", "trace_id": "..."}`.
+
+   `GET /trace/{trace_id}` reads raw JSON from Redis with key
+   `trace:{trace_id}` and returns 404 when the trace is missing.
+
+   The existing compatibility/debug endpoint remains available:
 
    ```text
    GET /debug/llm-traces/{trace_id}
    ```
 
-   The endpoint is enabled only when `PRODUCT_REVIEWS_TRACE_HTTP_PORT` and
-   `PRODUCT_REVIEWS_TRACE_HTTP_TOKEN` are set. Local unauthenticated debugging
-   requires an explicit opt-in via
+   The HTTP service is enabled only when `PRODUCT_REVIEWS_TRACE_HTTP_TOKEN` is
+   set, unless local unauthenticated debugging is explicitly enabled via
    `PRODUCT_REVIEWS_TRACE_HTTP_ALLOW_UNAUTHENTICATED=true`.
 
 ## Implementation evidence
@@ -60,8 +81,8 @@ Add a runtime trace layer for `AskProductAIAssistant`:
 | Work item | Runtime evidence |
 |---|---|
 | AI-121: Extract OTel Trace ID and return via gRPC metadata | `product_reviews_server.py` calls `current_trace_id()` and `attach_trace_metadata(context, trace_id)` inside `get_ai_assistant_response()`; metadata key is `x-trace-id`. |
-| AI-122: Write black-box trace to Redis | `guardrails/llm_trace.py` writes JSON records with key prefix `product_reviews:llm_trace:` via `write_llm_trace()`. |
-| AI-123: HTTP fetch trace endpoint | `product_reviews_server.py` defines `LLMTraceHTTPHandler` and `start_llm_trace_http_server()`; route is `/debug/llm-traces/{trace_id}`. This implementation fetches persisted traces by id; it does not replay LLM calls. |
+| AI-122: Write black-box trace to Redis | `guardrails/llm_trace.py` writes the same audit-safe JSON record to `product_reviews:llm_trace:{trace_id}` and `trace:{trace_id}` via `write_llm_trace()`. |
+| AI-123: HTTP replay and fetch trace endpoint | `product_reviews_server.py` defines `LLMTraceHTTPHandler`, `_ReplayContext`, and `start_llm_trace_http_server()`; routes are `POST /replay`, `GET /trace/{trace_id}`, plus compatibility route `/debug/llm-traces/{trace_id}`. |
 | AI-124: ADR and view summary | This ADR documents the schema, access path, and limitations. |
 
 ## Trace schema summary
@@ -156,7 +177,23 @@ $env:PRODUCT_REVIEWS_TRACE_HTTP_PORT="8086"
 $env:PRODUCT_REVIEWS_TRACE_HTTP_TOKEN="<internal-token>"
 ```
 
-Then fetch a trace by id:
+Replay one runtime request through the same internal AI path:
+
+```powershell
+curl.exe -X POST `
+  -H "x-trace-token: <internal-token>" `
+  -H "Content-Type: application/json" `
+  -d "{\"question\":\"Do reviewers say it removes dust?\",\"product_id\":\"L9ECAV7KIM\",\"user_id\":\"jira-smoke\",\"session_id\":\"ai-123\"}" `
+  http://localhost:8086/replay
+```
+
+Then fetch the raw Redis trace by id:
+
+```powershell
+curl.exe -H "x-trace-token: <internal-token>" http://localhost:8086/trace/<trace-id>
+```
+
+Compatibility/debug fetch remains available:
 
 ```powershell
 curl.exe -H "x-trace-token: <internal-token>" http://localhost:8086/debug/llm-traces/<trace-id>
@@ -184,11 +221,11 @@ Benefits:
 
 Trade-offs and accepted limitations:
 
-- The HTTP endpoint depends on Redis availability; trace writes are fail-open
+- The HTTP endpoints depend on Redis availability; trace writes are fail-open
   and must not block user responses. This preserves the user-facing AI feature
   during a Redis outage, at the cost of possibly missing a trace for that
   request.
-- The HTTP endpoint is intended for local/internal debugging only. It is
+- The HTTP endpoints are intended for local/internal debugging only. They are
   disabled by default and token-protected when enabled; it should not be exposed
   directly to public traffic.
 - Cost is an estimate based on known Nova Lite/Micro public pricing constants,
@@ -198,7 +235,10 @@ Trade-offs and accepted limitations:
   model call happens on a cache hit. Instead, they point back to the original
   approved `source_trace_id`; re-judging every cache hit would defeat the
   cache's latency/cost purpose and can introduce unnecessary judge variance.
-- Raw question, review and answer text are intentionally not stored. Debugging
+- Raw question, review and answer text are intentionally not stored in the
+  persisted trace. `POST /replay` necessarily receives the replay question and
+  returns the AI response to the HTTP client, but the stored trace remains
+  metadata/hash-only. Debugging
   exact wording requires matching hashes against a controlled test artifact or
   UI evidence, which is safer than persisting raw PII/security-sensitive text in
   Redis.
@@ -251,6 +291,29 @@ Trace endpoint auth smoke:
 - Fetch with `x-trace-token` returned HTTP 200 and trace JSON.
 - Fetch without token returned HTTP 401.
 
+HTTP replay/fetch smoke for AI-123 was executed against the rebuilt container
+on July 27, 2026 with Redis fallback override enabled to avoid requiring local
+AWS credentials:
+
+- `POST /replay` accepted `{question, product_id, user_id, session_id}`.
+- Response shape matched the contract:
+
+  ```json
+  {
+    "response": "The AI is busy right now. Please try again later.",
+    "cache": "miss",
+    "trace_id": "2c13c783181b2e766ecd6c74b584a0bd"
+  }
+  ```
+
+- `GET /trace/2c13c783181b2e766ecd6c74b584a0bd` returned HTTP 200 and raw JSON
+  trace metadata from Redis.
+- Redis contained both keys for the same trace:
+  `trace:2c13c783181b2e766ecd6c74b584a0bd` and
+  `product_reviews:llm_trace:2c13c783181b2e766ecd6c74b584a0bd`.
+- `GET /trace/not-found-123456` returned HTTP 404.
+- Fetch without `x-trace-token` returned HTTP 401.
+
 ## Smoke-test procedure
 
 A complete runtime smoke test requires:
@@ -268,7 +331,7 @@ A complete runtime smoke test requires:
 5. Fetch by returned `x-trace-id`:
 
    ```powershell
-   curl.exe -H "x-trace-token: <internal-token>" http://localhost:8086/debug/llm-traces/<trace-id>
+   curl.exe -H "x-trace-token: <internal-token>" http://localhost:8086/trace/<trace-id>
    ```
 
 The expected trace should show final `response_class`, `outcome`,
