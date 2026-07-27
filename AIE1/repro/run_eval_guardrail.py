@@ -624,7 +624,7 @@ def main() -> int:
             "selection_rule": f"{selection_metadata['selection_rule']} + first {len(cases)} cases",
         }
     if args.expected_cases is None:
-        args.expected_cases = len(cases) if case_types or expected_behaviors else 200
+        args.expected_cases = len(cases)
     needs_runtime = any(case["type"] != "toxic_review" for case in cases) or args.enable_toxic_db_e2e
     if needs_runtime:
         assert_runtime_reachable(args.grpc_addr, timeout=min(3.0, args.grpc_timeout_seconds))

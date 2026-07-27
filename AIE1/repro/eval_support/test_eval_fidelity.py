@@ -92,10 +92,13 @@ class EvalFidelitySafetyTests(unittest.TestCase):
 
         cases, metadata = evaluator.load_question_cases(str(dataset_path))
 
-        self.assertEqual(len(cases), 43)
+        self.assertEqual(len(cases), evaluator.EXPECTED_QUESTION_SELECTED_CASES)
         self.assertEqual(len({case["product_id"] for case in cases}), 10)
         self.assertEqual(metadata["source_case_count"], evaluator.EXPECTED_QUESTION_SOURCE_CASES)
-        self.assertEqual(metadata["excluded_case_count"], evaluator.EXPECTED_QUESTION_SOURCE_CASES - 43)
+        self.assertEqual(
+            metadata["excluded_case_count"],
+            evaluator.EXPECTED_QUESTION_SOURCE_CASES - evaluator.EXPECTED_QUESTION_SELECTED_CASES,
+        )
         self.assertEqual(metadata["selection_rule"], "type=normal AND expected_behavior=answer")
         self.assertTrue(all(case["case_type"] == "normal" for case in cases))
 
@@ -384,11 +387,11 @@ class EvalFidelitySafetyTests(unittest.TestCase):
         products = sorted(evaluator.EXPECTED_MENTOR_PRODUCT_IDS)
         passing_cases = [
             {"product_id": products[index % 10], "status": "ok", "passed": True}
-            for index in range(43)
+            for index in range(evaluator.EXPECTED_QUESTION_SELECTED_CASES)
         ]
         incomplete_products = [
             {"product_id": products[index % 9], "status": "ok", "passed": True}
-            for index in range(43)
+            for index in range(evaluator.EXPECTED_QUESTION_SELECTED_CASES)
         ]
 
         self.assertTrue(evaluator.suite_is_strictly_acceptable(passing_cases))
@@ -402,12 +405,12 @@ class EvalFidelitySafetyTests(unittest.TestCase):
             {
                 "product_id": products[index % 10],
                 "status": "ok",
-                "passed": index < 35,
+                "passed": index < 36,
                 "format_passed": True,
                 "runtime_response_class": "answer",
                 "judge_result": {"contradicted_claims": 0},
             }
-            for index in range(43)
+            for index in range(evaluator.EXPECTED_QUESTION_SELECTED_CASES)
         ]
         selection = {
             "mode": "question_dataset",
@@ -420,7 +423,7 @@ class EvalFidelitySafetyTests(unittest.TestCase):
         gate = evaluator.suite_gate_assessment(cases, 0.8, selection)
 
         self.assertTrue(gate["passed"])
-        self.assertEqual(gate["observed_suite_pass_rate"], 0.814)
+        self.assertEqual(gate["observed_suite_pass_rate"], 0.8182)
         self.assertEqual(gate["failures"], [])
 
         cases[0]["judge_result"]["contradicted_claims"] = 1
@@ -444,13 +447,13 @@ class EvalFidelitySafetyTests(unittest.TestCase):
                 "runtime_response_class": "answer",
                 "judge_result": {"contradicted_claims": 0, "unsupported_claims": 0},
             }
-            for index in range(43)
+            for index in range(evaluator.EXPECTED_QUESTION_SELECTED_CASES)
         ]
         drifted_selection = {
             "mode": "question_dataset",
             "dataset_sha256": "0" * 64,
-            "source_case_count": 199,
-            "selected_case_count": 42,
+            "source_case_count": evaluator.EXPECTED_QUESTION_SOURCE_CASES - 1,
+            "selected_case_count": evaluator.EXPECTED_QUESTION_SELECTED_CASES - 1,
             "selection_rule": "type=normal AND expected_behavior=answer",
         }
 
@@ -468,8 +471,8 @@ class EvalFidelitySafetyTests(unittest.TestCase):
             {
                 **drifted_selection,
                 "dataset_sha256": evaluator.APPROVED_QUESTION_DATASET_SHA256,
-                "source_case_count": 200,
-                "selected_case_count": 43,
+                "source_case_count": evaluator.EXPECTED_QUESTION_SOURCE_CASES,
+                "selected_case_count": evaluator.EXPECTED_QUESTION_SELECTED_CASES,
             },
         )
         self.assertIn("mentor_benchmark_coverage_incomplete", product_gate["failures"])
@@ -705,12 +708,15 @@ class EvalCaseSelectionTests(unittest.TestCase):
             ["answer"],
         )
 
-        self.assertEqual(len(selected), 43)
+        self.assertEqual(len(selected), evaluator.EXPECTED_QUESTION_SELECTED_CASES)
         self.assertEqual(metadata["source_case_count"], len(cases))
-        self.assertEqual(metadata["selected_case_count"], 43)
-        self.assertEqual(metadata["excluded_case_count"], len(cases) - 43)
+        self.assertEqual(metadata["selected_case_count"], evaluator.EXPECTED_QUESTION_SELECTED_CASES)
+        self.assertEqual(
+            metadata["excluded_case_count"],
+            len(cases) - evaluator.EXPECTED_QUESTION_SELECTED_CASES,
+        )
         self.assertEqual(metadata["selection_rule"], "type=normal AND expected_behavior=answer")
-        self.assertEqual(metadata["selected_by_type"], {"normal": 43})
+        self.assertEqual(metadata["selected_by_type"], {"normal": evaluator.EXPECTED_QUESTION_SELECTED_CASES})
         self.assertEqual(metadata["source_by_type"]["hallucination_probe"], 3)
         self.assertEqual(metadata["excluded_by_type"]["hallucination_probe"], 3)
 
