@@ -1,0 +1,340 @@
+{
+  "test_suite": "MANDATE #25 - AI Resilience with Controlled Degradation",
+  "date": "27/07/2026",
+  "test_cases": [
+    {
+      "id": 1,
+      "name": "Circuit Breaker Opens on Sustained Failure",
+      "objective": "Verify circuit breaker opens after N failures, prevents hammering, then auto-recovers",
+      "config": {
+        "failure_threshold": 5,
+        "recovery_timeout": 60,
+        "success_threshold": 2
+      },
+      "scenarios": [
+        {
+          "scenario_id": "1a",
+          "description": "Circuit breaker transitions from CLOSED → OPEN after failures",
+          "steps": [
+            "Create CircuitBreaker with failure_threshold=5",
+            "Inject 5 consecutive failures",
+            "Verify state transitions: CLOSED → OPEN",
+            "Verify failure_count reaches threshold"
+          ],
+          "expected_result": "Breaker transitions to OPEN after 5 failures",
+          "metrics": {
+            "failures_needed": 5,
+            "state_after_fail": "OPEN"
+          }
+        },
+        {
+          "scenario_id": "1b",
+          "description": "Fast-fail when circuit breaker is OPEN",
+          "steps": [
+            "Circuit breaker is OPEN (from scenario 1a)",
+            "Attempt new request while OPEN",
+            "Verify CircuitBreakerOpen exception raised",
+            "Verify no actual function executed"
+          ],
+          "expected_result": "Request fails immediately with 0ms overhead (fast-fail)",
+          "metrics": {
+            "latency_ms": "< 1",
+            "executed": false
+          }
+        },
+        {
+          "scenario_id": "1c",
+          "description": "Auto-recovery after recovery timeout",
+          "steps": [
+            "Circuit breaker is OPEN",
+            "Wait for recovery_timeout (60s)",
+            "Verify state transitions: OPEN → HALF_OPEN",
+            "Send 1 successful request",
+            "Verify success_count increments",
+            "Send 1 more successful request",
+            "Verify state transitions: HALF_OPEN → CLOSED"
+          ],
+          "expected_result": "Breaker auto-recovers: needs 2 successes to fully close",
+          "metrics": {
+            "recovery_timeout_s": 60,
+            "successes_to_close": 2,
+            "final_state": "CLOSED"
+          }
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Retry with Bounded Backoff",
+      "objective": "Verify retry attempts on transient errors, fails fast on permanent errors, respects 8s ceiling",
+      "config": {
+        "max_retries": 3,
+        "initial_delay_ms": 1000,
+        "max_delay_ms": 8000
+      },
+      "scenarios": [
+        {
+          "scenario_id": "2a",
+          "description": "Transient error: retry and succeed on attempt 2",
+          "steps": [
+            "Configure RetryConfig(max_retries=3, initial_delay_ms=1000)",
+            "Inject timeout error on attempt 1 (transient)",
+            "Verify retry triggered",
+            "Wait backoff ~1s",
+            "Attempt 2 succeeds",
+            "Verify total attempts = 2"
+          ],
+          "expected_result": "Retried once, succeeded on attempt 2",
+          "metrics": {
+            "total_attempts": 2,
+            "backoff_delays": ["1000ms"],
+            "final_status": "success"
+          }
+        },
+        {
+          "scenario_id": "2b",
+          "description": "Permanent error: fail fast without retry",
+          "steps": [
+            "Configure RetryConfig",
+            "Inject PermissionError (permanent)",
+            "Verify error is detected as permanent",
+            "Verify no retry attempted",
+            "Verify total attempts = 1"
+          ],
+          "expected_result": "Failed immediately without retry",
+          "metrics": {
+            "total_attempts": 1,
+            "retry_attempted": false,
+            "final_status": "permanent_error"
+          }
+        },
+        {
+          "scenario_id": "2c",
+          "description": "Max retries exhausted, backoff ceiling respected",
+          "steps": [
+            "Configure RetryConfig",
+            "Inject timeout error on all attempts (transient, persistent)",
+            "Verify retry sequence: 1s → 2s → 4s → 8s (capped)",
+            "Verify total attempts = 4 (1 initial + 3 retries)",
+            "Verify total wait time < 8s"
+          ],
+          "expected_result": "Max 4 attempts, backoff capped at 8s, total latency < 8s",
+          "metrics": {
+            "total_attempts": 4,
+            "backoff_sequence": [1000, 2000, 4000],
+            "backoff_ceiling_ms": 8000,
+            "total_latency_ms": "< 8000"
+          }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Schema Validation Prevents Garbage",
+      "objective": "Verify malformed LLM output rejected, no crash, no tool execution with garbage args",
+      "config": {
+        "valid_task_types": ["search", "view_cart", "list_products"],
+        "whitelisted_tools": ["get_cart", "search_product", "view_review"]
+      },
+      "scenarios": [
+        {
+          "scenario_id": "3a",
+          "description": "Invalid task_type enum value",
+          "steps": [
+            "Input: JSON with task_type='invalid_xyz'",
+            "Call validate_intent_parser_output()",
+            "Verify validation fails (task_type not in enum)",
+            "Verify repair_intent_fallback() called",
+            "Verify safe default returned"
+          ],
+          "expected_result": "Invalid task_type rejected, safe fallback used",
+          "metrics": {
+            "validation_result": "invalid",
+            "fallback_used": true,
+            "crashed": false
+          }
+        },
+        {
+          "scenario_id": "3b",
+          "description": "Malformed JSON (parse error)",
+          "steps": [
+            "Input: '{broken json' (invalid JSON syntax)",
+            "Call validate_intent_parser_output()",
+            "Verify JSONDecodeError caught",
+            "Verify exception handled gracefully",
+            "Verify no crash"
+          ],
+          "expected_result": "JSON parse error caught, system continues",
+          "metrics": {
+            "exception_type": "JSONDecodeError",
+            "exception_handled": true,
+            "crashed": false
+          }
+        },
+        {
+          "scenario_id": "3c",
+          "description": "Invalid tool name in plan",
+          "steps": [
+            "Input: Plan with tool_name='invalid_tool_xyz'",
+            "Call validate_planner_output()",
+            "Verify tool name not in whitelist",
+            "Verify validation fails",
+            "Verify repair_plan_fallback() returns empty list",
+            "Verify tool never executed"
+          ],
+          "expected_result": "Invalid tool name rejected, empty plan returned, no tool execution",
+          "metrics": {
+            "validation_result": "invalid",
+            "tool_executed": false,
+            "fallback_plan": []
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "name": "Safe Degradation (No Fabrication)",
+      "objective": "Verify fallback responses don't invent prices/products, use keywords only",
+      "config": {
+        "fabrication_checks": [
+          "no_invented_prices",
+          "no_invented_products",
+          "keywords_only",
+          "predefined_messages_only"
+        ]
+      },
+      "scenarios": [
+        {
+          "scenario_id": "4a",
+          "description": "Intent fallback uses keywords, not invented data",
+          "steps": [
+            "Bedrock fails (timeout)",
+            "Call repair_intent_fallback(user_message='tôi muốn xem giỏ hàng')",
+            "Verify task_type detected from keywords",
+            "Verify no fabricated fields added",
+            "Verify only real data from input used"
+          ],
+          "expected_result": "Fallback extracts keywords only, no invented content",
+          "metrics": {
+            "fabrication_detected": false,
+            "keywords_used": true,
+            "data_source": "user_input"
+          }
+        },
+        {
+          "scenario_id": "4b",
+          "description": "Plan fallback empty (not fabricated)",
+          "steps": [
+            "Bedrock plan validation fails",
+            "Call repair_plan_fallback()",
+            "Verify returns empty list []",
+            "Verify no random tool calls injected",
+            "Verify no fabricated actions"
+          ],
+          "expected_result": "Empty plan returned, no fabricated tools",
+          "metrics": {
+            "plan_result": [],
+            "fabricated_tools": 0
+          }
+        },
+        {
+          "scenario_id": "4c",
+          "description": "Synthesis fallback uses predefined message",
+          "steps": [
+            "Response generation timeout",
+            "Use predefined fallback message",
+            "Verify message doesn't contain fabricated prices",
+            "Verify message doesn't contain fabricated products",
+            "Verify message explains system status"
+          ],
+          "expected_result": "Predefined message used, no hallucinated content",
+          "metrics": {
+            "message_type": "predefined",
+            "hallucination_detected": false
+          }
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "name": "No 500 on Provider Failure",
+      "objective": "Verify system returns HTTP 200 with safe response on any provider failure",
+      "config": {
+        "failure_modes": [
+          "timeout",
+          "rate_limit",
+          "5xx_error",
+          "malformed_json"
+        ]
+      },
+      "scenarios": [
+        {
+          "scenario_id": "5a",
+          "description": "Provider timeout → HTTP 200 with fallback",
+          "steps": [
+            "Bedrock call times out",
+            "Retry attempted (1s, 2s, 4s backoff)",
+            "All retries fail",
+            "Circuit breaker or fallback activated",
+            "Response returned to client"
+          ],
+          "expected_result": "HTTP 200 OK with safe degradation message",
+          "metrics": {
+            "http_status": 200,
+            "response_type": "safe_fallback",
+            "contains_error_message": true
+          }
+        },
+        {
+          "scenario_id": "5b",
+          "description": "Provider 5xx error → HTTP 200 with fallback",
+          "steps": [
+            "Bedrock returns 5xx error",
+            "Detected as transient",
+            "Retry attempted",
+            "All retries fail",
+            "Fallback activated"
+          ],
+          "expected_result": "HTTP 200 OK (not 5xx), safe response",
+          "metrics": {
+            "http_status": 200,
+            "provider_error": "5xx",
+            "client_sees_500": false
+          }
+        },
+        {
+          "scenario_id": "5c",
+          "description": "Rate limit (429) → HTTP 200 with fallback",
+          "steps": [
+            "Bedrock returns 429 (rate-limit)",
+            "Detected as transient",
+            "Retry with exponential backoff",
+            "After max retries, fallback used"
+          ],
+          "expected_result": "HTTP 200 OK, request handled gracefully",
+          "metrics": {
+            "http_status": 200,
+            "provider_status": 429,
+            "client_status": 200
+          }
+        },
+        {
+          "scenario_id": "5d",
+          "description": "Malformed response JSON → HTTP 200 with fallback",
+          "steps": [
+            "Bedrock returns malformed JSON",
+            "Schema validation fails",
+            "Parse error caught",
+            "Fallback activated"
+          ],
+          "expected_result": "HTTP 200 OK, no crash, safe response",
+          "metrics": {
+            "http_status": 200,
+            "crashed": false,
+            "response_valid": true
+          }
+        }
+      ]
+    }
+  ]
+}

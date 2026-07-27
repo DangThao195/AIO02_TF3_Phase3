@@ -46,18 +46,22 @@ shopping-copilot/
 │   ├── llm/
 │   │   ├── llm.py          # AWS Bedrock client (Amazon Nova)
 │   │   └── prompt.py       # System prompt + format prompt
-│   ├── guardrails/         # 6 lớp bảo vệ
+│   ├── guardrails/         # 9 lớp bảo vệ (6 base + 3 MANDATE #25 resilience)
 │   │   ├── input_filter.py  # L2: Regex + Bedrock Guardrails
 │   │   ├── confirmation.py  # L1: HMAC confirmation gate
 │   │   ├── fallback.py      # L3: Exception handler + retry
 │   │   ├── tool_validator.py# L4: Allow-list + user isolation + param bounds
 │   │   ├── output_filter.py # L5: PII redaction
-│   │   └── rate_limiter.py  # L6: Request/token limit
+│   │   ├── rate_limiter.py  # L6: Request/token limit
+│   │   ├── circuit_breaker.py  # MANDATE #25 L1: Circuit breaker pattern
+│   │   ├── retry.py         # MANDATE #25 L2: Bounded retry + exponential backoff
+│   │   └── schema_validator.py # MANDATE #25 L3: Schema validation + safe fallback
 │   ├── memory/
 │   │   ├── store.py        # SessionStore + CacheStore (TTL, LRU, JSON persistence)
 │   │   └── cache.py        # Backward compatibility re-export
 │   ├── tools/              # 10 công cụ agent
-│   │   ├── search/         # Search pipeline (multi-strategy)
+│   │   ├── search_product/ # Search pipeline (multi-strategy)
+│   │   │   ├── __init__.py
 │   │   │   ├── orchestrator.py  # Phối hợp Flow 1 + Flow 2 + Reranker
 │   │   │   ├── flow1/      # SQL matching (entity extractor → SQL builder → executor)
 │   │   │   ├── flow2/      # RAG (Bedrock Knowledge Base)
@@ -70,11 +74,20 @@ shopping-copilot/
 │   │   ├── currency_tool.py # convert_currency_tool
 │   │   ├── shipping_tool.py # get_shipping_quote_tool (REST)
 │   │   ├── product_id_tool.py # get_product_id (tra cứu ID từ tên)
-│   │   └── service_config.py  # Resolver địa chỉ backend (real/test)
+│   │   ├── service_config.py  # Resolver địa chỉ backend (real/test)
+│   │   └── __init__.py     # Tool registry
 │   ├── protos/             # gRPC stubs (demo.proto)
 │   ├── database/           # PostgreSQL connection pool
 │   └── evaluation/         # Trust & Safety evaluation
 ├── server-test/            # Mock backend local (7 servers: 6 gRPC + 1 HTTP)
+├── mandate25/              # MANDATE #25 test suite
+│   ├── README.md           # Full documentation
+│   ├── run_mandate_25_tests.py  # Test runner
+│   ├── mandate_25_testcases.json  # 5 tests, 12 scenarios
+│   └── mandate_25_test_results.json # Test results (5/5 PASS)
+├── docs/
+│   └── ADR/
+│       └── ADR4-MANDATE-25-RESILIENCE.md # Architecture Decision Record
 ├── static/                 # Giao diện chatbot HTML
 ├── data/                   # Runtime data (cache, session JSON)
 ├── scripts/                # Công cụ vận hành
@@ -88,29 +101,44 @@ shopping-copilot/
 
 ### 10 công cụ agent
 
-| Công cụ | Chức năng | Backend |
-|---------|-----------|---------|
-| `search_products_v2` | Tìm kiếm sản phẩm (SQL + RAG + reranker) | SQL DB + Bedrock KB |
-| `get_categories` | Danh sách danh mục | SQL DB |
-| `get_all_products` | Toàn bộ sản phẩm (chỉ khi cần) | SQL DB |
-| `get_product_id` | Tra product_id từ tên sản phẩm | SQL DB + SQLite |
-| `get_product_reviews_tool` | Xem đánh giá | gRPC ProductReviewService |
-| `add_to_cart_tool` | Thêm vào giỏ (cần xác nhận) | gRPC CartService |
-| `get_cart_tool` | Xem giỏ hàng | gRPC CartService |
-| `get_recommendations_tool` | Gợi ý sản phẩm | gRPC RecommendationService |
-| `convert_currency_tool` | Quy đổi tiền tệ | gRPC CurrencyService |
-| `get_shipping_quote_tool` | Phí vận chuyển (nội địa VN) | REST HTTP |
+| Công cụ | Chức năng | Backend | File |
+|---------|-----------|---------|------|
+| `search_products_v2` | Tìm kiếm sản phẩm (SQL + RAG + reranker) | SQL DB + Bedrock KB | [`src/tools/search_product/`](src/tools/search_product/) |
+| `get_categories` | Danh sách danh mục | SQL DB | [`src/tools/catalog_tool.py`](src/tools/catalog_tool.py) |
+| `get_all_products` | Toàn bộ sản phẩm (chỉ khi cần) | SQL DB | [`src/tools/catalog_tool.py`](src/tools/catalog_tool.py) |
+| `get_product_id` | Tra product_id từ tên sản phẩm | SQL DB + SQLite | [`src/tools/product_id_tool.py`](src/tools/product_id_tool.py) |
+| `get_product_reviews_tool` | Xem đánh giá | gRPC ProductReviewService | [`src/tools/review_tool.py`](src/tools/review_tool.py) |
+| `add_to_cart_tool` | Thêm vào giỏ (cần xác nhận) | gRPC CartService | [`src/tools/cart_tool.py`](src/tools/cart_tool.py) |
+| `get_cart_tool` | Xem giỏ hàng | gRPC CartService | [`src/tools/cart_tool.py`](src/tools/cart_tool.py) |
+| `get_recommendations_tool` | Gợi ý sản phẩm | gRPC RecommendationService | [`src/tools/recommendation_tool.py`](src/tools/recommendation_tool.py) |
+| `convert_currency_tool` | Quy đổi tiền tệ | gRPC CurrencyService | [`src/tools/currency_tool.py`](src/tools/currency_tool.py) |
+| `get_shipping_quote_tool` | Phí vận chuyển (nội địa VN) | REST HTTP | [`src/tools/shipping_tool.py`](src/tools/shipping_tool.py) |
 
 ### 6 lớp Guardrail
 
 | Lớp | Chức năng | File |
 |-----|-----------|------|
-| L1 | Confirmation Gate (HMAC token cho write actions) | `confirmation.py` |
-| L2 | Input Filter (Regex + AWS Bedrock Guardrails) | `input_filter.py` |
-| L3 | Fallback (xử lý exception, timeout, retry) | `fallback.py` |
-| L4 | Tool Validator (allow-list, user isolation, param bounds) | `tool_validator.py` |
-| L5 | Output Filter (PII redaction) | `output_filter.py` |
-| L6 | Rate Limiter (request/token per user) | `rate_limiter.py` |
+| L1 | Confirmation Gate (HMAC token cho write actions) | [`src/guardrails/confirmation.py`](src/guardrails/confirmation.py) |
+| L2 | Input Filter (Regex + AWS Bedrock Guardrails) | [`src/guardrails/input_filter.py`](src/guardrails/input_filter.py) |
+| L3 | Fallback (xử lý exception, timeout, retry) | [`src/guardrails/fallback.py`](src/guardrails/fallback.py) |
+| L4 | Tool Validator (allow-list, user isolation, param bounds) | [`src/guardrails/tool_validator.py`](src/guardrails/tool_validator.py) |
+| L5 | Output Filter (PII redaction) | [`src/guardrails/output_filter.py`](src/guardrails/output_filter.py) |
+| L6 | Rate Limiter (request/token per user) | [`src/guardrails/rate_limiter.py`](src/guardrails/rate_limiter.py) |
+
+---
+
+## MANDATE #25: AI Resilience with Controlled Degradation
+
+**3 Guardrail Layers** (bổ sung để đạt MANDATE #25):
+
+| Lớp | Chức năng | File |
+|-----|-----------|------|
+| Circuit Breaker | Detect sustained failures (5+ errors) → fast-fail | [`src/guardrails/circuit_breaker.py`](src/guardrails/circuit_breaker.py) |
+| Bounded Retry | Transient vs permanent error detection + exponential backoff (1-8s, max 3 retries) | [`src/guardrails/retry.py`](src/guardrails/retry.py) |
+| Schema Validator | Validate LLM output + safe fallback repair (keywords-only) | [`src/guardrails/schema_validator.py`](src/guardrails/schema_validator.py) |
+
+**Test Results**: 5/5 tests PASSING (100% pass rate)  
+**Documentation**: [`docs/ADR/ADR4-MANDATE-25-RESILIENCE.md`](docs/ADR/ADR4-MANDATE-25-RESILIENCE.md)
 
 ---
 
@@ -206,7 +234,7 @@ uvicorn src.main:app --port 8001 --mock
 |----------|--------|-----------|
 | `/` | GET | Thông tin server |
 | `/health` | GET | Health check |
-| `/chatbot` | GET | Giao diện chatbot HTML |
+| `/chatbot` | GET | Giao diện chatbot HTML ([`static/chatbot.html`](static/)) |
 | `/api/chat` | POST | Gửi tin nhắn, nhận trả lời |
 | `/api/confirm` | POST | Xác nhận hành động (thêm giỏ hàng) |
 | `/api/cart` | GET | Xem giỏ hàng theo user_id |
@@ -263,8 +291,11 @@ Response khi cần xác nhận (status=pending):
 
 ## Luồng tìm kiếm (Search Pipeline)
 
+Xem chi tiết tại [`src/tools/search_product/`](src/tools/search_product/):
+
 ```
 Query → Entity Extractor (heuristic + LLM) ─┬→ Flow 1: SQL matching (PostgreSQL / SQLite)
+                                             │   └─ Flow 1 files: [`flow1/`](src/tools/search_product/flow1/)
                                              │
                                              └→ Flow 2: RAG (Bedrock Knowledge Base)
                                                     │
@@ -275,8 +306,10 @@ Query → Entity Extractor (heuristic + LLM) ─┬→ Flow 1: SQL matching (Pos
                                               KB Query → resolve product details
                                                     │
                                                     ↓
-                                              Reranker (dedup + merge)
+                                              Reranker ([`reranker.py`](src/tools/search_product/reranker.py))
                                                     │
                                                     ↓
                                               Result (top 5 products)
 ```
+
+**Orchestrator**: [`orchestrator.py`](src/tools/search_product/orchestrator.py) - Phối hợp Flow 1 + Flow 2

@@ -29,6 +29,15 @@ from src.guardrails import (
     MaxIterationsExceeded,
     MAX_TOOL_ITERATIONS,
 )
+from src.guardrails.circuit_breaker import CircuitBreaker, CircuitBreakerOpen, CircuitBreakerConfig
+from src.guardrails.retry import retry_with_backoff, RetryConfig
+from src.guardrails.schema_validator import (
+    validate_intent_parser_output,
+    validate_planner_output,
+    validate_synthesis_output,
+    repair_intent_fallback,
+    repair_plan_fallback,
+)
 from src.memory import SessionStore, CacheStore
 from src.tools import all_shopping_tools
 from src.tools.catalog_tool import (
@@ -53,6 +62,15 @@ class CopilotAgent:
         self._cache = CacheStore()
         self.llm = self._build_llm()
         self._steps: List[Dict[str, Any]] = []
+        
+        # ── MANDATE #25: Resilience Components ──
+        # Circuit breaker for Bedrock provider (5 failures → open, 60s recovery timeout, 2 successes to close)
+        self._bedrock_breaker = CircuitBreaker(
+            "bedrock",
+            CircuitBreakerConfig(failure_threshold=5, recovery_timeout=60, success_threshold=2)
+        )
+        # Retry config for transient failures (max 3 retries, exponential backoff 1-8s)
+        self._retry_config = RetryConfig(max_retries=3, initial_delay_ms=1000, max_delay_ms=8000)
 
     def _build_llm(self):
         model = os.getenv("BEDROCK_MODEL_ID", "apac.amazon.nova-lite-v1:0")
@@ -95,10 +113,11 @@ class CopilotAgent:
             final = "".join(text_parts)
         return final or ""
 
-    # LAYER 1: Intent Parser
+    # LAYER 1: Intent Parser (with retry, circuit-breaker, schema validation)
     async def _parse_intent_with_llm(self, user_message: str, session: dict) -> dict:
         if not self.llm:
             # Fallback keyword logic if LLM is down
+            logger.warning("[INTENT] LLM is None, using keyword-based heuristic fallback")
             lower = user_message.lower()
             if "cart" in lower or "giỏ hàng" in lower:
                 if "add" in lower or "thêm" in lower:
@@ -144,35 +163,46 @@ class CopilotAgent:
             chat_history=chat_history, context=context_str, user_message=user_message
         )
 
-        # ── Check Cache cho Intent Parser ──
+        # ── Check Cache for Intent Parser ──
         prompt_hash = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
         cache_key = f"intent:{prompt_hash}"
         cached_intent = self._cache.get_raw(cache_key)
         if cached_intent is not None:
-            logger.debug("Cache HIT for Intent Parser")
+            logger.debug("[INTENT] Cache HIT")
             return cached_intent
 
+        # ── MANDATE #25: Resilient LLM call with retry + circuit-breaker + schema validation ──
         try:
-            response = await self.llm.ainvoke([HumanMessage(content=prompt)])
-            text = self._extract_text(response)
-            # clean code block if any
-            if "```json" in text:
-                text = text.split("```json")[1].split("```")[0]
-            elif "```" in text:
-                text = text.split("```")[1].split("```")[0]
-
-            parsed_intent = json.loads(text.strip())
-
-            # Lưu vào cache trong 10 phút
+            # Check if circuit breaker is open (fast-fail)
+            if self._bedrock_breaker.is_open:
+                logger.warning("[INTENT] Circuit breaker is OPEN for Bedrock, using fallback")
+                return repair_intent_fallback(user_message)
+            
+            # Call with retry on transient failures
+            async def _call_intent_parser():
+                response = await self.llm.ainvoke([HumanMessage(content=prompt)])
+                return self._extract_text(response)
+            
+            text = await retry_with_backoff(_call_intent_parser, config=self._retry_config)
+            
+            # Validate & repair schema
+            validation = validate_intent_parser_output(text)
+            if validation.is_valid:
+                parsed_intent = validation.data
+                # Mark that we used LLM (not fallback)
+                parsed_intent["_model_source"] = "llm"
+            else:
+                logger.warning(f"[INTENT] Schema validation failed: {validation.error}. Using fallback.")
+                parsed_intent = repair_intent_fallback(text)
+                parsed_intent["_model_source"] = "repaired"
+            
+            # Cache for 10 minutes
             self._cache.set_raw(cache_key, parsed_intent, ttl=600)
             return parsed_intent
+            
         except Exception as e:
-            logger.error(f"Intent parse failed: {e}")
-            return {
-                "task_type": "search",
-                "target_entity": "product",
-                "product_query": user_message,
-            }
+            logger.error(f"[INTENT] Fatal error in intent parsing: {e}. Using fallback.")
+            return repair_intent_fallback(user_message)
 
     # Structured context resolution — trusts LLM's context_reference & ordinal_index
     def _resolve_context_references(self, intent: dict, session: dict) -> dict:
@@ -311,7 +341,7 @@ class CopilotAgent:
 
         return intent
 
-    # LAYER 2: LLM-driven Planner with Rule-based Fallback
+    # LAYER 2: LLM-driven Planner with Rule-based Fallback (with resilience)
     async def _build_plan_with_llm(
         self, intent: dict, user_id: str, session: dict
     ) -> List[dict]:
@@ -319,7 +349,7 @@ class CopilotAgent:
         if task_type in ["greeting", "unknown", "unsupported_cart_action", "clarify"]:
             return []
 
-        # First, try the deterministic Heuristic Planner
+        # First, try the deterministic Heuristic Planner (always works, no LLM dependency)
         heuristic_plan = self._build_plan_from_intent(intent, user_id)
         if heuristic_plan:
             logger.info(
@@ -328,10 +358,16 @@ class CopilotAgent:
             return heuristic_plan
 
         # Fallback to LLM Planner only if heuristic planner produced no plan
+        # ── MANDATE #25: Resilient LLM plan generation with circuit-breaker + retry + validation ──
         if self.llm:
             try:
                 from src.llm.prompt import LLM_PLANNER_PROMPT
-
+                
+                # Check circuit breaker first (fast-fail if Bedrock is broken)
+                if self._bedrock_breaker.is_open:
+                    logger.warning("[PLANNER] Circuit breaker OPEN, skipping LLM, returning empty plan")
+                    return []
+                
                 ctx_dict = session.get("context", {})
                 ctx_summary = {
                     "last_product_id": ctx_dict.get("last_product_id"),
@@ -344,18 +380,32 @@ class CopilotAgent:
                     intent_json=json.dumps(intent, ensure_ascii=False),
                     user_id=user_id,
                 )
-                response = await self.llm.ainvoke([HumanMessage(content=prompt)])
-                text = self._extract_text(response).strip()
+                
+                # Call with retry + circuit breaker protection
+                async def _call_planner():
+                    response = await self.llm.ainvoke([HumanMessage(content=prompt)])
+                    return self._extract_text(response)
+                
+                text = await retry_with_backoff(_call_planner, config=self._retry_config)
+                text = text.strip()
+                
+                # Extract JSON (handle markdown blocks)
                 if "```json" in text:
                     text = text.split("```json")[1].split("```")[0]
                 elif "```" in text:
                     text = text.split("```")[1].split("```")[0]
 
-                plan = json.loads(text.strip())
+                # ── Schema validation: ensure plan is valid before using ──
+                validation = validate_planner_output(text)
+                if not validation.is_valid:
+                    logger.warning(f"[PLANNER] Schema validation failed: {validation.error}. Falling back to empty plan.")
+                    return repair_plan_fallback()
+                
+                plan = validation.data
+                
+                # Validate tool names and structure
+                valid_tools = set(TOOLS_MAP.keys()).union({"__fetch_reviews_for_context__"})
                 if isinstance(plan, list) and len(plan) <= 6:
-                    valid_tools = set(TOOLS_MAP.keys()).union(
-                        {"__fetch_reviews_for_context__"}
-                    )
                     if all(
                         isinstance(step, dict) and step.get("name") in valid_tools
                         for step in plan
@@ -364,8 +414,16 @@ class CopilotAgent:
                             f"[PLANNER] LLM generated plan with {len(plan)} steps"
                         )
                         return plan
+                    else:
+                        logger.warning("[PLANNER] Plan contains invalid tool names, using empty plan")
+                        return repair_plan_fallback()
+                else:
+                    logger.warning("[PLANNER] Plan validation failed (not list or too many steps)")
+                    return repair_plan_fallback()
+                    
             except Exception as e:
-                logger.warning(f"[PLANNER] LLM plan generation failed ({e})")
+                logger.warning(f"[PLANNER] LLM plan generation failed ({e}), using empty plan")
+                return repair_plan_fallback()
 
         return []
 

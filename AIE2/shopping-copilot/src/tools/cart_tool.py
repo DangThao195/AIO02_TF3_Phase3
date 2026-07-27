@@ -134,12 +134,24 @@ def add_to_cart_tool(user_id: str, product_id: str, quantity: int) -> str:
         channel.close()
 
 
+def _price(units: int, nanos: int) -> float:
+    """
+    Convert price_units + price_nanos to USD with cent precision.
+    price_nanos is billionths of a dollar: 80_000_000 nanos = $0.08
+    Uses integer arithmetic to avoid float rounding.
+    """
+    u = int(units or 0)
+    n = int(nanos or 0)
+    cents_total = u * 100 + round(n / 10_000_000)
+    return cents_total / 100
+
+
 @tool
 def get_cart_tool(user_id: str) -> str:
     """
     Hữu ích khi người dùng muốn xem danh sách các sản phẩm đang có trong giỏ hàng của họ.
     Đầu vào cần thiết: user_id.
-    Returns JSON: {"status", "user_id", "items": [{"product_id","quantity"}], "total_items"}
+    Returns JSON: {"status", "user_id", "items": [{"product_id","product_name","quantity","price"}], "total_items"}
     """
     channel = grpc.insecure_channel(CART_ADDR)
     stub = demo_pb2_grpc.CartServiceStub(channel)
@@ -157,9 +169,9 @@ def get_cart_tool(user_id: str) -> str:
             })
 
         items = []
-        product_names = {}
+        product_metadata = {}
         
-        # Try to resolve product names via Catalog Service
+        # Try to resolve product names and prices via Catalog Service
         if response.items:
             cat_channel = grpc.insecure_channel(CATALOG_ADDR)
             try:
@@ -168,17 +180,43 @@ def get_cart_tool(user_id: str) -> str:
                     try:
                         p_req = demo_pb2.GetProductRequest(id=item.product_id)
                         p_res = cat_stub.GetProduct(p_req)
-                        product_names[item.product_id] = p_res.name
-                    except Exception:
+                        product_metadata[item.product_id] = {
+                            "name": p_res.name,
+                            "price_units": getattr(p_res, "price_units", 0) or 0,
+                            "price_nanos": getattr(p_res, "price_nanos", 0) or 0,
+                        }
+                    except Exception as e:
                         pass
             finally:
                 cat_channel.close()
 
+        # Fallback to database if gRPC failed
+        if not product_metadata or not all(product_metadata.get(item.product_id) for item in response.items):
+            try:
+                from src.tools.search_product.flow1.sql_executor import SQLQueryExecutor
+                executor = SQLQueryExecutor()
+                product_ids = [item.product_id for item in response.items]
+                if product_ids:
+                    ids_str = ",".join([f"'{pid}'" for pid in product_ids])
+                    rows = executor.execute(
+                        f"SELECT id, name, price_units, price_nanos FROM products WHERE id IN ({ids_str})"
+                    )
+                    for row in rows:
+                        product_metadata[row["id"]] = {
+                            "name": row["name"],
+                            "price_units": row.get("price_units", 0) or 0,
+                            "price_nanos": row.get("price_nanos", 0) or 0,
+                        }
+            except Exception:
+                pass
+
         for item in response.items:
+            metadata = product_metadata.get(item.product_id, {})
             items.append({
                 "product_id": item.product_id,
-                "product_name": product_names.get(item.product_id, "Unknown Product"),
+                "product_name": metadata.get("name", "Unknown Product"),
                 "quantity": item.quantity,
+                "price": _price(metadata.get("price_units", 0), metadata.get("price_nanos", 0)),
             })
 
         return json.dumps({
