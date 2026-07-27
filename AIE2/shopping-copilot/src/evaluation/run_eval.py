@@ -377,7 +377,6 @@ def run_mandate14_harness(
         }
 
     report = {
-        "mandate": "MANDATE #14 - AI Evaluation Standard",
         "input_dataset": input_file.name,
         "judge_model": judge.model_id,
         "total_cases": total_cases,
