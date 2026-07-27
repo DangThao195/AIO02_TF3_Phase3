@@ -10,9 +10,9 @@ if str(ROOT) not in sys.path:
 
 os.environ["SKIP_LLM_SQL_FLOW"] = "1"
 
-from src.tools.search import search_products_v2
-from src.tools.search.orchestrator import SearchOrchestrator
-from src.tools.search.tracer import SearchTracer
+from src.tools.search_product import search_products_v2
+from src.tools.search_product.orchestrator import SearchOrchestrator
+from src.tools.search_product.tracer import SearchTracer
 
 
 async def test_telescope_under_100():
