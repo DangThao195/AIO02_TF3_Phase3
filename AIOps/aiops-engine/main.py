@@ -33,6 +33,7 @@ app.add_middleware(
 )
 
 # Khởi tạo các module
+from drift_detector import DriftDetector
 detector = AnomalyDetector()
 rca_engine = RCAEngine()
 evidence_collector = EvidenceCollector()
@@ -40,6 +41,7 @@ diagnostician = LLMDiagnostician()
 handler = RemediationHandler()
 notifier = SlackNotifier()
 correlator = AlertCorrelator(window_seconds=600)  # 10 phút — đủ bao phủ cascade failure chậm
+drift_detector = DriftDetector()
 
 # Bộ đếm số lần chạy hành động chống chạy lặp vô hạn (C6 Invariant 4)
 action_counters = {}  # {incident_id: count}
@@ -1282,7 +1284,7 @@ async def simulate_state_endpoint():
     return simulation_state
 
 
-from typing import List
+from typing import List, Dict
 
 class MetricPoint(BaseModel):
     timestamp: str
@@ -1943,6 +1945,29 @@ async def get_audit_logs(limit: int = 50):
         "total": len(logs),
         "audit_logs": logs
     }
+
+class DriftPayload(BaseModel):
+    intents: Dict[str, int] = {}
+    embeddings: List[List[float]] = []
+    abstention_rate: float = 0.0
+    fallback_rate: float = 0.0
+    judge_score: float = 4.2
+
+@app.post("/simulate/drift")
+async def simulate_drift(payload: DriftPayload):
+    """
+    [Mandate #27] Nhận dữ liệu kiểm thử về mô hình và phân phối để đánh giá Drift.
+    """
+    try:
+        current_data = payload.model_dump()
+        result = drift_detector.detect_drift(current_data)
+        return {
+            "status": "success",
+            "evaluated_at": time.time(),
+            "drift_result": result
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error evaluating drift: {str(e)}")
 
 
 
