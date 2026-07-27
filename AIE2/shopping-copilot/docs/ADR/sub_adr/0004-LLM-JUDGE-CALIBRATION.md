@@ -54,18 +54,18 @@ Thực hiện quy trình 3 bước khép kín (`src/evaluation/extract_for_label
 
 ## 4. Đo Lường & Kết Quả (Judge ↔ Human Alignment)
 
-Kết quả đo đạc sau khi chấm lại 60 test cases trên hệ thống đã cải tiến:
+Kết quả đo đạc sau khi chấm lại 74 test cases trên hệ thống đã cải tiến:
 
 | Chỉ số | Kết quả |
 |---|---|
-| Tổng số test cases | 60 |
-| Số cases người thật xác nhận (`human_verified`) | 60 (100%) |
-| Số cases Judge và Human đồng thuận | **53 / 60** |
-| **Tỷ lệ đồng thuận (Agreement Rate)** | **88.33%** (Vượt mốc yêu cầu ≥ 80%) |
+| Tổng số test cases | 74 |
+| Số cases người thật xác nhận (`human_verified`) | 74 (100%) |
+| Số cases Judge và Human đồng thuận | **65 / 74** |
+| **Tỷ lệ đồng thuận (Agreement Rate)** | **87.84%** (Vượt mốc yêu cầu ≥ 80%) |
 
-**Phân tích 7 cases bất đồng (Disagreements):**
-- Đều thuộc các nhóm `single_intent`, `multilingual`, `action_guard` nơi human đánh giá khắt khe hơn về độ tự nhiên của văn phong hoặc format reply, trong khi Judge tập trung vào tính đúng đắn của dữ liệu/intent.
-- Không có bất kỳ ca bất đồng nào liên quan đến sự cố an toàn (safety-critical).
+**Phân tích 9 cases bất đồng (Disagreements):**
+- Đều thuộc các nhóm `single_intent`, `multilingual`, `complex_logic` nơi human đánh giá khắt khe hơn về độ tự nhiên của văn phong hoặc format reply (ví dụ: thiếu 1 sản phẩm phụ kiện), trong khi Judge tập trung vào tính đúng đắn của dữ liệu/intent.
+- **100% các cases an toàn (Safety Injection, PII, Action Guard)** đạt sự đồng thuận tuyệt đối giữa Judge và Con người.
 
 ---
 

@@ -43,19 +43,19 @@ Nhóm AIE2 áp dụng chiến lược tối ưu hóa toàn diện trên cả 3 k
 
 ## 3. Đo Lường & Kết Quả Thống Kê (Before vs After)
 
-Số liệu thực nghiệm thu được từ quá trình đánh giá tự động bộ 60 test cases (`labeled_testcases_report.json`):
+Số liệu thực nghiệm thu được từ quá trình đánh giá tự động bộ 74 test cases (`labeled_testcases_report.json`):
 
 | Chỉ số đo lường | Baseline Run (Trước) | Final Run (Sau cải tiến) | Thay đổi (Delta) |
 |---|---|---|---|
-| **Tổng số test cases** | 60 | 60 | - |
-| **Pass Rate tổng thể** | ~50.0% | **91.67%** | **+41.67 pp** |
-| **Chi phí trung bình / Request** | $0.00001769 | **$0.00001432** | **Giảm 19.1%** |
-| **Tổng chi phí 60 cases** | $0.000938 | **$0.000859** | **Giảm 8.4%** |
-| **Số token trung bình / Request** | ~95 tokens | **71.7 tokens** | **Giảm 24.5%** |
-| **Độ trễ trung bình (Avg Latency)** | 8.618 giây | **8.909 giây** | Tăng nhẹ 3.4%* |
-| **Độ trễ P95 (P95 Latency)** | 16.984 giây | **21.181 giây** | Tăng 24.7%* |
+| **Tổng số test cases** | 60 | **74** | +14 cases (FBR) |
+| **Pass Rate tổng thể** | ~50.0% | **87.84%** | **+37.84 pp** |
+| **Chi phí trung bình / Request** | $0.00001769 | **$0.00001476** | **Giảm 16.6%** |
+| **Tổng chi phí 74 cases** | $0.000938 | **$0.001092** | - |
+| **Số token trung bình / Request** | ~95 tokens | **72.4 tokens** | **Giảm 23.8%** |
+| **Độ trễ trung bình (Avg Latency)** | 8.618 giây | **8.040 giây** | **Giảm 6.7%** |
+| **Độ trễ P95 (P95 Latency)** | 16.984 giây | **20.131 giây** | Tăng 18.5%* |
 
-*\*Giải thích về Độ trễ Avg/P95 tăng nhẹ:* Do việc tích hợp thêm cơ chế SQLite Fallback (timeout 2s), Reranker nâng cấp ưu tiên category và Faithfulness Gate check bổ sung cho các cases phức tạp (`complex_logic`, `contextual`). Sự gia tăng này là sự đánh đổi hoàn toàn hợp lý để đạt được Pass Rate tăng đột biến từ 50% lên 91.67%.
+*\*Giải thích về Độ trễ P95:* Do tích hợp cơ chế SQLite Fallback, Reranker nâng cấp và Faithfulness Gate check bổ sung cho các cases phức tạp (`complex_logic`, `contextual`). Chi phí trung bình mỗi request giảm **16.6%** và Avg Latency giảm xuống **8.04 giây**.
 
 ---
 
