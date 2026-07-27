@@ -220,6 +220,30 @@ FALLBACK_SUMMARY_MESSAGE = "The AI is busy right now. Please try again later."
 UNVERIFIED_SUMMARY_MESSAGE = "The summary cannot be verified. Please try again later."
 OUT_OF_SCOPE_MESSAGE = "This question is out of scope. I only answer questions related to the product."
 NO_INFO_MESSAGE = "No information in reviews."
+
+def resolve_fallback_summary(product_id: str, span=None) -> tuple[str, int]:
+    """
+    Cơ chế Fallback 3 tầng (ADR 0002):
+    Khi cuộc gọi LLM Bedrock/OpenAI bị lỗi (mạng/timeout/Rate limit và Circuit Breaker đang OPEN),
+    trước khi trả về tin nhắn lỗi tĩnh (Tầng 3), truy vấn bảng reviews.product_summaries từ PostgreSQL.
+    Nếu tìm thấy bản tóm tắt cũ -> Trả về kết quả này (Tầng 2).
+    Ngược lại -> Trả về generic error message (Tầng 3).
+    """
+    try:
+        summary_data = fetch_product_summary_from_db(product_id)
+        if summary_data and summary_data.get("summary_text"):
+            logger.info(f"[FALLBACK] Tier 2 triggered: Returning PostgreSQL static summary for product_id: {product_id}")
+            if span:
+                span.set_attribute("app.fallback.tier", 2)
+            return summary_data["summary_text"], 2
+    except Exception as err:
+        logger.warning(f"[FALLBACK] Tier 2 DB lookup failed for product_id {product_id}: {err}")
+
+    logger.info(f"[FALLBACK] Tier 3 triggered: Returning generic error message for product_id: {product_id}")
+    if span:
+        span.set_attribute("app.fallback.tier", 3)
+    return FALLBACK_SUMMARY_MESSAGE, 3
+
 DEFAULT_CANDIDATE_MODEL = "amazon.nova-lite-v1:0"
 DEFAULT_JUDGE_MODEL = "amazon.nova-micro-v1:0"
 INACCURATE_SUMMARY_FIXTURES = {
@@ -1163,23 +1187,25 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                 logger.warning(f"[FALLBACK_OVERRIDE] Key active, bypassing LLM for product_id: {request_product_id}")
                 span.set_attribute("app.fallback.triggered", True)
                 span.set_attribute("app.fallback.source", "redis_override")
+                fallback_text, tier = resolve_fallback_summary(request_product_id, span)
                 product_review_svc_metrics["app_ai_fallback_total"].add(
                     1,
-                    {"source": "redis_override", "error": "forced"},
+                    {"source": "redis_override", "error": "forced", "tier": str(tier)},
                 )
                 product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
-                return finalize_response(FALLBACK_SUMMARY_MESSAGE, outcome="fallback", fallback_reason="redis_override")
+                return finalize_response(fallback_text, outcome="fallback", fallback_reason="redis_override")
 
             if not circuit_breaker.allow_request():
                 logger.warning(f"[CIRCUIT_BREAKER] Circuit is OPEN, bypassing LLM for product_id: {request_product_id}")
                 span.set_attribute("app.fallback.triggered", True)
                 span.set_attribute("app.fallback.source", "circuit_breaker")
+                fallback_text, tier = resolve_fallback_summary(request_product_id, span)
                 product_review_svc_metrics["app_ai_fallback_total"].add(
                     1,
-                    {"source": "circuit_breaker", "error": "open"},
+                    {"source": "circuit_breaker", "error": "open", "tier": str(tier)},
                 )
                 product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
-                return finalize_response(FALLBACK_SUMMARY_MESSAGE, outcome="fallback", fallback_reason="circuit_breaker_open")
+                return finalize_response(fallback_text, outcome="fallback", fallback_reason="circuit_breaker_open")
 
             # --- Error Injection Endpoint hook (Task 3) ---
             # Ưu tiên trước x-force-llm-error metadata để AIOps có thể
@@ -1194,29 +1220,30 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                 span.set_attribute("app.fallback.triggered", True)
                 span.set_attribute("app.fallback.source", "error_injection")
                 span.set_attribute("app.error_injection.type", injected_err)
+                fallback_text, tier = resolve_fallback_summary(request_product_id, span)
                 if injected_err == "circuit_breaker":
                     # Simulate circuit breaker trip via actual CB record_failure
                     circuit_breaker.record_failure()
                     product_review_svc_metrics["app_ai_fallback_total"].add(
-                        1, {"source": "circuit_breaker", "error": "injected"}
+                        1, {"source": "circuit_breaker", "error": "injected", "tier": str(tier)}
                     )
                     product_review_svc_metrics["app_ai_assistant_counter"].add(
                         1, {"product.id": request_product_id}
                     )
                     return finalize_response(
-                        FALLBACK_SUMMARY_MESSAGE,
+                        fallback_text,
                         outcome="fallback",
                         fallback_reason="error_injection_circuit_breaker",
                     )
                 else:
                     product_review_svc_metrics["app_ai_fallback_total"].add(
-                        1, {"source": "error_injection", "error": injected_err}
+                        1, {"source": "error_injection", "error": injected_err, "tier": str(tier)}
                     )
                     product_review_svc_metrics["app_ai_assistant_counter"].add(
                         1, {"product.id": request_product_id}
                     )
                     return finalize_response(
-                        FALLBACK_SUMMARY_MESSAGE,
+                        fallback_text,
                         outcome="fallback",
                         fallback_reason=f"error_injection_{injected_err}",
                     )
@@ -1233,16 +1260,18 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                 logger.warning("[FORCED_ERROR] Metadata x-force-llm-error=429 received, triggering Rate Limit Fallback.")
                 span.set_attribute("app.fallback.triggered", True)
                 span.set_attribute("app.fallback.source", "rate_limit")
-                product_review_svc_metrics["app_ai_fallback_total"].add(1, {"source": "rate_limit", "error": "429"})
+                fallback_text, tier = resolve_fallback_summary(request_product_id, span)
+                product_review_svc_metrics["app_ai_fallback_total"].add(1, {"source": "rate_limit", "error": "429", "tier": str(tier)})
                 product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
-                return finalize_response(FALLBACK_SUMMARY_MESSAGE, outcome="fallback", fallback_reason="forced_429")
+                return finalize_response(fallback_text, outcome="fallback", fallback_reason="forced_429")
             if force_err_code == "timeout":
                 logger.warning("[FORCED_ERROR] Metadata x-force-llm-error=timeout received, triggering Timeout Fallback.")
                 span.set_attribute("app.fallback.triggered", True)
                 span.set_attribute("app.fallback.source", "timeout")
-                product_review_svc_metrics["app_ai_fallback_total"].add(1, {"source": "timeout", "error": "timeout"})
+                fallback_text, tier = resolve_fallback_summary(request_product_id, span)
+                product_review_svc_metrics["app_ai_fallback_total"].add(1, {"source": "timeout", "error": "timeout", "tier": str(tier)})
                 product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
-                return finalize_response(FALLBACK_SUMMARY_MESSAGE, outcome="fallback", fallback_reason="forced_timeout")
+                return finalize_response(fallback_text, outcome="fallback", fallback_reason="forced_timeout")
 
             user_prompt, accurate_prompt, inaccurate_prompt = build_runtime_prompts(request_product_id, safe_question)
             system_prompt = build_system_prompt()
@@ -1313,14 +1342,17 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                     final_text = call_candidate_bedrock(system_prompt, grounded_prompt)
                     if isinstance(final_text, str) and final_text == FALLBACK_SUMMARY_MESSAGE:
                         span.set_status(Status(StatusCode.ERROR, description="candidate_bedrock_failed"))
+                        span.set_attribute("app.fallback.triggered", True)
+                        fallback_text, tier = resolve_fallback_summary(request_product_id, span)
                         logger.error(
-                            "AI_OUTCOME product_id=%s stage=candidate outcome=fallback provider=%s model=%s",
+                            "AI_OUTCOME product_id=%s stage=candidate outcome=fallback provider=%s model=%s tier=%s",
                             request_product_id,
                             llm_provider,
                             llm_model,
+                            tier,
                         )
                         return finalize_response(
-                            final_text,
+                            fallback_text,
                             outcome="fallback",
                             fallback_reason="candidate_bedrock_failed",
                         )
@@ -1413,14 +1445,17 @@ def get_ai_assistant_response(request_product_id, question, context=None):
             candidate_latency_ms = (time.perf_counter() - candidate_started) * 1000
             if isinstance(initial_response, str):
                 span.set_status(Status(StatusCode.ERROR, description="candidate_call_1_failed"))
+                span.set_attribute("app.fallback.triggered", True)
+                fallback_text, tier = resolve_fallback_summary(request_product_id, span)
                 logger.error(
-                    "AI_OUTCOME product_id=%s stage=candidate_initial outcome=fallback provider=%s model=%s",
+                    "AI_OUTCOME product_id=%s stage=candidate_initial outcome=fallback provider=%s model=%s tier=%s",
                     request_product_id,
                     llm_provider,
                     llm_model,
+                    tier,
                 )
                 return finalize_response(
-                    initial_response,
+                    fallback_text,
                     outcome="fallback",
                     fallback_reason="candidate_call_1_failed",
                 )
@@ -1445,13 +1480,14 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                             logger.error(f"[MALFORMED_TOOL_ARGS] Invalid tool arguments: {val_err}")
                             span.set_attribute("app.fallback.triggered", True)
                             span.set_attribute("app.fallback.source", "malformed_tool_args")
+                            fallback_text, tier = resolve_fallback_summary(request_product_id, span)
                             product_review_svc_metrics["app_ai_fallback_total"].add(
                                 1,
-                                {"source": "malformed_tool_args", "error": val_err or "invalid_schema"},
+                                {"source": "malformed_tool_args", "error": val_err or "invalid_schema", "tier": str(tier)},
                             )
                             product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
                             return finalize_response(
-                                FALLBACK_SUMMARY_MESSAGE,
+                                fallback_text,
                                 outcome="fallback",
                                 fallback_reason="malformed_tool_args",
                             )
@@ -1514,14 +1550,17 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                 candidate_latency_ms = (time.perf_counter() - candidate_started) * 1000
                 if isinstance(final_response, str):
                     span.set_status(Status(StatusCode.ERROR, description="candidate_call_2_failed"))
+                    span.set_attribute("app.fallback.triggered", True)
+                    fallback_text, tier = resolve_fallback_summary(request_product_id, span)
                     logger.error(
-                        "AI_OUTCOME product_id=%s stage=candidate_grounded outcome=fallback provider=%s model=%s",
+                        "AI_OUTCOME product_id=%s stage=candidate_grounded outcome=fallback provider=%s model=%s tier=%s",
                         request_product_id,
                         llm_provider,
                         llm_model,
+                        tier,
                     )
                     return finalize_response(
-                        final_response,
+                        fallback_text,
                         outcome="fallback",
                         fallback_reason="candidate_call_2_failed",
                     )
