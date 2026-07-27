@@ -102,7 +102,7 @@ make eval-mandate14
 ---
 
 ## 📊 7. Kết Quả Đo Lường Hiệu Năng & Chi Phí (Before vs After Caching)
-*Chi tiết đo lường thực nghiệm trên bộ 6 cases normal mẫu:*
+*Đo lường tự động công khai qua tệp bằng chứng [cost_latency_comparison.json](../../repro/artifacts/cost_latency_comparison.json) (trên bộ 6 cases normal mẫu):*
 
 | Chỉ số                            | Trước khi có Cache (Before Baseline) | Lần chạy đầu tiên (Cold Cache) | Các lần chạy sau (Hot Cache) |   Hiệu quả cải thiện (Delta)   |
 | :-------------------------------- | :----------------------------------: | :----------------------------: | :--------------------------: | :----------------------------: |
@@ -120,6 +120,7 @@ make eval-mandate14
 ## 📁 8. Các Tài Liệu Minh Chứng Đi Kèm (Artifacts)
 *   **Artifact JSON Đánh Giá An Toàn v2 (27/07):** [security_false_block_runtime_bedrock_v2_20260727.json](../../repro/artifacts/security_false_block_runtime_bedrock_v2_20260727.json)
 *   **Artifact JSON Đánh Giá RAG Accuracy v2 (27/07):** [rag_accuracy_runtime_bedrock_usage_fix2_20260727.json](../../repro/artifacts/rag_accuracy_runtime_bedrock_usage_fix2_20260727.json)
+*   **Artifact JSON Đo Lường Caching (Before vs Hot Cache):** [cost_latency_comparison.json](../../repro/artifacts/cost_latency_comparison.json)
 *   **Báo cáo hiệu năng chi tiết:** [cost_latency_baseline.json](../../repro/artifacts/cost_latency_baseline.json)
 *   **Báo cáo chi tiết Rubrics & Hiệu chỉnh LLM Judge:** [0007-FIDELITY-JUDGE-RUBRICS-AND-EVALUATION.md](../analysis/0007-FIDELITY-JUDGE-RUBRICS-AND-EVALUATION.md)
 
