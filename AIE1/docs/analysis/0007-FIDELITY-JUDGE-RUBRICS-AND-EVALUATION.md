@@ -60,5 +60,5 @@ Mỗi câu trả lời từ trợ lý AI (Candidate Summary) khi đưa vào ki�
 
 | Thành viên                  | Vai trò         | Chữ ký ký duyệt | Trạng thái |
 | :-------------------------- | :-------------- | :-------------- | :--------- |
-| **Lê Hải Khoa**             | Leader AIE1     | *KhoaDM*        | Đã duyệt   |
-| **Nguyễn Tiến Hoàng Thịnh** | Thành viên AIE1 | *ThinhTQ*       | Đã duyệt   |
+| **Lê Hải Khoa**             | Leader AIE1     | *Khoa*          | Đã duyệt   |
+| **Nguyễn Tiến Hoàng Thịnh** | Thành viên AIE1 | *Thinh*         | Đã duyệt   |

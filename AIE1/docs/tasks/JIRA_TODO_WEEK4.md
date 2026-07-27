@@ -106,19 +106,30 @@ Nâng cấp độ bền vững của `product-reviews` khi model bị lỗi (tim
 * **Label Jira:** `ai-quality`, `rag-opt`
 
 ### Mô tả công việc (Description)
-Rà soát và cải tiến chất lượng sinh câu trả lời (RAG Accuracy) của LLM Candidate và hiệu chuẩn mô hình Judge để tăng tỷ lệ Pass Rate thực tế (hiện đang ở mức 83.3% trong baseline caching). Khắc phục các trường hợp Judge từ chối nhầm các câu trả lời tốt (False Positive) hoặc Candidate bịa đặt thông tin khi dữ liệu review ít.
+Rà soát và cải tiến chất lượng sinh câu trả lời (RAG Accuracy) của LLM Candidate và hiệu chuẩn mô hình Judge để tăng tỷ lệ Pass Rate thực tế (hiện đang ở mức 83.3% trong baseline caching lên ≥ 90%). Khắc phục triệt để các trường hợp Judge từ chối nhầm các câu trả lời tốt (False Positive) hoặc Candidate bịa đặt thông tin khi dữ liệu review ít.
 
 ### Các tác vụ con (Sub-tasks)
-* **Sub-task 4.1: Cải tiến Prompt System cho Candidate (Thịnh)**
-  - Tinh chỉnh system prompt của `AskProductAIAssistant` để định hình rõ hơn ranh giới thông tin: chỉ tóm tắt các khía cạnh có bằng chứng trực tiếp trong reviews, không tự suy diễn hoặc phóng đại tính năng sản phẩm.
-  - Cải tiến cách cấu trúc Context gửi sang LLM (chèn tiêu đề review, score, và username rõ ràng hơn).
-* **Sub-task 4.2: Hiệu chuẩn tiêu chuẩn và Prompt của Judge (Thịnh)**
-  - Phân tích chi tiết các case bị Judge từ chối (`Unverified` ở baseline) để phát hiện bias.
-  - Tinh chỉnh prompt của Judge để phân biệt rõ giữa "thông tin bổ sung mang tính logic" và "hallucination nghiêm trọng", giảm thiểu False Positive.
-  - Tối ưu hóa định dạng JSON output của Judge để giảm thiểu lỗi parse schema.
-* **Sub-task 4.3: Viết test-suite tự động cho Edge Cases (Thịnh)**
-  - Bổ sung các test cases biên vào `dataset.jsonl` (sản phẩm 0 review, sản phẩm có review cực kỳ mâu thuẫn, review chỉ có rating không có text).
-  - Chạy thử nghiệm và báo cáo Pass Rate cải thiện sau khi tối ưu hóa Prompt.
+
+* **Sub-task 4.1: Cải tiến Prompt System & Context cho Candidate (`product_reviews_server.py`)**
+  - **Vị trí code**: Chỉnh sửa các hàm `build_system_prompt()` và `build_runtime_prompts()` trong [product_reviews_server.py](../../techx-corp-platform/src/product-reviews/product_reviews_server.py).
+  - **Ranh giới thông tin (Grounding Bound)**: Ràng buộc chặt chẽ trong System Prompt: Chỉ tóm tắt các khía cạnh có bằng chứng trực tiếp (`Direct Evidence`) từ danh sách review. Nếu câu hỏi yêu cầu khía cạnh không có trong dữ liệu -> bắt buộc trả về sentinel `NO_INFO`.
+  - **Cấu trúc lại Context**: Định dạng lại chuỗi Grounded Context truyền sang Candidate với cấu trúc rõ ràng: `[Rating/Score]`, `[User]`, `[Review Title]`, `[Review Content]`.
+  - **Xử lý dữ liệu thưa (Sparse Evidence)**: Tinh chỉnh chỉ dẫn cho các sản phẩm chỉ có 1-2 review hoặc review không có text (chỉ có sao rating), ngăn LLM Candidate tự suy diễn hoặc phóng đại các tính năng sản phẩm không có thật.
+
+* **Sub-task 4.2: Hiệu chuẩn Tiêu chuẩn & Prompt của Judge (`guardrails/evaluator.py`)**
+  - **Vị trí code**: Chỉnh sửa hằng số `JUDGE_SYSTEM_PROMPT` và hàm `_build_prompt()` trong [evaluator.py](../../techx-corp-platform/src/product-reviews/guardrails/evaluator.py).
+  - **Quy tắc Paraphrase & Đa ngôn ngữ (Cross-language)**: Bổ sung chỉ dẫn không bắt lỗi (False Positive) với các câu trả lời diễn đạt lại (Paraphrase) hoặc dịch nghĩa tương đương giữa tiếng Anh và tiếng Việt.
+  - **Quy tắc Tổng hợp Logic (Conservative Synthesis)**: Cho phép tổng hợp các ý tương đồng từ nhiều review (Reasonable Synthesis) nếu không tự sáng tạo ra chi tiết mới ngoài dữ liệu review.
+  - **Kiểm tra chỉ số định lượng (Rating/Score Alignment)**: Ràng buộc Judge đối chiếu các tuyên bố về số sao/điểm số dựa trên dữ liệu chuẩn `trusted_derived_review_facts` (`review_count`, `average_score`, `negative_review_count` với score < 3.0).
+  - **Chuẩn hóa Tool Call Schema**: Ép mô hình Judge trả kết quả qua tool `submit_fidelity_result` (dạng JSON object `claims: [{text, label, evidence}]`) để loại bỏ hoàn toàn lỗi parse markdown code fences.
+
+* **Sub-task 4.3: Bổ sung Dataset Edge Cases & Đo lường Tỷ lệ Khớp (Agreement Rate)**
+  - **Vị trí code**: Tệp [dataset.jsonl](../../repro/datasets/dataset.jsonl), script [eval_fidelity.py](../../repro/eval_fidelity.py), và `judge_agreement.py`.
+  - **Ca kiểm thử biên (Edge Cases)**: Thêm 15–20 ca test biên phức tạp vào `dataset.jsonl` (sản phẩm 0 review, sản phẩm review chỉ có rating không có text, review chứa PII SĐT/Email - Loại B, review mâu thuẫn khen/chê).
+  - **Mục tiêu Pass Rate**: Chạy lại bộ eval harness và báo cáo Pass Rate cải thiện sau khi tối ưu hóa Prompt (đạt **≥ 90%**).
+  - **Đo lường Judge-Human Agreement**: Chạy `eval_support/judge_agreement.py` so sánh phán quyết của Judge với nhãn thủ công trong `human_labeled_cases.jsonl` để đạt tỷ lệ đồng thuận **≥ 85%**.
+
+
 
 ---
 
