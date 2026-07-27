@@ -5,10 +5,15 @@ Run negative test cases (valid requests) through the system.
 If system blocks/refuses valid request = False Positive = contributes to FBR.
 """
 import os
+import sys
 import json
 import logging
 import asyncio
 from dotenv import load_dotenv
+
+# Add parent dir to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+
 from src.agent.copilot_agent import CopilotAgent
 
 load_dotenv()
@@ -16,8 +21,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("measure_fbr")
 
 async def measure_false_block_rate():
-    # Load negative test cases
-    with open("src/evaluation/datasets/negative_testcases.json", "r", encoding="utf-8") as f:
+    # Load negative test cases - use absolute path
+    test_cases_path = os.path.join(os.path.dirname(__file__), "datasets", "negative_testcases.json")
+    with open(test_cases_path, "r", encoding="utf-8") as f:
         negative_cases = json.load(f)
     
     agent = CopilotAgent()
@@ -80,12 +86,12 @@ async def measure_false_block_rate():
                             "reason": input_result.reason,
                             "category": category
                         })
-                        print(f"  ✗ {tc_id}: FALSELY BLOCKED")
+                        print(f"  [X] {tc_id}: FALSELY BLOCKED")
                         print(f"    Input: {user_input[:60]}")
                         print(f"    Reason: {input_result.reason}")
                     else:
                         # Correctly blocked
-                        print(f"  ✓ {tc_id}: Correctly blocked (as expected)")
+                        print(f"  [OK] {tc_id}: Correctly blocked (as expected)")
                 else:
                     # Input passed guardrail check
                     if should_pass:
@@ -95,13 +101,13 @@ async def measure_false_block_rate():
                             "input": user_input[:100],
                             "category": category
                         })
-                        print(f"  ✓ {tc_id}: Correctly allowed")
+                        print(f"  [OK] {tc_id}: Correctly allowed")
                     else:
                         # Should have been blocked but wasn't
-                        print(f"  ✗ {tc_id}: Should have been blocked but wasn't")
+                        print(f"  [X] {tc_id}: Should have been blocked but wasn't")
             
             except Exception as e:
-                print(f"  ⚠ {tc_id}: Error during test: {e}")
+                print(f"  [!] {tc_id}: Error during test: {e}")
         
         # Summary for category
         cat_summary = {
@@ -132,15 +138,17 @@ async def measure_false_block_rate():
     print(f"Total Valid Requests: {results['overall']['total_cases']}")
     print(f"Correctly Allowed: {results['overall']['true_negatives']}")
     print(f"Falsely Blocked: {results['overall']['false_positives']}")
-    print(f"\n✓ True Allow Rate: {results['overall']['true_allow_rate_pct']}%")
-    print(f"✗ False Block Rate (FBR): {results['overall']['false_block_rate_pct']}%")
+    print(f"\n[OK] True Allow Rate: {results['overall']['true_allow_rate_pct']}%")
+    print(f"[X] False Block Rate (FBR): {results['overall']['false_block_rate_pct']}%")
     print("=" * 70)
     
-    # Save results
-    with open("src/evaluation/reports/fbr_measurement.json", "w", encoding="utf-8") as f:
+    # Save results - use absolute path
+    output_path = os.path.join(os.path.dirname(__file__), "reports", "fbr_measurement.json")
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2, ensure_ascii=False)
     
-    print(f"\nResults saved to: src/evaluation/reports/fbr_measurement.json")
+    print(f"\nResults saved to: {output_path}")
     
     return results
 
