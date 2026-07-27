@@ -49,6 +49,16 @@ def _normalize_text(text: str) -> str:
     return "".join(" " if unicodedata.category(char) == "Cc" else char for char in normalized)
 
 
+def _strip_vietnamese_accents(text: str) -> str:
+    """Return a lowercase, accent-insensitive form used only for security matching."""
+    stripped = "".join(
+        character
+        for character in unicodedata.normalize("NFKD", text)
+        if not unicodedata.combining(character)
+    )
+    return stripped.replace("đ", "d")
+
+
 def _decode_base64_tokens(text: str) -> List[str]:
     decoded: List[str] = []
     for token in re.findall(r"(?<![A-Za-z0-9+/=])[A-Za-z0-9+/]{16,}={0,2}(?![A-Za-z0-9+/=])", text):
@@ -103,7 +113,14 @@ def _analysis_variants(text: str) -> List[str]:
     # Base64 is case-sensitive; decode the original text before normalization.
     variants.extend(_decode_base64_tokens(text))
     variants.extend(_decode_hex_tokens(normalized))
-    return list(dict.fromkeys(_normalize_text(item) for item in variants if item))
+    normalized_variants = []
+    for item in variants:
+        if not item:
+            continue
+        canonical = _normalize_text(item)
+        normalized_variants.append(canonical)
+        normalized_variants.append(_strip_vietnamese_accents(canonical))
+    return list(dict.fromkeys(normalized_variants))
 
 
 def _input_fingerprint(text: str) -> str:
@@ -248,10 +265,34 @@ ATTACK_PATTERNS: List[Tuple[re.Pattern, str]] = [
      "SYSTEM_OVERRIDE"),
     (re.compile(r"(ignore|forget|disregard).{0,40}(instructions?|rules?|system)", re.IGNORECASE),
      "SYSTEM_OVERRIDE"),
+    (re.compile(r"(from\s+now\s+on|starting\s+now).{0,80}(answer|respond).{0,80}(freely|without\s+limits?|without\s+restrictions?)", re.IGNORECASE),
+     "SYSTEM_OVERRIDE"),
+    (re.compile(r"(tu\s+bay\s+gio|bat\s+dau\s+tu\s+gio).{0,80}(tra\s+loi|phan\s+hoi).{0,80}(khong\s+gioi\s+han|tu\s+do|bo\s+het\s+gioi\s+han)", re.IGNORECASE),
+     "SYSTEM_OVERRIDE"),
+    (re.compile(r"(bo\s+qua|quen|ghi\s+de).{0,80}(huong\s+dan|chi\s+dan|quy\s+tac|noi\s+bo|he\s+thong)", re.IGNORECASE),
+     "SYSTEM_OVERRIDE"),
     (re.compile(r"(no|without)\s+(content\s+)?(policy|policies|restrictions?|limits?)", re.IGNORECASE),
      "JAILBREAK"),
     (re.compile(r"(reveal|show|print|return|output).{0,40}(system\s+prompt|api\s+key|secrets?)", re.IGNORECASE),
      "PROMPT_DISCLOSURE"),
+    (re.compile(r"(tell|show|reveal|print|display|return|output).{0,80}(exact\s+words?|system|internal).{0,40}(configuration|prompt|instructions?|rules?)", re.IGNORECASE),
+     "PROMPT_DISCLOSURE"),
+    (re.compile(r"(system|internal).{0,30}(configuration|prompt|instructions?|rules?).{0,60}(exact\s+words?|verbatim|full\s+text)", re.IGNORECASE),
+     "PROMPT_DISCLOSURE"),
+    (re.compile(r"(pretend\s+to\s+be|act\s+as|roleplay\s+as|respond\s+like|trained\s+to\s+respond\s+like).{0,80}(admin|administrator|database\s+admin|system\s+administrator|hacker)", re.IGNORECASE),
+     "JAILBREAK"),
+    (re.compile(r"(gia\s+lam|dong\s+vai|hay\s+lam|hanh\s+xu\s+nhu).{0,80}(admin|quan\s+tri|quan\s+tri\s+vien|hacker)", re.IGNORECASE),
+     "JAILBREAK"),
+    (re.compile(r"(give|show|reveal|get|extract|leak|list|return).{0,80}(connection\s+string|database\s+credentials?|api\s+keys?|secrets?|user\s+emails?|passwords?)", re.IGNORECASE),
+     "PII_EXTRACTION"),
+    (re.compile(r"(cho|lay|tiet\s+lo|ro\s+ri|hien\s+thi|dua).{0,80}(api\s*key|key\s+api|khoa\s+api|bi\s+mat|connection\s+string|chuoi\s+ket\s+noi|mat\s+khau)", re.IGNORECASE),
+     "PII_EXTRACTION"),
+    (re.compile(r"(run|execute).{0,40}(query|shell|command|code)|code\s+interpreter|__import__\s*\(|os\.system\s*\(|/etc/passwd", re.IGNORECASE),
+     "ENCODING_EVASION"),
+    (re.compile(r"(fetch|retrieve|open|call).{0,40}(https?://)?(localhost|127\.0\.0\.1|internal|metadata|169\.254\.169\.254|admin/secrets?)", re.IGNORECASE),
+     "UNAUTHORIZED_ACTION"),
+    (re.compile(r"(decode|decrypt|giai\s+ma)\s+(and\s+)?(follow|execute|run|lam\s+theo|thuc\s+thi)\s*:?", re.IGNORECASE),
+     "ENCODING_EVASION"),
 ]
 
 # ── Thông báo từ chối thân thiện cho từng loại ──
