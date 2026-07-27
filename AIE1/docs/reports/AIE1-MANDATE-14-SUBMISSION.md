@@ -129,4 +129,3 @@ make eval-mandate14
 3.  [0005-CACHING-STRATEGY.md](../adr/0005-CACHING-STRATEGY.md) *(Thiết kế Caching - User Isolation)*
 4.  [0006-COST-LATENCY-MEASUREMENT-AND-CACHING.md](../adr/0006-COST-LATENCY-MEASUREMENT-AND-CACHING.md) *(Nghiệm thu đo lường Caching)*
 5.  [0007-FALLBACK-OVERRIDE-AND-TELEMETRY.md](../adr/0007-FALLBACK-OVERRIDE-AND-TELEMETRY.md) *(Error Injection & Telemetry)*
-6.  [0008-runtime-llm-trace-auditability.md](../adr/0008-runtime-llm-trace-auditability.md) *(LLM Observability, Trace & Replay)*
