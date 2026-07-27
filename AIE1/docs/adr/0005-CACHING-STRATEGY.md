@@ -3,7 +3,7 @@
 * **Trạng thái:** Đã phê duyệt
 * **Tác giả:** Kiên (AIE1) & Khoa (Leader AIE1)
 * **Ngày tạo:** 2026-07-17
-* **Tài liệu thiết kế chi tiết:** [PRODUCT_REVIEW_SERVER_CACHING_DESIGN.md](../analysis/PRODUCT_REVIEW_SERVER_CACHING_DESIGN.md)
+* **Tài liệu thiết kế chi tiết:** [0006-PRODUCT-REVIEW-SERVER-CACHING-DESIGN.md](../analysis/0006-PRODUCT-REVIEW-SERVER-CACHING-DESIGN.md)
 
 ---
 
@@ -16,7 +16,7 @@ Theo [Chỉ thị số 6](../../mandates/MANDATE-06-ai-trust-safety.md) từ Ban
 3. **Guardrail/eval không được kéo p95 vỡ SLO** (Performance).
 4. **Chứng minh bằng eval, có log kiểm toán** — không bằng lời (Auditability).
 
-Sau khi hoàn thành triển khai các biện pháp tối ưu hiệu năng cốt lõi (xem [PRODUCT_REVIEWS_BOTTLENECK_ANALYSIS.md](../analysis/PRODUCT_REVIEWS_BOTTLENECK_ANALYSIS.md)), nhóm xác định **hai điểm nghẽn còn lại** cần giải quyết bằng Caching:
+Sau khi hoàn thành triển khai các biện pháp tối ưu hiệu năng cốt lõi (xem [0001-PRODUCT-REVIEWS-BOTTLENECK-ANALYSIS.md](../analysis/0001-PRODUCT-REVIEWS-BOTTLENECK-ANALYSIS.md)), nhóm xác định **hai điểm nghẽn còn lại** cần giải quyết bằng Caching:
 
 | Điểm nghẽn | Loại | Latency trung bình | Nguyên nhân gốc |
 | :--- | :--- | :--- | :--- |
@@ -38,7 +38,9 @@ Thiết kế và tích hợp **kiến trúc Caching hai tầng bổ trợ lẫn 
 | Cơ chế | Mô tả |
 | :--- | :--- |
 | **Cache-First Lookup** | Tra cứu cache ngay sau Input Guardrails. Khi Cache Hit → trả kết quả < 1ms, không gọi LLM, không tốn token |
-| **Dynamic Invalidation** | Cache Key = `SHA256(product_id + review_version + model_id + normalize(question))`. Khi có review mới hoặc đổi model → key tự thay đổi → Cache Miss tự động |
+| **Dynamic Invalidation** | Cache Key = `SHA256(product_id + review_version + model_id + normalize(question) + user_id)`. Khi có review mới, đổi model hoặc đổi user → key tự thay đổi → Cache Miss tự động |
+| **Ranh giới Người dùng** | Trích xuất `user_id` từ metadata gRPC (`x-user-id`/`user-id`) và nhúng vào khóa băm Cache Key, ngăn chặn rò rỉ chéo thông tin giữa các tài khoản. Mặc định là `"anonymous"` nếu không truyền |
+| **Cache Status Header** | Trả cờ trạng thái cache qua gRPC metadata trailing headers. Trả `cache: hit` khi cache hit và `cache: miss` khi cache miss hoặc fallback |
 | **Cache Policy chọn lọc** | Chỉ cache khi Fidelity Judge phê duyệt (`approved = true`). Không cache lỗi, fallback, `OUT_OF_SCOPE`, `NO_INFO` |
 | **Metadata đầy đủ** | Lưu kèm `provider`, `model`, `token_usage`, `created_at`, `review_version` phục vụ kiểm toán |
 | **TTL + LRU Eviction** | TTL 24 giờ, eviction policy `allkeys-lru` khi Redis đầy bộ nhớ |
@@ -74,7 +76,7 @@ Thiết kế và tích hợp **kiến trúc Caching hai tầng bổ trợ lẫn 
 
 ### 3.2. Tại sao chọn DB Column `is_safe` cho Regex Cache (không phải RAM/Redis)?
 
-Ba phương án đã được đánh giá chi tiết (xem [PRODUCT_REVIEW_SERVER_CACHING_DESIGN.md § 3.2](../analysis/PRODUCT_REVIEW_SERVER_CACHING_DESIGN.md)):
+Ba phương án đã được đánh giá chi tiết (xem [0006-PRODUCT-REVIEW-SERVER-CACHING-DESIGN.md § 3.2](../analysis/0006-PRODUCT-REVIEW-SERVER-CACHING-DESIGN.md)):
 
 | Tiêu chí | Phương án A (RAM/Redis) | **Phương án B (DB Column)** | Phương án C (Chỉ LLM Cache) |
 | :--- | :--- | :--- | :--- |
@@ -143,9 +145,9 @@ Phương án B triệt tiêu hoàn toàn tác vụ quét Regex CPU-bound khỏi 
 
 | Tài liệu | Mô tả |
 | :--- | :--- |
-| [PRODUCT_REVIEW_SERVER_CACHING_DESIGN.md](../analysis/PRODUCT_REVIEW_SERVER_CACHING_DESIGN.md) | Thiết kế kỹ thuật chi tiết: kiến trúc, trade-off analysis, code minh họa, phân tích rủi ro |
+| [0006-PRODUCT-REVIEW-SERVER-CACHING-DESIGN.md](../analysis/0006-PRODUCT-REVIEW-SERVER-CACHING-DESIGN.md) | Thiết kế kỹ thuật chi tiết: kiến trúc, trade-off analysis, code minh họa, phân tích rủi ro |
 | [LLM_CACHING_DESIGN.md](../analysis/LLM_CACHING_DESIGN.md) | Tài liệu thiết kế LLM Caching ban đầu |
-| [PRODUCT_REVIEWS_BOTTLENECK_ANALYSIS.md](../analysis/PRODUCT_REVIEWS_BOTTLENECK_ANALYSIS.md) | Phân tích điểm nghẽn hiệu năng tổng thể dịch vụ product-reviews |
+| [0001-PRODUCT-REVIEWS-BOTTLENECK-ANALYSIS.md](../analysis/0001-PRODUCT-REVIEWS-BOTTLENECK-ANALYSIS.md) | Phân tích điểm nghẽn hiệu năng tổng thể dịch vụ product-reviews |
 | [ADR 0001 — Chọn Bedrock Nova Lite](./0001-CHOOSE-BEDROCK-NOVA-LITE.md) | Quyết định chọn model LLM chính |
 | [ADR 0003 — Guardrails & Eval](./0003-AI-TRUST-SAFETY-GUARDRAILS.md) | Thiết kế hệ thống Guardrails đa tầng |
 | [ADR 0004 — Summary Fidelity Evaluation](./0004-SUMMARY-FIDELITY-EVALUATION.md) | Bộ đánh giá độ trung thực — tích hợp làm Cache Policy gate |

@@ -14,15 +14,37 @@ Tham khảo: docs/analysis/LLM_RETRY_BACKOFF.md
 import logging
 import functools
 
-from openai import (
-    OpenAIError,
-    RateLimitError,
-    InternalServerError,
-    APIConnectionError,
-    BadRequestError,
-    AuthenticationError,
-    PermissionDeniedError,
-)
+try:
+    from openai import (
+        OpenAIError,
+        RateLimitError,
+        InternalServerError,
+        APIConnectionError,
+        BadRequestError,
+        AuthenticationError,
+        PermissionDeniedError,
+    )
+except ImportError:  # pragma: no cover - Bedrock-only runtime path
+    class OpenAIError(Exception):
+        pass
+
+    class RateLimitError(OpenAIError):
+        pass
+
+    class InternalServerError(OpenAIError):
+        pass
+
+    class APIConnectionError(OpenAIError):
+        pass
+
+    class BadRequestError(OpenAIError):
+        pass
+
+    class AuthenticationError(OpenAIError):
+        pass
+
+    class PermissionDeniedError(OpenAIError):
+        pass
 try:
     from botocore.exceptions import ClientError, BotoCoreError
 except ImportError:  # pragma: no cover
@@ -155,14 +177,31 @@ def with_fallback(fn):
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
         try:
-            return retryable_fn(*args, **kwargs)
+            res = retryable_fn(*args, **kwargs)
+            try:
+                from guardrails.circuit_breaker import circuit_breaker
+                circuit_breaker.record_success()
+            except Exception:
+                pass
+            return res
         except _NON_RETRYABLE as e:
             # Lỗi không retryable (400/401/403) → fallback ngay, không cần log retry
             logger.error("[FALLBACK] Non-retryable error, skipping retry: %s", e)
+            try:
+                from guardrails.circuit_breaker import circuit_breaker
+                circuit_breaker.record_failure()
+            except Exception:
+                pass
             return handle_exception(e)
         except Exception as e:
             # Hết retry hoặc lỗi bất ngờ → fallback
+            try:
+                from guardrails.circuit_breaker import circuit_breaker
+                circuit_breaker.record_failure()
+            except Exception:
+                pass
             return handle_exception(e)
 
     return wrapper
+
 
