@@ -18,7 +18,7 @@ Tài liệu này tổng hợp toàn bộ bằng chứng nghiệm thu, kết qu�
 
 **Repository GitHub:** [`https://github.com/DangThao195/AIO02_TF3_Phase3`](https://github.com/DangThao195/AIO02_TF3_Phase3)
 
-**Nhánh chính thức để chấm điểm:** [`feature/copilot`](https://github.com/DangThao195/AIO02_TF3_Phase3/tree/feature/copilot)
+**Nhánh chính thức để chấm điểm:** [`feature/copilot`](https://github.com/DangThao195/AIO02_TF3_Phase3/tree/mandate14)
 
 ### Các commit quan trọng (theo thứ tự thời gian):
 
@@ -29,7 +29,7 @@ Tài liệu này tổng hợp toàn bộ bằng chứng nghiệm thu, kết qu�
 | `cc6c29c` | Tối ưu hóa prompt: cắt giảm INTENT_PARSE, PLANNER, EVIDENCE prompts ~40% để giảm latency và chi phí                                                                                                                                                                                                                                                                                                                                                              | [→ Xem commit](https://github.com/DangThao195/AIO02_TF3_Phase3/commit/cc6c29c2a79e4ec41b742d01044a11b30e33d101) |
 | `313e460` | Fix catalog & review tool: cải thiện error handling và response formatting                                                                                                                                                                                                                                                                                                                                                                                       | [→ Xem commit](https://github.com/DangThao195/AIO02_TF3_Phase3/commit/313e46047562dcc884947007e43bb0cb6980a63a) |
 | `c264cf8` | **COMMIT NGHIỆM THU CHÍNH**: Sửa tất cả vấn đề tuân thủ MANDATE-14 bao gồm: <br/>• Fix confirmation UX với phrase-based keyword matching (Layer 0.5)<br/>• Fix currency conversion: mặc định from_currency = USD, thêm price extraction<br/>• Fix action guard: template từ chối rõ ràng cho cart operations không được phép<br/>• Implement semantic boundary defense chống prompt injection (ADR-7)<br/>• Cleanup temporary files và consolidate documentation | [→ Xem commit](https://github.com/DangThao195/AIO02_TF3_Phase3/commit/c264cf88404aebd817b61a4ceffa5edc0a249741) |
-| `a1b8b32` | Hoàn thiện tài liệu ADR với GitHub links và chuẩn hóa naming convention                                                                                                                                                                                                                                                                                                                                                                                          | [→ Xem commit](https://github.com/DangThao195/AIO02_TF3_Phase3/commit/a1b8b32ca9c377de7050078c5d9e494f74f05244) |
+| `a1b8b32` | Hoàn thiện tài liệu ADR với GitHub links và chuẩn hóa naming convention                                                                                                                                                                                                                                                                                                                                                                                          | [→ Xem commit](https://github.com/DangThao195/AIO02_TF3_Phase3/commit/55b634c44b885b5c53d3bc0446abe91f101d356f) |
 
 **Các commit nền tảng trước đó** (đã merge vào nhánh feature/copilot):
 
