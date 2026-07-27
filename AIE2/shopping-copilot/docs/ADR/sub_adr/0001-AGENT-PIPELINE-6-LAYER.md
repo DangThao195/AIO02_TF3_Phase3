@@ -84,10 +84,10 @@ Input → [1] Input Guard → [2] Intent Parser → [3] Context Resolver
 
 | Chỉ số | Giá trị |
 |---|---|
-| Overall Pass Rate (60 test cases) | **91.67%** (55/60) |
-| Avg Latency (end-to-end, bao gồm cả tool calls) | **8.9 giây** |
-| P95 Latency | **21.2 giây** |
-| Avg Cost per Request (Nova Lite tokens) | **$0.0000143** |
+| Overall Pass Rate (74 test cases) | **87.84%** (65/74) |
+| Avg Latency (end-to-end, bao gồm cả tool calls) | **8.04 giây** |
+| P95 Latency | **20.13 giây** |
+| Avg Cost per Request (Nova Lite tokens) | **$0.00001476** |
 
 ---
 

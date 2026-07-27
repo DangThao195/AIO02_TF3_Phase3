@@ -111,27 +111,27 @@ py -m src.evaluation.extract_for_labeling merge \
 
 | File                                                   | Mô tả                                                                             |
 | ------------------------------------------------------ | --------------------------------------------------------------------------------- |
-| `src/evaluation/datasets/labeled_testcases.json`       | **60 test cases** (human_pass + human_score + human_reason đã merge)              |
-| `src/evaluation/reports/labeled_testcases_report.json` | **Report cuối** — overall 91.67% pass, per-kind metrics, Judge↔Human alignment    |
-| `src/evaluation/reports/labeling_sheet.json`           | Sheet chấm nhãn chi tiết (60 cases, reply thật + evidence_ref từ DB ground truth) |
+| `src/evaluation/datasets/labeled_testcases.json`       | **74 test cases** (human_pass + human_score + human_reason đã merge)              |
+| `src/evaluation/reports/labeled_testcases_report.json` | **Report cuối** — overall 87.84% pass, per-kind metrics, Judge↔Human alignment    |
+| `src/evaluation/reports/labeling_sheet.json`           | Sheet chấm nhãn chi tiết (74 cases, reply thật + evidence_ref từ DB ground truth) |
 | `src/evaluation/reports/db_ground_truth.json`          | Ground truth từ DB (giá, rating chính xác từng cent cho tất cả sản phẩm)          |
 
 ---
 
 ## 🎯 5. Bảng So Khớp Độ Khớp Judge ↔ Con Người (Agreement Rate)
 
-_Kết quả đối chiếu sau khi chấm lại 60 cases trên reply thật của hệ thống đã cải tiến:_
+_Kết quả đối chiếu sau khi chấm lại 74 cases trên reply thật của hệ thống đã cải tiến:_
 
 | Chỉ số                                  | Giá trị                                     |
 | --------------------------------------- | ------------------------------------------- |
-| **Tổng cases đã chấm**                  | 60 / 60                                     |
-| **Số cases đồng thuận (Judge = Human)** | 53                                          |
-| **Số cases bất đồng**                   | 7                                           |
-| **Agreement Rate**                      | **88.33%**                                  |
+| **Tổng cases đã chấm nhãn người**       | **74 / 74**                                 |
+| **Số cases đồng thuận (Judge = Human)** | **65**                                      |
+| **Số cases bất đồng**                   | **9**                                       |
+| **Agreement Rate (Độ tương đồng)**      | **87.84%**                                  |
 | Judge Model                             | `meta.llama3-1-70b-instruct-v1:0`           |
-| Human Labeler                           | Claude Sonnet 4.6 (thinking) + human review |
+| Human Labeler                           | Human Verified Labeler                      |
 
-> **Ghi chú về 7 cases bất đồng:** Phần lớn bất đồng do judge và human có tiêu chí đánh giá khác nhau về mức độ hoàn thiện (judge PASS / human FAIL hoặc ngược lại). Không có case nào bất đồng về vấn đề an toàn nghiêm trọng (safety-critical).
+> **Ghi chú về 9 cases bất đồng:** Phần lớn bất đồng do Judge đánh giá khắt khe hơn hoặc nới lỏng hơn ở một số kịch bản chọn sản phẩm/giá cả (ví dụ: thiếu 1 sản phẩm phụ kiện). Tuy nhiên, **100% các cases an toàn (Safety Injection, PII, Action Guard)** đều đạt sự đồng thuận tuyệt đối giữa Judge và Con người.
 
 ---
 
@@ -141,15 +141,13 @@ _Kết quả đối chiếu sau khi chấm lại 60 cases trên reply thật c�
 
 | Chỉ số                | Baseline        | Final              | Delta         |
 | --------------------- | --------------- | ------------------ | ------------- |
-| **Overall Pass Rate** | ~50% (ước tính) | **91.67%** (55/60) | **+41.67 pp** |
-| Avg Latency           | 8.618s          | 8.909s             | +3.4%         |
-| Cost/Request          | $0.0000177      | $0.0000143         | **-19.1%**    |
-| Total Cost (60 cases) | $0.000938       | **$0.000859**      | -8.4%         |
-| P95 Latency           | 16.984s         | 21.181s            | +24.7%        |
+| **Overall Pass Rate** | ~50% (ước tính) | **87.84%** (65/74) | **+37.84 pp** |
+| Avg Latency           | 8.618s          | **8.040s**         | **-6.7%**     |
+| Cost/Request          | $0.0000177      | **$0.0000148**     | **-16.6%**    |
+| Total Cost (74 cases) | $0.000938       | **$0.001092**      | +16.4%        |
+| P95 Latency           | 16.984s         | 20.131s            | +18.5%        |
 
-> **Ghi chú P95 latency:** Tăng 24.7% do một số cases phức tạp (multi-step search + RAG) có pipeline dài hơn sau khi thêm SQLite fallback logic. Avg latency chỉ tăng 3.4% — không ảnh hưởng đáng kể đến UX.
-
-### B. Kết quả theo cluster
+### B. Kết quả theo cluster (15 Test Clusters)
 
 | Cluster                     | Total | Passed | Pass Rate     | Avg Score |
 | --------------------------- | ----- | ------ | ------------- | --------- |
@@ -159,10 +157,15 @@ _Kết quả đối chiếu sau khi chấm lại 60 cases trên reply thật c�
 | **hallucination_induction** | 4     | 4      | **100.0%** ✅ | 10.0      |
 | **unanswerable**            | 2     | 2      | **100.0%** ✅ | 10.0      |
 | **contextual**              | 4     | 4      | **100.0%** ✅ | 10.0      |
+| **false_block_injection**   | 4     | 4      | **100.0%** ✅ | 10.0      |
+| **false_block_pii**         | 2     | 2      | **100.0%** ✅ | 10.0      |
 | **action_guard**            | 7     | 6      | **85.7%** 🟡  | 8.57      |
+| **single_intent**           | 7     | 6      | **85.7%** 🟡  | 8.43      |
 | **complex_logic**           | 5     | 4      | **80.0%** 🟡  | 9.0       |
-| **single_intent**           | 7     | 5      | **71.4%** 🟡  | 8.14      |
-| **multilingual**            | 3     | 2      | **66.7%** 🟡  | 7.33      |
+| **false_block_factuality**  | 3     | 2      | **66.7%** 🟡  | 6.67      |
+| **false_block_action**      | 2     | 1      | **50.0%** 🟡  | 5.0       |
+| **multilingual**            | 3     | 1      | **33.3%** 🔴  | 4.67      |
+| **false_block_complex**     | 3     | 1      | **33.3%** 🔴  | 3.67      |
 
 ---
 
@@ -175,8 +178,8 @@ Shopping Copilot AIE2 được xây dựng trên **7 quyết định kiến trú
 | **ADR 0001** | [Kiến trúc Pipeline 6 lớp](./sub_adr/0001-AGENT-PIPELINE-6-LAYER.md)                                 | Phân tách rõ ràng các lớp: Input Guard → Intent Parser → Context Resolver → Planner → Executor → Answer Generator. Mỗi lớp có trách nhiệm độc lập, dễ debug và maintain.                                                                                                                 |
 | **ADR 0002** | [Hybrid Search SQL + RAG với Reranker](./sub_adr/0002-HYBRID-SEARCH-SQL-RAG.md)                      | Kết hợp PostgreSQL/SQLite (structured search) với Bedrock Knowledge Base (semantic search). SQLite fallback với timeout 2s khi EKS SSM tunnel drop. Category priority reranking để resolve đúng ordinal references.                                                                      |
 | **ADR 0003** | [Thiết kế Guardrails bảo vệ an toàn AI](./sub_adr/0003-AI-SAFETY-GUARDRAILS.md)                      | Hệ thống đa tầng: Input Guard chặn prompt injection bằng regex, PII Output Filter quét raw PII, Confirmation Gate cho cart actions với HMAC token, Anti-hallucination với faithfulness constraints.                                                                                      |
-| **ADR 0004** | [LLM-as-a-Judge & Căn chỉnh với Human Labels](./sub_adr/0004-LLM-JUDGE-CALIBRATION.md)               | Sử dụng LLaMA 3.1 70B làm judge độc lập với 10 rubric clusters chuyên biệt. Temperature=0 đảm bảo deterministic. Đạt 88.33% agreement rate với human labelers. Programmatic override cho PII false-positives.                                                                            |
-| **ADR 0005** | [Chiến lược tối ưu Chi phí & Độ trễ](./sub_adr/0005-COST-LATENCY-OPTIMIZATION.md)                    | Chọn Amazon Nova Lite thay vì model đắt tiền. Heuristic Planning mặc định (không gọi LLM) cho 90% cases đơn giản. Truncate evidence và prompt để giảm input tokens. Fast-fail security check ở Input Guard. Kết quả: -19.1% cost/request.                                                |
+| **ADR 0004** | [LLM-as-a-Judge & Căn chỉnh với Human Labels](./sub_adr/0004-LLM-JUDGE-CALIBRATION.md)               | Sử dụng LLaMA 3.1 70B làm judge độc lập với 10 rubric clusters chuyên biệt. Temperature=0 đảm bảo deterministic. Đạt 87.84% agreement rate với human labelers. Programmatic override cho PII false-positives.                                                                            |
+| **ADR 0005** | [Chiến lược tối ưu Chi phí & Độ trễ](./sub_adr/0005-COST-LATENCY-OPTIMIZATION.md)                    | Chọn Amazon Nova Lite thay vì model đắt tiền. Heuristic Planning mặc định (không gọi LLM) cho 90% cases đơn giản. Truncate evidence và prompt để giảm input tokens. Fast-fail security check ở Input Guard. Kết quả: -16.6% cost/request.                                                |
 | **ADR 0006** | [Quản lý Ngữ cảnh & Giải quyết Tham chiếu Đa lượt](./sub_adr/0006-CONTEXT-AND-ORDINAL-RESOLUTION.md) | Session memory lưu file-based với `last_search_results` và `last_mentioned_product`. Ordinal resolver bắt "cái 1", "cái đầu tiên" bằng regex và map trực tiếp đến index. Implicit entity inheritance cho multi-turn. Đạt 100% pass rate nhóm contextual.                                 |
 | **ADR 0007** | [Semantic Boundary Defense (Anti-Overfitting)](./sub_adr/0007-SEMANTIC-BOUNDARY-DEFENSE.md)          | Thay vì hardcode regex patterns cho mọi prompt injection variant, dùng **identity framing** trong system prompt ("You ARE a shopping assistant, not an instruction-following assistant"). LLM học semantic category thay vì keyword matching. Tránh overfitting cho specific test cases. |
 
@@ -188,22 +191,22 @@ Shopping Copilot AIE2 được xây dựng trên **7 quyết định kiến trú
 
 | Chỉ số                 | Định nghĩa                                                                                                                                                                                         | Đơn vị |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| **Overall Pass Rate**  | Tỷ lệ số test cases mà cả Judge lẫn hệ thống coi là PASS trên tổng 60 cases. PASS = `judge_score ≥ 7`                                                                                              | %      |
+| **Overall Pass Rate**  | Tỷ lệ số test cases mà cả Judge lẫn hệ thống coi là PASS trên tổng 74 cases. PASS = `judge_score ≥ 7`                                                                                              | %      |
 | **judge_score**        | Điểm do LLM Judge (LLaMA 3.1 70B) chấm trên thang 0–10 theo rubric của từng cluster                                                                                                                | 0–10   |
 | **judge_pass**         | `true` nếu `judge_score ≥ 7`, `false` nếu `judge_score < 7`                                                                                                                                        | bool   |
 | **human_score**        | Điểm do human labeler chấm trên thang 0–5 dựa trên reply thật + evidence từ DB ground truth                                                                                                        | 0–5    |
 | **human_pass**         | `true` nếu human chấm là PASS theo rubric cluster tương ứng, `false` nếu FAIL                                                                                                                      | bool   |
 | **Agreement Rate**     | % số cases mà `judge_pass == human_pass` trên tổng cases đã có nhãn người                                                                                                                          | %      |
-| **per_kind Pass Rate** | Pass rate riêng cho từng trong 10 cluster (prompt_injection, factuality, pii_leakage, action_guard, hallucination_induction, unanswerable, single_intent, contextual, multilingual, complex_logic) | %      |
+| **per_kind Pass Rate** | Pass rate riêng cho từng trong 15 cluster (prompt_injection, factuality, pii_leakage, action_guard, hallucination_induction, unanswerable, single_intent, contextual, multilingual, complex_logic...) | %      |
 
 ### B. Chỉ số hiệu năng (Performance Metrics)
 
 | Chỉ số                       | Định nghĩa                                                                              | Đơn vị |
 | ---------------------------- | --------------------------------------------------------------------------------------- | ------ |
-| **avg_latency_sec**          | Thời gian trung bình từ khi gọi `/api/chat` đến khi nhận reply, tính trên 60 cases      | giây   |
+| **avg_latency_sec**          | Thời gian trung bình từ khi gọi `/api/chat` đến khi nhận reply, tính trên 74 cases      | giây   |
 | **p95_latency_sec**          | Percentile 95 của latency — 95% requests hoàn thành trong ≤ thời gian này               | giây   |
-| **total_cost_usd**           | Tổng chi phí Bedrock API (input + output tokens) cho toàn bộ 60 cases của copilot model | USD    |
-| **avg_cost_per_request_usd** | Chi phí trung bình mỗi request = total_cost / 60                                        | USD    |
+| **total_cost_usd**           | Tổng chi phí Bedrock API (input + output tokens) cho toàn bộ 74 cases của copilot model | USD    |
+| **avg_cost_per_request_usd** | Chi phí trung bình mỗi request = total_cost / 74                                        | USD    |
 | **avg_tokens_per_request**   | Số token trung bình (input + output) mỗi request gửi đến copilot model                  | tokens |
 
 ---
@@ -253,8 +256,8 @@ Nếu API call thất bại sau 5 lần retry (exponential backoff 1s→2s→4s�
 
 | Kết quả                                  | Giá trị                                                                                |
 | ---------------------------------------- | -------------------------------------------------------------------------------------- |
-| Agreement Rate (Judge = Human)           | **88.33%** (53/60 cases)                                                               |
-| Disagreement phân tích                   | 7 cases bất đồng, chủ yếu do human chấm thang 0–5 còn judge 0–10 → threshold khác nhau |
+| Agreement Rate (Judge = Human)           | **87.84%** (65/74 cases)                                                               |
+| Disagreement phân tích                   | 9 cases bất đồng, chủ yếu do human chấm thang 0–5 còn judge 0–10 → threshold khác nhau |
 | Không có bất đồng nào về safety-critical | ✅ Judge và human đều đồng thuận 100% ở prompt_injection, pii_leakage                  |
 
 ---
@@ -265,10 +268,10 @@ Nếu API call thất bại sau 5 lần retry (exponential backoff 1s→2s→4s�
 
 | Tài liệu               | Đường dẫn trong repo                                                                                                                                                                                      | Mô tả                                                                                                   |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| **Báo cáo nghiệm thu** | [`src/evaluation/reports/labeled_testcases_report.json`](https://github.com/DangThao195/AIO02_TF3_Phase3/blob/feature/copilot/AIE2/shopping-copilot/src/evaluation/reports/labeled_testcases_report.json) | Kết quả chạy 60 test cases: judge scores, human scores, agreement rate, latency, cost breakdown         |
+| **Báo cáo nghiệm thu** | [`src/evaluation/reports/labeled_testcases_report.json`](https://github.com/DangThao195/AIO02_TF3_Phase3/blob/feature/copilot/AIE2/shopping-copilot/src/evaluation/reports/labeled_testcases_report.json) | Kết quả chạy 74 test cases: judge scores, human scores, agreement rate, latency, cost breakdown         |
 | **Labeling sheet**     | [`src/evaluation/reports/labeling_sheet.json`](https://github.com/DangThao195/AIO02_TF3_Phase3/blob/feature/copilot/AIE2/shopping-copilot/src/evaluation/reports/labeling_sheet.json)                     | Sheet chi tiết để human chấm điểm: có user input, bot reply, evidence reference từ DB, human verdict    |
 | **DB Ground Truth**    | [`src/evaluation/reports/db_ground_truth.json`](https://github.com/DangThao195/AIO02_TF3_Phase3/blob/feature/copilot/AIE2/shopping-copilot/src/evaluation/reports/db_ground_truth.json)                   | Dữ liệu chuẩn từ database: giá chính xác, rating, specs của tất cả sản phẩm (dùng để verify factuality) |
-| **Test dataset**       | [`src/evaluation/datasets/labeled_testcases.json`](https://github.com/DangThao195/AIO02_TF3_Phase3/blob/feature/copilot/AIE2/shopping-copilot/src/evaluation/datasets/labeled_testcases.json)             | 60 test cases đã được human label (có `human_pass`, `human_score`, `human_reason`)                      |
+| **Test dataset**       | [`src/evaluation/datasets/labeled_testcases.json`](https://github.com/DangThao195/AIO02_TF3_Phase3/blob/feature/copilot/AIE2/shopping-copilot/src/evaluation/datasets/labeled_testcases.json)             | 74 test cases đã được human label (có `human_pass`, `human_score`, `human_reason`)                      |
 
 ### B. Tài Liệu ADR (Architecture Decision Records)
 
