@@ -11,10 +11,13 @@ import uuid
 import time
 import hashlib
 import logging
+import contextvars
 from typing import Dict, Any, List, Optional
 
 from langchain_aws import ChatBedrockConverse
 from langchain_core.messages import HumanMessage, SystemMessage
+
+from src.telemetry import trace_llm_ctx, get_tracer
 
 from src.guardrails import (
     rate_limiter,
@@ -99,6 +102,44 @@ class CopilotAgent:
             }
         )
 
+    async def _call_llm(self, messages: list, **kwargs):
+        ctx = trace_llm_ctx.get()
+        if ctx is None:
+            return await self.llm.ainvoke(messages, **kwargs)
+        prompt_text = " ".join(m.content for m in messages if hasattr(m, "content"))
+        trace_id = str(uuid.uuid4())
+        t0 = time.time()
+        try:
+            response = await self.llm.ainvoke(messages, **kwargs)
+            latency_ms = int((time.time() - t0) * 1000)
+            get_tracer().record_call(
+                trace_id=trace_id,
+                request_id=ctx["request_id"],
+                layer=ctx["layer"],
+                session_id=ctx.get("session_id", ""),
+                user_id=ctx.get("user_id", ""),
+                prompt_text=prompt_text,
+                response=response,
+                outcome="ok",
+                latency_ms=latency_ms,
+            )
+            return response
+        except Exception as e:
+            latency_ms = int((time.time() - t0) * 1000)
+            get_tracer().record_call(
+                trace_id=trace_id,
+                request_id=ctx["request_id"],
+                layer=ctx["layer"],
+                session_id=ctx.get("session_id", ""),
+                user_id=ctx.get("user_id", ""),
+                prompt_text=prompt_text,
+                response=None,
+                error=str(e),
+                outcome="error",
+                latency_ms=latency_ms,
+            )
+            raise
+
     def _extract_text(self, response: Any) -> str:
         final = response.content if hasattr(response, "content") else str(response)
         if isinstance(final, list):
@@ -180,7 +221,7 @@ class CopilotAgent:
             
             # Call with retry on transient failures
             async def _call_intent_parser():
-                response = await self.llm.ainvoke([HumanMessage(content=prompt)])
+                response = await self._call_llm([HumanMessage(content=prompt)])
                 return self._extract_text(response)
             
             text = await retry_with_backoff(_call_intent_parser, config=self._retry_config)
@@ -383,7 +424,7 @@ class CopilotAgent:
                 
                 # Call with retry + circuit breaker protection
                 async def _call_planner():
-                    response = await self.llm.ainvoke([HumanMessage(content=prompt)])
+                    response = await self._call_llm([HumanMessage(content=prompt)])
                     return self._extract_text(response)
                 
                 text = await retry_with_backoff(_call_planner, config=self._retry_config)
@@ -1016,7 +1057,7 @@ REPLY:
 Respond with exactly one word: PASS or FAIL
 """
         try:
-            response = await self.llm.ainvoke([HumanMessage(content=prompt)])
+            response = await self._call_llm([HumanMessage(content=prompt)])
             text = self._extract_text(response).strip().upper()
             return "FAIL" not in text
         except Exception as e:
@@ -1168,7 +1209,7 @@ Respond with exactly one word: PASS or FAIL
         )
 
         try:
-            response = await self.llm.ainvoke(
+            response = await self._call_llm(
                 [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=prompt)]
             )
             reply = self._extract_text(response)
@@ -1249,6 +1290,7 @@ Respond with exactly one word: PASS or FAIL
         self, session_id: str, user_id: str, user_message: str
     ) -> Dict[str, Any]:
         self._steps = []
+        request_id = get_tracer().create_request_id()
 
         s1, a1 = self._time("RateLimiter")
         rate_res = rate_limiter.check_rate_limit(user_id)
@@ -1258,6 +1300,7 @@ Respond with exactly one word: PASS or FAIL
                 "status": "error",
                 "reply": rate_res.blocked_reason,
                 "session_id": session_id,
+                "request_id": request_id,
                 "steps": list(self._steps),
             }
         self._end(s1, a1, "PASS", "Rate OK")
@@ -1339,6 +1382,7 @@ Respond with exactly one word: PASS or FAIL
                     ),
                     "token": pending["token"],
                     "session_id": session_id,
+                    "request_id": request_id,
                     "steps": [],
                 }
 
@@ -1350,6 +1394,7 @@ Respond with exactly one word: PASS or FAIL
                 "status": "error",
                 "reply": detail,
                 "session_id": session_id,
+                "request_id": request_id,
                 "steps": list(self._steps),
                 "intent": {},
                 "evidence": {},
@@ -1365,6 +1410,7 @@ Respond with exactly one word: PASS or FAIL
         self._sessions.append_message(session_id, "user", user_message)
 
         # L1: Parse Intent
+        trace_llm_ctx.set({"layer": "intent_parser", "request_id": request_id, "session_id": session_id, "user_id": user_id})
         s3, a3 = self._time("IntentParser")
         raw_intent = await self._parse_intent_with_llm(user_message, session)
         intent = self._resolve_context_references(raw_intent, session)
@@ -1382,6 +1428,7 @@ Respond with exactly one word: PASS or FAIL
                 "status": "ok",
                 "reply": reply,
                 "session_id": session_id,
+                "request_id": request_id,
                 "steps": list(self._steps),
                 "intent": intent,
                 "evidence": {},
@@ -1393,6 +1440,7 @@ Respond with exactly one word: PASS or FAIL
         # not an implementation detail (e.g. "cart is empty").
         _NO_TOOL_TASKS = {"greeting", "unknown", "unsupported_cart_action", "clarify"}
         if intent.get("task_type") in _NO_TOOL_TASKS:
+            trace_llm_ctx.set({"layer": "synthesis", "request_id": request_id, "session_id": session_id, "user_id": user_id})
             s_skip, a_skip = self._time("AnswerGenerator")
             reply = await self._generate_grounded_answer(user_message, {}, intent)
             output_filtered = filter_output(reply)
@@ -1409,12 +1457,14 @@ Respond with exactly one word: PASS or FAIL
                 "status": "ok",
                 "reply": reply,
                 "session_id": session_id,
+                "request_id": request_id,
                 "steps": list(self._steps),
                 "intent": intent,
                 "evidence": {},
             }
 
         # L2: Planner
+        trace_llm_ctx.set({"layer": "planner", "request_id": request_id, "session_id": session_id, "user_id": user_id})
         s4, a4 = self._time("Planner")
         plan = await self._build_plan_with_llm(intent, user_id, session)
         self._end(s4, a4, "OK", f"Plan steps: {len(plan)}")
@@ -1441,6 +1491,7 @@ Respond with exactly one word: PASS or FAIL
                 "reply": reply,
                 "token": exec_result["token"],
                 "session_id": session_id,
+                "request_id": request_id,
                 "steps": list(self._steps),
                 "intent": intent,
                 "evidence": exec_result.get("evidence", {}),
@@ -1453,12 +1504,14 @@ Respond with exactly one word: PASS or FAIL
                 "status": "error",
                 "reply": reply,
                 "session_id": session_id,
+                "request_id": request_id,
                 "steps": list(self._steps),
                 "intent": intent,
                 "evidence": exec_result.get("evidence", {}),
             }
 
         # L5 & L6: Answer Gen + Guarding
+        trace_llm_ctx.set({"layer": "synthesis", "request_id": request_id, "session_id": session_id, "user_id": user_id})
         s6, a6 = self._time("AnswerGenerator")
         reply = await self._generate_grounded_answer(
             user_message, exec_result.get("evidence", {}), intent
@@ -1477,6 +1530,7 @@ Respond with exactly one word: PASS or FAIL
             "add_to_cart",
             "view_cart",
         ]:
+            trace_llm_ctx.set({"layer": "faithfulness_guard", "request_id": request_id, "session_id": session_id, "user_id": user_id})
             is_faithful = await self._check_faithfulness(
                 exec_result.get("evidence", {}), reply
             )

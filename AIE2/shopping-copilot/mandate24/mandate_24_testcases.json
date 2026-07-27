@@ -1,0 +1,207 @@
+{
+  "test_suite": "MANDATE #24 - LLM Observability (Model Call Black Box)",
+  "date": "27/07/2026",
+  "test_cases": [
+    {
+      "id": 1,
+      "name": "Trace ghi đủ trường lõi",
+      "objective": "Mỗi lời gọi model sinh 1 bản ghi trace đủ 20+ trường: model+version, token in/out, latency, cost, outcome, trace_id, user/phiên (hashed)",
+      "scenarios": [
+        {
+          "scenario_id": "1a",
+          "description": "record_call với đầy đủ fields → file JSONL có đúng schema",
+          "steps": [
+            "Gọi get_tracer().record_call() với layer=intent_parser",
+            "Đọc file JSONL vừa ghi",
+            "Verify 20+ trường tồn tại",
+            "Verify model, latency, outcome, trace_id, user_id (hashed), session_id (hashed)"
+          ],
+          "expected_result": "JSONL record có đủ: trace_id, request_id, model, session_id, user_id, timestamp, latency_ms, prompt_tokens, completion_tokens, total_tokens, estimated_cost_usd, outcome, prompt_preview, response_preview",
+          "metrics": {
+            "required_fields": [
+              "trace_id", "request_id", "surface", "layer", "model",
+              "session_id", "user_id", "timestamp", "latency_ms",
+              "prompt_tokens", "completion_tokens", "total_tokens",
+              "estimated_cost_usd", "outcome", "prompt_preview", "response_preview",
+              "prompt_masked", "response_masked"
+            ],
+            "min_fields": 18
+          }
+        },
+        {
+          "scenario_id": "1b",
+          "description": "Cost estimation hoạt động với token count > 0",
+          "steps": [
+            "record_call với response có usage_metadata (prompt_tokens=100, completion_tokens=50)",
+            "Verify estimated_cost_usd > 0",
+            "Verify cost formula: 100*0.00006/1000 + 50*0.00024/1000"
+          ],
+          "expected_result": "estimated_cost_usd tính đúng theo pricing Nova Lite",
+          "metrics": {
+            "expected_cost": 0.000018,
+            "tolerance": 0.000001
+          }
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Dựng lại request chain",
+      "objective": "Từ một request_id bất kỳ, dựng lại được chuỗi lời gọi AI theo đúng thứ tự",
+      "scenarios": [
+        {
+          "scenario_id": "2a",
+          "description": "4 span cùng request_id → get_by_request_id trả đúng 4 span, đúng thứ tự layer",
+          "steps": [
+            "record_call với 4 layer khác nhau (intent_parser, planner, synthesis, faithfulness_guard) cùng request_id",
+            "Gọi store.get_by_request_id(request_id)",
+            "Verify trả đúng 4 records",
+            "Verify thứ tự đúng theo timestamp"
+          ],
+          "expected_result": "Array 4 span, cùng request_id, sorted theo timestamp",
+          "metrics": {
+            "expected_count": 4,
+            "expected_layers": ["intent_parser", "planner", "synthesis", "faithfulness_guard"]
+          }
+        },
+        {
+          "scenario_id": "2b",
+          "description": "Span với request_id khác nhau không bị trộn lẫn",
+          "steps": [
+            "record_call 2 span với request_id-A",
+            "record_call 1 span với request_id-B",
+            "get_by_request_id(A) → 2 span",
+            "get_by_request_id(B) → 1 span"
+          ],
+          "expected_result": "Isolation: mỗi request_id chỉ trả về span của nó",
+          "metrics": {
+            "request_a_count": 2,
+            "request_b_count": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Aggregate view tổng hợp",
+      "objective": "Xem cost/latency/token theo model/bề mặt/layer trên khoảng thời gian",
+      "scenarios": [
+        {
+          "scenario_id": "3a",
+          "description": "Nhiều trace → aggregate trả đúng tổng cost, token, latency, calls",
+          "steps": [
+            "record_call 3 traces: 2 intent_parser, 1 synthesis",
+            "Gọi store.aggregate(period_hours=24)",
+            "Verify total_calls = 3",
+            "Verify tổng cost = sum từng trace"
+          ],
+          "expected_result": "Aggregate trả về đúng số calls, tổng cost, tổng token",
+          "metrics": {
+            "traces_to_write": 3,
+            "expected_total_calls": 3
+          }
+        },
+        {
+          "scenario_id": "3b",
+          "description": "Chỉ tính trace trong period (lọc traces cũ)",
+          "steps": [
+            "record_call trace với timestamp cũ (25h trước)",
+            "record_call trace với timestamp hiện tại",
+            "aggregate(period_hours=24) → chỉ đếm trace hiện tại"
+          ],
+          "expected_result": "Aggregate chỉ tính trace trong 24h gần nhất",
+          "metrics": {
+            "expected_calls_in_window": 1,
+            "window_hours": 24
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "name": "PII/Secret không lộ thô",
+      "objective": "Prompt có dữ liệu nhạy cảm (PII, secret) được mask/hash trước khi lưu trace",
+      "scenarios": [
+        {
+          "scenario_id": "4a",
+          "description": "Prompt có email → prompt_preview không chứa email thô",
+          "steps": [
+            "record_call với prompt_text chứa email test@gmail.com",
+            "Verify prompt_preview không chứa 'test@gmail.com'",
+            "Verify prompt_preview chứa '[EMAIL_REDACTED]' hoặc tương đương"
+          ],
+          "expected_result": "Email bị mask, không xuất hiện raw trong trace",
+          "metrics": {
+            "input_pii": "test@gmail.com",
+            "expected_mask_pattern": "EMAIL_REDACTED"
+          }
+        },
+        {
+          "scenario_id": "4b",
+          "description": "Prompt có SSN và credit card → tất cả bị mask",
+          "steps": [
+            "record_call với prompt_text chứa 'My SSN is 123-45-6789, card is 4111-1111-1111-1111'",
+            "Verify prompt_preview không chứa 123-45-6789",
+            "Verify prompt_preview không chứa 4111-1111-1111-1111",
+            "Verify prompt_preview chứa các tag '[SSN_REDACTED]', '[CREDIT_CARD_REDACTED]'"
+          ],
+          "expected_result": "Tất cả PII patterns đều bị mask, không lộ thô",
+          "metrics": {
+            "pii_types_tested": 2,
+            "pii_masked": true
+          }
+        },
+        {
+          "scenario_id": "4c",
+          "description": "User/session ID bị hash (SHA256), không lưu raw",
+          "steps": [
+            "record_call với session_id='test-session-123', user_id='test-user-456'",
+            "Verify session_id trong trace != 'test-session-123' (là hash)",
+            "Verify user_id trong trace != 'test-user-456' (là hash)",
+            "Verify session_id và user_id là hex string 16 ký tự"
+          ],
+          "expected_result": "session_id và user_id bị SHA256 hash, không lưu raw",
+          "metrics": {
+            "hash_length": 16,
+            "hash_hex_only": true
+          }
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "name": "Outcome error/fallback được ghi",
+      "objective": "Lời gọi lỗi hoặc fallback có outcome=error được ghi với đủ thông tin",
+      "scenarios": [
+        {
+          "scenario_id": "5a",
+          "description": "record_call với outcome=error → trace có error message",
+          "steps": [
+            "record_call với outcome='error', error='Bedrock TimeoutException'",
+            "Verify trace[outcome] == 'error'",
+            "Verify trace[error] chứa 'Bedrock TimeoutException'"
+          ],
+          "expected_result": "Trace lỗi có outcome=error và error message",
+          "metrics": {
+            "outcome": "error",
+            "error_message": "Bedrock TimeoutException"
+          }
+        },
+        {
+          "scenario_id": "5b",
+          "description": "record_call với outcome=fallback → trace ghi nhận fallback",
+          "steps": [
+            "record_call với outcome='fallback', error='Circuit breaker open, used heuristic fallback'",
+            "Verify trace[outcome] == 'fallback'",
+            "Verify trace[error] chứa 'heuristic fallback'"
+          ],
+          "expected_result": "Trace fallback có outcome=fallback và reason",
+          "metrics": {
+            "outcome": "fallback",
+            "error_message": "heuristic fallback"
+          }
+        }
+      ]
+    }
+  ]
+}
