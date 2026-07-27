@@ -34,6 +34,12 @@ from src.tools import all_shopping_tools
 from src.tools.catalog_tool import get_all_products, get_categories, get_top_rated_products
 from src.llm.prompt import SYSTEM_PROMPT, INTENT_PARSE_PROMPT, EVIDENCE_SYNTHESIS_PROMPT
 
+# ── AIE Mandates Engine Integration (Mandates #23, #24, #25) ──
+from src.aie_mandates_engine import (
+    get_cache, get_tracer, get_user_memory, get_circuit_breaker, get_gateway,
+    retry_with_backoff, validate_llm_output
+)
+
 logger = logging.getLogger("agent.copilot_agent")
 
 TOOLS_MAP: Dict[str, Any] = {t.name: t for t in all_shopping_tools}
@@ -47,6 +53,13 @@ class CopilotAgent:
         self._cache = CacheStore()
         self.llm = self._build_llm()
         self._steps: List[Dict[str, Any]] = []
+
+        # Mandates Engine Singletons
+        self._mandate_cache = get_cache()
+        self._user_memory = get_user_memory()
+        self._tracer = get_tracer()
+        self._circuit_breaker = get_circuit_breaker()
+        self._gateway = get_gateway()
 
     def _build_llm(self):
         model = os.getenv("BEDROCK_MODEL_ID", "apac.amazon.nova-lite-v1:0")
@@ -531,6 +544,29 @@ REPLY:
         session = self._sessions.get_or_create(session_id, user_id)
         self._sessions.append_message(session_id, "user", user_message)
 
+        # ── Mandate #23: Check Semantic Cache with User Isolation ──
+        cached_res = self._mandate_cache.get(user_message, user_id=user_id)
+        if cached_res:
+            reply = cached_res["response"]
+            self._end(s2, a2, "PASS", "Semantic Cache HIT")
+            self._sessions.append_message(session_id, "assistant", reply)
+            return {
+                "status": "ok",
+                "reply": reply,
+                "session_id": session_id,
+                "steps": list(self._steps),
+                "intent": {"task_type": "cached"},
+                "evidence": {},
+                "cache_hit": True,
+            }
+
+        # ── Mandate #23: Inject Cross-Session Long-Term Memory ──
+        user_mem = self._user_memory.recall(user_id)
+        if user_mem:
+            session_ctx = session.setdefault("context", {})
+            session_ctx["user_memory"] = user_mem
+            logger.info("[AGENT] Recalled cross-session memory for user %s: %s", user_id, user_mem.get("preferences"))
+
         # L1: Parse Intent
         s3, a3 = self._time("IntentParser")
         raw_intent = await self._parse_intent_with_llm(user_message, session)
@@ -610,6 +646,10 @@ REPLY:
         reply = output_filtered.filtered_response
         self._end(s6, a6, "OK", "Answer generated and filtered")
 
+        # ── Mandate #23: Save Successful Response to Semantic Cache (User Isolated) ──
+        if intent.get("task_type") not in ["unsupported_cart_action", "unknown"]:
+            self._mandate_cache.set(user_message, reply, user_id=user_id, ttl=300)
+
         self._sessions.append_message(session_id, "assistant", reply)
         self._sessions.touch(session_id)
 
@@ -620,6 +660,7 @@ REPLY:
             "steps": list(self._steps),
             "intent": intent,
             "evidence": exec_result.get("evidence", {}),
+            "cache_hit": False,
         }
 
     async def confirm(self, session_id: str, token: str, confirmed: bool = True) -> Dict[str, Any]:
