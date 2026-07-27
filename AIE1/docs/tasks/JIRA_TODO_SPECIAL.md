@@ -1,6 +1,6 @@
-# Kế hoạch Công việc Đặc biệt - Nhóm AIE1 (JIRA TODO SPECIAL)
+# Kế hoạch Phân chia Công việc Đặc biệt - Nhóm AIE1 (JIRA TODO SPECIAL)
 
-Tài liệu này chứa nội dung chi tiết các công việc đặc biệt (**JIRA TODO SPECIAL**) nhằm giải quyết dứt điểm các điểm nghẽn hạ tầng & bảo mật (Promotion Blockers) được chỉ ra trong báo cáo kiểm toán CDO tại [product-reviews-readonly-audit-2026-07-26.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/reports/product-reviews-readonly-audit-2026-07-26.md). Toàn bộ các ticket này được giao cho **1 người thực hiện duy nhất (Khoa - Leader)** để đảm bảo tính nhất quán tuyệt đối và triển khai tuyến tính từ đầu đến cuối.
+Tài liệu này chứa nội dung chi tiết các công việc đặc biệt (**JIRA TODO SPECIAL**) nhằm giải quyết dứt điểm các điểm nghẽn hạ tầng & bảo mật (Promotion Blockers) được chỉ ra trong báo cáo kiểm toán CDO tại [product-reviews-readonly-audit-2026-07-26.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/reports/product-reviews-readonly-audit-2026-07-26.md). Công việc được phân chia hợp lý cho cả 3 thành viên: **Khoa** (Leader), **Thịnh**, và **Kiên** dựa trên đúng thế mạnh chuyên môn.
 
 ---
 
@@ -9,9 +9,9 @@ Tài liệu này chứa nội dung chi tiết các công việc đặc biệt (*
 | Ticket | Tên Công Việc | Người thực hiện (Assignee) | Trụ cột ảnh hưởng |
 |:---:|:---|:---:|:---|
 | **S1** | Chọn Kiến trúc Bedrock Egress & Loại bỏ mở `0.0.0.0/0:443` | **Khoa (Leader)** | Security & Network Architecture |
-| **S2** | ServiceAccount Token Hardening (Tắt K8s API Token) | **Khoa (Leader)** | K8s Security & Hardening |
-| **S3** | Chuẩn hóa NetworkPolicy Pod Selectors theo AWS VPC CNI | **Khoa (Leader)** | Network Policy & GitOps |
-| **S4** | Văn bản hóa Kiến trúc Guardrail & Tối giản IAM Role Policy | **Khoa (Leader)** | IAM & Compliance |
+| **S2** | ServiceAccount Token Hardening (Tắt K8s API Token) | **Kiên** | K8s Security & Hardening |
+| **S3** | Chuẩn hóa NetworkPolicy Pod Selectors theo AWS VPC CNI | **Kiên** | Network Policy & GitOps |
+| **S4** | Văn bản hóa Kiến trúc Guardrail & Tối giản IAM Role Policy | **Thịnh** | IAM & Compliance |
 | **S5** | Chạy Validation & Thu thập Bằng chứng Promo (Evidence) | **Khoa (Leader)** | Release & Quality Assurance |
 
 ---
@@ -40,7 +40,7 @@ Chính sách mạng hiện tại của dịch vụ `product-reviews` đang bị 
 ---
 
 ## TICKET S2: Hardening ServiceAccount Token (Tắt Kubernetes API Token Mặc Định)
-* **Người thực hiện (Assignee):** Khoa (Leader)
+* **Người thực hiện (Assignee):** Kiên
 * **Epic:** AIE1 - CDO Audit Promotion Unblocker
 * **Ưu tiên:** High (P1)
 * **Label Jira:** `k8s-security`, `helm`, `hardening`
@@ -59,7 +59,7 @@ CDO phát hiện Pod `product-reviews` vẫn tự động mount Kubernetes API T
 ---
 
 ## TICKET S3: Chuẩn Hóa NetworkPolicy Pod Selectors Theo AWS VPC CNI Standard
-* **Người thực hiện (Assignee):** Khoa (Leader)
+* **Người thực hiện (Assignee):** Kiên
 * **Epic:** AIE1 - CDO Audit Promotion Unblocker
 * **Ưu tiên:** High (P1)
 * **Label Jira:** `aws-vpc-cni`, `network-policy`, `k8s`
@@ -77,7 +77,7 @@ AWS VPC CNI hoạt động ở chế độ `standard`, đánh giá traffic sau b
 ---
 
 ## TICKET S4: Văn Bản Hóa Kiến Trúc Guardrail & Tối Giản IAM Role Policy
-* **Người thực hiện (Assignee):** Khoa (Leader)
+* **Người thực hiện (Assignee):** Thịnh
 * **Epic:** AIE1 - CDO Audit Promotion Unblocker
 * **Ưu tiên:** Medium (P2)
 * **Label Jira:** `iam-policy`, `compliance`, `guardrails`
