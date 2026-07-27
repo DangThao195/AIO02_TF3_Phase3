@@ -61,8 +61,8 @@ async def reflection_node(state: dict) -> dict:
                     r = json.loads(result)
                 except Exception:
                     pass
-            if r.get("total") == 0 or r.get("status") == "empty":
-                issues.append(f"zero_result: {tool_name} returned 0 results")
+            if r.get("total") == 0 or r.get("status") in ("empty", "error"):
+                issues.append(f"zero_result: {tool_name} returned 0 results (status={r.get('status')})")
                 break
 
     # 3. Low confidence

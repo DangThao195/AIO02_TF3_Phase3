@@ -1,13 +1,16 @@
 """
-graph/nodes/tool_executor.py — DAG Runner (Tool Executor Node)
+graph/nodes/tool_executor.py — Sequential Tool Executor with Entity Extractor
 
-Topological execution của DAG plan:
-- Resolve variable references ($steps[id].*, $input.entities.*, $memory.*, $session.*)
-- L3 validate mỗi tool call
-- Cache check/set cho read tools
-- Retry theo config
-- Write tool → LangGraph interrupt() để chờ confirm
-- Planner memory update sau mỗi node
+Thuật toán:
+1. Duyệt plan (flat list) theo thứ tự
+2. Với mỗi tool:
+   a. Entity Extractor (LLM) → trích xuất params từ query + context
+   b. L3 validate
+   c. Cache check/set cho read tools
+   d. Execute với retry + timeout
+   e. Update planner_memory + reference tables
+   f. Feed kết quả vào context cho tool kế tiếp
+3. Write tool → pending_action → confirmation node
 """
 
 from __future__ import annotations
@@ -24,13 +27,11 @@ from typing import Any
 logger = logging.getLogger("graph.tool_executor")
 
 _MAX_NODES = 8
-_MAX_PARALLEL = 4
 
 
 def _normalize_price_output(data: Any) -> Any:
     """Normalize price fields trong tool output."""
     if isinstance(data, dict):
-        # units + nanos → price string
         if "price_units" in data and "price_nanos" in data:
             units = data.get("price_units", 0)
             nanos = data.get("price_nanos", 0)
@@ -39,11 +40,9 @@ def _normalize_price_output(data: Any) -> Any:
             data["price"] = f"${units}.{cents:02d}"
             data.pop("price_units", None)
             data.pop("price_nanos", None)
-        # picture → image
         if "picture" in data and "image" not in data:
             data = dict(data)
             data["image"] = data.pop("picture")
-        # categories TEXT → array
         if "categories" in data and isinstance(data["categories"], str):
             data = dict(data)
             data["categories"] = [c.strip() for c in data["categories"].split(",") if c.strip()]
@@ -53,77 +52,56 @@ def _normalize_price_output(data: Any) -> Any:
     return data
 
 
-def _resolve_json_path(path: str, data: Any) -> Any:
-    """Resolve JSON path như products[0].id → data['products'][0]['id']."""
-    parts = path.split(".")
-    current = data
-    for part in parts:
-        arr_match = re.match(r"(\w+)\[(\d+)\]", part)
-        if arr_match:
-            key, idx = arr_match.group(1), int(arr_match.group(2))
-            current = (current or {}).get(key, [])
-            current = current[idx] if isinstance(current, list) and len(current) > idx else None
-        elif isinstance(current, dict):
-            current = current.get(part)
-        else:
-            return None
-    return current
+def _build_cache_key(tool_name: str, args: dict) -> str | None:
+    filter_tools = {"category_filter", "price_filter", "semantic_filter", "multi_filter"}
+    if tool_name in filter_tools:
+        query = args.get("query") or args.get("name") or str(args)
+        return f"{tool_name}:{hashlib.sha256(query.lower().encode()).hexdigest()[:16]}"
+    if tool_name == "get_product_details_tool":
+        return f"product:{args.get('product_id', '')}"
+    if tool_name == "convert_currency_tool":
+        amount = str(args.get("amount", args.get("amount_units", "0")))
+        return f"currency:{args.get('from_currency', 'USD')}:{args.get('to_currency', 'VND')}:{amount}"
+    if tool_name == "get_shipping_quote_tool":
+        zip_code = str(args.get("zip_code", ""))
+        total = str(args.get("cart_total", "0"))
+        raw = zip_code + total
+        return f"shipping:{hashlib.sha256(raw.encode()).hexdigest()[:16]}"
+    if tool_name == "get_recommendations_tool":
+        pid = str(args.get("product_id", "all"))
+        limit = args.get("limit", 5)
+        return f"recommend:{pid}:{limit}"
+    if tool_name in ("get_cart_tool", "get_categories", "get_all_products", "get_product_id"):
+        return f"{tool_name}:{hashlib.sha256(str(sorted(args.items())).encode()).hexdigest()[:16]}"
+    return None
 
 
-def _safe_first(path_expr: str, default_expr: str, node_outputs: dict) -> str:
-    """$first(path, default): lấy phần tử đầu tiên, fallback default."""
-    m = re.match(r"steps\[(\w+)\]\.(.+)", path_expr)
-    if m:
-        node_id = m.group(1)
-        json_path = m.group(2)
-        data = node_outputs.get(node_id, {})
-        result = _resolve_json_path(json_path, data)
-        if isinstance(result, list) and result:
-            return str(result[0])
-    return _parse_default(default_expr)
+def _get_cache_ttl(tool_name: str) -> int:
+    filter_tools = {"category_filter", "price_filter", "semantic_filter", "multi_filter"}
+    if tool_name in filter_tools:
+        return 600
+    if tool_name in ("get_product_details_tool", "get_product_id"):
+        return 1800
+    if tool_name in ("convert_currency_tool", "get_shipping_quote_tool"):
+        return 3600
+    if tool_name == "get_recommendations_tool":
+        return 900
+    return 300
 
 
-def _safe_exists(path_expr: str, node_outputs: dict) -> bool:
-    """$exists(path): check field tồn tại."""
-    m = re.match(r"steps\[(\w+)\]\.(.+)", path_expr)
-    if m:
-        node_id = m.group(1)
-        json_path = m.group(2)
-        data = node_outputs.get(node_id, {})
-        result = _resolve_json_path(json_path, data)
-        return result is not None
-    return False
-
-
-def _safe_index(path_expr: str, index: int, default_expr: str, node_outputs: dict) -> str:
-    """$safe_index(path, i, default): index an toàn, không IndexError."""
-    m = re.match(r"steps\[(\w+)\]\.(.+)", path_expr)
-    if m:
-        node_id = m.group(1)
-        json_path = m.group(2)
-        data = node_outputs.get(node_id, {})
-        arr = _resolve_json_path(json_path, data)
-        if isinstance(arr, list) and 0 <= index < len(arr):
-            return str(arr[index])
-    return _parse_default(default_expr)
-
-
-def _parse_default(expr: str) -> str:
-    """Parse default value: null → '', number → str(number), string → string."""
-    expr = expr.strip().strip("'\"")
-    if expr.lower() in ("null", "none", ""):
-        return ""
-    return expr
+def _parse_condition_value(s: str):
+    s = s.strip().strip("'\"")
+    try:
+        return int(s) if s.isdigit() else float(s.replace(",", ""))
+    except ValueError:
+        return s
 
 
 def _evaluate_condition(result: dict, condition: dict) -> str:
-    """Evaluate condition expression. Return: 'ask_user' | 'stop' | 'continue'."""
     if not condition:
         return "continue"
-
     on_field = condition.get("on", "")
     value = result.get(on_field)
-
     for key, action in condition.items():
         if key == "on":
             continue
@@ -141,173 +119,10 @@ def _evaluate_condition(result: dict, condition: dict) -> str:
                 return action
         elif key == "default":
             return action
-
     return "continue"
 
 
-def _parse_condition_value(s: str):
-    """Parse '0' → 0, 'ask_user' → 'ask_user'."""
-    s = s.strip().strip("'\"")
-    try:
-        return int(s) if s.isdigit() else float(s.replace(",", ""))
-    except ValueError:
-        return s
-
-
-def _build_cache_key(tool_name: str, args: dict) -> str | None:
-    """Sinh cache key theo naming convention trong cache_design.md."""
-    if tool_name == "search_products_v2":
-        query = args.get("query", "")
-        return f"search:{hashlib.sha256(query.lower().encode()).hexdigest()[:16]}"
-    if tool_name == "get_product_details_tool":
-        return f"product:{args.get('product_id', '')}"
-    if tool_name == "convert_currency_tool":
-        return f"currency:{args.get('from_currency', 'USD')}:{args.get('to_currency', 'VND')}"
-    if tool_name == "get_shipping_quote_tool":
-        zip_code = str(args.get("zip_code", ""))
-        total = str(args.get("cart_total", "0"))
-        raw = zip_code + total
-        return f"shipping:{hashlib.sha256(raw.encode()).hexdigest()[:16]}"
-    if tool_name == "get_recommendations_tool":
-        pid = str(args.get("product_id", "all"))
-        limit = args.get("limit", 5)
-        return f"recommend:{pid}:{limit}"
-    if tool_name in ("get_cart_tool", "get_categories", "get_all_products", "get_product_id"):
-        return f"{tool_name}:{hashlib.sha256(str(sorted(args.items())).encode()).hexdigest()[:16]}"
-    return None
-
-
-def _get_cache_ttl(tool_name: str) -> int:
-    """Get TTL for tool cache in seconds."""
-    if tool_name == "search_products_v2":
-        return 600
-    if tool_name in ("get_product_details_tool", "get_product_id"):
-        return 1800
-    if tool_name in ("convert_currency_tool", "get_shipping_quote_tool"):
-        return 3600
-    if tool_name == "get_recommendations_tool":
-        return 900
-    return 300
-
-
-def _compute_dag_depth(nodes: list, edges: list) -> int:
-    """Tính độ sâu lớn nhất của DAG (number of edges in longest path)."""
-    depths: dict = {}
-    adj: dict = {n["id"]: [] for n in nodes}
-    for f, t in edges:
-        adj[f].append(t)
-
-    def dfs(nid: str) -> int:
-        if nid in depths:
-            return depths[nid]
-        if not adj[nid]:
-            depths[nid] = 0
-            return 0
-        depths[nid] = 1 + max(dfs(child) for child in adj[nid])
-        return depths[nid]
-
-    if not nodes:
-        return 0
-    return max(dfs(n["id"]) for n in nodes)
-
-
-def _resolve_value(val: Any, node_outputs: dict, state: dict) -> Any:
-    """Resolve variable references trong args."""
-    if not isinstance(val, str):
-        return val
-
-    # $steps[id].path
-    def resolve_step(m):
-        node_id = m.group(1)
-        path = m.group(2).strip(".")
-        result = node_outputs.get(node_id, {})
-        if isinstance(result, str):
-            try:
-                result = json.loads(result)
-            except Exception:
-                return val
-        for part in path.split("."):
-            # Handle array index like products[0]
-            arr_match = re.match(r"(\w+)\[(\d+)\]", part)
-            if arr_match:
-                key, idx = arr_match.group(1), int(arr_match.group(2))
-                arr = result.get(key, []) if isinstance(result, dict) else []
-                if not isinstance(arr, list) or len(arr) <= idx:
-                    return None
-                result = arr[idx]
-            elif isinstance(result, dict):
-                result = result.get(part, "")
-            else:
-                result = ""
-        return result
-
-    val = re.sub(r'\$steps\[(\w+)\]([\.\w\[\]]+)', resolve_step, val)
-
-    # $input.entities.*
-    entities = state.get("entities") or {}
-    val = re.sub(
-        r'\$input\.entities\.(\w+)',
-        lambda m: str(entities.get(m.group(1), "")),
-        val,
-    )
-
-    # $input.query
-    messages = state.get("messages", [])
-    query = messages[-1].content if messages and hasattr(messages[-1], "content") else ""
-    val = val.replace("$input.query", query)
-
-    # $session.*
-    val = re.sub(
-        r'\$session\.(\w+)',
-        lambda m: str(state.get(m.group(1), "")),
-        val,
-    )
-
-    # $memory.*
-    memory = state.get("planner_memory") or {}
-    val = re.sub(
-        r'\$memory\.(\w+)',
-        lambda m: str(memory.get(m.group(1), "")),
-        val,
-    )
-
-    # $first(path, default=None) — lấy phần tử đầu tiên
-    val = re.sub(
-        r'\$first\(([^,]+),\s*default=([^)]+)\)',
-        lambda m: _safe_first(m.group(1).strip(), m.group(2).strip(), node_outputs),
-        val,
-    )
-
-    # $exists(path) — kiểm tra field tồn tại
-    val = re.sub(
-        r'\$exists\(([^)]+)\)',
-        lambda m: str(_safe_exists(m.group(1).strip(), node_outputs)),
-        val,
-    )
-
-    # $safe_index(path, index, default=None) — index an toàn
-    val = re.sub(
-        r'\$safe_index\(([^,]+),\s*(\d+),\s*default=([^)]+)\)',
-        lambda m: _safe_index(m.group(1).strip(), int(m.group(2)), m.group(3).strip(), node_outputs),
-        val,
-    )
-
-    return val
-
-
-def _resolve_args(args: dict, node_outputs: dict, state: dict) -> dict:
-    """Resolve tất cả args của một node."""
-    resolved = {}
-    for k, v in args.items():
-        resolved[k] = _resolve_value(v, node_outputs, state)
-    # Inject user_id nếu tool cần
-    if "user_id" not in resolved:
-        resolved["user_id"] = state.get("user_id", "anonymous")
-    return resolved
-
-
 async def _execute_tool(tool_name: str, args: dict, timeout: float = 2.0) -> Any:
-    """Execute một tool với timeout."""
     from src.tools.registry import ToolRegistry
     fn = ToolRegistry.get_fn(tool_name)
     if fn is None:
@@ -329,7 +144,6 @@ async def _execute_tool(tool_name: str, args: dict, timeout: float = 2.0) -> Any
 
 
 def _update_planner_memory(memory: dict, tool_name: str, result: Any, state: dict) -> dict:
-    """Cập nhật planner_memory sau khi tool chạy xong."""
     memory = dict(memory) if memory else {}
     plan = state.get("plan") or {}
     memory["last_goal"] = plan.get("goal", "")
@@ -340,18 +154,22 @@ def _update_planner_memory(memory: dict, tool_name: str, result: Any, state: dic
         except Exception:
             return memory
 
-    if tool_name == "search_products_v2":
+    if tool_name in ("category_filter", "price_filter", "semantic_filter", "multi_filter"):
         products = result.get("products", [])
         if products:
-            memory["last_searched_product_id"] = products[0].get("id", "")
-            memory["last_searched_product_name"] = products[0].get("name", "")
+            pid = products[0].get("id", "")
+            pname = products[0].get("name", "")
+            memory["last_searched_product_id"] = pid
+            memory["last_searched_product_name"] = pname
+            memory["last_product_id"] = pid
+            memory["last_product_name"] = pname
             memory["last_results_ids"] = [p.get("id") for p in products[:5] if p.get("id")]
             mentioned = memory.get("mentioned_products", [])
             for p in products[:5]:
                 pid = p.get("id")
                 if pid and pid not in mentioned:
                     mentioned.append(pid)
-            memory["mentioned_products"] = mentioned
+            memory["mentioned_products"] = mentioned[-50:]
 
         messages = state.get("messages", [])
         if messages:
@@ -372,250 +190,414 @@ def _update_planner_memory(memory: dict, tool_name: str, result: Any, state: dic
             memory["last_product_name"] = result.get("product_name", "")
 
     elif tool_name == "get_cart_tool":
-        memory["current_cart_items"] = result.get("item_count", 0)
+        if result.get("status") == "success":
+            memory["current_cart_items"] = result.get("item_count", 0)
+        else:
+            logger.warning("[_update_planner_memory] get_cart_tool returned error, preserving current_cart_items=%s",
+                           memory.get("current_cart_items"))
 
     return memory
 
 
+def _extract_items_from_result(tool_name: str, result: dict) -> list[dict]:
+    items = []
+    if tool_name in ("category_filter", "price_filter", "semantic_filter", "multi_filter"):
+        for p in result.get("products", []):
+            items.append({"index": len(items) + 1, "id": p.get("id", ""), "name": p.get("name", "")})
+    elif tool_name == "get_product_details_tool":
+        p = result.get("product", result)
+        if p.get("id"):
+            items.append({"index": 1, "id": p.get("id", ""), "name": p.get("name", "")})
+    elif tool_name == "get_all_products":
+        for p in result.get("products", []):
+            items.append({"index": len(items) + 1, "id": p.get("id", ""), "name": p.get("name", "")})
+    elif tool_name == "get_recommendations_tool":
+        for rec in result.get("recommendations", []):
+            items.append({"index": len(items) + 1, "id": rec.get("id", ""), "name": rec.get("name", "")})
+    elif tool_name == "get_cart_tool":
+        for item in result.get("items", []):
+            items.append({"index": len(items) + 1, "id": item.get("product_id", ""), "name": item.get("name", "")})
+    elif tool_name in ("get_product_reviews_tool",):
+        p_name = result.get("product_name", result.get("product", {})).get("name", "")
+        if result.get("product_id"):
+            items.append({"index": 1, "id": result.get("product_id", ""), "name": p_name})
+    return items
+
+
+def _build_reference_table(items: list[dict]) -> dict:
+    table: dict = {}
+    ordinal_map = {1: "first", 2: "second", 3: "third", 4: "fourth", 5: "fifth"}
+    n = len(items)
+    for i, item in enumerate(items):
+        pos = i + 1
+        if pos in ordinal_map:
+            table[ordinal_map[pos]] = item
+        table[str(pos)] = item
+        if pos == n:
+            table["last"] = item
+    return table
+
+
+def _update_references(state_refs: dict, tool_name: str, result: dict) -> dict:
+    items = _extract_items_from_result(tool_name, result)
+    if not items:
+        return state_refs or {}
+
+    refs = dict(state_refs) if state_refs else {}
+    now = time.time()
+
+    last_outputs = list(refs.get("last_tool_outputs") or [])
+    last_outputs.append({
+        "type": _tool_output_type(tool_name),
+        "items": items,
+        "tool_name": tool_name,
+        "timestamp": now,
+    })
+    refs["last_tool_outputs"] = last_outputs[-5:]
+
+    new_table = _build_reference_table(items)
+    existing_table = dict(refs.get("reference_table") or {})
+    for k, v in new_table.items():
+        existing_table[k] = v
+    refs["reference_table"] = existing_table
+
+    registry = dict(refs.get("entity_registry") or {})
+    for item in items:
+        name = (item.get("name") or "").strip().lower()
+        if name and len(name) > 2:
+            registry[name] = {"id": item.get("id", ""), "type": _entity_type(tool_name), "source_tool": tool_name}
+    refs["entity_registry"] = registry
+
+    stack = list(refs.get("reference_stack") or [])
+    stack.append({
+        "type": _tool_output_type(tool_name),
+        "items": items,
+        "tool_name": tool_name,
+        "timestamp": now,
+    })
+    refs["reference_stack"] = stack[-5:]
+
+    table = refs.get("reference_table", {})
+    if len(table) > 20:
+        digit_keys = [k for k in table if isinstance(k, str) and k.isdigit()]
+        for k in sorted(digit_keys)[:-10]:
+            table.pop(k, None)
+
+    registry = refs.get("entity_registry", {})
+    if len(registry) > 50:
+        keys = list(registry.keys())
+        for k in keys[:-50]:
+            registry.pop(k, None)
+
+    return refs
+
+
+def _tool_output_type(tool_name: str) -> str:
+    if tool_name in ("category_filter", "price_filter", "semantic_filter", "multi_filter"):
+        return "product_list"
+    if tool_name == "get_product_details_tool":
+        return "product_detail"
+    if tool_name == "get_product_reviews_tool":
+        return "review_list"
+    if tool_name == "get_recommendations_tool":
+        return "recommendation_list"
+    if tool_name == "get_cart_tool":
+        return "cart"
+    if tool_name == "get_all_products":
+        return "product_list"
+    return "generic"
+
+
+def _entity_type(tool_name: str) -> str:
+    if tool_name in ("category_filter", "price_filter", "semantic_filter", "multi_filter", "get_product_details_tool", "get_all_products"):
+        return "product"
+    if tool_name in ("get_recommendations_tool",):
+        return "recommendation"
+    if tool_name == "get_cart_tool":
+        return "cart_item"
+    return "generic"
+
+
+async def _extract_tool_params(
+    query: str,
+    tool_name: str,
+    previous_results: dict,
+    planner_memory: dict,
+) -> dict:
+    """
+    Entity Extractor — gọi LLM để trích xuất params cho tool từ query + context.
+    Fast path: tool không cần params → trả về {}.
+    """
+    from src.tools.registry import ToolRegistry
+
+    spec = ToolRegistry.get_spec(tool_name)
+    if not spec:
+        return {}
+
+    input_schema = spec.input_schema or {}
+    props = input_schema.get("properties", {})
+
+    # Fast path: tool không cần tham số
+    if not props:
+        return {}
+
+    from src.llm.llm import get_llm_client
+    from src.llm.prompt import TOOL_PARAM_EXTRACTOR_PROMPT
+
+    llm = get_llm_client()
+
+    previous_text = ""
+    if previous_results:
+        lines = []
+        for name, res in previous_results.items():
+            if isinstance(res, dict):
+                preview = {k: v for k, v in list(res.items())[:4]}
+                lines.append(f"[{name}]: {json.dumps(preview, ensure_ascii=False)[:200]}")
+            else:
+                lines.append(f"[{name}]: {str(res)[:200]}")
+        previous_text = "\n".join(lines)
+
+    mem_text = json.dumps(planner_memory, ensure_ascii=False)[:300] if planner_memory else "(không có)"
+
+    prompt = TOOL_PARAM_EXTRACTOR_PROMPT.format(
+        user_query=query,
+        tool_name=tool_name,
+        tool_description=spec.description[:120],
+        tool_input_schema=json.dumps(input_schema, ensure_ascii=False),
+        previous_results=previous_text or "(chưa có tool nào chạy)",
+        planner_memory=mem_text,
+    )
+
+    try:
+        resp = llm.invoke(prompt, temperature=0.1, max_tokens=400)
+        text = resp.content if hasattr(resp, "content") else str(resp)
+        text = text.strip()
+        m = re.search(r'```(?:json)?\s*(.*?)\s*```', text, re.DOTALL)
+        if m:
+            text = m.group(1).strip()
+        params = json.loads(text) if text else {}
+        if not isinstance(params, dict):
+            params = {}
+        return params
+    except Exception as e:
+        logger.warning("[entity_extractor] LLM extract failed for %s: %s", tool_name, e)
+        return {}
+
+
 async def tool_executor_node(state: dict) -> dict:
     """
-    DAG Runner — thực thi tất cả nodes trong plan theo thứ tự topological.
+    Sequential Tool Executor — duyệt plan theo thứ tự, entity_extract → execute → feed-forward.
     Output: {tool_results, errors, retry_count, pending_action, node_durations, planner_memory}
     """
     t0 = time.time()
 
     plan = state.get("plan") or {}
     nodes = plan.get("nodes", [])
-    edges = plan.get("edges", [])
 
-    # Nếu không có nodes (greeting, ask_user, v.v.)
     if not nodes:
         return {
             "tool_results": {},
             "errors": [],
             "retry_count": 0,
+            "last_tool_outputs": [],
+            "reference_table": {},
+            "reference_stack": [],
+            "entity_registry": {},
             "node_durations": {"tool_executor": int((time.time() - t0) * 1000)},
         }
 
-    # Trim nếu vượt max
     if len(nodes) > _MAX_NODES:
         nodes = sorted(nodes, key=lambda n: n.get("confidence", 0), reverse=True)[:_MAX_NODES]
 
-    # Phase 4.9: Enforce Max DAG Depth = 5
-    depth = _compute_dag_depth(nodes, edges)
-    if depth > 5:
-        logger.warning("[tool_executor] DAG depth %d > 5 — flattening", depth)
-        for n in nodes:
-            n["depends_on"] = []
-
     user_id = state.get("user_id", "anonymous")
     planner_memory = dict(state.get("planner_memory") or {})
+    reference_refs = {
+        "last_tool_outputs": list(state.get("last_tool_outputs") or []),
+        "reference_table": dict(state.get("reference_table") or {}),
+        "reference_stack": list(state.get("reference_stack") or []),
+        "entity_registry": dict(state.get("entity_registry") or {}),
+    }
     tool_results: dict = {}
     errors: list = []
     retry_count = 0
     node_outputs: dict = {}
-    done: set = set()
-    node_map = {n["id"]: n for n in nodes}
+    previous_results: dict = {}
     total_duration: dict = {}
     tool_had_pending: bool = False
     pending_action: dict | None = None
 
-    # ── Topological execution ──
-    max_iterations = len(nodes) + 2
-    iteration = 0
+    messages = state.get("messages", [])
+    query = messages[-1].content if messages and hasattr(messages[-1], "content") else ""
 
-    while len(done) < len(nodes) and iteration < max_iterations:
-        iteration += 1
+    # ── Sequential execution ──
+    for node in nodes:
+        nid = node["id"]
+        tool_name = node.get("tool", "")
+        if not tool_name:
+            continue
 
-        # Find ready nodes
-        ready = [
-            n for n in nodes
-            if n["id"] not in done
-            and all(dep in done for dep in n.get("depends_on", []))
-        ]
+        nt0 = time.time()
 
-        if not ready:
-            if len(done) < len(nodes):
-                remaining = [n["id"] for n in nodes if n["id"] not in done]
-                errors.append({"node": "tool_executor", "error": f"Deadlock: {remaining}"})
-            break
+        # 1. Entity Extractor → params
+        args = await _extract_tool_params(
+            query=query,
+            tool_name=tool_name,
+            previous_results=previous_results,
+            planner_memory=planner_memory,
+        )
 
-        # Batch parallel (max 4)
-        for batch_start in range(0, len(ready), _MAX_PARALLEL):
-            batch = ready[batch_start:batch_start + _MAX_PARALLEL]
+        if tool_name in ("get_cart_tool", "check_cart_item_tool",
+                          "add_to_cart_tool", "update_cart_item_tool"):
+            args["user_id"] = user_id
 
-            async def execute_one(node: dict):
-                nid = node["id"]
-                tool_name = node.get("tool", "")
-                raw_args = node.get("args", {})
-                nt0 = time.time()
+        resolved_entities = state.get("resolved_entities") or {}
+        if resolved_entities.get("product_id"):
+            if tool_name in ("get_product_details_tool", "get_product_reviews_tool",
+                              "add_to_cart_tool", "update_cart_item_tool",
+                              "check_cart_item_tool", "get_recommendations_tool"):
+                if not args.get("product_id"):
+                    args["product_id"] = resolved_entities["product_id"]
 
-                # Resolve args
-                args = _resolve_args(raw_args, node_outputs, state)
-                # Ensure user_id for cart/review tools
-                if tool_name in ("get_cart_tool", "check_cart_item_tool",
-                                  "add_to_cart_tool", "update_cart_item_tool"):
-                    args["user_id"] = user_id
+        # 2. L3 validate
+        try:
+            from src.guardrails.tool_validator import validate_tool_call
+            validation = validate_tool_call(tool_name, args, user_id)
+            if not validation.is_valid:
+                errors.append({"node": nid, "error": validation.blocked_reason})
+                tool_results[tool_name] = {"status": "error", "message": validation.blocked_reason}
+                node_outputs[nid] = {"status": "error", "message": validation.blocked_reason}
+                continue
+        except Exception:
+            pass
 
-                # Skip if any arg could not be resolved (template variable → None)
-                if any(v is None for v in args.values()):
-                    err_msg = (
-                        f"Dữ liệu đầu vào không đầy đủ — "
-                        f"không thể resolve template variable cho {tool_name}. "
-                        f"Có thể do dữ liệu phụ thuộc rỗng."
-                    )
-                    logger.warning("[tool_executor] SKIP tool=%s reason=unresolved_args args=%s", tool_name, args)
-                    return nid, None, err_msg, None
-
-                # L3 validate
+        # 3. Cache check cho read tools
+        from src.tools.registry import ToolRegistry
+        spec = ToolRegistry.get_spec(tool_name)
+        is_read = spec and not spec.is_write
+        cache_key = None
+        cached_result = None
+        if is_read:
+            cache_key = _build_cache_key(tool_name, args)
+            if cache_key:
                 try:
-                    from src.guardrails.tool_validator import validate_tool_call
-                    validation = validate_tool_call(tool_name, args, user_id)
-                    if not validation.is_valid:
-                        return nid, None, validation.blocked_reason, None
+                    from src.memory.cache_manager import CacheManager
+                    cache_mgr = CacheManager()
+                    cached_result = await cache_mgr.get(cache_key, "tool")
                 except Exception:
                     pass
 
-                # Phase 4.2: Cache check for read tools
-                from src.tools.registry import ToolRegistry
-                spec = ToolRegistry.get_spec(tool_name)
-                is_read = spec and not spec.is_write
-                cache_key = None
-                if is_read:
-                    cache_key = _build_cache_key(tool_name, args)
-                    if cache_key:
+        if cached_result is not None:
+            logger.debug("[cache] HIT tool=%s key=%s", tool_name, cache_key)
+            result = cached_result
+        else:
+            # 4. Execute with retry
+            if tool_name in ("category_filter", "price_filter", "semantic_filter", "multi_filter"):
+                timeout = 15.0
+            elif tool_name == "get_shipping_quote_tool":
+                timeout = 3.0
+            else:
+                timeout = 2.0
+
+            retry_cfg = ToolRegistry.get_retry_config(tool_name)
+            max_retries = retry_cfg.get("max_retries", 1)
+            backoff = retry_cfg.get("backoff")
+            if not backoff or len(backoff) < max_retries + 1:
+                backoff = [0.5 * (2 ** i) for i in range(max_retries + 1)]
+
+            result = None
+            last_err = None
+            for attempt in range(max_retries + 1):
+                try:
+                    result = await _execute_tool(tool_name, args, timeout=timeout)
+                    break
+                except Exception as e:
+                    last_err = str(e)
+                    if attempt < max_retries:
+                        wait = backoff[min(attempt, len(backoff) - 1)]
+                        await asyncio.sleep(wait)
+
+            nd_ms = int((time.time() - nt0) * 1000)
+            total_duration[f"tool_executor:{tool_name}"] = nd_ms
+
+            if result is None:
+                errors.append({"node": nid, "error": last_err or "Tool execution failed"})
+                tool_results[tool_name] = {"status": "error", "message": last_err or "Tool execution failed"}
+                node_outputs[nid] = {"status": "error", "message": last_err or "Tool execution failed"}
+                continue
+
+            # 5. Cache set cho read tools (only cache success)
+            try:
+                if is_read and cache_key:
+                    parsed_check = result
+                    if isinstance(result, str):
                         try:
-                            from src.memory.cache_manager import CacheManager
-                            cache_mgr = CacheManager()
-                            cached = await cache_mgr.get(cache_key, "tool")
-                            if cached is not None:
-                                logger.debug("[cache] HIT tool=%s key=%s", tool_name, cache_key)
-                                return nid, cached, None, args
+                            parsed_check = json.loads(result)
                         except Exception:
                             pass
-
-                # Determine timeout
-                if tool_name == "search_products_v2":
-                    timeout = 15.0
-                elif tool_name == "get_shipping_quote_tool":
-                    timeout = 3.0
-                else:
-                    timeout = 2.0
-
-                # Retry config with exponential backoff
-                retry_cfg = ToolRegistry.get_retry_config(tool_name)
-                max_retries = retry_cfg.get("max_retries", 1)
-                backoff = retry_cfg.get("backoff")
-                if not backoff or len(backoff) < max_retries + 1:
-                    backoff = [0.5 * (2 ** i) for i in range(max_retries + 1)]
-
-                result = None
-                last_err = None
-                for attempt in range(max_retries + 1):
-                    try:
-                        result = await _execute_tool(tool_name, args, timeout=timeout)
-                        break
-                    except Exception as e:
-                        last_err = str(e)
-                        if attempt < max_retries:
-                            wait = backoff[min(attempt, len(backoff) - 1)]
-                            await asyncio.sleep(wait)
-
-                nd_ms = int((time.time() - nt0) * 1000)
-                total_duration[f"tool_executor:{tool_name}"] = nd_ms
-
-                if result is None:
-                    return nid, None, last_err or "Tool execution failed", None
-
-                # Phase 4.2: Cache set for read tools (inside execute_one before returning)
-                try:
-                    if is_read and cache_key:
+                    is_error = isinstance(parsed_check, dict) and parsed_check.get("status") == "error"
+                    if not is_error:
                         from src.memory.cache_manager import CacheManager
                         cache_mgr = CacheManager()
                         ttl = _get_cache_ttl(tool_name)
                         await cache_mgr.set(cache_key, result, "tool", ttl)
-                except Exception:
-                    pass
+            except Exception:
+                pass
 
-                return nid, result, None, args
+        # 6. Parse & normalize
+        parsed = result
+        if isinstance(result, str):
+            try:
+                parsed = json.loads(result)
+            except Exception:
+                parsed = {"raw": result}
 
-            results = await asyncio.gather(*[execute_one(n) for n in batch],
-                                           return_exceptions=True)
+        parsed = _normalize_price_output(parsed)
+        node_outputs[nid] = parsed
+        previous_results[tool_name] = parsed
 
-            for node, outcome in zip(batch, results):
-                nid = node["id"]
-                tool_name = node.get("tool", "")
-
-                if isinstance(outcome, Exception):
-                    errors.append({"node": nid, "error": str(outcome)})
-                    done.add(nid)
-                    continue
-
-                nid_out, result, err, resolved_args = outcome
-
-                if err:
-                    errors.append({"node": nid, "error": err})
-                    done.add(nid)
-                    continue
-
-                # Parse result
-                parsed = result
-                if isinstance(result, str):
-                    try:
-                        parsed = json.loads(result)
-                    except Exception:
-                        parsed = {"raw": result}
-
-                # Normalize
-                parsed = _normalize_price_output(parsed)
-                node_outputs[nid] = parsed
-
-                # Phase 4.5: Conditional branching — evaluate node condition
-                condition = node.get("condition")
-                if condition:
-                    data = parsed if isinstance(parsed, dict) else {}
-                    branch = _evaluate_condition(data, condition)
-                    if branch == "ask_user":
-                        msg = data.get("message", "Vui lòng cung cấp thêm thông tin.")
-                        pending = {"action": tool_name, "args": resolved_args or {}, "message": msg}
-                        tool_results[tool_name] = parsed
-                        # Set pending_action — interrupt will happen in confirmation_node
-                        tool_had_pending = True
-                        pending_action = pending
-                        done.add(nid)
-                        continue
-                    elif branch == "stop":
-                        done.add(nid)
-                        continue
-
-                # Write tool → check for pending
-                if isinstance(parsed, dict) and parsed.get("status") == "pending":
-                    token = parsed.get("token", "")
-                    message = parsed.get("message", "")
-                    pending = {
-                        "action": tool_name,
-                        "args": resolved_args or {},
-                        "token": token,
-                        "message": message,
-                    }
-                    tool_results[tool_name] = parsed
-                    # Set pending_action — no interrupt here, will be handled by confirmation_node
-                    tool_had_pending = True
-                    pending_action = pending
-                    done.add(nid)
-                    continue
-
-                # Store result
+        # 7. Conditional branching
+        condition = node.get("condition")
+        if condition:
+            data = parsed if isinstance(parsed, dict) else {}
+            branch = _evaluate_condition(data, condition)
+            if branch == "ask_user":
+                msg = data.get("message", "Vui lòng cung cấp thêm thông tin.")
+                pending = {"action": tool_name, "args": args, "message": msg}
                 tool_results[tool_name] = parsed
+                tool_had_pending = True
+                pending_action = pending
+                continue
+            elif branch == "stop":
+                continue
 
-                # Update planner memory
-                planner_memory = _update_planner_memory(planner_memory, tool_name, parsed, state)
+        # 8. Write tool → pending
+        if isinstance(parsed, dict) and parsed.get("status") == "pending":
+            token = parsed.get("token", "")
+            message = parsed.get("message", "")
+            pending = {
+                "action": tool_name,
+                "args": args,
+                "token": token,
+                "message": message,
+            }
+            tool_results[tool_name] = parsed
+            tool_had_pending = True
+            pending_action = pending
+            continue
 
-                done.add(nid)
+        # 9. Store result
+        tool_results[tool_name] = parsed
+
+        # 10. Update planner memory
+        planner_memory = _update_planner_memory(planner_memory, tool_name, parsed, state)
+
+        # 11. Update reference resolution fields
+        if isinstance(parsed, dict):
+            reference_refs = _update_references(reference_refs, tool_name, parsed)
 
     duration_ms = int((time.time() - t0) * 1000)
     logger.info("[tool_executor] done=%d/%d errors=%d pending=%s (%dms)",
-                len(done), len(nodes), len(errors), bool(tool_had_pending), duration_ms)
+                len(tool_results), len(nodes), len(errors), bool(tool_had_pending), duration_ms)
 
     return {
         "tool_results": tool_results,
@@ -623,5 +605,9 @@ async def tool_executor_node(state: dict) -> dict:
         "retry_count": retry_count,
         "pending_action": pending_action,
         "planner_memory": planner_memory,
+        "last_tool_outputs": reference_refs.get("last_tool_outputs", []),
+        "reference_table": reference_refs.get("reference_table", {}),
+        "reference_stack": reference_refs.get("reference_stack", []),
+        "entity_registry": reference_refs.get("entity_registry", {}),
         "node_durations": {**total_duration, "tool_executor": duration_ms},
     }

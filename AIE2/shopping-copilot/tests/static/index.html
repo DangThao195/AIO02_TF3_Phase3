@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shopping Copilot - Auto Tester</title>
+    <style>
+        :root {
+            --primary: #007bff;
+            --bg-color: #f4f7f6;
+            --chat-bg: #fff;
+            --user-msg: #dcf8c6;
+            --agent-msg: #f1f0f0;
+            --border: #ccc;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            box-sizing: border-box;
+        }
+        .container {
+            width: 100%;
+            max-width: 800px;
+            background: var(--chat-bg);
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        .header {
+            background: var(--primary);
+            color: #fff;
+            padding: 15px 20px;
+            text-align: center;
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+        .controls {
+            padding: 15px;
+            background: #eee;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        select, button {
+            padding: 10px;
+            font-size: 1rem;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+        }
+        select {
+            flex-grow: 1;
+        }
+        button {
+            background: var(--primary);
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #aaa;
+            cursor: not-allowed;
+        }
+        .chat-window {
+            flex-grow: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            background: #fafafa;
+        }
+        .message {
+            max-width: 75%;
+            padding: 12px 15px;
+            border-radius: 15px;
+            line-height: 1.4;
+            word-wrap: break-word;
+        }
+        .user {
+            align-self: flex-end;
+            background-color: var(--user-msg);
+            border-bottom-right-radius: 2px;
+        }
+        .agent {
+            align-self: flex-start;
+            background-color: var(--agent-msg);
+            border-bottom-left-radius: 2px;
+        }
+        .system {
+            align-self: center;
+            background-color: transparent;
+            color: #888;
+            font-size: 0.9rem;
+            text-align: center;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .error {
+            align-self: center;
+            background-color: #ffe6e6;
+            color: #d9534f;
+            border: 1px solid #d9534f;
+            padding: 8px 15px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        Shopping Copilot - Automated Test Runner
+    </div>
+    
+    <div class="controls">
+        <select id="session-select">
+            <option value="">-- Đang tải Sessions --</option>
+        </select>
+        <button id="btn-start" disabled>Test Start</button>
+    </div>
+
+    <div class="chat-window" id="chat-window">
+        <div class="system">Vui lòng chọn Session và bấm Test Start</div>
+    </div>
+</div>
+
+<script>
+    const sessionSelect = document.getElementById('session-select');
+    const btnStart = document.getElementById('btn-start');
+    const chatWindow = document.getElementById('chat-window');
+    
+    let ws = null;
+
+    // Fetch sessions on load
+    fetch('/sessions')
+        .then(res => res.json())
+        .then(data => {
+            sessionSelect.innerHTML = '';
+            if (data.sessions && data.sessions.length > 0) {
+                data.sessions.forEach(s => {
+                    const option = document.createElement('option');
+                    option.value = s.id;
+                    option.textContent = s.name;
+                    sessionSelect.appendChild(option);
+                });
+                btnStart.disabled = false;
+            } else {
+                sessionSelect.innerHTML = '<option value="">Không có session nào</option>';
+            }
+        })
+        .catch(err => {
+            sessionSelect.innerHTML = '<option value="">Lỗi tải session</option>';
+            console.error(err);
+        });
+
+    // Clear chat when session changes
+    sessionSelect.addEventListener('change', () => {
+        chatWindow.innerHTML = '<div class="system">Vui lòng bấm Test Start để chạy kịch bản mới.</div>';
+    });
+
+    function appendMessage(type, content) {
+        const div = document.createElement('div');
+        div.classList.add('message');
+        
+        if (type === 'user_query') {
+            div.classList.add('user');
+        } else if (type === 'agent_response') {
+            div.classList.add('agent');
+        } else if (type === 'session_start' || type === 'system_info') {
+            div.classList.remove('message');
+            div.classList.add('system');
+        } else if (type === 'system_error') {
+            div.classList.remove('message');
+            div.classList.add('error');
+        }
+
+        // Format newlines to <br> for agent responses
+        if (type === 'agent_response') {
+             div.innerHTML = content.replace(/\n/g, '<br>');
+        } else {
+             div.textContent = content;
+        }
+        
+        chatWindow.appendChild(div);
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+
+    btnStart.addEventListener('click', () => {
+        const sessionId = sessionSelect.value;
+        if (!sessionId) return;
+
+        // Reset state
+        chatWindow.innerHTML = '';
+        btnStart.disabled = true;
+        sessionSelect.disabled = true;
+        
+        // Connect WebSocket
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws/test/${sessionId}`;
+        
+        ws = new WebSocket(wsUrl);
+
+        ws.onmessage = (event) => {
+            try {
+                const msg = JSON.parse(event.data);
+                appendMessage(msg.type, msg.content);
+            } catch (e) {
+                console.error("Parse error:", e);
+            }
+        };
+
+        ws.onclose = () => {
+            btnStart.disabled = false;
+            sessionSelect.disabled = false;
+            appendMessage('system_info', 'Kết nối đã đóng.');
+        };
+
+        ws.onerror = (error) => {
+            appendMessage('system_error', 'Lỗi kết nối WebSocket.');
+            console.error("WebSocket error:", error);
+            btnStart.disabled = false;
+            sessionSelect.disabled = false;
+        };
+    });
+</script>
+
+</body>
+</html>

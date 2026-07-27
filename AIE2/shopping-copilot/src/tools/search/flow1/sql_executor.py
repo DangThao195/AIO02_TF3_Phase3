@@ -9,7 +9,10 @@ from src.database.connect import get_conn
 class SQLQueryExecutor:
     """Thực thi SQL query trên database của thư mục src/database."""
 
-    def execute(self, query: str, limit: int = 15) -> List[Dict[str, Any]]:
+    def ensure_initialized(self) -> None:
+        """Đảm bảo database connection pool sẵn sàng (sync version)."""
+
+    def execute(self, query: str, limit: int = 500) -> List[Dict[str, Any]]:
         self._validate_query(query)
         try:
             with get_conn() as conn:
@@ -63,7 +66,7 @@ class SQLFlowExecutor:
     def __init__(self):
         self.executor = SQLQueryExecutor()
 
-    def execute(self, query: str, limit: int = 15) -> List[Product]:
+    def execute(self, query: str, limit: int = 500) -> List[Product]:
         rows = self.executor.execute(query, limit=limit)
         products: List[Product] = []
         for row in rows:

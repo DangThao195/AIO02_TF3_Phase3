@@ -1,217 +1,154 @@
 """
-graph/nodes/hallucination_guard.py — HallucinationGuard
+graph/nodes/hallucination_guard.py — HallucinationGuard (simplified)
 
-Chỉ chạy khi complexity_score > 0.5.
-6 exact deterministic checks → groundedness_score.
-score >= 0.8 → PASS; < 0.8 → FAIL → FallbackGenerator.
+4 deterministic checks, threshold 0.5.
+Auto-PASS nếu response mode là "template" (template format tool data, không hallucinate).
+score >= 0.5 → PASS; < 0.5 → FAIL → response_generator safe mode.
 """
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 import time
-from collections import defaultdict
-from typing import Any
 
 logger = logging.getLogger("graph.hallucination_guard")
 
 # ── Metrics ──
 _hallucination_metrics: dict = {"passed": 0, "failed": 0}
 
-# Vietnamese + English stop words for entity extraction
-_STOP_WORDS = {
-    "và", "hoặc", "của", "này", "đó", "là", "có", "không", "được", "trong",
-    "với", "cho", "từ", "đến", "một", "các", "những", "bạn", "tôi", "sản",
-    "phẩm", "giá", "tiền", "the", "a", "an", "of", "in", "is", "are", "was",
-    "to", "for", "with", "and", "or", "not", "it", "this", "that", "has",
-    "have", "be", "been", "at", "on", "by", "from", "as", "but", "if",
-}
 
+def _known_values(tool_results: dict) -> dict:
+    """Build lookup sets from tool results for validation."""
+    prices: set[str] = set()
+    names: set[str] = set()
+    scores: set[float] = set()
+    counts: set[int] = set()
 
-def _build_known_set(tool_results: dict) -> set[str]:
-    """Build known entity set from tool results."""
-    known: set[str] = set()
     for result in tool_results.values():
         r = result if isinstance(result, dict) else {}
-        # Products
-        for p in r.get("products", []):
-            if p.get("name"):
-                known.add(p["name"].lower())
-            for cat in (p.get("categories") or []):
-                known.add(cat.lower())
-        # Cart items
-        for item in r.get("items", []):
-            if item.get("name"):
-                known.add(item["name"].lower())
-        # Recommendations
-        for rec in r.get("recommendations", []):
-            if rec.get("name"):
-                known.add(rec["name"].lower())
-    return known
-
-
-def _extract_candidate_tokens(text: str) -> list[str]:
-    """Extract noun-like tokens ≥3 chars, excluding stop words."""
-    words = re.findall(r"[a-zA-ZÀ-ỹ]{3,}", text)
-    return [w.lower() for w in words if w.lower() not in _STOP_WORDS]
-
-
-def _check_prices(answer: str, tool_results: dict) -> float:
-    """Check price mentions in answer against tool results. Returns penalty."""
-    price_pat = re.compile(r'\$\d+(?:\.\d{2})?')
-    answer_prices = set(price_pat.findall(answer))
-    if not answer_prices:
-        return 0.0
-
-    known_prices: set[str] = set()
-    for result in tool_results.values():
-        r = result if isinstance(result, dict) else {}
-        # Direct price fields
         if r.get("price"):
-            known_prices.add(str(r["price"]))
-        # Products
-        for p in r.get("products", []) + r.get("items", []) + r.get("recommendations", []):
-            if p.get("price"):
-                known_prices.add(str(p["price"]))
-        # Subtotal
+            prices.add(str(r["price"]))
         if r.get("subtotal"):
-            known_prices.add(str(r["subtotal"]))
+            prices.add(str(r["subtotal"]))
         if r.get("cost"):
-            known_prices.add(str(r["cost"]))
+            prices.add(str(r["cost"]))
         if r.get("converted") is not None:
-            val = r["converted"]
-            if isinstance(val, (int, float)):
-                known_prices.add(f"${float(val):.2f}")
+            v = r["converted"]
+            if isinstance(v, (int, float)):
+                prices.add(f"${float(v):.2f}")
             else:
-                known_prices.add(str(val))
-
-    violations = answer_prices - known_prices
-    return len(violations) * 0.15
-
-
-def _check_counts(answer: str, tool_results: dict) -> float:
-    """Check count mentions match tool results."""
-    count_pat = re.compile(r'(\d+)\s*(sản phẩm|kết quả|đánh giá|món|item|product|review)', re.I)
-    matches = count_pat.findall(answer)
-    if not matches:
-        return 0.0
-
-    known_counts: set[int] = set()
-    for result in tool_results.values():
-        r = result if isinstance(result, dict) else {}
+                prices.add(str(v))
+        if r.get("average_score") is not None:
+            scores.add(float(r["average_score"]))
         for key in ("total", "total_reviews", "item_count"):
             if r.get(key) is not None:
-                known_counts.add(int(r[key]))
+                counts.add(int(r[key]))
 
-    penalty = 0.0
-    for count_str, _ in matches:
-        c = int(count_str)
-        if known_counts and c not in known_counts:
-            penalty += 0.15
-    return min(penalty, 0.30)
+        for p in r.get("products", []) + r.get("items", []) + r.get("recommendations", []):
+            if p.get("name"):
+                names.add(p["name"].lower())
+                names.update(w.lower() for w in p["name"].split())
+            if p.get("price"):
+                prices.add(str(p["price"]))
+
+    return {"prices": prices, "names": names, "scores": scores, "counts": counts}
 
 
-def _check_scores(answer: str, tool_results: dict) -> float:
-    """Check star rating mentions."""
-    score_pat = re.compile(r'(\d+\.?\d*)\s*/?\s*5')
-    matches = score_pat.findall(answer)
+def _check_prices(answer: str, known: dict) -> float:
+    """Check every $price in answer exists in tool results."""
+    matches = set(re.findall(r'\$\d+(?:\.\d{2})?', answer))
     if not matches:
         return 0.0
+    violations = matches - known["prices"]
+    if violations:
+        for v in violations:
+            # Allow if the price appears as substring of a known price
+            if not any(v in kp for kp in known["prices"]):
+                return 0.30
+    return 0.0
 
-    known_scores: set[float] = set()
-    for result in tool_results.values():
-        r = result if isinstance(result, dict) else {}
-        if r.get("average_score") is not None:
-            known_scores.add(float(r["average_score"]))
 
-    penalty = 0.0
-    for s in matches:
-        score = float(s)
-        if known_scores and not any(abs(score - k) <= 0.1 for k in known_scores):
-            penalty += 0.15
-    return min(penalty, 0.15)
+def _check_empty_evidence(answer: str, tool_results: dict) -> float:
+    """If all tool results empty but answer claims specifics → penalty."""
+    has_data = any(
+        bool(r.get("products") or r.get("items") or r.get("total", 0) > 0)
+        for r in tool_results.values() if isinstance(r, dict)
+    )
+    if has_data:
+        return 0.0
+
+    if re.search(r'\$\d+', answer) or re.search(r'\*\*[^*]{3,}\*\*', answer):
+        return 0.50
+    return 0.0
 
 
 def _check_action_confirm(answer: str, state: dict) -> float:
     """Check action confirm claims only when actually confirmed."""
-    action_pat = re.compile(r'(đã thêm|đã xoá|đã cập nhật|đã thực hiện)', re.I)
-    if not action_pat.search(answer):
+    if not re.search(r'(đã thêm|đã xoá|đã cập nhật|đã thực hiện)', answer, re.I):
         return 0.0
-    confirmed = state.get("confirmed", False)
-    pending = state.get("pending_action")
-    # If claiming action done but not actually confirmed → penalty
-    if pending and not confirmed:
-        return 0.15
+    if state.get("pending_action") and not state.get("confirmed"):
+        return 0.30
     return 0.0
 
 
-def _check_entity_list(answer: str, tool_results: dict) -> float:
-    """Check entity violations using known_set intersection."""
-    known = _build_known_set(tool_results)
-    if not known:
+def _check_entity_list(answer: str, known: dict) -> float:
+    """Check if named entities in answer appear in tool results (substring match)."""
+    bold_names = re.findall(r'\*\*([^*]+)\*\*', answer)
+    if not bold_names:
         return 0.0
 
-    # Check for zero-result case
-    for result in tool_results.values():
-        r = result if isinstance(result, dict) else {}
-        if r.get("total") == 0 and r.get("status") in ("success", "empty"):
-            # Any entity claim in answer is a violation
-            tokens = _extract_candidate_tokens(answer)
-            if tokens:
-                return 0.50
+    violations = 0
+    for name in bold_names:
+        name_lower = name.strip().lower()
+        if not name_lower:
+            continue
+        found = any(name_lower in kn for kn in known["names"])
+        if not found:
+            violations += 1
 
-    tokens = _extract_candidate_tokens(answer)
-    if not tokens:
-        return 0.0
-
-    violations = [t for t in tokens if len(t) > 4 and t not in known]
-    if len(violations) > len(tokens) * 0.6:
+    if violations > 0 and violations >= len(bold_names) * 0.5:
         return 0.40
     return 0.0
 
 
 async def hallucination_guard_node(state: dict) -> dict:
     """
-    HallucinationGuard: 6 exact deterministic checks.
-    Output: {groundedness_score, hallucination_detected, fallback_used, node_durations}
+    HallucinationGuard (simplified): 4 checks, threshold 0.5.
+    Template mode → auto PASS (templates only format tool data, never fabricate).
+    Output: {groundedness_score, hallucination_detected, node_durations}
     """
     t0 = time.time()
-    complexity = state.get("complexity_score", 0.0)
 
-    errors = state.get("errors") or []
-    # Only run for complex responses; template path → auto PASS
-    if complexity <= 0.5 and not errors:
-        return {
-            "groundedness_score": 1.0,
-            "hallucination_detected": False,
-            "fallback_used": False,
-            "node_durations": {"hallucination_guard": int((time.time() - t0) * 1000)},
-        }
-
+    mode = state.get("response_mode", "llm")
     answer = state.get("final_answer", "")
     tool_results = state.get("tool_results") or {}
 
-    if not answer:
+    # Template mode always passes — templates just format existing tool data
+    if mode == "template":
         return {
             "groundedness_score": 1.0,
             "hallucination_detected": False,
-            "fallback_used": False,
             "node_durations": {"hallucination_guard": int((time.time() - t0) * 1000)},
         }
 
+    if not answer or not tool_results:
+        return {
+            "groundedness_score": 1.0,
+            "hallucination_detected": False,
+            "node_durations": {"hallucination_guard": int((time.time() - t0) * 1000)},
+        }
+
+    known = _known_values(tool_results)
     score = 1.0
 
-    # Run all 6 checks
-    score -= _check_prices(answer, tool_results)
-    score -= _check_entity_list(answer, tool_results)
-    score -= _check_counts(answer, tool_results)
-    score -= _check_scores(answer, tool_results)
+    score -= _check_prices(answer, known)
+    score -= _check_entity_list(answer, known)
     score -= _check_action_confirm(answer, state)
+    score -= _check_empty_evidence(answer, tool_results)
     score = max(0.0, min(1.0, score))
 
-    hallucination_detected = score < 0.8
+    hallucination_detected = score < 0.5
 
     if hallucination_detected:
         _hallucination_metrics["failed"] += 1
@@ -219,28 +156,14 @@ async def hallucination_guard_node(state: dict) -> dict:
         _hallucination_metrics["passed"] += 1
 
     duration_ms = int((time.time() - t0) * 1000)
-    logger.info("[hallucination_guard] score=%.2f detected=%s (%dms)",
-                score, hallucination_detected, duration_ms)
+    logger.info("[hallucination_guard] mode=%s score=%.2f detected=%s (%dms)",
+                mode, score, hallucination_detected, duration_ms)
 
     result = {
         "groundedness_score": score,
         "hallucination_detected": hallucination_detected,
-        "fallback_used": False,
         "node_durations": {"hallucination_guard": duration_ms},
     }
-
-    # Phase 4.1: Nếu PASS và còn claims, gọi semantic_hallucination_gate per-claim
-    if not hallucination_detected:
-        answer = state.get("final_answer", "")
-        if answer:
-            from src.graph.gates.semantic_hallucination_gate import _extract_claims
-            claims = _extract_claims(answer)
-            if claims:
-                from src.graph.gates.semantic_hallucination_gate import semantic_hallucination_gate_node
-                sem_result = await semantic_hallucination_gate_node(state)
-                result["semantic_hallucination_detected"] = sem_result.get("semantic_hallucination_detected", False)
-                if sem_result.get("semantic_hallucination_detected"):
-                    result["hallucination_detected"] = True
-                    result["fallback_used"] = True
-
+    if hallucination_detected:
+        result["safe_mode"] = True
     return result

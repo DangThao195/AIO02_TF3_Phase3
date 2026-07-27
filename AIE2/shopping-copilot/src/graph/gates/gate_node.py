@@ -43,7 +43,7 @@ async def gate_node(
     context: str = "",
     gate_name: str = "routing_gate",
     want_reason: bool = False,
-    timeout: float = 2.0,
+    timeout: float = 15.0,
 ) -> GateResult:
     """
     Call Nova Lite with binary classification prompt.

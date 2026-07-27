@@ -1,0 +1,519 @@
+  [DB] shopping.db san sang (10 products)
+========================================================================
+  SHOPPING COPILOT - TOOL TEST
+  Mode: LIVE
+========================================================================
+
+========================================================================
+  1. ToolRegistry
+========================================================================
+
+  Registered tools: 16
+     1. search_products_v2                  write=False
+     2. get_cart_tool                       write=False
+     3. add_to_cart_tool                    write=True
+     4. update_cart_item_tool               write=True
+     5. check_cart_item_tool                write=False
+     6. get_product_details_tool            write=False
+     7. get_product_reviews_tool            write=False
+     8. get_best_reviewed_products_tool     write=False
+     9. get_worst_reviewed_products_tool    write=False
+    10. get_recommendations_tool            write=False
+    11. convert_currency_tool               write=False
+    12. get_shipping_quote_tool             write=False
+    13. get_categories                      write=False
+    14. get_all_products                    write=False
+    15. get_product_id                      write=False
+    16. respond_out_of_scope_tool           write=False
+
+
+========================================================================
+  2. SEARCH
+========================================================================
+
+----------------------------------------
+  Tool: search_products_v2
+  Input: {"query": "laptop"}
+
+[RAG] Kich hoat Bedrock RAG tim kiem ngu nghia cho: '"Laptop computer for everyday use, budget-friendly, reliable performance, suitable for students and professionals"' (Region: us-east-1, KB_ID: UCTITOWFHE)
+  [PASS] search_products_v2
+         | {
+         |   "status": "success",
+         |   "total": 0,
+         |   "confidence": 0.0
+         | }
+
+----------------------------------------
+  Tool: search_products_v2
+  Input: {"query": "iphone"}
+
+[RAG] Kich hoat Bedrock RAG tim kiem ngu nghia cho: '"iPhone smartphone, latest model, Apple brand, high-performance mobile device"' (Region: us-east-1, KB_ID: UCTITOWFHE)
+  [PASS] search_products_v2
+         | {
+         |   "status": "success",
+         |   "total": 0,
+         |   "confidence": 0.0
+         | }
+
+----------------------------------------
+  Tool: search_products_v2
+  Input: {"query": "ao thun"}
+
+[RAG] Kich hoat Bedrock RAG tim kiem ngu nghia cho: '"Men's or women's short-sleeve t-shirt, casual cotton ao thun for everyday wear"' (Region: us-east-1, KB_ID: UCTITOWFHE)
+  [PASS] search_products_v2
+         | {
+         |   "status": "success",
+         |   "total": 0,
+         |   "confidence": 0.0
+         | }
+
+----------------------------------------
+  Tool: search_products_v2
+  Input: {"query": "telescope"}
+
+[RAG] Kich hoat Bedrock RAG tim kiem ngu nghia cho: '"Telescope for astronomy stargazing, optical instrument for observing celestial objects"' (Region: us-east-1, KB_ID: UCTITOWFHE)
+  [PASS] search_products_v2
+         | {
+         |   "status": "success",
+         |   "total": 6,
+         |   "confidence": 0.95,
+         |   "products": [
+         |     {
+         |       "id": "66VCHSJNUP",
+         |       "name": "Starsense Explorer Refractor Telescope",
+         |       "price": "$349.95",
+         |       "description": "The first telescope that uses your smartphone to analyze the night sky and calculate it...
+
+----------------------------------------
+  Tool: search_products_v2
+  Input: {"query": "solar filter"}
+
+[RAG] Kich hoat Bedrock RAG tim kiem ngu nghia cho: '"Solar filter for telescopes, safe solar viewing accessory, designed for solar eclipse observation"' (Region: us-east-1, KB_ID: UCTITOWFHE)
+  [PASS] search_products_v2
+         | {
+         |   "status": "success",
+         |   "total": 3,
+         |   "confidence": 0.74,
+         |   "products": [
+         |     {
+         |       "id": "6E92ZMYYFZ",
+         |       "name": "Solar Filter",
+         |       "price": "$69.95",
+         |       "description": "Enhance your viewing experience with EclipSmart Solar Filter for 8\" telescopes. With two Velcro straps and four s...
+
+========================================================================
+  3. CATALOG
+========================================================================
+
+----------------------------------------
+  Tool: get_categories
+  Input: {}
+  [PASS] get_categories
+         | {
+         |   "status": "success",
+         |   "categories": [
+         |     "accessories",
+         |     "assembly",
+         |     "binoculars",
+         |     "books",
+         |     "flashlights",
+         |     "telescopes",
+         |     "travel"
+         |   ],
+         |   "total": 7
+         | }
+
+----------------------------------------
+  Tool: get_all_products
+  Input: {}
+  [PASS] get_all_products
+         | {
+         |   "status": "success",
+         |   "products": [
+         |     {
+         |       "id": "1YMWWN1N4O",
+         |       "name": "Eclipsmart Travel Refractor Telescope",
+         |       "price": "$129.95",
+         |       "description": "Dedicated white-light solar scope for the observer on the go. The 50mm refracting solar scope uses Solar Safe, ISO compliant...
+
+========================================================================
+  4. PRODUCT ID LOOKUP
+========================================================================
+
+----------------------------------------
+  Tool: get_product_id
+  Input: {"product_name": "Solar Filter"}
+  [PASS] get_product_id
+         | {
+         |   "status": "success",
+         |   "product_id": "6E92ZMYYFZ",
+         |   "product_name": "Solar Filter"
+         | }
+
+----------------------------------------
+  Tool: get_product_id
+  Input: {"product_name": "Laptop"}
+  [PASS] get_product_id
+         | {
+         |   "status": "not_found",
+         |   "message": "Không tìm thấy sản phẩm 'Laptop'."
+         | }
+
+----------------------------------------
+  Tool: get_product_id
+  Input: {"product_name": "San pham khong ton tai XYZ"}
+  [PASS] get_product_id
+         | {
+         |   "status": "not_found",
+         |   "message": "Không tìm thấy sản phẩm 'San pham khong ton tai XYZ'."
+         | }
+
+========================================================================
+  5. PRODUCT DETAIL
+========================================================================
+
+----------------------------------------
+  Tool: get_product_details_tool
+  Input: {"product_id": "OLJCESPC7Z"}
+  [PASS] get_product_details_tool
+         | {
+         |   "status": "success",
+         |   "product": {
+         |     "id": "OLJCESPC7Z",
+         |     "name": "National Park Foundation Explorascope",
+         |     "price": "$101.96",
+         |     "description": "The National Park Foundation's (NPF) Explorascope 60AZ is a manual alt-azimuth, refractor telescope perfect for celestial viewing on the go...
+
+----------------------------------------
+  Tool: get_product_details_tool
+  Input: {"product_id": "1"}
+  [PASS] get_product_details_tool
+         | {
+         |   "status": "error",
+         |   "message": "Dịch vụ sản phẩm tạm thời không khả dụng. Vui lòng thử lại sau."
+         | }
+
+========================================================================
+  6. REVIEWS
+========================================================================
+
+----------------------------------------
+  Tool: get_product_reviews_tool
+  Input: {"product_id": "OLJCESPC7Z"}
+  [PASS] get_product_reviews_tool
+         | {
+         |   "status": "success",
+         |   "product_id": "OLJCESPC7Z",
+         |   "reviews": [
+         |     {
+         |       "username": "stargazer_mike",
+         |       "score": 4.5,
+         |       "description": "Great entry-level telescope! Easy to set up and provides clear views of the moon and brighter planets. Highly recommend for new astronomers."
+         |     ...
+
+----------------------------------------
+  Tool: get_product_reviews_tool
+  Input: {"product_id": "1"}
+  [PASS] get_product_reviews_tool
+         | {
+         |   "status": "success",
+         |   "product_id": "1",
+         |   "reviews": [],
+         |   "average_score": 0,
+         |   "total_reviews": 0,
+         |   "source": "none"
+         | }
+
+----------------------------------------
+  Tool: get_best_reviewed_products_tool
+  Input: {"limit": 5}
+  [PASS] get_best_reviewed_products_tool
+         | {
+         |   "status": "success",
+         |   "total": 5,
+         |   "products": [
+         |     {
+         |       "id": "6E92ZMYYFZ",
+         |       "name": "Solar Filter",
+         |       "categories": "accessories,telescopes",
+         |       "price": 69.95,
+         |       "avg_score": 4.8,
+         |       "review_count": 5
+         |     },
+         |     {
+         |       "id": "9SIQT8TOJO",
+         |       "name": "Optical Tube ...
+
+----------------------------------------
+  Tool: get_best_reviewed_products_tool
+  Input: {"limit": 5, "category": "telescopes"}
+  [PASS] get_best_reviewed_products_tool
+         | {
+         |   "status": "success",
+         |   "total": 5,
+         |   "products": [
+         |     {
+         |       "id": "6E92ZMYYFZ",
+         |       "name": "Solar Filter",
+         |       "categories": "accessories,telescopes",
+         |       "price": 69.95,
+         |       "avg_score": 4.8,
+         |       "review_count": 5
+         |     },
+         |     {
+         |       "id": "9SIQT8TOJO",
+         |       "name": "Optical Tube ...
+
+----------------------------------------
+  Tool: get_best_reviewed_products_tool
+  Input: {"limit": 5, "category": "electronics"}
+  [PASS] get_best_reviewed_products_tool
+         | {
+         |   "status": "empty",
+         |   "total": 0,
+         |   "products": [],
+         |   "filters": {
+         |     "category": "electronics"
+         |   }
+         | }
+
+----------------------------------------
+  Tool: get_worst_reviewed_products_tool
+  Input: {"limit": 3}
+  [PASS] get_worst_reviewed_products_tool
+         | {
+         |   "status": "success",
+         |   "total": 3,
+         |   "products": [
+         |     {
+         |       "id": "OLJCESPC7Z",
+         |       "name": "National Park Foundation Explorascope",
+         |       "categories": "telescopes",
+         |       "price": 101.96,
+         |       "avg_score": 3.8,
+         |       "review_count": 5
+         |     },
+         |     {
+         |       "id": "2ZYFJ3GM2N",
+         |       "name": ...
+
+----------------------------------------
+  Tool: get_worst_reviewed_products_tool
+  Input: {"limit": 3, "category": "binoculars"}
+  [PASS] get_worst_reviewed_products_tool
+         | {
+         |   "status": "success",
+         |   "total": 1,
+         |   "products": [
+         |     {
+         |       "id": "2ZYFJ3GM2N",
+         |       "name": "Roof Binoculars",
+         |       "categories": "binoculars",
+         |       "price": 209.95,
+         |       "avg_score": 4.4,
+         |       "review_count": 5
+         |     }
+         |   ],
+         |   "filters": {
+         |     "category": "binoculars"
+         |   }
+         | }
+
+========================================================================
+  7. CART
+========================================================================
+
+----------------------------------------
+  Tool: get_cart_tool
+  Input: {"user_id": "user001"}
+  [PASS] get_cart_tool
+         | {
+         |   "status": "empty",
+         |   "items": [],
+         |   "subtotal": "$0.00",
+         |   "item_count": 0
+         | }
+
+----------------------------------------
+  Tool: check_cart_item_tool
+  Input: {"user_id": "user001", "product_id": "OLJCESPC7Z"}
+  [PASS] check_cart_item_tool
+         | Không tìm thấy sản phẩm 'OLJCESPC7Z' trong giỏ hàng của bạn.
+
+----------------------------------------
+  Tool: add_to_cart_tool
+  Input: {"user_id": "user001", "product_id": "OLJCESPC7Z", "quantity": 1}
+  [PASS] add_to_cart_tool
+         | {
+         |   "status": "pending",
+         |   "token": "eyJhY3Rpb24iOiJBZGRJdGVtIiwiZXhwIjoxNzg1MTE4ODk2LCJwYXJhbXMiOnsicHJvZHVjdF9pZCI6Ik9MSkNFU1BDN1oiLCJxdWFudGl0eSI6MX0sInVzZXJfaWQiOiJ1c2VyMDAxIn0=.0ce55004d59e1483bc01173c70c454ecf1e43dbd0bc9e2151d2d74a2d696ad3f",
+         |   "message": "Vui lòng xác nhận: thêm 1 National Pa...
+
+----------------------------------------
+  Tool: update_cart_item_tool
+  Input: {"user_id": "user001", "product_id": "OLJCESPC7Z", "quantity": 2}
+  [PASS] update_cart_item_tool
+         | {
+         |   "status": "pending",
+         |   "token": "",
+         |   "message": "Xác nhận cập nhật số lượng OLJCESPC7Z thành 2?"
+         | }
+
+========================================================================
+  8. RECOMMENDATIONS
+========================================================================
+
+----------------------------------------
+  Tool: get_recommendations_tool
+  Input: {"product_id": "OLJCESPC7Z"}
+  [PASS] get_recommendations_tool
+         | {
+         |   "status": "success",
+         |   "product_id": "OLJCESPC7Z",
+         |   "recommendations": [
+         |     {
+         |       "id": "1YMWWN1N4O",
+         |       "name": "Eclipsmart Travel Refractor Telescope",
+         |       "price": "$129.95"
+         |     },
+         |     {
+         |       "id": "0PUK6V6EV0",
+         |       "name": "Solar System Color Imager",
+         |       "price": "$175.00"
+         |    ...
+
+----------------------------------------
+  Tool: get_recommendations_tool
+  Input: {"product_id": "1"}
+  [PASS] get_recommendations_tool
+         | {
+         |   "status": "success",
+         |   "product_id": "1",
+         |   "recommendations": [
+         |     {
+         |       "id": "66VCHSJNUP",
+         |       "name": "Starsense Explorer Refractor Telescope",
+         |       "price": "$349.95"
+         |     },
+         |     {
+         |       "id": "HQTGWGPNH4",
+         |       "name": "The Comet Book",
+         |       "price": "$0.99"
+         |     },
+         |     {
+         |       "id":...
+
+========================================================================
+  9. CURRENCY CONVERSION
+========================================================================
+
+----------------------------------------
+  Tool: convert_currency_tool
+  Input: {"from_currency": "USD", "to_currency": "VND", "amount": 100.0}
+  [PASS] convert_currency_tool
+         | {
+         |   "status": "success",
+         |   "from": "USD",
+         |   "to": "VND",
+         |   "amount": 100.0,
+         |   "converted": 2500000.0,
+         |   "rate": 25000.0
+         | }
+
+----------------------------------------
+  Tool: convert_currency_tool
+  Input: {"from_currency": "VND", "to_currency": "USD", "amount": 100000}
+  [PASS] convert_currency_tool
+         | {
+         |   "status": "success",
+         |   "from": "VND",
+         |   "to": "USD",
+         |   "amount": 100000,
+         |   "converted": 4.0,
+         |   "rate": 4e-05
+         | }
+
+========================================================================
+  10. SHIPPING QUOTE
+========================================================================
+
+----------------------------------------
+  Tool: get_shipping_quote_tool
+  Input: {"city": "Ho Chi Minh", "country": "VN"}
+  [PASS] get_shipping_quote_tool
+         | {
+         |   "status": "success",
+         |   "destination": "Ho Chi Minh, VN",
+         |   "cost": "$0.00",
+         |   "days": 3
+         | }
+
+----------------------------------------
+  Tool: get_shipping_quote_tool
+  Input: {"address": "123 Nguyen Hue, Q1", "city": "Ho Chi Minh", "country": "VN"}
+  [PASS] get_shipping_quote_tool
+         | {
+         |   "status": "success",
+         |   "destination": "123 Nguyen Hue, Q1",
+         |   "cost": "$0.00",
+         |   "days": 3
+         | }
+
+========================================================================
+  11. OUT OF SCOPE
+========================================================================
+
+----------------------------------------
+  Tool: respond_out_of_scope_tool('greeting')
+  Input: {"reason": "greeting"}
+  [PASS] respond_out_of_scope_tool('greeting')
+         | {
+         |   "status": "success",
+         |   "response": "Xin chào! Tôi là trợ lý mua sắm của TechX Corp. Tôi có thể giúp bạn tìm kiếm sản phẩm, xem giỏ hàng, thêm sản phẩm vào giỏ, xem đánh giá, quy đổi tiền tệ, hoặc tính phí vận chuyển. Bạn cần tôi hỗ trợ gì ạ?",
+         |   "reason": "greeting"
+         | }
+
+----------------------------------------
+  Tool: respond_out_of_scope_tool('weather')
+  Input: {"reason": "weather"}
+  [PASS] respond_out_of_scope_tool('weather')
+         | {
+         |   "status": "success",
+         |   "response": "Tôi là trợ lý mua sắm, chuyên hỗ trợ các câu hỏi về sản phẩm và giỏ hàng. Tôi không có khả năng xem thông tin thời tiết. Bạn có muốn tôi tìm kiếm sản phẩm hoặc kiểm tra giỏ hàng không?",
+         |   "reason": "weather"
+         | }
+
+----------------------------------------
+  Tool: respond_out_of_scope_tool('math')
+  Input: {"reason": "math"}
+  [PASS] respond_out_of_scope_tool('math')
+         | {
+         |   "status": "success",
+         |   "response": "Tôi được thiết kế để hỗ trợ mua sắm trực tuyến, không phải để tính toán. Bạn có cần tôi tìm kiếm sản phẩm, xem giỏ hàng, hoặc quy đổi tiền tệ không?",
+         |   "reason": "math"
+         | }
+
+----------------------------------------
+  Tool: respond_out_of_scope_tool('news')
+  Input: {"reason": "news"}
+  [PASS] respond_out_of_scope_tool('news')
+         | {
+         |   "status": "success",
+         |   "response": "Tôi chỉ hỗ trợ các câu hỏi liên quan đến mua sắm. Tôi không thể cung cấp tin tức hay thông tin thời sự. Bạn cần tìm sản phẩm hay xem giỏ hàng?",
+         |   "reason": "news"
+         | }
+
+----------------------------------------
+  Tool: respond_out_of_scope_tool('general')
+  Input: {"reason": "general"}
+  [PASS] respond_out_of_scope_tool('general')
+         | {
+         |   "status": "success",
+         |   "response": "Xin lỗi, tôi chỉ có thể hỗ trợ các câu hỏi liên quan đến mua sắm. Bạn cần tìm kiếm sản phẩm, xem giỏ hàng, thêm sản phẩm vào giỏ, xem đánh giá, quy đổi tiền tệ, hay tính phí vận chuyển?",
+         |   "reason": "general"
+         | }
+
+========================================================================
+  DONE - Tat ca tool da duoc kiem tra.
+  Mode: LIVE
+========================================================================

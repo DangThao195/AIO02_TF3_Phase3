@@ -39,7 +39,6 @@ class SQLBuilder:
             query += " ORDER BY price_units DESC, price_nanos DESC"
         elif sort == "price_asc":
             query += " ORDER BY price_units ASC, price_nanos ASC"
-        query += " LIMIT 15"
         return query
 
     def build_category_listing(self) -> str:
@@ -67,7 +66,7 @@ class SQLBuilder:
                 escaped = self._escape_value(str(keyword).lower())
                 column_terms = [f"lower({col}) LIKE '%{escaped}%'" for col in columns]
                 keyword_terms.append(" OR ".join(column_terms))
-            return " OR ".join(keyword_terms)
+            return "(" + " OR ".join(keyword_terms) + ")"
         return None
 
     def _like_clause(self, column: str, value: str) -> str:

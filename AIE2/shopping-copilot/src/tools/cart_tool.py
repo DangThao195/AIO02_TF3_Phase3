@@ -6,6 +6,8 @@ Backend: CartService gRPC (demo.proto)
 
 import json
 import logging
+import time
+from functools import wraps
 from typing import Optional
 
 import grpc
@@ -16,6 +18,25 @@ from src.tools.service_config import CART_ADDR, CATALOG_ADDR
 from src.guardrails.confirmation import request_confirmation
 
 logger = logging.getLogger("tools.cart")
+
+
+def _grpc_retry(max_retries=3, backoff=1.5):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            last_err = None
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except grpc.RpcError as e:
+                    last_err = e
+                    if e.code() == grpc.StatusCode.UNAVAILABLE:
+                        time.sleep(backoff * (attempt + 1))
+                    else:
+                        break
+            raise last_err
+        return wrapper
+    return decorator
 
 
 def _normalize_price(units: int, nanos: int) -> str:
@@ -34,55 +55,62 @@ def get_cart_tool(user_id: str) -> str:
     Trả về JSON: {status, items[], subtotal, item_count}
     """
     try:
-        with grpc.insecure_channel(CART_ADDR) as cart_ch, \
-             grpc.insecure_channel(CATALOG_ADDR) as cat_ch:
-            cart_stub = demo_pb2_grpc.CartServiceStub(cart_ch)
-            cat_stub = demo_pb2_grpc.ProductCatalogServiceStub(cat_ch)
+        @_grpc_retry(max_retries=3, backoff=1.5)
+        def _get_cart():
+            with grpc.insecure_channel(CART_ADDR) as cart_ch:
+                stub = demo_pb2_grpc.CartServiceStub(cart_ch)
+                return stub.GetCart(demo_pb2.GetCartRequest(user_id=user_id))
 
-            resp = cart_stub.GetCart(demo_pb2.GetCartRequest(user_id=user_id))
+        resp = _get_cart()
 
-            if not resp.items:
-                return json.dumps({
-                    "status": "empty",
-                    "items": [],
-                    "subtotal": "$0.00",
-                    "item_count": 0,
-                }, ensure_ascii=False)
-
-            items = []
-            total_cents = 0
-            total_count = 0
-            for item in resp.items:
-                pname = item.product_id
-                price_str = "$0.00"
-                image = ""
-                item_total = 0
-                try:
-                    p = cat_stub.GetProduct(demo_pb2.GetProductRequest(id=item.product_id))
-                    pname = p.name
-                    price_str = _normalize_price(p.price_usd.units, p.price_usd.nanos)
-                    item_total = (p.price_usd.units * 100 + p.price_usd.nanos // 10_000_000) * item.quantity
-                    total_cents += item_total
-                    image = getattr(p, "picture", "") or ""
-                except Exception as e:
-                    logger.debug("[get_cart_tool] product lookup failed for %s: %s", item.product_id, e)
-
-                items.append({
-                    "product_id": item.product_id,
-                    "name": pname,
-                    "price": price_str,
-                    "quantity": item.quantity,
-                    "image": image,
-                })
-                total_count += item.quantity
-
-            subtotal = f"${total_cents // 100}.{total_cents % 100:02d}"
+        if not resp.items:
             return json.dumps({
-                "status": "success",
-                "items": items,
-                "subtotal": subtotal,
-                "item_count": total_count,
+                "status": "empty",
+                "items": [],
+                "subtotal": "$0.00",
+                "item_count": 0,
             }, ensure_ascii=False)
+
+        items = []
+        total_cents = 0
+        total_count = 0
+        for item in resp.items:
+            pname = item.product_id
+            price_str = "$0.00"
+            image = ""
+            item_total = 0
+            try:
+                @_grpc_retry(max_retries=2, backoff=1.0)
+                def _get_product(pid):
+                    with grpc.insecure_channel(CATALOG_ADDR) as cat_ch:
+                        cat_stub = demo_pb2_grpc.ProductCatalogServiceStub(cat_ch)
+                        return cat_stub.GetProduct(demo_pb2.GetProductRequest(id=pid))
+
+                p = _get_product(item.product_id)
+                pname = p.name
+                price_str = _normalize_price(p.price_usd.units, p.price_usd.nanos)
+                item_total = (p.price_usd.units * 100 + p.price_usd.nanos // 10_000_000) * item.quantity
+                total_cents += item_total
+                image = getattr(p, "picture", "") or ""
+            except Exception as e:
+                logger.debug("[get_cart_tool] product lookup failed for %s: %s", item.product_id, e)
+
+            items.append({
+                "product_id": item.product_id,
+                "name": pname,
+                "price": price_str,
+                "quantity": item.quantity,
+                "image": image,
+            })
+            total_count += item.quantity
+
+        subtotal = f"${total_cents // 100}.{total_cents % 100:02d}"
+        return json.dumps({
+            "status": "success",
+            "items": items,
+            "subtotal": subtotal,
+            "item_count": total_count,
+        }, ensure_ascii=False)
 
     except grpc.RpcError as e:
         code = e.code().name if hasattr(e, "code") else "UNKNOWN"
@@ -111,11 +139,14 @@ def add_to_cart_tool(user_id: str, product_id: str, quantity: int = 1) -> str:
         product_name = product_id
         price_str = "$0.00"
         try:
-            with grpc.insecure_channel(CATALOG_ADDR) as cat_ch:
-                cat_stub = demo_pb2_grpc.ProductCatalogServiceStub(cat_ch)
-                p = cat_stub.GetProduct(demo_pb2.GetProductRequest(id=product_id))
-                product_name = p.name
-                price_str = _normalize_price(p.price_usd.units, p.price_usd.nanos)
+            @_grpc_retry(max_retries=3, backoff=1.5)
+            def _lookup_product():
+                with grpc.insecure_channel(CATALOG_ADDR) as ch:
+                    stub = demo_pb2_grpc.ProductCatalogServiceStub(ch)
+                    return stub.GetProduct(demo_pb2.GetProductRequest(id=product_id))
+            p = _lookup_product()
+            product_name = p.name
+            price_str = _normalize_price(p.price_usd.units, p.price_usd.nanos)
         except Exception as e:
             logger.debug("[add_to_cart_tool] product lookup failed for %s: %s", product_id, e)
 
@@ -203,13 +234,16 @@ def check_cart_item_tool(user_id: str, product_id: str) -> str:
     Trả về chuỗi mô tả kết quả.
     """
     try:
-        with grpc.insecure_channel(CART_ADDR) as ch:
-            stub = demo_pb2_grpc.CartServiceStub(ch)
-            resp = stub.GetCart(demo_pb2.GetCartRequest(user_id=user_id))
-            for item in resp.items:
-                if item.product_id == product_id:
-                    return f"Sản phẩm '{product_id}' đang có trong giỏ hàng với số lượng {item.quantity}."
-            return f"Không tìm thấy sản phẩm '{product_id}' trong giỏ hàng của bạn."
+        @_grpc_retry(max_retries=3, backoff=1.5)
+        def _get_cart():
+            with grpc.insecure_channel(CART_ADDR) as ch:
+                stub = demo_pb2_grpc.CartServiceStub(ch)
+                return stub.GetCart(demo_pb2.GetCartRequest(user_id=user_id))
+        resp = _get_cart()
+        for item in resp.items:
+            if item.product_id == product_id:
+                return f"Sản phẩm '{product_id}' đang có trong giỏ hàng với số lượng {item.quantity}."
+        return f"Không tìm thấy sản phẩm '{product_id}' trong giỏ hàng của bạn."
     except grpc.RpcError as e:
         code = e.code().name if hasattr(e, "code") else "UNKNOWN"
         logger.warning("[check_cart_item_tool] gRPC %s | user=%s | product=%s", code, user_id, product_id)

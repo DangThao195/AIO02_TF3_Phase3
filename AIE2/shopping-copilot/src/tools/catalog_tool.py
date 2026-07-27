@@ -83,7 +83,7 @@ def get_all_products() -> str:
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT id, name, description, categories, price_units, price_nanos
-                FROM products ORDER BY name LIMIT 100
+                FROM products ORDER BY name
             """)
             rows = cursor.fetchall()
         finally:

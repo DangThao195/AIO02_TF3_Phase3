@@ -1,0 +1,87 @@
+{
+  "status": "ok",
+  "reply": "Rất tiếc, không có sản phẩm nào khớp với yêu cầu này.",
+  "session_id": "test_session",
+  "token": null,
+  "steps": [
+    {
+      "action": "Kiểm tra đầu vào",
+      "status": "ok",
+      "detail": "",
+      "duration_ms": 743
+    },
+    {
+      "action": "Phân tích tham chiếu",
+      "status": "ok",
+      "detail": "",
+      "duration_ms": 0
+    },
+    {
+      "action": "Dịch thuật",
+      "status": "ok",
+      "detail": "",
+      "duration_ms": 1
+    },
+    {
+      "action": "Lập kế hoạch",
+      "status": "ok",
+      "detail": "",
+      "duration_ms": 1018
+    },
+    {
+      "action": "Kiểm tra kế hoạch",
+      "status": "ok",
+      "detail": "",
+      "duration_ms": 0
+    },
+    {
+      "action": "Công cụ: multi_filter",
+      "status": "ok",
+      "detail": "",
+      "duration_ms": 528
+    },
+    {
+      "action": "Thực thi công cụ",
+      "status": "ok",
+      "detail": "",
+      "duration_ms": 528
+    },
+    {
+      "action": "Phản ánh kết quả",
+      "status": "ok",
+      "detail": "",
+      "duration_ms": 0
+    },
+    {
+      "action": "answer_synthesizer",
+      "status": "ok",
+      "detail": "",
+      "duration_ms": 676
+    },
+    {
+      "action": "Tạo câu trả lời",
+      "status": "ok",
+      "detail": "",
+      "duration_ms": 0
+    },
+    {
+      "action": "Kiểm tra độ chính xác",
+      "status": "ok",
+      "detail": "",
+      "duration_ms": 0
+    },
+    {
+      "action": "Tạo câu trả lời",
+      "status": "ok",
+      "detail": "",
+      "duration_ms": 0
+    },
+    {
+      "action": "Công cụ: multi_filter",
+      "status": "ok",
+      "detail": "",
+      "duration_ms": 0
+    }
+  ],
+  "evidence": {}
+}

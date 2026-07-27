@@ -1,0 +1,8 @@
+{
+  "status": "error",
+  "reply": "Lỗi hệ thống: Recursion limit of 10007 reached without hitting a stop condition. You can increase the limit by setting the `recursion_limit` config key.\nFor troubleshooting, visit: https://docs.langchain.com/oss/py",
+  "session_id": "test_session",
+  "token": null,
+  "steps": [],
+  "evidence": {}
+}

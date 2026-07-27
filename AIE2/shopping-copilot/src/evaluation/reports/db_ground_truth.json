@@ -1,0 +1,448 @@
+{
+  "products": [
+    {
+      "id": "1YMWWN1N4O",
+      "name": "Eclipsmart Travel Refractor Telescope",
+      "description": "Dedicated white-light solar scope for the observer on the go. The 50mm refracting solar scope uses Solar Safe, ISO compliant, full-aperture glass filter material to ensure the safest view of solar events.  The kit comes complete with everything you need, including the dedicated travel solar scope, a Solar Safe finderscope, tripod, a high quality 20mm (18x) Kellner eyepiece and a nylon backpack to carry everything in.  This Travel Solar Scope makes it easy to share the Sun as well as partial and total solar eclipses with the whole family and offers much higher magnifications than you would otherwise get using handheld solar viewers or binoculars.",
+      "picture": "EclipsmartTravelRefractorTelescope.jpg",
+      "price_units": 129,
+      "price_nanos": 950000000,
+      "price": 129.95,
+      "categories": "telescopes,travel",
+      "avg_score": 4.6,
+      "review_count": 5
+    },
+    {
+      "id": "L9ECAV7KIM",
+      "name": "Lens Cleaning Kit",
+      "description": "Wipe away dust, dirt, fingerprints and other particles on your lenses to see clearly with the Lens Cleaning Kit. This cleaning kit works on all glass and optical surfaces, including telescopes, binoculars, spotting scopes, monoculars, microscopes, and even your camera lenses, computer screens, and mobile devices.  The kit comes complete with a retractable lens brush to remove dust particles and dirt and two options to clean smudges and fingerprints off of your optics, pre-moistened lens wipes and a bottled lens cleaning fluid with soft cloth.",
+      "picture": "LensCleaningKit.jpg",
+      "price_units": 21,
+      "price_nanos": 950000000,
+      "price": 21.95,
+      "categories": "accessories",
+      "avg_score": 4.6,
+      "review_count": 5
+    },
+    {
+      "id": "OLJCESPC7Z",
+      "name": "National Park Foundation Explorascope",
+      "description": "The National Park Foundation's (NPF) Explorascope 60AZ is a manual alt-azimuth, refractor telescope perfect for celestial viewing on the go. The NPF Explorascope 60 can view the planets, moon, star clusters and brighter deep sky objects like the Orion Nebula and Andromeda Galaxy.",
+      "picture": "NationalParkFoundationExplorascope.jpg",
+      "price_units": 101,
+      "price_nanos": 960000000,
+      "price": 101.96,
+      "categories": "telescopes",
+      "avg_score": 3.8,
+      "review_count": 5
+    },
+    {
+      "id": "9SIQT8TOJO",
+      "name": "Optical Tube Assembly",
+      "description": "Capturing impressive deep-sky astroimages is easier than ever with Rowe-Ackermann Schmidt Astrograph (RASA) V2, the perfect companion to today's top DSLR or astronomical CCD cameras. This fast, wide-field f/2.2 system allows for shorter exposure times compared to traditional f/10 astroimaging, without sacrificing resolution. Because shorter sub-exposure times are possible, your equatorial mount won't need to accurately track over extended periods. The short focal length also lessens equatorial tracking demands. In many cases, autoguiding will not be required.",
+      "picture": "OpticalTubeAssembly.jpg",
+      "price_units": 3599,
+      "price_nanos": 0,
+      "price": 3599.0,
+      "categories": "accessories,telescopes,assembly",
+      "avg_score": 4.8,
+      "review_count": 5
+    },
+    {
+      "id": "LS4PSXUNUM",
+      "name": "Red Flashlight",
+      "description": "This 3-in-1 device features a 3-mode red flashlight, a hand warmer, and a portable power bank for recharging your personal electronics on the go. Whether you use it to light the way at an techx star party, a night walk, or wildlife research, ThermoTorch 3 Astro Red's rugged, IPX4-rated design will withstand your everyday activities.",
+      "picture": "RedFlashlight.jpg",
+      "price_units": 57,
+      "price_nanos": 80000000,
+      "price": 57.08,
+      "categories": "accessories,flashlights",
+      "avg_score": 4.6,
+      "review_count": 5
+    },
+    {
+      "id": "2ZYFJ3GM2N",
+      "name": "Roof Binoculars",
+      "description": "This versatile, all-around binocular is a great choice for the trail, the stadium, the arena, or just about anywhere you want a close-up view of the action without sacrificing brightness or detail. It's an especially great companion for nature observation and bird watching, with ED glass that helps you spot the subtlest field markings and a close focus of just 6.5 feet.",
+      "picture": "RoofBinoculars.jpg",
+      "price_units": 209,
+      "price_nanos": 950000000,
+      "price": 209.95,
+      "categories": "binoculars",
+      "avg_score": 4.4,
+      "review_count": 5
+    },
+    {
+      "id": "6E92ZMYYFZ",
+      "name": "Solar Filter",
+      "description": "Enhance your viewing experience with EclipSmart Solar Filter for 8\" telescopes. With two Velcro straps and four self-adhesive Velcro pads for added safety, you can be assured that the solar filter cannot be accidentally knocked off and will provide Solar Safe, ISO compliant viewing.",
+      "picture": "SolarFilter.jpg",
+      "price_units": 69,
+      "price_nanos": 950000000,
+      "price": 69.95,
+      "categories": "accessories,telescopes",
+      "avg_score": 4.8,
+      "review_count": 5
+    },
+    {
+      "id": "0PUK6V6EV0",
+      "name": "Solar System Color Imager",
+      "description": "You have your new telescope and have observed Saturn and Jupiter. Now you're ready to take the next step and start imaging them. But where do you begin? The NexImage 10 Solar System Imager is the perfect solution.",
+      "picture": "SolarSystemColorImager.jpg",
+      "price_units": 175,
+      "price_nanos": 0,
+      "price": 175.0,
+      "categories": "accessories,telescopes",
+      "avg_score": 4.6,
+      "review_count": 5
+    },
+    {
+      "id": "66VCHSJNUP",
+      "name": "Starsense Explorer Refractor Telescope",
+      "description": "The first telescope that uses your smartphone to analyze the night sky and calculate its position in real time. StarSense Explorer is ideal for beginners thanks to the app's user-friendly interface and detailed tutorials. It's like having your own personal tour guide of the night sky",
+      "picture": "StarsenseExplorer.jpg",
+      "price_units": 349,
+      "price_nanos": 950000000,
+      "price": 349.95,
+      "categories": "telescopes",
+      "avg_score": 4.6,
+      "review_count": 5
+    },
+    {
+      "id": "HQTGWGPNH4",
+      "name": "The Comet Book",
+      "description": "A 16th-century treatise on comets, created anonymously in Flanders (now northern France) and now held at the Universitätsbibliothek Kassel. Commonly known as The Comet Book (or Kometenbuch in German), its full title translates as \"Comets and their General and Particular Meanings, According to Ptolomeé, Albumasar, Haly, Aliquind and other Astrologers\". The image is from https://publicdomainreview.org/collection/the-comet-book, made available by the Universitätsbibliothek Kassel under a CC-BY SA 4.0 license (https://creativecommons.org/licenses/by-sa/4.0/)",
+      "picture": "TheCometBook.jpg",
+      "price_units": 0,
+      "price_nanos": 990000000,
+      "price": 0.99,
+      "categories": "books",
+      "avg_score": 4.6,
+      "review_count": 5
+    }
+  ],
+  "reviews": {
+    "0PUK6V6EV0": [
+      {
+        "reviewer": "space_artist",
+        "score": 5.0,
+        "text": "The detail I can capture with this imager is incredible. It integrates well with various software. A must-have for serious planetary observers."
+      },
+      {
+        "reviewer": "astro_photog",
+        "score": 5.0,
+        "text": "This imager is a fantastic step up for planetary photography. The color quality is superb. Easy to use with my existing telescope setup."
+      },
+      {
+        "reviewer": "digital_sky",
+        "score": 4.5,
+        "text": "A solid choice for getting into solar system imaging. The setup was straightforward. Produces beautiful, vibrant planetary images."
+      },
+      {
+        "reviewer": "planet_shooter",
+        "score": 4.5,
+        "text": "Finally capturing stunning images of Saturn and Jupiter! The NexImage 10 makes it so accessible. Great for beginners in astrophotography."
+      },
+      {
+        "reviewer": "imager_pro",
+        "score": 4.0,
+        "text": "Excellent resolution and color rendition for its price point. It's a perfect solution for those looking to start imaging planets. Highly satisfied."
+      }
+    ],
+    "1YMWWN1N4O": [
+      {
+        "reviewer": "solar_viewer",
+        "score": 5.0,
+        "text": "Perfect for solar observations! The Solar Safe filter gives peace of mind. I used it for the last partial eclipse and it was fantastic."
+      },
+      {
+        "reviewer": "sun_gazer",
+        "score": 5.0,
+        "text": "Very impressed with the safety features and clarity. Sharing the sun with family has never been easier or safer. Great value for a dedicated solar scope."
+      },
+      {
+        "reviewer": "safe_viewer",
+        "score": 4.5,
+        "text": "The ISO compliant filter is reassuring. It's a well-designed product for safe solar observation. Highly recommend for educational purposes too."
+      },
+      {
+        "reviewer": "eclipse_chaser",
+        "score": 4.5,
+        "text": "Compact and easy to carry, this telescope is ideal for eclipse events. The included backpack is a nice touch. Views of the sun are incredibly clear and safe."
+      },
+      {
+        "reviewer": "travel_astro",
+        "score": 4.0,
+        "text": "Excellent travel scope for solar viewing. The magnification is much better than binoculars for the sun. A must-have for any solar enthusiast."
+      }
+    ],
+    "2ZYFJ3GM2N": [
+      {
+        "reviewer": "bird_watcher",
+        "score": 5.0,
+        "text": "Incredible clarity and brightness, perfect for bird watching. The ED glass really makes a difference. I can spot the subtlest markings."
+      },
+      {
+        "reviewer": "outdoor_adventurer",
+        "score": 4.5,
+        "text": "Excellent build quality and optical performance. They feel robust and provide sharp images. A great investment for any outdoor activity."
+      },
+      {
+        "reviewer": "nature_lover",
+        "score": 4.5,
+        "text": "These binoculars are fantastic for nature observation. The close focus is a huge advantage for viewing nearby wildlife. Very comfortable to hold."
+      },
+      {
+        "reviewer": "stadium_fan",
+        "score": 4.0,
+        "text": "Took these to a game and had an amazing view of the action. They perform great in various lighting conditions. A solid all-around binocular."
+      },
+      {
+        "reviewer": "hiker_guy",
+        "score": 4.0,
+        "text": "Lightweight and durable, these are my go-to binoculars for hiking. The wide field of view is excellent. Highly recommend for outdoor enthusiasts."
+      }
+    ],
+    "66VCHSJNUP": [
+      {
+        "reviewer": "clear_skies",
+        "score": 5.0,
+        "text": "Finally, a telescope that takes the guesswork out of stargazing. The real-time positioning is incredibly accurate. Highly recommended for anyone new to techx."
+      },
+      {
+        "reviewer": "tech_astro",
+        "score": 5.0,
+        "text": "The StarSense app is revolutionary! It made finding celestial objects incredibly easy. This telescope is a game-changer for beginners."
+      },
+      {
+        "reviewer": "app_user",
+        "score": 4.5,
+        "text": "Amazing technology, the smartphone integration works flawlessly. I've never had so much fun exploring the night sky. Worth every penny."
+      },
+      {
+        "reviewer": "gadget_geek",
+        "score": 4.5,
+        "text": "Fantastic product, the app truly guides you. It's like having a personal astronomer with you. The optical quality is also very good."
+      },
+      {
+        "reviewer": "innovator_john",
+        "score": 4.0,
+        "text": "Setup was a breeze, and the tutorials in the app are very helpful. The views are crisp and clear. My only minor gripe is battery drain on the phone."
+      }
+    ],
+    "6E92ZMYYFZ": [
+      {
+        "reviewer": "eclipse_ready",
+        "score": 5.0,
+        "text": "Bought this for the upcoming eclipse, and it fits perfectly. Tested it out, and the views are fantastic and safe. Very happy with this purchase."
+      },
+      {
+        "reviewer": "solar_safety",
+        "score": 5.0,
+        "text": "Essential for safe solar viewing with my 8-inch telescope. The Velcro straps ensure it stays securely in place. Peace of mind during solar observations."
+      },
+      {
+        "reviewer": "safe_sun_gazer",
+        "score": 5.0,
+        "text": "Easy to attach and provides crystal clear, safe views of the sun. The build quality is excellent. A must-have accessory for solar enthusiasts."
+      },
+      {
+        "reviewer": "filter_fan",
+        "score": 4.5,
+        "text": "Works perfectly with my 8-inch scope. No more worries about accidental dislodgement. Great product for protecting your eyes and equipment."
+      },
+      {
+        "reviewer": "telescope_upgrade",
+        "score": 4.5,
+        "text": "This EclipSmart filter is a perfect addition to my setup. The ISO compliance is crucial. Highly recommend for anyone looking to view the sun safely."
+      }
+    ],
+    "9SIQT8TOJO": [
+      {
+        "reviewer": "deep_sky_master",
+        "score": 5.0,
+        "text": "The RASA V2 is a dream come true for deep-sky imaging. The f/2.2 speed drastically cuts down exposure times. My best astrophotography investment yet."
+      },
+      {
+        "reviewer": "pro_astro",
+        "score": 5.0,
+        "text": "Unbelievable performance for wide-field astrophotography. The short focal length makes guiding less critical. Produces stunning, detailed images."
+      },
+      {
+        "reviewer": "advanced_scope",
+        "score": 5.0,
+        "text": "Worth every penny for the quality and speed it offers. My images have never been sharper or more vibrant. A truly professional piece of equipment."
+      },
+      {
+        "reviewer": "imaging_guru",
+        "score": 4.5,
+        "text": "This OTA is a beast! The fast optics mean more data in less time. If you're serious about deep-sky imaging, this is the one."
+      },
+      {
+        "reviewer": "precision_optics",
+        "score": 4.5,
+        "text": "The engineering behind this RASA is exceptional. It's incredibly efficient for capturing faint objects. A high-end choice for dedicated imagers."
+      }
+    ],
+    "HQTGWGPNH4": [
+      {
+        "reviewer": "history_buff",
+        "score": 5.0,
+        "text": "A fascinating glimpse into historical astronomical thought. The content is incredibly insightful. A must-read for anyone interested in the history of science."
+      },
+      {
+        "reviewer": "celestial_history",
+        "score": 5.0,
+        "text": "I love historical techx, and this book delivers. It's well-researched and provides a window into past beliefs. Highly recommended for scholars."
+      },
+      {
+        "reviewer": "bookworm_astro",
+        "score": 4.5,
+        "text": "Beautifully presented historical document. It's amazing to see how comets were understood centuries ago. A valuable addition to any techx library."
+      },
+      {
+        "reviewer": "rare_find",
+        "score": 4.5,
+        "text": "A truly special book for enthusiasts of astronomical history. The details about ancient astrologers are very interesting. Great for a deeper understanding."
+      },
+      {
+        "reviewer": "ancient_texts",
+        "score": 4.0,
+        "text": "Such a unique and intriguing read. The historical context is captivating. It offers a different perspective on celestial events."
+      }
+    ],
+    "L9ECAV7KIM": [
+      {
+        "reviewer": "tech_maintenance",
+        "score": 5.0,
+        "text": "Great value for money. The different cleaning options cover all needs. Keeps my expensive equipment in pristine condition."
+      },
+      {
+        "reviewer": "clean_optics",
+        "score": 5.0,
+        "text": "This kit is a lifesaver for all my optics. The brush and wipes work perfectly without leaving any residue. My lenses have never been cleaner."
+      },
+      {
+        "reviewer": "sharp_view",
+        "score": 4.5,
+        "text": "Works as advertised, my telescope views are much clearer after using this. The fluid and cloth are excellent. Definitely recommend."
+      },
+      {
+        "reviewer": "photog_pro",
+        "score": 4.5,
+        "text": "Essential for any photographer or telescope owner. It safely removes dust and fingerprints. A high-quality cleaning solution."
+      },
+      {
+        "reviewer": "daily_cleaner",
+        "score": 4.0,
+        "text": "I use this on my binoculars, camera lenses, and even my phone screen. It's very effective and gentle. A versatile cleaning kit."
+      }
+    ],
+    "LS4PSXUNUM": [
+      {
+        "reviewer": "astro_accessory",
+        "score": 5.0,
+        "text": "Every astronomer needs one of these. The red light is essential, and the hand warmer and power bank make it incredibly useful. A top-tier accessory."
+      },
+      {
+        "reviewer": "night_walker",
+        "score": 5.0,
+        "text": "The red light is perfect for preserving night vision during techx sessions. The hand warmer is an unexpected bonus. Very practical device."
+      },
+      {
+        "reviewer": "star_party_goer",
+        "score": 4.5,
+        "text": "This flashlight is indispensable for star parties. The red mode is gentle on the eyes, and the power bank feature is super handy. Love it!"
+      },
+      {
+        "reviewer": "camper_chris",
+        "score": 4.5,
+        "text": "Rugged and versatile, this flashlight is great for camping and night walks. The hand warmer function is a game-changer on cold nights. Highly recommend."
+      },
+      {
+        "reviewer": "emergency_kit",
+        "score": 4.0,
+        "text": "A fantastic multi-tool for my emergency kit. The red light is useful, and the power bank means I can charge my phone. Great design."
+      }
+    ],
+    "OLJCESPC7Z": [
+      {
+        "reviewer": "stargazer_mike",
+        "score": 4.5,
+        "text": "Great entry-level telescope! Easy to set up and provides clear views of the moon and brighter planets. Highly recommend for new astronomers."
+      },
+      {
+        "reviewer": "nightskylover",
+        "score": 4.0,
+        "text": "For the price, this Explorascope delivers excellent performance. I was able to see Jupiter's moons clearly. A fantastic purchase for casual viewing."
+      },
+      {
+        "reviewer": "celestial_explorer",
+        "score": 4.0,
+        "text": "Perfect for camping trips. It's lightweight and portable, making it easy to take anywhere. The views are surprisingly good for its size."
+      },
+      {
+        "reviewer": "beginner_astro",
+        "score": 3.5,
+        "text": "A bit tricky to get used to the manual controls, but once you do, it's very rewarding. Saw the Orion Nebula for the first time! Good value."
+      },
+      {
+        "reviewer": "telescope_fan",
+        "score": 3.0,
+        "text": "Not the most powerful scope, but it's great for kids and beginners. My children love looking at the moon with it. A solid choice for family fun."
+      }
+    ]
+  },
+  "avg_scores": {
+    "66VCHSJNUP": {
+      "avg_score": 4.6,
+      "review_count": 5
+    },
+    "9SIQT8TOJO": {
+      "avg_score": 4.8,
+      "review_count": 5
+    },
+    "OLJCESPC7Z": {
+      "avg_score": 3.8,
+      "review_count": 5
+    },
+    "L9ECAV7KIM": {
+      "avg_score": 4.6,
+      "review_count": 5
+    },
+    "6E92ZMYYFZ": {
+      "avg_score": 4.8,
+      "review_count": 5
+    },
+    "LS4PSXUNUM": {
+      "avg_score": 4.6,
+      "review_count": 5
+    },
+    "2ZYFJ3GM2N": {
+      "avg_score": 4.4,
+      "review_count": 5
+    },
+    "HQTGWGPNH4": {
+      "avg_score": 4.6,
+      "review_count": 5
+    },
+    "1YMWWN1N4O": {
+      "avg_score": 4.6,
+      "review_count": 5
+    },
+    "0PUK6V6EV0": {
+      "avg_score": 4.6,
+      "review_count": 5
+    }
+  },
+  "all_categories_raw": [
+    "accessories",
+    "accessories,flashlights",
+    "accessories,telescopes",
+    "accessories,telescopes,assembly",
+    "binoculars",
+    "books",
+    "telescopes",
+    "telescopes,travel"
+  ]
+}

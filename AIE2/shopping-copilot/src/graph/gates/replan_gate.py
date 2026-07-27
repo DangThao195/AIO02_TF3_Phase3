@@ -26,7 +26,7 @@ async def replan_gate_node(state: dict) -> dict:
     )
 
     result = await gate_node(question=question, gate_name="replan_gate",
-                              want_reason=True, timeout=2.0)
+                              want_reason=True, timeout=15.0)
 
     gate_decisions = dict(state.get("gate_decisions") or {})
     gate_decisions["replan_gate"] = {"decision": result.decision, "reason": result.reason}

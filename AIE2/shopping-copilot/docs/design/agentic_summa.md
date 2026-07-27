@@ -11,22 +11,25 @@
 
 ```
 User → [Guardrail L1-L2] → Intent Parser (rule → LLM fallback)
+                         → Reference Resolver (Table/Stack/Registry → rewrite query)
                          → Task Graph Builder (LLM chọn tool + nối DAG)
                          → Tool Executor (DAG runner, parallel, conditional)
+                             → Reference Updater (cập nhật Table/Stack/Registry)
                          → Reflection (pass / partial replan)
                          → Response Verifier (template-first / LLM)
                          → HallucinationGuard + Semantic Gate
                          → Answer Generator → User
 ```
 
-### Lớp Planner 2 tầng
+### Lớp Planner 2 tầng (+ Reference Resolution)
 
 | Layer | Chức năng | Output |
 |---|---|---|
 | **Intent Parser** | Rule-based regex (fast path) → LLM fallback nếu không rõ | `{intent, entities, confidence}` |
-| **Task Graph Builder** | LLM chọn tool từ ToolRegistry + nối edge dependency | `DAGPlan {nodes, edges, confidence}` |
+| **Reference Resolver** | Detect "nó"/"cái đầu tiên"/"cái cuối" → resolve bằng Reference Table, Stack, Entity Registry → rewrite query | `{resolved_query, resolved_entities, references}` |
+| **Task Graph Builder** | LLM chọn tool từ ToolRegistry + nối edge dependency (nhận query đã rewrite) | `DAGPlan {nodes, edges, confidence}` |
 
-Không như v2 dùng workflow cố định: DAG cho phép chạy song song node độc lập, conditional branching, và partial replan khi node lỗi.
+Tham chiếu từ khoá ("nó", "cái đầu tiên", "cái thứ hai") được resolve deterministic ($0, ~60μs) trước khi vào LLM planner — không cần LLM suy luận. Reference Table, Stack, Entity Registry được cập nhật sau mỗi tool result.
 
 ### DAG Executor & Reflection
 
@@ -63,7 +66,7 @@ Không như v2 dùng workflow cố định: DAG cho phép chạy song song node 
 
 ## State & Cache
 
-**State** (`ShoppingState`): messages, plan (DAG), intent + entities, tool_results, planner_memory (ngắn hạn), groundedness_score, gate_decisions, reflection_result, confirmation fields.
+**State** (`ShoppingState`): messages, plan (DAG), intent + entities, tool_results, planner_memory (ngắn hạn), **last_tool_outputs** (structured), **reference_table** (ordinal → item), **reference_stack** (navigation history), **entity_registry** (cross-turn entity mapping), groundedness_score, gate_decisions, reflection_result, confirmation fields.
 
 **Cache** (Redis, 3 logical DBs): Planner cache (DB0, 5p), Tool cache (DB1: search/product/currency/shipping/recommend, 10-60p), Session cache (DB2, 30p).
 

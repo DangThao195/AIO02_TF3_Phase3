@@ -171,6 +171,30 @@ class CacheManager:
     def session_key(session_id: str) -> str:
         return f"session:{session_id}"
 
+    # ── Persistence ───────────────────────────────────────────────
+
+    def persist_all(self) -> None:
+        """Persist local cache store and session store to disk."""
+        if self._local:
+            try:
+                self._local.persist()
+            except Exception as e:
+                logger.warning("[cache_manager] local cache persist error: %s", e)
+        try:
+            from src.memory.store import get_session_store
+            get_session_store().persist()
+        except Exception as e:
+            logger.warning("[cache_manager] session store persist error: %s", e)
+
+    @staticmethod
+    def persist_all_sync() -> None:
+        """Static helper: persist both cache and session singletons."""
+        try:
+            mgr = get_cache_manager()
+            mgr.persist_all()
+        except Exception as e:
+            logger.warning("[cache_manager] persist_all failed: %s", e)
+
 
 # Singleton
 _cache_manager: Optional[CacheManager] = None

@@ -90,7 +90,7 @@ async def main():
         queries = queries[:args.limit]
 
     print(f"\n{'='*60}")
-    print(f"🧪 LangGraph Test — {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    print(f"LangGraph Test — {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     print(f"Queries: {len(queries)}")
     print(f"{'='*60}")
 
@@ -103,30 +103,30 @@ async def main():
     results = []
     for i, query in enumerate(queries):
         result = await run_graph(graph, f"test-{i}", "test-user", query)
-        status_icon = "✅" if result.get("status") == "ok" else "❌"
+        status_icon = "PASS" if result.get("status") == "ok" else "FAIL"
         print(f"\n[{i+1}] {status_icon} {query[:60]}")
         print(f"    Intent: {result.get('intent', '?')} | Source: {result.get('intent_source', '?')}")
         reply = result.get("reply", "")
         if reply:
             print(f"    Reply: {reply[:120]}…" if len(reply) > 120 else f"    Reply: {reply}")
         if result.get("violations"):
-            print(f"    ⚠️  Violations: {json.dumps(result['violations'], ensure_ascii=False)}")
+            print(f"    Violations: {json.dumps(result['violations'], ensure_ascii=False)}")
         if result.get("error"):
-            print(f"    ❌ Error: {result['error']}")
+            print(f"    Error: {result['error']}")
         results.append({"query": query, **result})
 
     errors = sum(1 for r in results if r.get("error"))
     print(f"\n{'='*60}")
-    print(f"📊 Kết quả: {len(results) - errors}/{len(results)} passed")
+    print(f"Ket qua: {len(results) - errors}/{len(results)} passed")
     if errors:
-        print(f"❌ Errors: {errors}")
+        print(f"Errors: {errors}")
     print(f"{'='*60}\n")
 
     if args.output:
         output = {"timestamp": datetime.now().isoformat(), "total": len(results), "results": results}
         with open(args.output, "w", encoding="utf-8") as f:
             json.dump(output, f, ensure_ascii=False, indent=2)
-        print(f"✅ Saved to: {args.output}")
+        print(f"Saved to: {args.output}")
 
 
 if __name__ == "__main__":

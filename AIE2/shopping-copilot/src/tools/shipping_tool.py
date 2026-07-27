@@ -1,11 +1,12 @@
 """
 tools/shipping_tool.py — get_shipping_quote_tool
 
-Backend: ShippingService HTTP/gRPC
+Backend: ShippingService HTTP (POST JSON) / gRPC
 """
 
 import json
 import logging
+from urllib.request import urlopen, Request
 
 import grpc
 from langchain_core.tools import tool
@@ -36,30 +37,56 @@ def get_shipping_quote_tool(
         return json.dumps({"status": "error", "message": "Vui lòng cung cấp địa chỉ giao hàng."})
 
     try:
-        # Dùng gRPC nếu địa chỉ là host:port (không có http://)
-        shipping_host = SHIPPING_ADDR.replace("http://", "").replace("https://", "")
-        with grpc.insecure_channel(shipping_host) as ch:
-            stub = demo_pb2_grpc.ShippingServiceStub(ch)
-            resp = stub.GetQuote(demo_pb2.GetQuoteRequest(
-                address=demo_pb2.Address(
-                    street_address=street or address,
-                    city=city,
-                    state=state,
-                    country=country or "VN",
-                    zip_code=zip_code,
-                ),
-                items=[],
-            ))
-            cost = resp.cost_usd
-            cost_str = f"${cost.units}.{cost.nanos // 10_000_000:02d}"
-            days = getattr(resp, "shipping_days", getattr(resp, "days", 3))
+        if SHIPPING_ADDR.startswith("http://") or SHIPPING_ADDR.startswith("https://"):
+            base = SHIPPING_ADDR.rstrip("/")
+            body = json.dumps({
+                "address": {
+                    "street_address": street or address,
+                    "city": city,
+                    "state": state,
+                    "country": country or "VN",
+                    "zip_code": zip_code,
+                },
+                "items": [],
+            }, ensure_ascii=False).encode("utf-8")
+            req = Request(f"{base}/get-quote", data=body,
+                          headers={"Content-Type": "application/json"}, method="POST")
+            with urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read())
+            cost = data.get("cost_usd", {})
+            units = cost.get("units", 0)
+            nanos = cost.get("nanos", 0)
+            cost_str = f"${units}.{nanos // 10_000_000:02d}"
 
             return json.dumps({
                 "status": "success",
                 "destination": dest,
                 "cost": cost_str,
-                "days": days,
+                "days": 3,
             }, ensure_ascii=False)
+        else:
+            with grpc.insecure_channel(SHIPPING_ADDR) as ch:
+                stub = demo_pb2_grpc.ShippingServiceStub(ch)
+                resp = stub.GetQuote(demo_pb2.GetQuoteRequest(
+                    address=demo_pb2.Address(
+                        street_address=street or address,
+                        city=city,
+                        state=state,
+                        country=country or "VN",
+                        zip_code=zip_code,
+                    ),
+                    items=[],
+                ))
+                cost = resp.cost_usd
+                cost_str = f"${cost.units}.{cost.nanos // 10_000_000:02d}"
+                days = getattr(resp, "shipping_days", getattr(resp, "days", 3))
+
+                return json.dumps({
+                    "status": "success",
+                    "destination": dest,
+                    "cost": cost_str,
+                    "days": days,
+                }, ensure_ascii=False)
 
     except grpc.RpcError as e:
         code = e.code().name if hasattr(e, "code") else "UNKNOWN"

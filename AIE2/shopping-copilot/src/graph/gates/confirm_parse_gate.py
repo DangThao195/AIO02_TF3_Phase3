@@ -15,7 +15,7 @@ async def confirm_parse_gate_node(state: dict) -> dict:
     question = GATE_QUESTIONS["confirm_parse_gate"].format(user_reply=user_reply)
 
     result = await gate_node(question=question, gate_name="confirm_parse_gate",
-                              want_reason=False, timeout=2.0)
+                              want_reason=False, timeout=15.0)
 
     gate_decisions = dict(state.get("gate_decisions") or {})
     gate_decisions["confirm_parse_gate"] = {"decision": result.decision}

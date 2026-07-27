@@ -17,6 +17,7 @@ import os
 import re
 import sqlite3
 import time
+import unicodedata
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -226,12 +227,13 @@ class EntityExtractor:
         return entities
 
     def _infer_category(self, query: str) -> str | None:
-        normalized = re.sub(r"[^a-z0-9]+", "", query.lower())
+        nfkd_normalized = unicodedata.normalize("NFKD", query.lower())
+        normalized = re.sub(r"[^a-z0-9]+", "", nfkd_normalized)
         catalog_hints = self._get_catalog_category_hints()
         for normalized_hint, original_hint in catalog_hints.items():
             if normalized_hint in normalized:
                 return original_hint
-        for token in re.findall(r"[a-zA-ZÀ-ỹ0-9]+", query.lower()):
+        for token in re.findall(r"[a-zA-Z0-9]+", nfkd_normalized):
             cleaned = re.sub(r"[^a-z0-9]+", "", token)
             if cleaned in catalog_hints:
                 return catalog_hints[cleaned]
@@ -301,6 +303,27 @@ class EntityExtractor:
         except Exception as e:
             logger.warning("[entity_extractor] failed to load category hints: %s", e)
             return hints
+
+        # Add Vietnamese synonyms for each category hint
+        def _strip_diacritics(text: str) -> str:
+            nfkd = unicodedata.normalize("NFKD", text)
+            return "".join(c for c in nfkd if not unicodedata.combining(c))
+
+        VIETNAMESE_CATEGORY_MAP = {
+            "accessories": ["phụ kiện", "phụ kiện kính thiên văn"],
+            "telescopes": ["kính thiên văn", "thiên văn"],
+            "astronomy": ["thiên văn"],
+            "books": ["sách"],
+            "flashlights": ["đèn pin"],
+            "assembly": ["lắp ráp"],
+        }
+        for eng_key, vn_variants in VIETNAMESE_CATEGORY_MAP.items():
+            eng_normalized = re.sub(r"[^a-z0-9]+", "", eng_key.lower())
+            if eng_normalized in hints:
+                for vn in vn_variants:
+                    vn_normalized = re.sub(r"[^a-z0-9]+", "", _strip_diacritics(vn.lower()))
+                    if vn_normalized and vn_normalized not in hints:
+                        hints[vn_normalized] = hints[eng_normalized]
         return hints
 
     def get_all_categories(self) -> List[str]:

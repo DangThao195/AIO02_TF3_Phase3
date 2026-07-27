@@ -34,7 +34,7 @@ class Reranker:
             ranked = self._rerank_rule(merged, query)
 
         return SearchResult(
-            products=ranked[:15],
+            products=ranked,
             query=query,
             flows_used=flows_used,
             rerank_mode=self.MODE,

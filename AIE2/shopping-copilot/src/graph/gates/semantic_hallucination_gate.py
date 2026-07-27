@@ -49,7 +49,7 @@ async def semantic_hallucination_gate_node(state: dict) -> dict:
             claim=claim, evidence=evidence
         )
         result = await gate_node(question=question, gate_name="semantic_hallucination_gate",
-                                  want_reason=True, timeout=2.0)
+                                  want_reason=True, timeout=15.0)
         return result.decision  # True = claim is grounded
 
     results = await asyncio.gather(*[check_claim(c) for c in claims], return_exceptions=True)

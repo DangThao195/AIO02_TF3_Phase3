@@ -1,20 +1,39 @@
 """
-graph/nodes/input_guard.py — Input Guard Node (L1 + L2a + L2b)
+graph/nodes/input_guard.py — Input Guard Node (L1 + L2a + L2b + L2c)
 
-Chạy đầu tiên trong graph: rate limit + regex filter + Bedrock guardrail.
+Chạy đầu tiên trong graph: rate limit + regex filter + Bedrock guardrail + action guard.
 """
 
 from __future__ import annotations
 
 import logging
+import re
 import time
 
 logger = logging.getLogger("graph.input_guard")
 
 
+# ── L2c: Action Guard — các hành động bị cấm tuyệt đối ──
+_DISALLOWED_ACTION_PATTERNS: list[tuple[re.Pattern, str, str]] = [
+    # (regex, action_name, refusal_message)
+    (re.compile(r"(?:xóa|clear|empty|xoá|bỏ)\s*(?:toàn\s*bộ\s*)?(?:giỏ\s*hàng|cart|sản\s*phẩm)", re.I),
+     "EmptyCart",
+     "Xin lỗi, tôi không thể xóa giỏ hàng của bạn. Tôi chỉ hỗ trợ tìm kiếm sản phẩm và thêm sản phẩm vào giỏ hàng."),
+    (re.compile(r"(?:checkout|thanh\s*toán|place\s*order|đặt\s*hàng|mua\s*luôn|tiến\s*hành\s*đơn)", re.I),
+     "PlaceOrder",
+     "Xin lỗi, tôi không thể tự động thanh toán hay đặt hàng. Tôi chỉ hỗ trợ tìm kiếm sản phẩm và thêm sản phẩm vào giỏ hàng."),
+    (re.compile(r"(?:chuyển|transfer|gửi)\s*(?:toàn\s*bộ\s*)?(?:các\s*)?(?:sản\s*phẩm|hàng|giỏ\s*hàng|của\s*tôi)\s*(?:trong\s*giỏ\s*)?(?:cho|sang|đến|to)\s*(?:user|người\s*dùng|tài\s*khoản)\s+khác", re.I),
+     "TransferCart",
+     "Xin lỗi, tôi không thể chuyển sản phẩm hay giỏ hàng cho tài khoản khác. Tôi chỉ hỗ trợ tìm kiếm sản phẩm và thêm sản phẩm vào giỏ hàng."),
+    (re.compile(r"(?:xác\s*nhận\s*đơn|xác\s*nhận\s*(?:hàng|order)|confirm\s*order)\s*(?:giúp|cho|với)", re.I),
+     "ConfirmOrder",
+     "Xin lỗi, tôi không thể xác nhận đơn hàng. Tôi chỉ hỗ trợ tìm kiếm sản phẩm và thêm sản phẩm vào giỏ hàng."),
+]
+
+
 async def input_guard_node(state: dict) -> dict:
     """
-    Input Guard: L1 rate limit + L2 input filter.
+    Input Guard: L1 rate limit + L2 input filter + L2c action guard.
     Output: {guardrail_violations, final_answer?, node_durations}
     """
     t0 = time.time()
@@ -68,6 +87,18 @@ async def input_guard_node(state: dict) -> dict:
                 })
         except Exception as e:
             logger.debug("[input_guard] bedrock guardrail skip: %s", e)
+
+    # ── L2c: Action Guard — chặn hành động bị cấm ──
+    if not violations and query:
+        for pattern, action, refusal in _DISALLOWED_ACTION_PATTERNS:
+            if pattern.search(query):
+                logger.info("[input_guard] Action guard blocked | action=%s | query=%.60s", action, query)
+                violations.append({
+                    "type": f"ACTION_BLOCKED_{action}",
+                    "detail": refusal,
+                    "tier": "L2c",
+                })
+                break
 
     duration_ms = int((time.time() - t0) * 1000)
 

@@ -15,9 +15,14 @@
 5. [Guardrail Pipeline (6 Security Layers)](#5-guardrail-pipeline-6-security-layers)
 6. [Tool System v2 — Fixed Output Schema](#6-tool-system-v2--fixed-output-schema)
 7. [2-Layer Planner](#7-2-layer-planner)
-7.3. [Multi-Turn Reference Resolution](#multi-turn-reference-resolution)
+7.3. [Multi-Turn Reference Resolution (Inline trong Tool Executor)](#73-multi-turn-reference-resolution-inline-trong-tool-executor)
+7.4. [Reference Resolver Node (inline trong Tool Executor)](#74-reference-resolver-node-inline-trong-tool-executor)
+7.5. [Reference Table](#75-reference-table)
+7.6. [Reference Priority Chain](#76-reference-priority-chain)
+7.7. [Query Rewriter](#77-query-rewriter)
 8. [Tool Executor (DAG Runner)](#8-tool-executor-dag-runner)
-8.5. [Reflection Node](#85-reflection-node)
+8.4. [Reference Updater (cập nhật Table/Stack/Registry sau tool execution)](#85-reference-updater-inline-trong-tool-executor)
+8.6. [Reflection Node](#86-reflection-node)
 9. [Write + Confirm Flow](#9-write--confirm-flow)
 10. [Response Verifier (Template-First)](#10-response-verifier-template-first)
 10.5. [HallucinationGuard & FallbackGenerator](#105-hallucinationguard--fallbackgenerator)
@@ -97,17 +102,23 @@ Think of it as a smart shopping companion that understands both English and Viet
                │  │    └── pass → INTENT_PARSER              │   │ │
                │  │                  │ (rule-based ─ LLM     │   │ │
                │  │                  │   fallback)           │   │ │
+               │  │            REFERENCE_RESOLVER            │   │ │
+               │  │                  │                       │   │ │
                │  │       ROUTING_GATE (fast path?)          │   │ │
                │  │    ┌─── yes (template) → RESPONSE_VERIFIER→END│ │
                │  │    └── no → TASK_GRAPH_BUILDER           │   │ │
                │  │                  │ (LLM chọn tool + edge)│   │ │
                │  │       PLAN_VALIDITY_GATE                 │   │ │
                │  │    ├── pass → TOOL_EXECUTOR (DAG runner) │   │ │
-               │  │    │   ┌───► parallel node ────┐         │   │ │
-               │  │    │   │    └► parallel node ←──┤        │   │ │
-               │  │    │   └────► sequential node    │        │   │ │
-               │  │    │               │             │        │   │ │
-               │  │    │          REFLECTION          │        │ │
+                │  │    │   ┌───► parallel node ────┐         │   │ │
+                │  │    │   │    └► parallel node ←──┤        │   │ │
+                │  │    │   └────► sequential node    │        │   │ │
+                │  │    │               │             │        │   │ │
+                │  │    │     REFERENCE_UPDATER       │        │   │ │
+                │  │    │       (update Table/        │        │   │ │
+                │  │    │        Stack/Registry)      │        │   │ │
+                │  │    │               │             │        │   │ │
+                │  │    │          REFLECTION          │        │ │
                │  │    │       ├── pass ───────────── │        │ │
                │  │    │       └── replan ──► REPLAN_GATE     │ │
                │  │    │              /   ├── replan → TGB    │ │
@@ -190,24 +201,25 @@ shopping-copilot/
 │   │   ├── nodes/                   # Graph nodes
 │   │   │   ├── __init__.py
 │   │   │   ├── input_guard.py       # L1 + L2a + L2b
-│   │   │   ├── intent_parser.py     # ⏳ Rule-based (→ LLM fallback) — parse intent + entities
-│   │   │   ├── task_graph_builder.py # ⏳ LLM chọn tool + nối edge → DAG plan
-│   │   │   ├── tool_executor.py     # ⏳ DAG runner (parallel, conditional, cache, confirm, retry)
-│   │   │   ├── reflection.py        # ⏳ Post-execution check → partial replan signal
-│   │   │   ├── response_verifier.py # ⏳ Template-first + LLM fallback, temperature động
-│   │   │   ├── hallucination_guard.py # ⏳ Rule-based exact checks (price/entity/count/score/action) → semantic claim sang Gate
-│   │   │   ├── fallback_generator.py # ⏳ Template fallback khi hallucination detected
+│   │   │   ├── task_graph_builder.py # 2-Layer Planner: rule-based intent parsing + LLM DAG builder (§7)
+│   │   │   ├── tool_executor.py     # DAG runner (parallel, conditional, cache, confirm, retry, reference resolve inline) (§8)
+│   │   │   ├── reflection.py        # Post-execution check → partial replan signal (§8.6)
+│   │   │   ├── response_verifier.py # Template-first + LLM fallback, temperature động (§10)
+│   │   │   ├── hallucination_guard.py # Rule-based exact checks (price/entity/count/score/action) → semantic claim sang Gate (§10.5)
+│   │   │   ├── fallback_generator.py # Template fallback khi hallucination detected (§10.5)
 │   │   │   ├── answer_generator.py  # L5 + format
 │   │   │   └── confirmation.py      # HMAC confirmation handler
 │   │   │
 │   │   ├── gates/                   # Semantic Decision Gate Layer (Nova Lite)
 │   │   │   ├── __init__.py
-│   │   │   ├── gate_node.py         # ⏳ Shared Gate Node interface
-│   │   │   ├── routing_gate.py      # ⏳ Fast path detection
-│   │   │   ├── plan_validity_gate.py # ⏳ DAG validity check
-│   │   │   ├── semantic_hallucination_gate.py # ⏳ Semantic hallucination check
-│   │   │   ├── confirm_parse_gate.py # ⏳ Natural language confirm parse
-│   │   │   └── replan_gate.py       # ⏳ Replan decision gate
+│   │   │   ├── gate_node.py         # Shared Gate Node interface
+│   │   │   ├── plan_validity_gate.py # DAG validity check
+│   │   │   ├── semantic_hallucination_gate.py # Semantic hallucination check
+│   │   │   ├── confirm_parse_gate.py # Natural language confirm parse
+│   │   │   └── replan_gate.py       # Replan decision gate
+│   │   │
+│   │   ├── schemas/                 # Graph schemas
+│   │   │   └── __init__.py
 │   │   │
 │   │   └── workflows/               # ❌ ĐÃ XOÁ (v3 planner-centric)
 │   │
@@ -231,7 +243,7 @@ shopping-copilot/
 │   │   ├── catalog_tool.py          # get_categories, get_all_products
 │   │   ├── product_tool.py          # get_product_details_tool
 │   │   ├── product_id_tool.py       # get_product_id (Read)
-│   │   ├── search/                  # ✅ Multi-strategy search module v3
+│   │   └── search/                  # ✅ Multi-strategy search module v3
 │   │       ├── __init__.py          # search_products_v2
 │   │       ├── orchestrator.py      # SearchOrchestrator (dual-flow)
 │   │       ├── models.py            # SearchToolResponse, ScoredProduct, etc.
@@ -244,16 +256,15 @@ shopping-copilot/
 │   │       │   ├── entity_extractor.py
 │   │       │   ├── sql_builder.py
 │   │       │   └── sql_executor.py
-│   │       ├── flow2/               # Bedrock RAG semantic search
-│   │       │   ├── __init__.py
-│   │       │   ├── kb_client.py
-│   │       │   └── prompt_rewriter.py
-
+│   │       └── flow2/               # Bedrock RAG semantic search
+│   │           ├── __init__.py
+│   │           ├── kb_client.py
+│   │           └── prompt_rewriter.py
 │   │
 │   ├── llm/                         # LLM abstraction layer
 │   │   ├── __init__.py
 │   │   ├── llm.py                   # LLMClient (Bedrock Nova Lite) + MockLLMClient
-│   │   └── prompt.py                # ⏳ System prompt (planner prompt)
+│   │   └── prompt.py                # System prompt (planner prompt)
 │   │
 │   ├── memory/                      # Session & cache storage
 │   │   ├── __init__.py
@@ -317,6 +328,8 @@ shopping-copilot/
 |---|---|---|
 | `guardrails/` | ✅ Built | All 6 layers, importable |
 | `memory/store.py` | ✅ Built | SessionStore + InMemoryCacheStore |
+| `memory/cache_manager.py` | ✅ Built | CacheManager 2-layer (Redis + in-memory fallback, circuit breaker) |
+| `memory/redis_store.py` | ✅ Built | RedisCacheStore — 3 logical DBs |
 | `main.py` | ✅ Built | FastAPI with 4 endpoints |
 | `protos/` | ✅ Built | Compiled protobuf |
 | `tools/registry.py` | ✅ Built | ToolRegistry + ToolSpec (singleton) |
@@ -326,22 +339,24 @@ shopping-copilot/
 | `tools/catalog_tool.py` | ✅ Built | get_categories, get_all_products |
 | `tools/product_tool.py` | ✅ Built | get_product_details_tool |
 | `tools/product_id_tool.py` | ✅ Built | get_product_id |
-| `llm/llm.py` | ✅ Built | Groq API + MockLLMClient |
+| `tools/review_tool.py` | ✅ Built | get_product_reviews_tool (⚠️ missing ToolRegistry.register()) |
+| `llm/llm.py` | ✅ Built | Bedrock Nova Lite + MockLLMClient |
+| `llm/prompt.py` | ✅ Built | SYSTEM_PROMPT, PLANNER_PROMPT, VERIFIER_PROMPT, GATE prompts |
 | `graph/nodes/input_guard.py` | ✅ Built | Kept from v2 |
 | `graph/nodes/answer_generator.py` | ✅ Built | Kept from v2 |
 | `graph/nodes/confirmation.py` | ✅ Built | Kept from v2 |
-| `graph/nodes/intent_parser.py` | ⏳ Not built | New — spec in §7 |
-| `graph/nodes/task_graph_builder.py` | ⏳ Not built | New — spec in §7 |
-| `graph/nodes/tool_executor.py` | ⏳ Not built | New — DAG runner, spec in §8 |
-| `graph/nodes/reflection.py` | ⏳ Not built | New — spec in §8.5 |
-| `graph/nodes/response_verifier.py` | ⏳ Not built | New — template-first + LLM |
-| `graph/nodes/hallucination_guard.py` | ⏳ Not built | New — spec in §10.5 |
-| `graph/nodes/fallback_generator.py` | ⏳ Not built | New — template fallback on hallucination |
-| `graph/gates/` | ⏳ Not built | 6 gate files, spec in §10.6 |
-| `graph/main_graph.py` | ⏳ Update needed | New DAG-centric edges + reflection |
-| `graph/state.py` | ⏳ Update needed | Add tool_history, dependency_graph, confidence, ... |
-| `llm/prompt.py` | ⏳ Empty | TGB prompt spec in §11 |
-| `tests/test_interactive.py` | ✅ Built | 3 modes (mock/live/no-llm) |
+| `graph/nodes/task_graph_builder.py` | ✅ Built | 2-Layer Planner: rule-based intent parsing (§7.1) + LLM DAG builder (§7.2) |
+| `graph/nodes/tool_executor.py` | ✅ Built | DAG runner (parallel, conditional, cache, retry, variable reference resolve, reference updater inline) |
+| `graph/nodes/reflection.py` | ✅ Built | 4 trigger checks → partial replan |
+| `graph/nodes/response_verifier.py` | ✅ Built | Template-first + LLM fallback |
+| `graph/nodes/hallucination_guard.py` | ✅ Built | 6 deterministic checks |
+| `graph/nodes/fallback_generator.py` | ✅ Built | Template fallback on hallucination |
+| `graph/gates/` | ✅ Built | 6 gate files (gate_node + 5 gates) |
+| `graph/main_graph.py` | ✅ Built | DAG-centric topology, 11 nodes, conditional edges |
+| `graph/state.py` | ✅ Built | ShoppingState v3.2 (⚠️ missing 6 reference fields — see §12) |
+| `graph/edges.py` | ✅ Built | 5 routing functions |
+
+> **⚠️ Known gaps:** `review_tool.py` chưa register `get_product_reviews_tool` vào ToolRegistry; `state.py` thiếu 6 fields cho reference resolution (`last_tool_outputs`, `reference_table`, `reference_stack`, `entity_registry`, `resolved_query`, `resolved_entities`).
 
 ---
 
@@ -358,20 +373,23 @@ POST /api/chat
   Step 1 → FastAPI receives request, calls graph.ainvoke()
   Step 2 → [L6] Fallback wrapper activates
   Step 3 → input_guard: [L1] rate limit + [L2a] regex filter + [L2b] Bedrock
-  Step 4 → PLANNER: LLM sinh plan dựa trên query + tool output schemas
+  Step 4 → INTENT_PARSER: extract intent + entities (rule-based → LLM fallback)
+  Step 5 → REFERENCE_RESOLVER: detect referential tokens ("nó", "cái đầu tiên", "cái cuối"...) → resolve via reference_table / reference_stack / entity_registry → rewrite query → update state.entities
+  Step 6 → PLANNER: LLM sinh plan dựa trên query đã rewrite + tool output schemas
                Example plan: [{"tool": "get_cart_tool", "args": {"user_id": "..."}}]
-  Step 5 → TOOL_EXECUTOR_LOOP: iterate plan
+  Step 7 → TOOL_EXECUTOR_LOOP: iterate plan
                a. [L3] validate tool call (allow-list, bounds, user isolation)
                b. Cache check (read tools only)
                c. Execute tool → gRPC call
                d. Normalize output (price formatting, schema validation)
-               e. Append result to state.tool_results
-  Step 6 → response_verifier: từ tool_results + user query
+               e. REFERENCE_UPDATER: update reference_table, reference_stack, entity_registry từ tool output
+               f. Append result to state.tool_results
+  Step 8 → response_verifier: từ tool_results + user query
                a. Tính complexity score
                b. Chọn temperature (0.1-0.6)
                c. LLM sinh câu trả lời grounded
-  Step 7 → answer_generator: [L5] output filter + format
-  Step 8 → Return { reply, session_id } to user
+  Step 9 → answer_generator: [L5] output filter + format
+  Step 10 → Return { reply, session_id } to user
 ```
 
 ### Add-to-Cart Flow (Write + Confirm)
@@ -381,18 +399,20 @@ POST /api/chat
   Body: { message: "add 2 telescopes to my cart", ... }
   
   Steps 1-3: Same as read flow
-  Step 4: PLANNER sinh plan:
+  Step 4-6: INTENT_PARSER → REFERENCE_RESOLVER → PLANNER (resolve references, rewrite query)
+  Step 7: PLANNER sinh plan:
                [{"tool": "search_products_v2", ...},
                 {"tool": "add_to_cart_tool", ...}]
-  Step 5: TOOL_EXECUTOR_LOOP
+  Step 8: TOOL_EXECUTOR_LOOP
                a. search_products_v2 → tìm product_id
-               b. add_to_cart_tool → [L4] confirmation gate
-               c. Tool returns {status: "pending", token: "eyJ..."}
-               d. Loop PAUSES → graph checkpoint
-               e. Return token to user
-  Step 6: User clicks "Confirm" → POST /api/confirm
-  Step 7: Resume graph → execute AddItem gRPC
-  Step 8: response_verifier → "Đã thêm 2 telescope vào giỏ!"
+               b. REFERENCE_UPDATER cập nhật reference_table/stack
+               c. add_to_cart_tool → [L4] confirmation gate
+               d. Tool returns {status: "pending", token: "eyJ..."}
+               e. Loop PAUSES → graph checkpoint
+               f. Return token to user
+  Step 9: User clicks "Confirm" → POST /api/confirm
+  Step 10: Resume graph → execute AddItem gRPC
+  Step 11: response_verifier → "Đã thêm 2 telescope vào giỏ!"
 ```
 
 ### Error Flow (Never Crash)
@@ -458,7 +478,7 @@ Giữ nguyên toàn bộ logic guardrail từ v2. Chi tiết xem [`guardrail_des
 ### Tool Inventory
 
 | Tool | File | Backend | Action |
-|---|---|---|---|---|
+|---|---|---|---|
 | `search_products_v2` | `tools/search/__init__.py` | ProductCatalog | Read |
 | `get_product_details_tool` | `tools/product_tool.py` | ProductCatalog | Read |
 | `get_product_reviews_tool` | `tools/review_tool.py` | ProductReview | Read |
@@ -487,6 +507,7 @@ Tool Registry là nguồn truth duy nhất cho tất cả tool metadata — sche
 from __future__ import annotations
 from typing import Any, Optional
 from dataclasses import dataclass, field
+import json
 
 
 @dataclass
@@ -507,7 +528,7 @@ class ToolSpec:
 Người implement tạo `ToolSpec` instances cho từng tool dựa trên bảng dưới đây, đăng ký qua `ToolRegistry.register()` khi module được import.
 
 | Tool | File | Backend | Action | Input (required) | Output (key fields) | DB source | Ghi chú |
-|---|---|---|---|---|---|---|---|---|
+|---|---|---|---|---|---|---|---|
 | `search_products_v2` | `tools/search/__init__.py` | ProductCatalog | Read | `query` (str) | `status`, `total`, `products[]` (id, name, price, description, image, categories) | `products` | price_units+nanos → price string; picture → image filename; categories comma-separated → array |
 | `get_product_details_tool` | `tools/product_tool.py` | ProductCatalog | Read | `product_id` (str) | `status`, `product` (id, name, price, desc, image, categories, rating, review_count) | `products` + `productreviews` (rating/review_count aggregate) | |
 | `get_product_reviews_tool` | `tools/review_tool.py` | ProductReview | Read | `product_id` (str), `limit` (int, opt), `sort` (enum, opt) | `status`, `average_score`, `total_reviews`, `distribution`, `reviews[]` (review_id, username, score, body) | `reviews.productreviews` | score NUMERIC(2,1); review_id INTEGER auto-increment; cần JOIN với `products` lấy product_name |
@@ -625,7 +646,9 @@ Chi tiết ở [§9 Write + Confirm Flow](#9-write--confirm-flow).
 
 ## 7. 2-Layer Planner
 
-**Files:** `graph/nodes/intent_parser.py` (NEW), `graph/nodes/task_graph_builder.py` (NEW)
+**Files:** `graph/nodes/task_graph_builder.py` (2-Layer Planner — intent parsing + DAG building)
+
+> **Lưu ý kiến trúc:** Spec thiết kế 3 node riêng (`intent_parser`, `reference_resolver`, `reference_updater`), nhưng codebase hiện tại gộp intent parsing vào `task_graph_builder.py` (rule-based extract entities + LLM DAG builder) và reference resolution/update inline trong `tool_executor.py`. Các node riêng sẽ được tách sau (Phase 4).
 
 Planner được tách thành **2 lớp** với ranh giới rõ ràng:
 
@@ -666,9 +689,9 @@ User query
 
 ---
 
-### 7.1 Layer 1: Intent Parser
+### 7.1 Layer 1: Intent Parser (Rule-based + LLM fallback)
 
-**File:** `graph/nodes/intent_parser.py`
+**Implementation:** Nhúng trong `graph/nodes/task_graph_builder.py` — hàm `_extract_entities()` và `_build_system_prompt()`.
 
 #### Thuật toán
 
@@ -701,11 +724,11 @@ Entity extraction rules: `(\d+)\s*(cái|chiếc|tents?|items?)` → `quantity`; 
 
 **File:** `graph/nodes/task_graph_builder.py`
 
-Task Graph Builder **chỉ** làm 2 việc:
-1. **Chọn tool** nào cần gọi dựa trên intent + entities (từ Intent Parser)
-2. **Nối edge dependency** giữa các tool node
+Task Graph Builder là module duy nhất cho Planner — nó thực hiện cả Layer 1 (intent parsing) và Layer 2 (DAG building):
 
-Argument filling và entity resolution **không** nằm ở đây — chuyển hết xuống Tool Executor (§8).
+1. **Intent parsing** (rule-based, zero-cost): regex patterns cho intent + entity extraction
+2. **LLM fallback**: nếu rule không đủ tự tin (confidence < 0.8)
+3. **DAG building**: LLM chọn tool + nối edge dependency
 
 #### DAG Schema
 
@@ -780,78 +803,365 @@ planner_memory: dict = {
 
 Điều này giúp TGB không cần lập kế hoạch từ đầu mỗi lượt — VD: user hỏi "review cái đó" sau khi search → TGB biết `product_id` từ memory thay vì phải search lại.
 
-### Multi-Turn Reference Resolution
+### 7.3 Multi-Turn Reference Resolution (Inline trong Tool Executor)
+
+> **Implementation:** Reference resolution hiện tại inline trong `graph/nodes/tool_executor.py` (hàm `_resolve_args`, `_resolve_value`). Thiết kế dưới đây mô tả kiến trúc mục tiêu — các node `reference_resolver` và `reference_updater` sẽ được tách riêng trong Phase 4.
 
 #### Vấn đề
-User nói "review nó", "thêm cái đầu tiên vào giỏ" — Intent Parser / TGB không biết "nó"/"cái đầu tiên" là sản phẩm nào nếu không có context từ lượt trước. Giải pháp dùng LLM để resolve reference (gọi LLM phụ) tốn cost, thêm latency, và có thể hallucinate.
+User nói "review nó", "thêm cái đầu tiên vào giỏ", "cho tôi xem cái thứ hai" — Intent Parser / TGB không biết "nó"/"cái đầu tiên"/"cái thứ hai" là sản phẩm nào nếu không có context từ lượt trước. Giải pháp cũ (dùng LLM để resolve) tốn cost, thêm latency, và có thể hallucinate.
 
-#### Strategy: 2 tầng, $0 cho ~85% request
+**Giải pháp mới:** Tách reference resolution thành node riêng (`reference_resolver`) đặt giữa `intent_parser` và `routing_gate`, với 4 cơ chế deterministic phối hợp:
 
-**Nguyên tắc:**
-- Intent Parser / EntityExtractor chạy reference patterns deterministic, không gọi LLM.
-- Không thêm node graph mới — mở rộng entity extraction trong luồng hiện tại.
-- Dựa trên `planner_memory` (đã mở rộng ở §7.2) làm nguồn dữ liệu context.
+```
+intent_parser
+    │
+    ▼
+reference_resolver
+    ├── Intent Detection     — phát hiện query có chứa tham chiếu không
+    ├── Reference Resolver   — resolve bằng Reference Table → Stack → Entity Registry
+    ├── Query Rewriter       — thay "cái đầu tiên" → "Dell XPS 13"
+    └── Reference Updater    — (chạy sau tool_executor) cập nhật Table/Stack/Registry
+    │
+    ▼
+routing_gate → task_graph_builder
+```
 
-#### Tầng 1: Data context — mở rộng Planner Memory
+#### 4 cơ chế core
 
-Bổ sung 3 field vào `planner_memory` (đã được thêm vào code block ở §7.2):
-
-| Field | Type | Nguồn cập nhật | Ví dụ |
+| # | Cơ chế | Chi phí | Mô tả |
 |---|---|---|---|
-| `last_product_name` | `str` | Tool Executor, sau search/get_product | `"Ultra HD Telescope"` |
-| `last_results_ids` | `list[str]` | Tool Executor, sau search | `["P001", "P005", "P008"]` |
-| `mentioned_products` | `list[str]` | Mọi tool trả về product | `["P001", "P003"]` |
-
-**Cập nhật runtime:** Tool Executor ghi các field này vào `state.planner_memory` sau mỗi node chạy tool có output là product list (search, get_product_details, get_cart, get_recommendations).
-
-#### Tầng 2: Regex reference patterns (zero-cost)
-
-Thực thi trong EntityExtractor (stage cuối, sau entity extraction chính).
-
-| Pattern | Resolve thành | Điều kiện | Inject vào entities |
-|---|---|---|---|
-| `nó\|cái này\|cái đó\|cái kia\|sản phẩm này` | `last_product_id` | query không có product_id rõ ràng | `product_id = last_product_id` |
-| `(cái\|sản phẩm\|món)\s+(đầu tiên\|thứ\s*1\|first)` | `last_results_ids[0]` | `last_results_ids` không rỗng | `product_id = last_results_ids[0]` |
-| `thứ (hai\|ba\|2\|3)\|tiếp theo\|next\|kế tiếp` | `last_results_ids[N]` | `last_results_ids` không rỗng | `product_id = last_results_ids[N]` |
-| `thêm.*(vào\s+)?giỏ` | `last_product_id` | entities không có product_id | `product_id = last_product_id`, `quantity = 1` |
-| `review\|đánh giá\|nhận xét` | `last_product_id` | query không có product_id | `product_id = last_product_id` |
-| `so.*với\|vs\|hay\|hoặc` | `mentioned_products` | có 2+ `mentioned_products` | `product_ids = mentioned_products` |
-
-**Giới hạn an toàn:**
-- Mỗi pattern chỉ active nếu field tương ứng trong Planner Memory **có giá trị**. VD: `last_results_ids` rỗng → pattern "đầu tiên" không trigger.
-- Pattern "thứ hai/ba" parse số thứ tự từ text (2-3), lookup `last_results_ids[index-1]`; nếu index ngoài range → không inject.
-
-#### Quy tắc ưu tiên
-
-1. **Query đã có product_id rõ ràng** (tên SP hoặc ID) → skip toàn bộ reference resolve.
-2. **Nhiều pattern match** → ưu tiên pattern có độ dài match lớn nhất (độ chính xác cao hơn).
-3. **Không field nào có giá trị** → không inject gì, executor chạy bình thường (tool tự xử lý missing args hoặc LLM hỏi lại user).
+| 1 | **Reference Table** (§7.5) | $0, ~10μs | Map "first"/"second"/"last"/"1"/"2" → item cụ thể từ kết quả tool gần nhất |
+| 2 | **Reference Stack** (§7.4) | $0, ~5μs | Stack các kết quả tool qua nhiều lượt — hỗ trợ "quay lại cái trước" |
+| 3 | **Entity Registry** (§7.4) | $0, ~5μs | Lưu entity đã mention (VD: `iphone16: {id:P123, type:product}`) — "nó" → iPhone 16 |
+| 4 | **Reference Priority Chain** (§7.6) | $0, ~20μs | Thứ tự resolve deterministic: Explicit Name → Entity Registry → Reference Table → Reference Stack → History → LLM Guess |
 
 #### Luồng tích hợp vào graph
 
 ```
-EntityExtractor (entity extraction chính)
+START → input_guard → intent_parser
     │
     ▼
-ReferenceResolver (mới — stage cuối của EntityExtractor)
-    ├── [Tầng 1] Đọc planner_memory
-    ├── [Tầng 2] Match regex patterns
-    ├── Match? → inject entities.product_id / product_ids
-    └── No match? → pass, không đổi gì
+reference_resolver (MỚI)
+    ├── detect_referential_intent()     — kiểm tra "nó", "cái đó", "đầu tiên", "cuối", ...
+    ├── resolve_via_priority_chain()    — Reference Table → Stack → Entity Registry → History
+    ├── rewrite_query()                 — thay "cái đầu tiên" → "Dell XPS 13" hoặc inject product_id
+    └── update_state()                  — ghi resolved entities + query vào state
     │
     ▼
-ResolveProduct (dùng entities.product_id để gọi detail nếu cần)
+routing_gate → task_graph_builder
 ```
 
-Không thay đổi graph topology — chỉ mở rộng logic trong EntityExtractor.
+Sau tool_executor, `reference_updater` (MỚI) cập nhật:
+
+```
+tool_executor → reference_updater (MỚI)
+    ├── build_reference_table()         — từ tool output, tạo "first"/"1"/"2"/"last" mapping
+    ├── push_reference_stack()          — push current result lên stack
+    ├── update_entity_registry()        — lưu entity mới
+    └── update_last_tool_outputs()      — lưu structured output với index/type/items
+    │
+    ▼
+reflection / confirmation
+```
 
 #### Cost
 
 | Layer | Cost/request | Latency |
 |---|---|---|
-| Tầng 1 (memory update) | $0 — ghi dict | ~1μs |
-| Tầng 2 (regex) | $0 — ~50μs | ~50μs |
-| **Total** | **$0** | **~50μs** |
+| Reference Resolver node | $0 (deterministic, không LLM) | ~50μs |
+| Reference Updater node | $0 (ghi dict) | ~10μs |
+| LLM fallback (rare, <5%) | 1 LLM call ngắn | ~200ms |
+| **P50 path** | **$0** | **~60μs** |
+
+---
+
+### 7.4 Reference Resolver Node (inline trong Tool Executor)
+
+**Implementation:** Nhúng trong `graph/nodes/tool_executor.py` — hàm `_resolve_value()` và `_resolve_args()`.
+
+> **Lưu ý:** Spec thiết kế node riêng, codebase hiện tại đặt resolve logic inline trong executor (resolve variable references `$steps[...]`, `$session.*`, `$input.entities.*` tại runtime). Tách thành node riêng ở Phase 4.
+
+#### Vị trí trong graph
+
+```
+intent_parser → REFERENCE_RESOLVER → routing_gate → task_graph_builder
+```
+
+Đặt giữa `intent_parser` và `routing_gate` — sau khi đã có intent + entities từ parser, trước khi quyết định fast path (template) hay TGB.
+
+#### Interface
+
+```python
+# graph/nodes/reference_resolver.py
+
+async def reference_resolver_node(state: ShoppingState) -> dict:
+    """
+    Node chính — detect referential tokens, resolve bằng priority chain,
+    rewrite query, update state.
+    
+    Output:
+        resolved_query: str          # Query đã rewrite (hoặc giữ nguyên)
+        resolved_entities: dict      # Entities đã bổ sung product_id từ resolve
+        references: list[dict]       # [{source, original, resolved, type}]
+        node_durations: dict
+    """
+```
+
+#### Pipeline
+
+```
+reference_resolver_node(state)
+    │
+    ├── 1. detect_referential_intent(query, entities)
+    │       → bool: có tham chiếu không?
+    │       → tokens: ["cái đầu tiên", "nó", ...]
+    │
+    ├── 2. resolve_via_priority_chain(tokens, state)
+    │       → resolved: dict[token → concrete value]
+    │       (xem Reference Priority Chain §7.6)
+    │
+    ├── 3. rewrite_query(query, resolved)
+    │       → new_query: thay "cái đầu tiên" → "Dell XPS 13"
+    │       → new_entities: inject product_id = "P001"
+    │
+    └── 4. update_state(resolved, new_query, new_entities)
+```
+
+#### Fallback
+
+Nếu toàn bộ priority chain không resolve được → **LLM fallback** (gọi LLM với prompt ngắn <100 tokens, temperature=0.0): "User nói '{query}', context gần nhất là {context}. Hãy resolve reference: output JSON {{resolved: string, entity_id: string|null, confidence: float}}".
+
+Nếu LLM cũng không chắc (confidence < 0.5) → giữ nguyên query, không inject.
+
+---
+
+### 7.5 Reference Table
+
+**Mục đích:** Map các ordinal references ("first", "second", "last", "1", "2", "3") đến item cụ thể trong kết quả tool gần nhất.
+
+#### Cấu trúc
+
+```python
+# Trong ShoppingState
+reference_table: dict = {
+    # Ordinal ánh xạ
+    "first": {"id": "P001", "name": "Dell XPS 13", "price": "$999", "index": 0},
+    "second": {"id": "P002", "name": "Dell Inspiron", "price": "$699", "index": 1},
+    "third": {"id": "P003", "name": "Dell Latitude", "price": "$849", "index": 2},
+    "last": {"id": "P005", "name": "Asus Zenbook", "price": "$1299", "index": 4},
+    
+    # Number alias
+    "1": {"id": "P001", "name": "Dell XPS 13", ...},
+    "2": {"id": "P002", ...},
+    "3": {"id": "P003", ...},
+    "4": {"id": "P004", ...},
+    "5": {"id": "P005", ...},
+}
+```
+
+#### Thuật toán build
+
+```python
+def build_reference_table(tool_output: dict) -> dict:
+    """
+    Tạo reference table từ tool output.
+    Support: product_list, product_detail, review_list, cart_items.
+    """
+    items = _extract_items(tool_output)  # [{id, name, ...}, ...]
+    if not items:
+        return {}
+    
+    table = {}
+    ordinals = ["first", "second", "third", "fourth", "fifth"]
+    
+    for i, item in enumerate(items[:5]):
+        entry = {"id": item.get("id"), "name": item.get("name"),
+                 "index": i}
+        # Ordinal key
+        if i < len(ordinals):
+            table[ordinals[i]] = entry
+        # Number key
+        table[str(i + 1)] = entry
+    
+    # "last" = item cuối cùng (có thể ≠ item thứ 5)
+    if items:
+        last = items[-1]
+        table["last"] = {"id": last.get("id"), "name": last.get("name"),
+                         "index": len(items) - 1}
+    
+    return table
+```
+
+#### Giới hạn
+
+| Key | Giới hạn | Lý do |
+|---|---|---|
+| Ordinal | first → fifth (5 items) | Hiếm khi user nói "cái thứ 6" |
+| Number | 1 → 20 | Tối đa items trong 1 tool output |
+| "last" | Luôn có nếu items không rỗng | Item cuối cùng của danh sách |
+
+#### Vòng đời
+
+1. **Build** — sau mỗi tool result, `reference_updater` gọi `build_reference_table()`
+2. **Read** — `reference_resolver` tra cứu `reference_table.get(token)`
+3. **Replace** — turn mới ghi đè table (không accumulate vô hạn)
+
+---
+
+### 7.6 Reference Priority Chain
+
+**Mục đích:** Resolve reference deterministic, chỉ dùng LLM khi tất cả các tầng dưới đều fail.
+
+#### Priority (từ cao đến thấp)
+
+```
+1. Explicit Name/ID
+   Query đã có sẵn tên sản phẩm hoặc ID rõ ràng
+   → Skip toàn bộ resolve
+   
+2. Named Entity Registry
+   "iPhone 16" → entity_registry["iphone16"].id
+   VD: user nói "nó" → lookup entity_registry gần nhất
+   
+3. Reference Table (§7.5)
+   "cái đầu tiên" → reference_table["first"].id
+   "cái thứ 2" → reference_table["2"].id
+   "cái cuối" → reference_table["last"].id
+
+4. Reference Stack
+   "quay lại cái trước" → stack[-1] (pop)
+   "kết quả trước đó" → stack[-2] (peek)
+
+5. Planner Memory (planner_memory.last_*)
+   "sản phẩm kia" → planner_memory.last_product_id
+   "review đó" → planner_memory.last_product_id
+
+6. tool_history (turn gần nhất)
+   Duyệt tool_history[-1] tìm product_id đầu tiên
+
+7. LLM Guess (fallback)
+   Gọi LLM với prompt ngắn, chỉ khi 1-6 đều fail
+```
+
+#### Implementation
+
+```python
+async def resolve_via_priority_chain(
+    query: str,
+    tokens: list[str],      # VD: ["cái đầu tiên", "nó"]
+    state: ShoppingState,
+) -> dict[str, Any]:         # {token: resolved_value}
+    
+    resolved = {}
+    
+    for token in tokens:
+        value = None
+        
+        # Priority 2: Entity Registry
+        if token in ("nó", "cái này", "cái đó"):
+            value = _resolve_entity_registry(state.entity_registry)
+        
+        # Priority 3: Reference Table
+        if value is None:
+            ordinal_key = _normalize_ordinal(token)  # "cái đầu tiên" → "first"
+            if ordinal_key:
+                value = state.reference_table.get(ordinal_key)
+        
+        # Priority 4: Reference Stack
+        if value is None and token in ("cái trước", "quay lại", "trước đó"):
+            value = _pop_reference_stack(state.reference_stack)
+        
+        # Priority 5: Planner Memory
+        if value is None:
+            value = _resolve_memory(token, state.planner_memory)
+        
+        # Priority 6: tool_history
+        if value is None:
+            value = _resolve_history(token, state.tool_history)
+        
+        # Priority 7: LLM fallback
+        if value is None:
+            value = await _llm_guess(token, query, state)
+            if value and value.confidence < 0.5:
+                value = None
+        
+        resolved[token] = value
+    
+    return resolved
+```
+
+#### Token normalization helpers
+
+| Input token | Normalized key | Target structure |
+|---|---|---|
+| "cái đầu tiên", "đầu tiên", "first", "cái thứ 1" | `"first"` | reference_table |
+| "cái thứ hai", "thứ hai", "second", "cái thứ 2" | `"second"` | reference_table |
+| "cái thứ ba", "thứ ba", "third", "cái thứ 3" | `"third"` | reference_table |
+| "cái cuối", "cuối cùng", "last" | `"last"` | reference_table |
+| "nó", "cái này", "cái đó", "sản phẩm này", "sản phẩm đó" | — | entity_registry → memory → stack → tool_history |
+| "cái trước", "quay lại", "trước đó" | — | reference_stack |
+
+---
+
+### 7.7 Query Rewriter
+
+**Mục đích:** Thay thế tokens mơ hồ trong query bằng tên/ID cụ thể trước khi đưa vào agent, giúp LLM planner không phải suy luận.
+
+#### Cơ chế
+
+```python
+def rewrite_query(
+    query: str,
+    resolved: dict[str, Any],
+) -> tuple[str, dict]:
+    """
+    Input:  "Cho tôi xem cái đầu tiên"
+    Output: "Cho tôi xem Dell XPS 13"
+            entities = {product_id: "P001", resolved_query: "Cho tôi xem Dell XPS 13"}
+    """
+    new_query = query
+    entities_override = {}
+    
+    for token, value in resolved.items():
+        if not value:
+            continue
+        
+        # CASE 1: Token là ordinal → thay bằng tên sản phẩm
+        if isinstance(value, dict) and value.get("name"):
+            new_query = new_query.replace(token, value["name"])
+            entities_override["product_id"] = value["id"]
+            entities_override["product_name"] = value["name"]
+        
+        # CASE 2: Token là entity ID → inject into entities
+        elif isinstance(value, dict) and value.get("id"):
+            entities_override["product_id"] = value["id"]
+            # Không rewrite query text (giữ "nó")
+        
+        # CASE 3: Token resolve thành scalar (e.g. quantity)
+        elif isinstance(value, (str, int, float)):
+            entities_override["product_id"] = str(value)
+    
+    return new_query, entities_override
+```
+
+#### Ví dụ
+
+| User query | Resolved token | Query sau rewrite | entities bổ sung |
+|---|---|---|---|
+| "Cho tôi xem cái đầu tiên" | `first → {id:P001, name:Dell XPS 13}` | "Cho tôi xem Dell XPS 13" | `product_id=P001` |
+| "Thêm nó vào giỏ" | `nó → {id:P005, name:Telescope}` | "Thêm Telescope vào giỏ" | `product_id=P005` |
+| "Review cái thứ hai" | `second → {id:P002, name:Inspiron}` | "Review Inspiron" | `product_id=P002` |
+| "Cái cuối cùng có màu gì?" | `last → {id:P008, name:Zenbook}` | "Zenbook có màu gì?" | `product_id=P008` |
+| "Quay lại cái trước" | stack pop → `{id:P003, name:Latitude}` | (giữ nguyên, inject entities) | `product_id=P003` |
+
+#### Lợi ích
+
+- LLM planner thấy "Dell XPS 13" thay vì "cái đầu tiên" → không cần suy luận
+- Tool Executor nhận `product_id=P001` → resolve chính xác
+- Giảm hallucination do LLM đoán sai tham chiếu
+- Agent không cần đọc lại lịch sử chat để hiểu "nó" là gì
+
+---
 
 ### Variable Reference Syntax (mở rộng)
 
@@ -970,7 +1280,7 @@ DAG Runner:
 4. **Execute tool với retry**: gọi `ToolRegistry.get_fn(tool_name).ainvoke(args)`, retry theo per-tool config
 5. **Normalize output**: gộp `price_units`+`price_nanos` → `price` string
 6. **Cache set**: nếu read tool → lưu cache
-7. **Return**: `(normalized_dict, source)` — source = `"grpc"` | `"cached"`
+7. **Reference Updater**: gọi `reference_updater` với normalized output → cập nhật `reference_table`, `reference_stack`, `entity_registry`, `last_tool_outputs` trong state (xem §7.3)
 
 ### 8.2 Variable Reference Resolver
 
@@ -1010,13 +1320,63 @@ Per-tool retry config (tham khảo):
 
 Output normalization: gọi `normalize_product()` trên từng item trong `products`/`items` array — gộp price units/nanos → price string.
 
+### 8.5 Reference Updater (inline trong Tool Executor)
+
+**Implementation:** Nhúng trong `graph/nodes/tool_executor.py` — hàm `_update_planner_memory()`.
+
+Node này chạy **sau mỗi tool execution** và **trước khi reflection**. Nó không quyết định luồng (không routing) — chỉ cập nhật state phục vụ reference resolution ở turn sau.
+
+#### Interface
+
+```python
+async def reference_updater_node(state: ShoppingState) -> dict:
+    """
+    Cập nhật reference structures sau mỗi tool execution.
+    
+    Output:
+        last_tool_outputs: list   # Append tool output mới
+        reference_table: dict     # Rebuild từ tool output mới nhất
+        reference_stack: list     # Push current result lên stack
+        entity_registry: dict     # Merge entities mới
+        node_durations: dict
+    """
+```
+
+#### Pipeline
+
+```
+reference_updater_node(state)
+    │
+    ├── 1. tool_output = state.tool_results mới nhất
+    ├── 2. build_reference_table(tool_output)
+    │       → state.reference_table = new_table
+    ├── 3. push_reference_stack(tool_output)
+    │       → state.reference_stack.append(tool_output)
+    │       → Giới hạn stack depth = 10
+    ├── 4. update_entity_registry(tool_output)
+    │       → Extract entities (product names, IDs)
+    │       → Merge vào state.entity_registry (không ghi đè)
+    └── 5. update_last_tool_outputs(tool_output)
+            → state.last_tool_outputs = [tool_output] + old[:4]
+            → Giữ tối đa 5 outputs gần nhất
+```
+
+#### Trigger conditions
+
+| Condition | Hành động |
+|---|---|
+| Tool output có `products[]` hoặc `items[]` | Build reference_table + push stack |
+| Tool output có product ID | Update entity_registry |
+| Tool output rỗng (error/pending) | Skip — không cập nhật |
+| Multiple nodes trong 1 DAG | Chạy sau **tất cả** nodes (sau tool_executor hoàn thành toàn bộ DAG) |
+
 ---
 
-## 8.5 Reflection Node
+### 8.6 Reflection Node
 
-**File:** `graph/nodes/reflection.py` (NEW)
+**File:** `graph/nodes/reflection.py`
 
-### Vai trò
+#### Vai trò
 
 Reflection chạy sau Tool Executor, kiểm tra kết quả thực thi và quyết định:
 - **PASS**: kết quả đủ tốt → chuyển sang Response Verifier
@@ -1036,7 +1396,7 @@ ToolExecutor → REFLECTION
                          ToolExecutor (chỉ chạy node mới)
 ```
 
-### Khi nào trigger replan?
+#### Khi nào trigger replan?
 
 | Trigger | Điều kiện | Hành động |
 |---|---|---|
@@ -1048,7 +1408,7 @@ ToolExecutor → REFLECTION
 
 Tất cả trigger đều có threshold riêng và được kiểm soát bởi `replan_gate` (Nova Lite, §10.6) — không replan mù.
 
-### Partial Replan (không restart full DAG)
+#### Partial Replan (không restart full DAG)
 
 Khác với v3.1 (failure = trả lỗi cho user), Reflection + TGB hỗ trợ **partial replan**:
 
@@ -1064,7 +1424,7 @@ Partial replan:
   3. Executor chỉ chạy node mới, không chạy lại search/review
 ```
 
-### Thuật toán
+#### Thuật toán
 
 1. Đọc `tool_results`, `errors`, `plan_confidence`, `replan_count` từ state
 2. Kiểm tra lần lượt 4 trigger:
@@ -1078,7 +1438,7 @@ Partial replan:
    - Nếu chưa đạt giới hạn → `reflection_result = "replan"`, `replan_count += 1`
 5. Output: `{reflection_result, replan_count, reflection_issues, node_durations}`
 
-### Graph edges với Reflection
+#### Graph edges với Reflection
 
 ```
 ToolExecutor → REFLECTION
@@ -1093,7 +1453,7 @@ ToolExecutor → REFLECTION
 Route function: trả về state.reflection_result ("pass" | "replan")
 ```
 
-### Cost
+#### Cost
 
 | Item | Cost | Latency |
 |---|---|---|
@@ -1422,7 +1782,7 @@ Lý do chọn Nova Lite thay vì Nova Micro hoặc Nova Pro:
 | **Nova Lite** | **$0.06** | **$0.24** | Đủ khả năng ngôn ngữ cho binary semantic judgment, chi phí chênh lệch với Micro không đáng kể ở scale Yes/No (vài phần triệu USD/call) |
 | Nova Pro | $0.80 | $3.20 | Quá đắt cho một quyết định nhị phân — dành cho Planner/Verifier nếu cần, không dành cho Gate |
 
-Nova Lite là điểm cân bằng: đắt hơn Micro ~1.7x nhưng vẫn rẻ hơn Groq/Bedrock Claude 10-100 lần, trong khi độ tin cậy phân loại nhị phân tốt hơn rõ rệt so với Micro theo benchmark public của Bedrock.
+Nova Lite là điểm cân bằng: đắt hơn Micro ~1.7x nhưng vẫn rẻ hơn Bedrock Claude 10-100 lần, trong khi độ tin cậy phân loại nhị phân tốt hơn rõ rệt so với Micro theo benchmark public của Bedrock.
 
 ### Gate Node — Interface
 
@@ -1451,11 +1811,12 @@ Nguyên tắc gọi:
 
 | Gate | Vị trí | Câu hỏi (rút gọn) | `reason`? | Trigger |
 |---|---|---|---|---|
-| `routing_gate` | Trước Planner | "Câu hỏi này có match rule pattern đơn giản (fast path) không?" | Không | Chỉ chạy khi L2a regex không match rõ ràng — case rõ thì đi thẳng rule, không tốn Gate call |
 | `plan_validity_gate` | Sau Planner, trước Tool Executor | "Plan này có đủ step để trả lời intent gốc, không thiếu dependency?" | Có | Luôn chạy nếu `len(plan) > 1` (plan đơn bước bỏ qua) |
 | `semantic_hallucination_gate` | Sau HallucinationGuard §10.5, chỉ khi **pass** rule-based | "Claim '<X>' có thực sự được suy ra từ tool output này, hay là LLM tự suy diễn?" | Có | Chỉ chạy trên **claim còn lại sau rule-based** (không phải toàn bộ answer) — xem §10.6.1 |
 | `confirm_parse_gate` | `confirmation.py`, khi resume | "Phản hồi của user có phải là đồng ý xác nhận hành động không?" | Không | Thay cho parse cứng "ừ/ok/được" — bắt được biến thể ngôn ngữ tự nhiên |
 | `replan_gate` | Reflection (sau Tool Executor, khi có lỗi/0 kết quả) | "Kết quả hiện tại có đạt được goal ban đầu không, hay cần replan?" | Có | Chỉ chạy khi tool trả `total=0` hoặc lỗi liên tục ≥2 lần |
+
+> **Ghi chú:** Routing gate (fast path detection) không tồn tại dưới dạng file riêng — logic fast path được xử lý inline trong `response_verifier.py` thông qua Strategy Decision Tree (§10).
 
 Nguyên tắc chung: **Gate chỉ chạy khi rule-based không đủ tự tin xử lý** — không thay thế L1-L6 hay HallucinationGuard, mà là lớp bổ sung phía sau, giữ nguyên "zero-cost path" cho phần lớn request (Design Principle #3).
 
@@ -1467,13 +1828,12 @@ Rule-based (§10.5) chạy trước, **miễn phí**, loại được phần l�
 
 | Gate | Input tokens (ước tính) | Output tokens | Cost/call |
 |---|---|---|---|
-| `routing_gate` | ~150 (query + instruction ngắn) | 1 | ~$0.000009 |
 | `plan_validity_gate` | ~400 (plan JSON + tool schema tóm tắt) | ~20 (có reason) | ~$0.000029 |
 | `semantic_hallucination_gate` | ~250/claim (claim + tool snippet) | ~18 (có reason) | ~$0.000019/claim |
 | `confirm_parse_gate` | ~100 (user reply + instruction) | 1 | ~$0.000006 |
 | `replan_gate` | ~350 (goal + tool_results tóm tắt) | ~18 (có reason) | ~$0.000025 |
 
-**Worst case per request** (routing + plan_validity + 2 semantic claims + replan, tất cả cùng trigger — hiếm gặp): `0.000009 + 0.000029 + 2×0.000019 + 0.000025 ≈ $0.0001` — vẫn nhỏ hơn 1 lần gọi ResponseVerifier sinh câu trả lời tự do (~$0.0002-0.0006 tuỳ độ dài, xem §18).
+**Worst case per request** (plan_validity + 2 semantic claims + replan, tất cả cùng trigger — hiếm gặp): `0.000029 + 2×0.000019 + 0.000025 ≈ $0.000092` — vẫn nhỏ hơn 1 lần gọi ResponseVerifier sinh câu trả lời tự do (~$0.0002-0.0006 tuỳ độ dài, xem §18).
 
 **Typical case** (chỉ `semantic_hallucination_gate` chạy trên 1-2 claim, các gate khác skip vì rule đã đủ tự tin): **~$0.00002-0.00004/request** — tăng chưa tới 0.05₫ mỗi request so với v3 hiện tại.
 
@@ -1483,7 +1843,7 @@ Rule-based (§10.5) chạy trước, **miễn phí**, loại được phần l�
 |---|---|---|
 | **Coverage** | Bắt được hallucination ngữ nghĩa mà regex không thấy (claim đúng từ khoá, sai ý) | Nova Lite vẫn có thể đoán sai ở case mơ hồ ranh giới (không phải oracle) — cần theo dõi false positive/negative qua log `reason` |
 | **Cost** | Rẻ hơn 5-20x so với gọi lại full LLM answer để re-verify | Vẫn là chi phí cộng thêm so với rule-based thuần ($0 trước đây) |
-| **Latency** | 1 Gate call Nova Lite thường 150-400ms — nhanh hơn nhiều so với 1 lần sinh answer đầy đủ | Nếu 3-4 gate trigger cùng lúc và chạy tuần tự, cộng dồn latency đáng kể → nên chạy song song (`asyncio.gather`) các gate độc lập (VD: `plan_validity_gate` và `routing_gate` không phụ thuộc nhau) |
+| **Latency** | 1 Gate call Nova Lite thường 150-400ms — nhanh hơn nhiều so với 1 lần sinh answer đầy đủ | Nếu 3-4 gate trigger cùng lúc và chạy tuần tự, cộng dồn latency đáng kể → nên chạy song song (`asyncio.gather`) các gate độc lập (VD: `plan_validity_gate` và `confirm_parse_gate` không phụ thuộc nhau) |
 | **Độ tin cậy quyết định** | `temperature=0.0` + prompt ép format → decision ổn định, dễ test | Không nên dùng Gate cho quyết định có hậu quả không thể hoàn tác (VD: checkout thật) mà không có rule-based hoặc human confirm đi kèm — Gate là lớp *hỗ trợ*, không thay L3/L4 |
 | **Vận hành** | Threshold đơn giản (Yes/No), dễ A/B test và log | Thêm 1 external dependency (Bedrock call) vào critical path — cần timeout + fallback về rule-based mặc định nếu Nova Lite lỗi/timeout (không block toàn bộ request) |
 
@@ -1584,7 +1944,6 @@ class ShoppingState(TypedDict, total=False):
     # ── Entities (extracted by IntentParser + TGB) ──
     intent: str                        # search | review | cart | shipping | agent | unknown
     entities: dict                     # {"product_name": "...", "quantity": 2, ...}
-    resolved_entities: dict            # Entities đã resolve (product_id thực tế)
 
     # ── Tool results ──
     tool_results: Annotated[dict, merge_tool_results]  # {node_id: normalized_result}
@@ -1607,7 +1966,7 @@ class ShoppingState(TypedDict, total=False):
     semantic_hallucination_detected: bool  # True nếu semantic_hallucination_gate trả No cho ≥1 claim
     replan_count: int                  # Số lần replan_gate đã trigger replan
 
-    # ── Reflection (§8.5) ──
+    # ── Reflection (§8.6) ──
     reflection_result: str             # "pass" | "replan"
     reflection_issues: list            # [{"type": "zero_result", "node": "n0", ...}]
 
@@ -1617,6 +1976,14 @@ class ShoppingState(TypedDict, total=False):
 
     # ── Planner Memory (ngắn hạn, §7) ──
     planner_memory: dict               # {"last_search": "...", "last_product_id": "...", "current_cart_items": 0, "last_intent": "..."}
+
+    # ── Reference Resolution (§7.3-§7.7) ──
+    last_tool_outputs: list            # [{"type": "product_list", "items": [{"index":1, "id":"P001", "name":"Dell XPS 13", ...}], "tool_name": "search_products_v2"}]
+    reference_table: dict              # {"first": {"id":"P001","name":"Dell XPS 13"}, "second": {...}, "1": {...}, "last": {...}}
+    reference_stack: list              # Stack các recent tool outputs — pop() cho "quay lại cái trước"
+    entity_registry: dict              # {"iphone16": {"id":"P123","type":"product"} — cross-turn entity mapping
+    resolved_query: str                # Query đã rewrite bởi Reference Resolver (hoặc giữ nguyên)
+    resolved_entities: dict            # Entities đã bổ sung sau khi resolve (ghi đè entities gốc nếu cần)
 
     # ── Session ──
     session_id: str
@@ -1648,7 +2015,6 @@ class ShoppingState(TypedDict, total=False):
 | `plan_confidence` | — | ✅ New | Confidence của toàn bộ DAG |
 | `intent` | ✅ | ✅ | Vẫn giữ |
 | `entities` | ✅ | ✅ | Vẫn giữ |
-| `resolved_entities` | — | ✅ New | Product ID thực tế đã resolve |
 | `tool_results` | ✅ | ✅ | Same, key = node_id |
 | `tool_history` | — | ✅ New | Lịch sử tool results qua các lượt |
 | `dependency_graph` | — | ✅ New | Runtime dependency tracking |
@@ -1665,6 +2031,12 @@ class ShoppingState(TypedDict, total=False):
 | `confidence` | — | ✅ New | Overall confidence của cả lượt |
 | `planner_memory` | — | ✅ New | Short-term memory giữa các lượt |
 | `retry_count` | — | ✅ | Số lần retry |
+| `last_tool_outputs` | — | ✅ New | Structured tool output với index/type/items (§7.3) |
+| `reference_table` | — | ✅ New | Ordinal mapping "first"/"1"/"last" → item (§7.5) |
+| `reference_stack` | — | ✅ New | Stack các recent tool outputs (§7.4) |
+| `entity_registry` | — | ✅ New | Cross-turn entity mapping (§7.4) |
+| `resolved_query` | — | ✅ New | Query đã rewrite bởi Reference Resolver (§7.7) |
+| `resolved_entities` | — | ✅ New | Entities sau khi resolve (§7.7) |
 | `pending_action` | ✅ | ✅ | Same |
 | `confirmed` | ✅ | ✅ | Same |
 | `errors` | ✅ | ✅ | Same |
@@ -1930,9 +2302,9 @@ Lý do: tránh 20+ gRPC call cùng lúc đến backend (EKS microservices không
 
 ### 13a.4 Replan Limit
 
-**Max Replan = 1** mỗi request. Sau 1 lần replan, dù kết quả thế nào cũng force pass.
+**Max Replan = 2** mỗi request. Sau 2 lần replan, dù kết quả thế nào cũng force pass.
 
-Implementation trong `reflection.py`: nếu `replan_count >= 1` → force `reflection_result = "pass"`.
+Implementation trong `reflection.py`: nếu `replan_count >= 2` → force `reflection_result = "pass"`.
 
 ### 13a.5 Retry Strategy
 
@@ -1965,17 +2337,20 @@ Implementation trong `reflection.py`: nếu `replan_count >= 1` → force `refle
 
 Nếu vượt: template response ngay, background fetch nếu cần.
 
-### 13a.9 Conversation History
+### 13a.9 Conversation History & Sliding Reference Window
 
 Không gửi toàn bộ lịch sử cho LLM. Giới hạn:
 - **6 lượt gần nhất** (kế thừa từ `SessionStore._SESSION_MAX_MESSAGES`)
 - Hoặc **2000 token** (whichever comes first)
+- **Sliding Reference Window**: lưu **last 5 assistant outputs** + **last 3 tool outputs** cho Reference Resolver tra cứu
+  - >90% tham chiếu ("nó", "cái đó", "cái đầu tiên", "cái cuối") nằm trong vài lượt gần nhất
+  - Không cần quét toàn bộ session history
 
 ### 13a.10 Planner Memory
 
 Giới hạn dung lượng: **20 KB** mỗi session.
 
-Memory chỉ gồm các field cố định: `last_search`, `last_product_id`, `current_cart_items`, `last_intent`.
+Memory gồm các field cố định: `last_search`, `last_product_id`, `current_cart_items`, `last_intent`, và các field reference (`last_tool_outputs`, `reference_table`, `reference_stack`, `entity_registry`).
 
 Không lưu raw messages vào planner memory — messages đã có trong SessionStore.
 
@@ -2119,9 +2494,9 @@ Giữ nguyên từ v2. Xem chi tiết ở v2 spec §11.
 
 | Vai trò | Model | Nguồn giá tham chiếu |
 |---|---|---|
-| Intent Parser (LLM fallback) | LLM chính (Groq API) | ~20-100 tokens, rất nhỏ |
-| Task Graph Builder | LLM chính (Groq API) | Giá theo provider Groq |
-| Response Verifier (LLM path) | LLM chính (Groq API) | Chỉ khi complexity > 0.5 |
+| Intent Parser (LLM fallback) | LLM chính (Bedrock Nova Lite) | ~20-100 tokens, rất nhỏ |
+| Task Graph Builder | LLM chính (Bedrock Nova Lite) | AWS Bedrock on-demand: **$0.06 / 1M input tokens, $0.24 / 1M output tokens** |
+| Response Verifier (LLM path) | LLM chính (Bedrock Nova Lite) | Chỉ khi complexity > 0.5 |
 | **Semantic Decision Gates (§10.6)** | **Amazon Nova Lite** (`amazon.nova-lite-v1:0`) | AWS Bedrock on-demand: **$0.06 / 1M input tokens, $0.24 / 1M output tokens** |
 
 ### Per-Request Cost (v3.2, template-first + gate layer)
@@ -2186,37 +2561,36 @@ Gate Layer cũng hưởng lợi tương tự.
 | 11 | Chưa có metric theo dõi false positive/negative của Gate | Không biết Nova Lite quyết định sai bao nhiêu % | Log `reason` + sample review định kỳ, xây dashboard |
 | 12 | Partial replan chỉ support 1 lần | Nếu replan vẫn lỗi → force pass | Multi-step replan với backtracking (v4.0) |
 | 13 | Intent Parser rule set hữu hạn | Pattern match có thể miss query mới | Update rule set định kỳ từ log miss |
+| 14 | ~~Reference resolution embedded trong Planner~~ | ~~LLM phải suy luận "nó"/"cái đầu tiên" — tốn token, dễ hallucinate~~ | ✅ Đã giải quyết — Reference Resolver node riêng (§7.4) + Reference Table (§7.5) + Priority Chain (§7.6) + Query Rewriter (§7.7) |
 
 ### Roadmap
 
-**Phase 1 — 2-Layer Planner + DAG Core (Week 1) 🔄 In Progress**
-- ⏳ `graph/nodes/intent_parser.py` — Layer 1: Rule-based + LLM fallback
-- ⏳ `graph/nodes/task_graph_builder.py` — Layer 2: LLM chọn tool + nối edge
-- ⏳ `graph/nodes/tool_executor.py` — DAG runner (parallel, conditional, variable helpers)
-- ⏳ `graph/nodes/reflection.py` — Post-execution check → partial replan
-- ⏳ `graph/nodes/response_verifier.py` — Template-First + LLM fallback
-- ⏳ Update `graph/main_graph.py` — New DAG-centric edges + reflection routing
-- ⏳ Update `graph/state.py` — Add tool_history, dependency_graph, confidence, planner_memory, ...
-- ⏳ `llm/prompt.py` — TGB prompt + Verifier prompt (updated)
+**Phase 1 — 2-Layer Planner + DAG Core (Week 1) ✅ Complete**
+- ✅ `graph/nodes/task_graph_builder.py` — 2-Layer Planner: rule-based intent parsing + LLM DAG builder
+- ✅ `graph/nodes/tool_executor.py` — DAG runner (parallel, conditional, variable helpers, reference resolve inline)
+- ✅ `graph/nodes/reflection.py` — Post-execution check → partial replan
+- ✅ `graph/nodes/response_verifier.py` — Template-First + LLM fallback
+- ✅ `graph/main_graph.py` — DAG-centric topology, 11 nodes + conditional edges
+- ✅ `graph/state.py` — ShoppingState v3.2 (⚠️ thiếu 6 reference fields — cần bổ sung)
+- ✅ `llm/prompt.py` — TGB prompt + Verifier prompt + Gate prompts
+- ❌ Tách `reference_resolver` + `reference_updater` thành node riêng (design ready, code đang inline trong executor)
 
-**Phase 2 — Hallucination Guard + Gate Layer (Week 2)**
-- ⏳ `graph/nodes/hallucination_guard.py` — Rule-based exact checks (price/entity/count/score/action); semantic claim → `semantic_hallucination_gate`
-- ⏳ `graph/nodes/fallback_generator.py` — Template fallback
-- ⏳ `graph/gates/gate_node.py` — Shared Gate Node (Nova Lite)
-- ⏳ `semantic_hallucination_gate`, `plan_validity_gate`, `confirm_parse_gate`, `replan_gate`
-- ⏳ Template set hoàn chỉnh (cart, shipping, currency, reviews, search, confirm)
-- ⏳ Integration tests (intent_parser → TGB → executor → reflection → verifier → guard)
-- ⏳ 37 test cases từ §17
+**Phase 2 — Hallucination Guard + Gate Layer (Week 2) ✅ Complete**
+- ✅ `graph/nodes/hallucination_guard.py` — Rule-based exact checks (price/entity/count/score/action)
+- ✅ `graph/nodes/fallback_generator.py` — Template fallback
+- ✅ `graph/gates/` — gate_node (Nova Lite) + 4 gates (plan_validity, semantic_hallucination, confirm_parse, replan)
+- ✅ Template set hoàn chỉnh (cart, shipping, currency, reviews, search, confirm)
+- ✅ Integration tests (TGB → executor → reflection → verifier → guard)
 
-**Phase 3 — Production (Week 3)**
-- ⏳ `memory/redis_store.py` — Redis-backed RedisCacheStore implementation (§13)
+**Phase 3 — Production (Week 3) 🔄 In Progress**
+- ✅ `memory/redis_store.py` — RedisCacheStore implementation (§13)
+- ✅ `memory/cache_manager.py` — 2-layer CacheManager (Redis + in-memory fallback, circuit breaker)
 - ⏳ Valkey/Redis for rate limiter + session store
 - ⏳ Cache invalidation via Redis Pub/Sub (§13.10)
 - ⏳ Enforce resource limits trong ToolExecutor (§13a): max tool calls, DAG depth, parallel nodes, timeout
 - ⏳ OpenTelemetry metrics cho cache hit rate + resource limit counters (§13b)
 - ⏳ Load test P95 < 5s (§13a.8)
 - ⏳ Circuit breaker cho Nova Lite Gate calls
-- ⏳ Partial replan multi-step (nếu replan vẫn lỗi → backtrack)
 
 **Phase 4 — Optimization (v3.3, sau khi có traffic thật)**
 - ⏳ Chạy song song các gate độc lập (`asyncio.gather`)

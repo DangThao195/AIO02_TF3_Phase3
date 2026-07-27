@@ -1,12 +1,13 @@
 """
-graph/main_graph.py — Shopping Copilot LangGraph v3.4
+graph/main_graph.py — Shopping Copilot LangGraph v3.5
 
-Topology:
-  START → input_guard → task_graph_builder → plan_validity_gate
+    Topology:
+  START → input_guard → reference_resolver → translate → task_graph_builder → plan_validity_gate
         → tool_executor → reflection → replan_gate
-        → (replan → task_graph_builder) or (continue → response_verifier)
-        → response_verifier → hallucination_guard
-        → answer_generator / fallback_generator → answer_generator → END
+        → (replan → task_graph_builder) or (continue → answer_synthesizer)
+        → answer_synthesizer → response_generator → hallucination_guard
+        → (FAIL) → response_generator (safe mode) → hallucination_guard (auto-PASS)
+        → (PASS) → answer_generator → END
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ import time
 
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.errors import GraphInterrupt
 
 from src.graph.state import ShoppingState
 from src.graph.edges import (
@@ -33,10 +35,12 @@ from src.graph.nodes import (
     tool_executor_node,
     confirmation_node,
     reflection_node,
-    response_verifier_node,
+    response_generator_node,
     hallucination_guard_node,
-    fallback_generator_node,
     answer_generator_node,
+    reference_resolver_node,
+    translate_node,
+    answer_synthesizer_node,
 )
 from src.graph.gates import (
     plan_validity_gate_node,
@@ -59,8 +63,14 @@ def _summarize_input(node_name: str, state: dict) -> str:
         text = (last.content if hasattr(last, "content") else str(last))[:120]
         info["msg"] = text.replace("\n", " ")
 
+    if node_name in ("translate",):
+        if state.get("translated_query"):
+            info["translated_query"] = state["translated_query"][:80]
+        if state.get("resolved_query"):
+            info["resolved_query"] = state["resolved_query"][:80]
+
     if node_name in ("task_graph_builder", "plan_validity_gate",
-                     "reflection", "response_verifier"):
+                     "reflection", "response_generator"):
         if state.get("tool_results"):
             info["tool_results"] = str(list(state["tool_results"].keys()))
         if state.get("planner_memory"):
@@ -68,8 +78,8 @@ def _summarize_input(node_name: str, state: dict) -> str:
             info["memory"] = str({k: v for k, v in mem.items()
                                   if k not in ("mentioned_products",)})
 
-    if node_name in ("reflection", "response_verifier", "hallucination_guard",
-                     "fallback_generator", "tool_executor"):
+    if node_name in ("reflection", "response_generator", "hallucination_guard",
+                     "tool_executor"):
         if state.get("errors"):
             info["errors"] = len(state["errors"])
         if state.get("tool_results"):
@@ -101,8 +111,8 @@ def _summarize_input(node_name: str, state: dict) -> str:
         if state.get("current_goal"):
             info["goal"] = state["current_goal"][:80]
 
-    if node_name in ("response_verifier", "hallucination_guard",
-                     "answer_generator", "fallback_generator"):
+    if node_name in ("response_generator", "hallucination_guard",
+                     "answer_generator"):
         fa = state.get("final_answer", "")
         if fa:
             info["final_answer"] = fa[:80].replace("\n", " ")
@@ -175,6 +185,10 @@ def _log_node_io(node_name: str, func):
             t0 = time.time()
             try:
                 result = await func(state)
+            except GraphInterrupt:
+                _IO_LOG.info("[NODE:%s] INTERRUPT (%dms)", node_name,
+                             int((time.time() - t0) * 1000))
+                raise
             except Exception as e:
                 _IO_LOG.error("[NODE:%s] ERROR %s (%dms)", node_name,
                               str(e)[:300], int((time.time() - t0) * 1000))
@@ -192,6 +206,10 @@ def _log_node_io(node_name: str, func):
         t0 = time.time()
         try:
             result = func(state)
+        except GraphInterrupt:
+            _IO_LOG.info("[NODE:%s] INTERRUPT (%dms)", node_name,
+                         int((time.time() - t0) * 1000))
+            raise
         except Exception as e:
             _IO_LOG.error("[NODE:%s] ERROR %s (%dms)", node_name,
                           str(e)[:300], int((time.time() - t0) * 1000))
@@ -217,42 +235,48 @@ def build_graph() -> StateGraph:
 
     # ── Register nodes (wrapped with I/O logging) ────────────────
     graph.add_node("input_guard",        _log_node_io("input_guard",        input_guard_node))
+    graph.add_node("reference_resolver", _log_node_io("reference_resolver", reference_resolver_node))
+    graph.add_node("translate",          _log_node_io("translate",          translate_node))
     graph.add_node("task_graph_builder", _log_node_io("task_graph_builder", task_graph_builder_node))
     graph.add_node("plan_validity_gate", _log_node_io("plan_validity_gate", plan_validity_gate_node))
     graph.add_node("tool_executor",      _log_node_io("tool_executor",      tool_executor_node))
-    graph.add_node("reflection",         _log_node_io("reflection",         reflection_node))
-    graph.add_node("response_verifier",  _log_node_io("response_verifier",  response_verifier_node))
-    graph.add_node("hallucination_guard", _log_node_io("hallucination_guard", hallucination_guard_node))
-    graph.add_node("fallback_generator", _log_node_io("fallback_generator", fallback_generator_node))
-    graph.add_node("answer_generator",   _log_node_io("answer_generator",   answer_generator_node))
-    graph.add_node("replan_gate",        _log_node_io("replan_gate",        replan_gate_node))
-    graph.add_node("confirmation",       _log_node_io("confirmation",       confirmation_node))
+    graph.add_node("reflection",          _log_node_io("reflection",          reflection_node))
+    graph.add_node("answer_synthesizer",   _log_node_io("answer_synthesizer",   answer_synthesizer_node))
+    graph.add_node("response_generator",   _log_node_io("response_generator",   response_generator_node))
+    graph.add_node("hallucination_guard",  _log_node_io("hallucination_guard",  hallucination_guard_node))
+    graph.add_node("answer_generator",     _log_node_io("answer_generator",     answer_generator_node))
+    graph.add_node("replan_gate",         _log_node_io("replan_gate",         replan_gate_node))
+    graph.add_node("confirmation",        _log_node_io("confirmation",        confirmation_node))
 
     # ── Entry point ──────────────────────────────────────────────
     graph.set_entry_point("input_guard")
 
     # ── Edges ────────────────────────────────────────────────────
 
-    # input_guard → task_graph_builder OR end (blocked)
+    # input_guard → reference_resolver OR end (blocked)
     graph.add_conditional_edges(
         "input_guard",
         route_after_input_guard,
         {
-            "task_graph_builder": "task_graph_builder",
+            "reference_resolver": "reference_resolver",
             "blocked": "answer_generator",
         },
     )
 
+    # reference_resolver → translate → task_graph_builder
+    graph.add_edge("reference_resolver", "translate")
+    graph.add_edge("translate", "task_graph_builder")
+
     # task_graph_builder → plan_validity_gate
     graph.add_edge("task_graph_builder", "plan_validity_gate")
 
-    # plan_validity_gate → tool_executor OR response_verifier (no-tool plan)
+    # plan_validity_gate → tool_executor OR answer_synthesizer (no-tool plan)
     graph.add_conditional_edges(
         "plan_validity_gate",
         route_after_plan_validity_gate,
         {
             "tool_executor": "tool_executor",
-            "response_verifier": "response_verifier",
+            "answer_synthesizer": "answer_synthesizer",
         },
     )
 
@@ -266,45 +290,45 @@ def build_graph() -> StateGraph:
         },
     )
 
-    # reflection → replan_gate OR response_verifier
+    # reflection → replan_gate OR answer_synthesizer
     graph.add_conditional_edges(
         "reflection",
         route_after_reflection,
         {
             "replan_gate": "replan_gate",
-            "response_verifier": "response_verifier",
+            "answer_synthesizer": "answer_synthesizer",
         },
     )
 
-    # replan_gate → task_graph_builder OR response_verifier
+    # replan_gate → task_graph_builder OR answer_synthesizer
     from src.graph.edges import route_after_replan_gate
     graph.add_conditional_edges(
         "replan_gate",
         route_after_replan_gate,
         {
             "task_graph_builder": "task_graph_builder",
-            "response_verifier": "response_verifier",
+            "answer_synthesizer": "answer_synthesizer",
         },
     )
 
-    # response_verifier → hallucination_guard
-    graph.add_edge("response_verifier", "hallucination_guard")
+    # answer_synthesizer → response_generator
+    graph.add_edge("answer_synthesizer", "response_generator")
 
-    # hallucination_guard → answer_generator OR fallback_generator
+    # response_generator → hallucination_guard
+    graph.add_edge("response_generator", "hallucination_guard")
+
+    # hallucination_guard → answer_generator (PASS) OR response_generator (FAIL safe mode)
     graph.add_conditional_edges(
         "hallucination_guard",
         route_after_hallucination_guard,
         {
             "answer_generator": "answer_generator",
-            "fallback_generator": "fallback_generator",
+            "response_generator": "response_generator",
         },
     )
 
-    # fallback_generator → answer_generator
-    graph.add_edge("fallback_generator", "answer_generator")
-
-    # confirmation → response_verifier (sau khi user confirm write)
-    graph.add_edge("confirmation", "response_verifier")
+    # confirmation → answer_synthesizer (sau khi user confirm write)
+    graph.add_edge("confirmation", "answer_synthesizer")
 
     # answer_generator → END
     graph.add_edge("answer_generator", END)

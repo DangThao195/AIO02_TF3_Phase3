@@ -12,6 +12,7 @@ Chạy local:
   hoặc: cd .. && py -m src.main
 """
 
+import atexit
 import logging
 import sys
 import os
@@ -23,12 +24,13 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
 from pydantic import BaseModel, Field
-from typing import Any, List
+from typing import Any, Dict, List
 import argparse
 
 # ── Parse command-line args ──
 parser = argparse.ArgumentParser(description="Shopping Copilot API Server")
 parser.add_argument("--mock", action="store_true", help="Chạy với gRPC mock EKS")
+parser.add_argument("--reload", action="store_true", default=False, help="Tự động restart server khi có thay đổi code (hot-reload)")
 args, _ = parser.parse_known_args()
 
 # ── Logging setup (file + console, JSON + plain) ──
@@ -102,10 +104,11 @@ def _get_graph():
     return _graph
 
 
-# ── PostgreSQL pool warmup ──
+# ── Startup / Shutdown ──
+
 @app.on_event("startup")
-async def warmup_db_pool():
-    """Khởi tạo PostgreSQL pool ngay khi server start, tránh lazy init 5s trong request path."""
+async def startup():
+    """Warm up PostgreSQL pool + SessionStore from file."""
     import asyncio
     from src.database.connect import init_pool
 
@@ -114,7 +117,7 @@ async def warmup_db_pool():
         try:
             init_pool()
             logger.info("[MAIN] PostgreSQL pool warmup done")
-            return
+            break
         except Exception as e:
             if attempt < max_retries - 1:
                 wait = 2 ** attempt
@@ -128,6 +131,18 @@ async def warmup_db_pool():
                     "[MAIN] PostgreSQL pool warmup failed after %d attempts (will lazy init): %s",
                     max_retries, e,
                 )
+
+    from src.memory.store import get_session_store
+    get_session_store()
+    logger.info("[MAIN] SessionStore loaded from file")
+
+
+@app.on_event("shutdown")
+def shutdown():
+    """Persist cache + session to disk."""
+    from src.memory.cache_manager import get_cache_manager
+    get_cache_manager().persist_all()
+    logger.info("[MAIN] Cache + Session persisted to disk")
 
 
 # ── Request/Response models ──
@@ -150,19 +165,21 @@ class ChatResponse(BaseModel):
     session_id: str
     token: str | None = None
     steps: List[StepInfo] = []
+    evidence: Dict[str, Any] = Field(default_factory=dict)
 
 
 # ── Step labels mapping (node_key → display name) ──
 _STEP_LABELS: dict[str, str] = {
     # v3.2 nodes
     "input_guard": "Kiểm tra đầu vào",
+    "reference_resolver": "Phân tích tham chiếu",
+    "translate": "Dịch thuật",
     "task_graph_builder": "Lập kế hoạch",
     "plan_validity_gate": "Kiểm tra kế hoạch",
     "tool_executor": "Thực thi công cụ",
     "reflection": "Phản ánh kết quả",
-    "response_verifier": "Xác minh câu trả lời",
+    "response_generator": "Tạo câu trả lời",
     "hallucination_guard": "Kiểm tra độ chính xác",
-    "fallback_generator": "Tạo câu trả lời dự phòng",
     "answer_generator": "Tạo câu trả lời",
     "confirmation": "Xác nhận hành động",
     # v2 legacy (kept for backward compat)
@@ -512,6 +529,129 @@ async def api_get_cart(user_id: str):
         return {"user_id": user_id, "items": [], "error": str(e)}
 
 
+def _build_evidence(state: dict) -> dict:
+    """Build structured evidence dict from tool_results for LLM Judge verification."""
+    tool_results = state.get("tool_results", {})
+    evidence: dict = {}
+    products = []
+    reviews = []
+    categories = None
+    cart = None
+
+    for key, val in tool_results.items():
+        tool_name = key.split(":")[0]
+        result = val.get("result")
+        if not result:
+            continue
+        if isinstance(result, str):
+            import json
+            try:
+                result = json.loads(result)
+            except (json.JSONDecodeError, ValueError):
+                continue
+        if not isinstance(result, dict):
+            continue
+
+        if tool_name in ("category_filter", "price_filter", "semantic_filter", "multi_filter"):
+            prods = result.get("products", [])
+            for p in prods:
+                products.append({
+                    "id": p.get("id", ""),
+                    "name": p.get("name", ""),
+                    "price": p.get("price", ""),
+                    "description": p.get("description", ""),
+                    "categories": p.get("categories", []),
+                })
+            cats = result.get("categories")
+            if cats:
+                categories = list(cats)
+
+        elif tool_name == "get_product_details_tool":
+            p = result.get("product") or result
+            if isinstance(p, dict) and p.get("id"):
+                products.append({
+                    "id": p.get("id", ""),
+                    "name": p.get("name", ""),
+                    "price": p.get("price", ""),
+                    "description": p.get("description", ""),
+                    "categories": p.get("categories", []),
+                })
+
+        elif tool_name in ("get_all_products",):
+            prods = result.get("products", [])
+            if isinstance(prods, list):
+                for p in prods:
+                    products.append({
+                        "id": p.get("id", ""),
+                        "name": p.get("name", ""),
+                        "price": p.get("price", ""),
+                        "categories": p.get("categories", []),
+                    })
+
+        elif tool_name == "get_product_reviews_tool":
+            rlist = result.get("reviews") or result.get("data", [])
+            if isinstance(rlist, list):
+                for r in rlist:
+                    if isinstance(r, dict):
+                        reviews.append({
+                            "product_id": r.get("product_id", ""),
+                            "reviewer": r.get("reviewer", r.get("author", "")),
+                            "score": r.get("score", r.get("rating", 0)),
+                            "text": r.get("text", r.get("content", "")),
+                        })
+            avg = result.get("average_score", result.get("avg_score", result.get("avg_rating")))
+            cnt = result.get("review_count", result.get("count"))
+            if avg is not None:
+                evidence["avg_score"] = avg
+            if cnt is not None:
+                evidence["review_count"] = cnt
+
+        elif tool_name == "get_cart_tool":
+            items = result.get("items", [])
+            if isinstance(items, list):
+                cart_items = []
+                for item in items:
+                    cart_items.append({
+                        "product_id": item.get("product_id", ""),
+                        "name": item.get("name", ""),
+                        "price": item.get("price", ""),
+                        "quantity": item.get("quantity", 1),
+                    })
+                cart = {
+                    "items": cart_items,
+                    "item_count": result.get("item_count", len(cart_items)),
+                    "subtotal": result.get("subtotal", ""),
+                }
+
+        elif tool_name == "get_categories":
+            cats = result.get("categories", [])
+            if isinstance(cats, list):
+                categories = cats
+
+        elif tool_name in ("get_best_reviewed_products_tool", "get_worst_reviewed_products_tool"):
+            prods = result.get("products", [])
+            for p in prods:
+                products.append({
+                    "id": p.get("id", ""),
+                    "name": p.get("name", ""),
+                    "price": str(p.get("price", "")),
+                    "avg_score": p.get("avg_score", 0),
+                    "review_count": p.get("review_count", 0),
+                    "categories": p.get("categories", ""),
+                })
+
+    if products:
+        evidence["products"] = products
+    if reviews:
+        evidence["reviews"] = reviews
+    if categories is not None:
+        evidence["categories"] = categories
+    if cart is not None:
+        evidence["cart"] = cart
+
+    return evidence
+
+
 @app.post("/api/chat", response_model=ChatResponse)
 async def api_chat(req: ChatRequest):
     """
@@ -524,28 +664,71 @@ async def api_chat(req: ChatRequest):
     Luôn dùng LangGraph StateGraph path.
     """
     from langchain_core.messages import HumanMessage
+    from src.memory.store import get_session_store
 
     logger.info(
         "[API] /api/chat | session=%s | user=%s | msg=%.80s",
         req.session_id, req.user_id, req.message,
     )
 
+    session_store = get_session_store()
+    session_store.get_or_create(req.session_id, req.user_id)
+    session_store.add_message(req.session_id, "user", req.message)
+
     graph = _get_graph()
     config = {"configurable": {"thread_id": req.session_id}}
 
+    pending = session_store.get_pending(req.session_id)
+    if pending:
+        from src.llm.prompt import GATE_QUESTIONS
+        from src.graph.gates.gate_node import gate_node
+        from langgraph.types import Command
+        
+        q = GATE_QUESTIONS["confirm_parse_gate"].format(user_reply=req.message)
+        gate_res = await gate_node(question=q, gate_name="confirm_parse_gate", want_reason=False, timeout=15.0)
+        
+        if gate_res.decision:
+            try:
+                result = await graph.ainvoke(Command(resume={"confirmed": True}), config=config)
+                session_store.clear_pending(req.session_id)
+                final_answer = result.get("final_answer", "")
+                if final_answer:
+                    session_store.add_message(req.session_id, "assistant", final_answer)
+                steps = _build_steps(result)
+                _log_steps(result, req.session_id)
+                return ChatResponse(
+                    status="ok",
+                    reply=final_answer or "Đã xác nhận.",
+                    session_id=req.session_id,
+                    steps=steps,
+                    evidence=_build_evidence(result),
+                )
+            except Exception as e:
+                logger.error("[API] LangGraph confirm error | session=%s | err=%s", req.session_id, e)
+                # Fallthrough to normal flow if resume fails
+        else:
+            try:
+                await graph.ainvoke(Command(resume={"confirmed": False}), config=config)
+            except Exception:
+                pass
+            session_store.clear_pending(req.session_id)
+            # Fallthrough to normal chat processing for the new intent
+
     try:
-        # Chỉ gửi input mới; để checkpoint giữ lại context cũ như candidate_products,
-        # pending_action và lịch sử workflow giữa các lượt chat.
+        from src.tools.language_detector import detect_language
+        user_lang = detect_language(req.message)
         result = await graph.ainvoke(
             {
                 "messages": [HumanMessage(content=req.message)],
                 "session_id": req.session_id,
                 "user_id": req.user_id,
                 "trace_id": str(uuid.uuid4()),
-                # Reset per-turn transient state để tránh tích lũy từ turn trước
+                "user_lang": user_lang,
                 "tool_results": {"__reset__": True},
                 "errors": ["__reset__"],
                 "node_durations": {"__reset__": 0},
+                "final_answer": "",
+                "safe_mode": False,
             },
             config=config,
         )
@@ -556,6 +739,9 @@ async def api_chat(req: ChatRequest):
             reply=f"Lỗi hệ thống: {str(e)[:200]}",
             session_id=req.session_id,
         )
+
+    final_answer = result.get("final_answer", "")
+    planner_memory = result.get("planner_memory")
 
     steps = _build_steps(result)
     _log_steps(result, req.session_id)
@@ -568,28 +754,58 @@ async def api_chat(req: ChatRequest):
             reply=violation.get("detail", "Yêu cầu bị từ chối."),
             session_id=req.session_id,
             steps=steps,
+            evidence=_build_evidence(result),
         )
 
-    # Kiểm tra __interrupt__ từ ConfirmationNode (graph bị suspend chờ confirm)
     interrupts = result.get("__interrupt__", [])
     if interrupts:
         interrupt_value = interrupts[0].value if hasattr(interrupts[0], "value") else interrupts[0]
         if isinstance(interrupt_value, dict):
             pending_action = interrupt_value.get("pending_action")
             if pending_action:
+                session_store.set_pending(
+                    req.session_id,
+                    pending_action.get("token", ""),
+                    pending_action.get("action", ""),
+                    pending_action.get("args", {}),
+                )
                 return ChatResponse(
                     status="pending",
                     reply=pending_action.get("message", "Vui lòng xác nhận hành động."),
                     token=pending_action.get("token"),
                     session_id=req.session_id,
                     steps=steps,
+                    evidence=_build_evidence(result),
                 )
+
+    if final_answer:
+        # Build references metadata (§8)
+        ref_result = result.get("resolved_query") or ""
+        ref_entities = result.get("resolved_entities") or {}
+        ref_table = result.get("reference_table") or {}
+        ref_metadata = {}
+        if ref_result:
+            ref_metadata["resolved_query"] = ref_result
+        if ref_entities:
+            ref_metadata["resolved_entities"] = ref_entities
+        if ref_table:
+            # Chỉ lấy positional keys (first, second, last) — tránh số
+            pos_keys = {k: v for k, v in ref_table.items() if isinstance(k, str) and not k.isdigit()}
+            if pos_keys:
+                ref_metadata["references"] = pos_keys
+        metadata = ref_metadata if ref_metadata else None
+        session_store.add_message(req.session_id, "assistant", final_answer, metadata=metadata)
+    if planner_memory:
+        session_store.update_planner_memory(req.session_id, planner_memory)
+
+    session_store.clear_pending(req.session_id)
 
     return ChatResponse(
         status="ok",
-        reply=result.get("final_answer", ""),
+        reply=final_answer,
         session_id=req.session_id,
         steps=steps,
+        evidence=_build_evidence(result),
     )
 
 
@@ -603,10 +819,10 @@ async def api_confirm(req: ConfirmRequest):
     """
     from src.guardrails.confirmation import verify_confirmation_token
     from langgraph.types import Command
+    from src.memory.store import get_session_store
 
     logger.info("[API] /api/confirm | session=%s", req.session_id)
 
-    # Verify HMAC token trước
     is_valid, action_data = verify_confirmation_token(req.token)
     if not is_valid:
         return ConfirmResponse(status="error", reply="Token không hợp lệ hoặc đã hết hạn.")
@@ -615,15 +831,19 @@ async def api_confirm(req: ConfirmRequest):
     config = {"configurable": {"thread_id": req.session_id}}
 
     try:
-        # Resume graph từ checkpoint — interrupt() trong ConfirmationNode
-        # trả về resume data, node trả về {"confirmed": True}
         result = await graph.ainvoke(
             Command(resume={"confirmed": True}),
             config=config,
         )
+        session_store = get_session_store()
+        session_store.clear_pending(req.session_id)
+        session_store.add_message(req.session_id, "system", "User confirmed action")
+        final_answer = result.get("final_answer", "")
+        if final_answer:
+            session_store.add_message(req.session_id, "assistant", final_answer)
         return ConfirmResponse(
             status="ok",
-            reply=result.get("final_answer", "✅ Đã xác nhận."),
+            reply=final_answer or "✅ Đã xác nhận.",
         )
     except Exception as e:
         logger.error("[API] LangGraph confirm error | session=%s | err=%s", req.session_id, e)
@@ -699,4 +919,4 @@ if __name__ == "__main__":
     port = int(os.getenv("PORT", "8001"))
     mode_str = "MOCK" if (args.mock or os.getenv("MOCK_EKS") == "true") else "LIVE"
     logger.info("Starting Shopping Copilot API [%s] on port %d", mode_str, port)
-    uvicorn.run("src.main:app", host="0.0.0.0", port=port, reload=False, log_level="info")
+    uvicorn.run("src.main:app", host="0.0.0.0", port=port, reload=args.reload, log_level="info")

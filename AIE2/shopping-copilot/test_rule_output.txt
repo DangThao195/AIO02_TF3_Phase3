@@ -1,0 +1,3 @@
+Q1: {'nodes': [{'id': 'n0', 'tool': 'respond_out_of_scope_tool', 'args': {'reason': 'personal_info'}, 'depends_on': [], 'confidence': 1.0, 'description': 'Từ chối thông tin cá nhân'}], 'goal': 'Từ chối', 'reasoning': 'Rule matched personal info restriction'}
+Q2: {'nodes': [{'id': 'n0', 'tool': 'get_cart_tool', 'args': {'user_id': 'anonymous'}, 'depends_on': [], 'confidence': 1.0, 'description': 'Xem giỏ hàng'}], 'goal': 'Xem giỏ hàng', 'reasoning': 'Rule matched view cart'}
+Q3: {'nodes': [{'id': 'n0', 'tool': 'respond_out_of_scope_tool', 'args': {'reason': 'personal_info'}, 'depends_on': [], 'confidence': 1.0, 'description': 'Từ chối thông tin cá nhân'}], 'goal': 'Từ chối', 'reasoning': 'Rule matched personal info restriction'}

@@ -1,7 +1,7 @@
 """
 graph/nodes/answer_generator.py — Answer Generator Node (L5 output filter + final format)
 
-Chạy sau response_verifier hoặc fallback_generator.
+Chạy sau response_generator (hoặc hallucination_guard).
 Áp dụng L5 output filter để redact PII trước khi trả về user.
 """
 
@@ -28,7 +28,7 @@ async def answer_generator_node(state: dict) -> dict:
         if violations:
             final_answer = violations[0].get("detail", "Yêu cầu bị từ chối.")
         else:
-            final_answer = "Tôi không có thông tin để trả lời câu hỏi này."
+            final_answer = "Xin lỗi, tôi không thể xử lý yêu cầu của bạn lúc này. Bạn có thể thử diễn đạt lại hoặc hỏi về sản phẩm khác được không?"
 
     # ── L5: Output Filter — redact PII ──
     try:

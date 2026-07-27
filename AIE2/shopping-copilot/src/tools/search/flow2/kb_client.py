@@ -73,7 +73,7 @@ class BedrockRAGStrategy(SearchStrategy):
             },
             retrievalConfiguration={
                 'vectorSearchConfiguration': {
-                    'numberOfResults': 5
+                    'numberOfResults': 50
                 }
             }
         )

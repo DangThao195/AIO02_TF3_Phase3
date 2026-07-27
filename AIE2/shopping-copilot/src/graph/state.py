@@ -144,12 +144,24 @@ class ShoppingState(TypedDict, total=False):
     #   current_cart_items: int    — số lượng item trong giỏ
     #   last_goal: str             — mục tiêu của lượt trước
 
+    # ── Reference Resolution fields (§7.3-§7.7) ───────────────────
+    last_tool_outputs: list            # [{"type": "product_list", "items": [...], "tool_name": "..."}]
+    reference_table: dict              # {"first": {"id":"P001","name":"Dell XPS 13"}, "second": {...}, "1": {...}, "last": {...}}
+    reference_stack: list              # Stack các recent tool outputs — pop() cho "quay lại cái trước"
+    entity_registry: dict              # {"iphone16": {"id":"P123","type":"product"} — cross-turn entity mapping
+    resolved_query: str                # Query đã rewrite bởi Reference Resolver (hoặc giữ nguyên)
+    resolved_entities: dict            # Entities đã bổ sung sau khi resolve (ghi đè entities gốc nếu cần)
+    translated_query: str              # Query đã được translate sang tiếng Việt (bởi Translate Node)
+
     # ── Confirmation / Write flow ──────────────────────────────────
     pending_action: Optional[dict]      # {action, params, token, message}
     confirmed: bool
 
     # ── Guardrails ────────────────────────────────────────────────
     guardrail_violations: list          # [{type, detail, tier}]
+
+    # ── Language ────────────────────────────────────────────────────
+    user_original_lang: str             # "vi" | "en" — ngôn ngữ gốc từ input
 
     # ── Observability ─────────────────────────────────────────────
     errors: Annotated[list, accumulate_errors]

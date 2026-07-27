@@ -9,7 +9,7 @@ def route_after_input_guard(state: dict) -> str:
     violations = state.get("guardrail_violations") or []
     if violations:
         return "blocked"
-    return "task_graph_builder"
+    return "reference_resolver"
 
 
 def route_after_plan_validity_gate(state: dict) -> str:
@@ -17,28 +17,28 @@ def route_after_plan_validity_gate(state: dict) -> str:
     decision = gate.get("decision", True)
     nodes = (state.get("plan") or {}).get("nodes", [])
     if not nodes:
-        return "response_verifier"
-    return "tool_executor" if decision else "response_verifier"
+        return "answer_synthesizer"
+    return "tool_executor" if decision else "answer_synthesizer"
 
 
 def route_after_reflection(state: dict) -> str:
     result = state.get("reflection_result", "pass")
     if result == "replan":
         return "replan_gate"
-    return "response_verifier"
+    return "answer_synthesizer"
 
 
 def route_after_hallucination_guard(state: dict) -> str:
-    if state.get("hallucination_detected") or state.get("semantic_hallucination_detected"):
-        return "fallback_generator"
+    if state.get("hallucination_detected"):
+        return "response_generator"
     return "answer_generator"
 
 
 def route_after_replan_gate(state: dict) -> str:
-    """Replan Gate: YES → task_graph_builder, NO → response_verifier."""
+    """Replan Gate: YES → task_graph_builder, NO → answer_synthesizer."""
     gate = (state.get("gate_decisions") or {}).get("replan_gate", {})
     decision = gate.get("decision", False)
-    return "task_graph_builder" if decision else "response_verifier"
+    return "task_graph_builder" if decision else "answer_synthesizer"
 
 
 def route_after_tool_executor(state: dict) -> str:
