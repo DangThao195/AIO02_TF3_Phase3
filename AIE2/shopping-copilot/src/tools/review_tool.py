@@ -7,13 +7,15 @@ get_product_reviews_tool — Lấy đánh giá sản phẩm theo 2 tầng:
 import json
 import logging
 import grpc
+from typing import Optional
 from langchain_core.tools import tool
 
 import src.protos.demo_pb2 as demo_pb2
 import src.protos.demo_pb2_grpc as demo_pb2_grpc
 from src.tools.service_config import REVIEWS_ADDR
-from src.tools.search.flow2.kb_client import BedrockRAGStrategy
+from src.tools.search_review.review_kb_client import BedrockReviewRAGStrategy
 from src.guardrails.input_filter import check_input
+from src.tools.catalog_tool import _price
 
 logger = logging.getLogger("tools.review_tool")
 
@@ -38,8 +40,8 @@ def _sanitize_review_description(description: str) -> str:
 
 
 def _reviews_via_rag(product_id: str) -> list:
-    """Query Bedrock KB for reviews. Returns list of review dicts or empty list."""
-    rag = BedrockRAGStrategy()
+    """Query Bedrock KB specifically for reviews using review_kb_client (productreview DS)."""
+    rag = BedrockReviewRAGStrategy()
     if not rag.kb_id:
         return []
     return rag.retrieve_reviews(product_id)
@@ -153,7 +155,7 @@ def get_product_reviews_tool(product_id: str) -> str:
 
 
 @tool
-def get_best_reviewed_products_tool(limit: int = 10, category: str = None) -> str:
+def get_best_reviewed_products_tool(limit: int = 10, category: Optional[str] = None) -> str:
     """
     Get the top-rated products based on average review scores.
     Use when user asks: "sản phẩm đánh giá tốt nhất", "best reviewed products",
@@ -166,7 +168,7 @@ def get_best_reviewed_products_tool(limit: int = 10, category: str = None) -> st
     Returns JSON: {"status", "total", "products": [{"id", "name", "price", "avg_score", "review_count"}]}
     """
     try:
-        from src.tools.search.flow1.sql_executor import SQLQueryExecutor
+        from src.tools.search_product.flow1.sql_executor import SQLQueryExecutor
         executor = SQLQueryExecutor()
         executor.ensure_initialized()
         
@@ -201,13 +203,11 @@ def get_best_reviewed_products_tool(limit: int = 10, category: str = None) -> st
         
         products = []
         for r in rows:
-            price_u = r.get("price_units", 0) or 0
-            price_n = r.get("price_nanos", 0) or 0
             products.append({
                 "id": str(r.get("id", "")),
                 "name": r.get("name", ""),
                 "categories": r.get("categories", ""),
-                "price": round(price_u + price_n / 1e9, 2),
+                "price": _price(r.get("price_units", 0), r.get("price_nanos", 0)),
                 "avg_score": float(r.get("avg_score", 0)),
                 "review_count": int(r.get("review_count", 0)),
             })
@@ -230,7 +230,7 @@ def get_best_reviewed_products_tool(limit: int = 10, category: str = None) -> st
 
 
 @tool
-def get_worst_reviewed_products_tool(limit: int = 10, category: str = None) -> str:
+def get_worst_reviewed_products_tool(limit: int = 10, category: Optional[str] = None) -> str:
     """
     Get the worst-rated products based on average review scores.
     Use when user asks: "sản phẩm đánh giá tệ nhất", "worst reviewed products",
@@ -243,7 +243,7 @@ def get_worst_reviewed_products_tool(limit: int = 10, category: str = None) -> s
     Returns JSON: {"status", "total", "products": [{"id", "name", "price", "avg_score", "review_count"}]}
     """
     try:
-        from src.tools.search.flow1.sql_executor import SQLQueryExecutor
+        from src.tools.search_product.flow1.sql_executor import SQLQueryExecutor
         executor = SQLQueryExecutor()
         executor.ensure_initialized()
         
@@ -278,13 +278,11 @@ def get_worst_reviewed_products_tool(limit: int = 10, category: str = None) -> s
         
         products = []
         for r in rows:
-            price_u = r.get("price_units", 0) or 0
-            price_n = r.get("price_nanos", 0) or 0
             products.append({
                 "id": str(r.get("id", "")),
                 "name": r.get("name", ""),
                 "categories": r.get("categories", ""),
-                "price": round(price_u + price_n / 1e9, 2),
+                "price": _price(r.get("price_units", 0), r.get("price_nanos", 0)),
                 "avg_score": float(r.get("avg_score", 0)),
                 "review_count": int(r.get("review_count", 0)),
             })

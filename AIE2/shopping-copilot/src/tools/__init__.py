@@ -1,6 +1,6 @@
 # tools/__init__.py
 
-from src.tools.search import search_products_v2
+from src.tools.search_product import search_products_v2
 from src.tools.cart_tool import add_to_cart_tool, get_cart_tool, check_cart_item_tool
 from src.tools.review_tool import get_product_reviews_tool, get_best_reviewed_products_tool, get_worst_reviewed_products_tool
 from src.tools.recommendation_tool import get_recommendations_tool
