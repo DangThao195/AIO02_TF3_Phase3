@@ -33,6 +33,8 @@ spec:
         {{- ((.imageOverride).pullSecrets) | default .defaultValues.image.pullSecrets | toYaml | nindent 8}}
       {{- end }}
       serviceAccountName: {{ include "techx-corp.serviceAccountName" .}}
+      automountServiceAccountToken: {{ if hasKey . "automountServiceAccountToken" }}{{ .automountServiceAccountToken }}{{ else if hasKey .defaultValues "automountServiceAccountToken" }}{{ .defaultValues.automountServiceAccountToken }}{{ else }}false{{ end }}
+
       {{- $schedulingRules := .schedulingRules | default dict }}
       {{- if or .defaultValues.schedulingRules.nodeSelector $schedulingRules.nodeSelector}}
       nodeSelector:
