@@ -1,0 +1,2 @@
+2026-07-14 21:55:46,742 - botocore.credentials - INFO - Found credentials in environment variables.
+2026-07-14 21:55:46,907 - main - INFO - Product reviews service started, listening on port 8085

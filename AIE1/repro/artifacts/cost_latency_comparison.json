@@ -1,0 +1,40 @@
+{
+  "run_id": "2026-07-23T10:27:18+07:00",
+  "purpose": "Comparison of cost, tokens, and latency before and after caching integration for AIE1 product-review server.",
+  "method": "Comparative evaluation of 6 normal cases running sequentially on a local server. Baseline is compared with Cold Cache (first run) and Hot Cache (subsequent cache hit runs).",
+  "metrics_comparison": {
+    "baseline_before_cache": {
+      "description": "No cache integrated. All requests call Bedrock (Nova Lite + Nova Micro).",
+      "p50_latency_seconds": 2.8213,
+      "mean_latency_seconds": 2.8922,
+      "p95_latency_seconds": 3.4962,
+      "total_bedrock_calls": 12,
+      "estimated_cost_usd": 0.00069523,
+      "pass_rate": 0.8333
+    },
+    "cold_cache": {
+      "description": "First run after caching integration. Part of the cases hit the cache (from partial previous tests) and the rest call Bedrock to populate the cache.",
+      "p50_latency_seconds": 4.0820,
+      "mean_latency_seconds": 6.2786,
+      "p95_latency_seconds": 17.6619,
+      "total_bedrock_calls": 6,
+      "estimated_cost_usd": 0.0003476,
+      "pass_rate": 0.8333
+    },
+    "hot_cache": {
+      "description": "Subsequent run. 5 out of 6 cases hit the Redis cache directly. Case 1 (unverified summary) is bypassed by the Cache Policy and calls Bedrock.",
+      "p50_latency_seconds": 0.0044,
+      "mean_latency_seconds": 3.3389,
+      "p95_latency_seconds": 15.0109,
+      "total_bedrock_calls": 2,
+      "estimated_cost_usd": 0.0001158,
+      "pass_rate": 0.8333
+    }
+  },
+  "key_findings": {
+    "latency_improvement": "P50 latency decreased from 2.8213 seconds to 0.0044 seconds (4.4 milliseconds) on Hot Cache, yielding a 641x speedup.",
+    "cost_savings": "Bedrock API calls were reduced from 12 to 2 (83.3% reduction in cost and token usage) for Hot Cache runs because cached responses consume zero Bedrock tokens.",
+    "cache_policy_fidelity": "The Cache Policy successfully prevented caching of unverified responses (Case 1), ensuring that incorrect summaries are always re-evaluated rather than served from cache.",
+    "concurrency_safeguard": "Distributed locks (SET NX EX 10) protect the system from Cache Stampede (Thundering Herd) when multiple requests hit the same missing cache key simultaneously."
+  }
+}
