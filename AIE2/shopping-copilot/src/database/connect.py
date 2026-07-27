@@ -42,10 +42,10 @@ class DBConfig:
         default_factory=lambda: int(os.getenv("DB_MAX_CONN", "10"))
     )
     connect_timeout: int = field(
-        default_factory=lambda: int(os.getenv("DB_TIMEOUT", "30"))
+        default_factory=lambda: int(os.getenv("DB_TIMEOUT", "2"))
     )
     sslmode: str = field(
-        default_factory=lambda: os.getenv("DB_SSLMODE", "disable")
+        default_factory=lambda: os.getenv("DB_SSLMODE", "prefer")
     )
     application_name: str = field(
         default_factory=lambda: os.getenv("DB_APP_NAME", "shopping-copilot")

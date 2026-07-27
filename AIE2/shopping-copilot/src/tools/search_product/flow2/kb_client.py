@@ -1,0 +1,163 @@
+import asyncio
+import os
+import re
+import boto3
+from typing import List, Optional
+
+from src.database.connect import get_conn, init_pool
+from src.tools.search_product.models import Money, Product, SearchQuery, ScoredProduct, SearchStrategy
+
+
+class BedrockRAGStrategy(SearchStrategy):
+    """
+    Query AWS Bedrock Knowledge Base to perform semantic vector search on PRODUCTS.
+    Targets specifically the PRODUCT data source (BEDROCK_KB_DATA_SOURCE_ID / DATA_SOURCE_ID).
+    """
+
+    _name = "bedrock_product_rag"
+
+    def __init__(self):
+        pass
+
+    @property
+    def kb_id(self) -> Optional[str]:
+        return os.environ.get("BEDROCK_KB_ID")
+
+    @property
+    def product_data_source_id(self) -> Optional[str]:
+        """ID of the product datasource in Bedrock KB."""
+        return os.environ.get("BEDROCK_KB_DATA_SOURCE_ID") or os.environ.get("DATA_SOURCE_ID", "OJQNE88GXV")
+
+    @property
+    def region(self) -> str:
+        return os.environ.get("BEDROCK_KB_REGION", "us-east-1")
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    def should_run(self, sq: SearchQuery) -> bool:
+        """Only run if BEDROCK_KB_ID is configured in the environment."""
+        return bool(self.kb_id)
+
+    async def search(self, sq: SearchQuery) -> List[ScoredProduct]:
+        kb_id = self.kb_id
+        if not kb_id:
+            return []
+
+        print(f"\n[PRODUCT RAG] Kích hoạt RAG tìm kiếm sản phẩm: '{sq.raw}' (KB_ID: {kb_id}, Product DS: {self.product_data_source_id})")
+        try:
+            loop = asyncio.get_event_loop()
+            results = await loop.run_in_executor(None, self._query_kb, sq.raw)
+            print(f"[PRODUCT RAG] Tìm thấy {len(results)} sản phẩm phù hợp từ Product Vector KB.")
+            return results
+        except Exception as e:
+            print(f"[PRODUCT RAG] Lỗi BedrockRAGStrategy: {e}")
+            return []
+
+    def _query_kb(self, query_text: str) -> List[ScoredProduct]:
+        kb_id = self.kb_id
+        region = self.region
+        ds_id = self.product_data_source_id
+
+        session = boto3.Session(profile_name=os.environ.get("AWS_PROFILE"))
+        client = session.client("bedrock-agent-runtime", region_name=region)
+
+        retrieval_config = {
+            'vectorSearchConfiguration': {
+                'numberOfResults': 5
+            }
+        }
+
+        # Filter strictly by PRODUCT data source ID
+        if ds_id:
+            retrieval_config['vectorSearchConfiguration']['filter'] = {
+                'equals': {
+                    'key': 'x-amz-bedrock-kb-data-source-id',
+                    'value': ds_id
+                }
+            }
+
+        response = client.retrieve(
+            knowledgeBaseId=kb_id,
+            retrievalQuery={
+                'text': query_text
+            },
+            retrievalConfiguration=retrieval_config
+        )
+
+        scored_products = []
+        retrieved_results = response.get("retrievalResults", [])
+
+        id_pattern = re.compile(r"Product\s+ID:\s*([A-Z0-9]{10})", re.IGNORECASE)
+
+        for res in retrieved_results:
+            text = res.get("content", {}).get("text", "")
+            score = res.get("score", 0.8)
+
+            match = id_pattern.search(text)
+            if match:
+                product_id = match.group(1)
+                product = self._resolve_product_details(product_id, text)
+                scored_products.append(ScoredProduct(
+                    product=product,
+                    score=score * 100,
+                    strategy_name=self.name
+                ))
+
+        return scored_products
+
+    def _resolve_product_details(self, product_id: str, chunk_text: str) -> Product:
+        """Resolve product details from PostgreSQL catalog. Falls back to parsing RAG chunk text."""
+        try:
+            from src.database.connect import DBConfig
+            import psycopg2
+            cfg = DBConfig()
+            conn = psycopg2.connect(**cfg.get_connect_kwargs())
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT name, description, categories, price_units, price_nanos FROM products WHERE id = %s",
+                        (product_id,)
+                    )
+                    row = cur.fetchone()
+                    if row:
+                        raw_cat = row[2]
+                        cats = [c.strip() for c in raw_cat.split(",") if c.strip()] if isinstance(raw_cat, str) else (list(raw_cat) if raw_cat else [])
+                        conn.close()
+                        return Product(
+                            id=product_id,
+                            name=row[0],
+                            description=row[1] or "",
+                            categories=cats,
+                            price_usd=Money(units=row[3] if row[3] is not None else 0,
+                                            nanos=row[4] if row[4] is not None else 0)
+                        )
+            conn.close()
+        except Exception:
+            pass
+
+        # Parse from RAG chunk text fallback
+        name_match = re.search(r"(?:Product\s+Name|Name|Title|Product):\s*([^\n\r]+)", chunk_text, re.IGNORECASE)
+        price_match = re.search(r"Price:\s*\$?(\d+(?:\.\d+)?)", chunk_text, re.IGNORECASE)
+        cat_match = re.search(r"Categor(?:y|ies):\s*([^\n\r]+)", chunk_text, re.IGNORECASE)
+
+        name = name_match.group(1).strip() if name_match else f"Product {product_id}"
+        units, nanos = 0, 0
+        if price_match:
+            try:
+                val = float(price_match.group(1).strip())
+                units = int(val)
+                nanos = int(round((val - units) * 1e9))
+            except Exception:
+                pass
+
+        categories = [c.strip() for c in cat_match.group(1).split(",") if c.strip()] if cat_match else []
+
+        return Product(
+            id=product_id,
+            name=name,
+            description=chunk_text[:200],
+            categories=categories,
+            price_usd=Money(units=units, nanos=nanos)
+        )
