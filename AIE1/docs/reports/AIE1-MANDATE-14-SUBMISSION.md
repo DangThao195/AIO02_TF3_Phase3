@@ -92,25 +92,25 @@ make eval-mandate14
 ## 🎯 6.1. Kết Quả Kiểm Thử Độ Chính Xác RAG & Quality Gate (RAG Accuracy & Quality Gate)
 *Đo lường tự động công khai qua tệp bằng chứng [rag_accuracy_runtime_bedrock_usage_fix2_20260727.json](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/repro/artifacts/rag_accuracy_runtime_bedrock_usage_fix2_20260727.json) (59 cases):*
 
-| Nhóm Ca Kiểm Thử (Category) | Số Ca (Total) | Đạt (Passed) | Thất Bại (Failed) | Tỷ Lệ Đạt (Pass Rate) | Trạng Thái Quality Gate |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| **Normal (Hỏi đáp hợp lệ)** | 44 | 43 | 1 | **`97.73%`** | ✅ Vượt ngưỡng (≥ 80%) |
-| **Unanswerable (Thiếu dữ liệu)** | 15 | 15 | 0 | **`100.0%`** | ✅ Vượt ngưỡng (100%) |
-| **Off-topic (Ngoại vi)** | 9 | 9 | 0 | **`100.0%`** | ✅ Vượt ngưỡng (100%) |
-| **TỔNG THỂ (Overall)** | **59** | **58** | **1** | **`98.31%`** | **`PASSED`** |
+| Nhóm Ca Kiểm Thử (Category)      | Số Ca (Total) | Đạt (Passed) | Thất Bại (Failed) | Tỷ Lệ Đạt (Pass Rate) | Trạng Thái Quality Gate |
+| :------------------------------- | :-----------: | :----------: | :---------------: | :-------------------: | :---------------------: |
+| **Normal (Hỏi đáp hợp lệ)**      |      44       |      43      |         1         |     **`97.73%`**      |  ✅ Vượt ngưỡng (≥ 80%)  |
+| **Unanswerable (Thiếu dữ liệu)** |      15       |      15      |         0         |     **`100.0%`**      |  ✅ Vượt ngưỡng (100%)   |
+| **Off-topic (Ngoại vi)**         |       9       |      9       |         0         |     **`100.0%`**      |  ✅ Vượt ngưỡng (100%)   |
+| **TỔNG THỂ (Overall)**           |    **59**     |    **58**    |       **1**       |     **`98.31%`**      |      **`PASSED`**       |
 
 ---
 
 ## 📊 7. Kết Quả Đo Lường Hiệu Năng & Chi Phí (Before vs After Caching)
 *Chi tiết đo lường thực nghiệm trên bộ 6 cases normal mẫu:*
 
-| Chỉ số | Trước khi có Cache (Before Baseline) | Lần chạy đầu tiên (Cold Cache) | Các lần chạy sau (Hot Cache) | Hiệu quả cải thiện (Delta) |
-| :--- | :---: | :---: | :---: | :---: |
-| **Tổng số cuộc gọi LLM** | 12 (6 Candidate + 6 Judge) | 6 | **2** | **Giảm 83.3%** lần gọi Bedrock |
-| **Tổng lượng token tiêu thụ** | 13,788 tokens | 6,894 tokens | **2,297 tokens** | **Tiết kiệm 11,491 tokens** |
-| **Tổng chi phí ước tính** | $0.00069523 | $0.00034760 | **$0.00011580** | **Giảm 83.3%** chi phí API |
-| **Độ trễ trung vị p50 (Latency)** | 2.8213 giây | 4.0820 giây | **0.0044 giây (4.4 ms)** | **Nhanh gấp ~641 lần** |
-| **Tỷ lệ Pass Rate** | 83.3% | 83.3% | **83.3%** | Đảm bảo độ chính xác tuyệt đối |
+| Chỉ số                            | Trước khi có Cache (Before Baseline) | Lần chạy đầu tiên (Cold Cache) | Các lần chạy sau (Hot Cache) |   Hiệu quả cải thiện (Delta)   |
+| :-------------------------------- | :----------------------------------: | :----------------------------: | :--------------------------: | :----------------------------: |
+| **Tổng số cuộc gọi LLM**          |      12 (6 Candidate + 6 Judge)      |               6                |            **2**             | **Giảm 83.3%** lần gọi Bedrock |
+| **Tổng lượng token tiêu thụ**     |            13,788 tokens             |          6,894 tokens          |       **2,297 tokens**       |  **Tiết kiệm 11,491 tokens**   |
+| **Tổng chi phí ước tính**         |             $0.00069523              |          $0.00034760           |       **$0.00011580**        |   **Giảm 83.3%** chi phí API   |
+| **Độ trễ trung vị p50 (Latency)** |             2.8213 giây              |          4.0820 giây           |   **0.0044 giây (4.4 ms)**   |     **Nhanh gấp ~641 lần**     |
+| **Tỷ lệ Pass Rate**               |                83.3%                 |             83.3%              |          **83.3%**           | Đảm bảo độ chính xác tuyệt đối |
 
 > [!NOTE]
 > **Về Độ Trễ p95:** p95 giữ ở mức 15.01 giây do chính sách **Fidelity-based Caching (Chỉ cache kết quả PASS)**. Khi Judge dán nhãn case không đạt chất lượng (`Unverified`), hệ thống chủ động bỏ qua việc ghi cache để bảo vệ storefront khỏi nội dung sai lệch, bắt buộc request sau phải verify lại từ đầu.
@@ -128,5 +128,4 @@ make eval-mandate14
 2.  [0004-SUMMARY-FIDELITY-EVALUATION.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/adr/0004-SUMMARY-FIDELITY-EVALUATION.md) *(Độ trung thực RAG)*
 3.  [0005-CACHING-STRATEGY.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/adr/0005-CACHING-STRATEGY.md) *(Thiết kế Caching - User Isolation)*
 4.  [0006-COST-LATENCY-MEASUREMENT-AND-CACHING.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/adr/0006-COST-LATENCY-MEASUREMENT-AND-CACHING.md) *(Nghiệm thu đo lường Caching)*
-5.  [0007-FALLBACK-OVERRIDE-AND-TELEMETRY.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/adr/0007-FALLBACK-OVERRIDE-AND-TELEMETRY.md) *(Circuit Breaker, Error Injection & Telemetry)*
-6.  [0008-runtime-llm-trace-auditability.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/adr/0008-runtime-llm-trace-auditability.md) *(LLM Observability, Trace & Replay)*
+5.  [0007-FALLBACK-OVERRIDE-AND-TELEMETRY.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/adr/0007-FALLBACK-OVERRIDE-AND-TELEMETRY.md) *(Error Injection & Telemetry)*
