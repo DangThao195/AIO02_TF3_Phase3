@@ -127,7 +127,7 @@ except ImportError:  # pragma: no cover - local unit-test fallback
     health = SimpleNamespace(HealthServicer=_NoopHealthServicer)
     health_pb2 = SimpleNamespace(HealthCheckResponse=SimpleNamespace(SERVING="SERVING"))
     health_pb2_grpc = SimpleNamespace(add_HealthServicer_to_server=lambda *args, **kwargs: None)
-from database import fetch_product_reviews, fetch_product_reviews_from_db, fetch_avg_product_review_score_from_db, get_review_version
+from database import fetch_product_reviews, fetch_product_reviews_from_db, fetch_avg_product_review_score_from_db, get_review_version, save_product_summary, fetch_product_summary_from_db
 from guardrails.cache import (
     acquire_lock,
     generate_cache_key,
@@ -1454,6 +1454,36 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                     },
                 }
                 set_cached_response(cache_key, cache_data)
+            # Task 2: Khi LLM + Judge thành công (approved/deterministic), ghi đè bản tóm tắt
+            # mới nhất vào bảng reviews.product_summaries để phục vụ Tầng 2 Fallback sau này.
+            _should_persist = (
+                result is not None
+                and judge_status in ("approved", "deterministic")
+                and result not in (
+                    FALLBACK_SUMMARY_MESSAGE,
+                    UNVERIFIED_SUMMARY_MESSAGE,
+                    OUT_OF_SCOPE_MESSAGE,
+                    NO_INFO_MESSAGE,
+                )
+            )
+            if _should_persist:
+                try:
+                    save_product_summary(
+                        product_id=request_product_id,
+                        summary_text=result,
+                        review_version=review_version,
+                    )
+                    logger.info(
+                        "[DB_SUMMARY] Overwritten static summary for product_id=%s judge_status=%s",
+                        request_product_id,
+                        judge_status,
+                    )
+                except Exception as _db_err:
+                    logger.warning(
+                        "[DB_SUMMARY] Failed to persist static summary for product_id=%s: %s",
+                        request_product_id,
+                        _db_err,
+                    )
 
 
 def fetch_product_info(product_id):
