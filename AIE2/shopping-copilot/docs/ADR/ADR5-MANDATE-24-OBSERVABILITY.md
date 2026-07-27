@@ -1,6 +1,6 @@
 # ADR5: MANDATE #24 — HỘP ĐEN CHO TẦNG MODEL (LLM OBSERVABILITY)
 
-**Tác giả:** Đặng Thị Ngọc Thảo  
+**Tác giả:** Phạm Vũ Khánh Trường  
 **Ngày:** 27/07/2026  
 **Hạn chót nộp:** 28/07/2026 (Thứ Ba)  
 **Status:** ✅ HOÀN THÀNH — READY FOR GRADING  
@@ -333,7 +333,7 @@ curl -X POST http://localhost:8001/api/traces/trigger-error
 ## 11. SIGN-OFF
 
 **Implementation Team:** AIE2 — Shopping Copilot  
-**Implementer:** Đặng Thị Ngọc Thảo  
+**Implementer:** Phạm Vũ Khánh Trường 
 **Date Completed:** 27/07/2026  
 **Deadline:** 28/07/2026 (Tuesday)  
 **Status:** ✅ **COMPLETE AND READY FOR GRADING**
