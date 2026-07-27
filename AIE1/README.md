@@ -18,7 +18,7 @@ Nhiệm vụ không phải "làm bài tập". Nhiệm vụ là **vận hành s�
 | `onboarding/` | Kiến trúc, SLO, ngân sách, lịch sử sự cố, pitch guide - hiểu hệ thống trước khi đụng vào |
 | `GETTING_STARTED.md` | Hướng dẫn build → deploy → verify |
 | `docs/guides/` | Hướng dẫn chạy thử nghiệm & deploy (`MOCK_TEST_GUIDE.md`, `TEST_SERVICES_GUIDE.md`, `EKS_DEPLOY_GUIDE.md`) |
-| `docs/analysis/` | Các báo cáo phân tích, đề xuất kỹ thuật (`evaluation_bottlenecks.md`, `BEDROCK_INTEGRATION_PROPOSAL.md`) |
+| `docs/analysis/` | Các báo cáo phân tích, đề xuất kỹ thuật (`0002-EVALUATION-BOTTLENECKS.md`, `0004-BEDROCK-INTEGRATION-PROPOSAL.md`) |
 | `docs/adr/` | Nhật ký quyết định kiến trúc (ADR 0001, ADR 0002) |
 | `mandates/` | Directive bắt buộc BTC thả vào trong lúc vận hành (trống lúc đầu) |
 | `techx-corp-platform/` | Toàn bộ source code sản phẩm (microservice, AI review + LLM, observability) |

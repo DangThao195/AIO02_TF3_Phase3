@@ -1,0 +1,6 @@
+**/venv/**
+**/node_modules/**
+**/.venv/**
+**/venv/
+**/.venv/
+**/techx-corp-platform/src/product-reviews/venv/

@@ -1,54 +1,54 @@
 # Product Reviews Service
 
-This service returns product reviews for a specific product, along with an
-AI-generated summary of the product reviews.
+Dịch vụ Product Reviews cung cấp thông tin đánh giá sản phẩm và trả về bản tóm tắt tự động sử dụng Trợ lý AI (RAG Pipeline) kèm theo các cơ chế Caching, Resilience, và Observability được tích hợp sẵn.
 
-## Local Build
+---
 
-To build the protos, run from the root directory:
+## 1. Hướng dẫn Dựng & Chạy local
 
+### Build Protobuf
+Chạy từ thư mục gốc của project:
 ```sh
 make docker-generate-protobuf
 ```
 
-## Docker Build
-
-From the root directory, run:
-
+### Docker Build
+Chạy từ thư mục gốc của project:
 ```sh
 docker compose build product-reviews
 ```
 
-## LLM Configuration
-
-By default, this service uses a mock LLM service, as configured in
-the `.env` file:
-
-``` yaml
-LLM_BASE_URL=http://${LLM_HOST}:${LLM_PORT}/v1
-LLM_MODEL=techx-llm
-OPENAI_API_KEY=dummy
-```
-
-If desired, the configuration can be changed to point to a real, OpenAI API
-compatible LLM in the file `.env.override`. For example, the following
-configuration can be used to utilize OpenAI's gpt-4o-mini model:
-
-``` yaml
-LLM_BASE_URL=https://api.openai.com/v1
-LLM_MODEL=gpt-4o-mini
-OPENAI_API_KEY=<replace with API key>
+### Chạy Replay Simulation (Kiểm thử Closed-loop)
+Chạy trực tiếp từ thư mục này để giả lập kịch bản dập lỗi của AIOps:
+```sh
+python aiops_replay_sim.py
 ```
 
 ---
 
-## Sơ đồ luồng hoạt động chi tiết (Detailed Code Flowcharts)
+## 2. Kiến trúc & Các Điểm Cải Tiến Cốt Lõi (Tuần 3)
 
-Để đảm bảo khả năng hiển thị tốt nhất trên các ứng dụng như Obsidian và GitHub, sơ đồ luồng hoạt động của dịch vụ Product Reviews (`product_reviews_server.py`) được chia nhỏ thành 4 sơ đồ thành phần dưới đây:
+Dịch vụ đã được nâng cấp toàn diện để đáp ứng các tiêu chuẩn vận hành an toàn:
+1. **Caching 2 Tầng (LLM & Database):**
+   * **Tầng 1 (Redis Cache):** Tra cứu trước khi gọi LLM. Cache key băm SHA256 phân tách theo `user_id` để tránh rò rỉ chéo thông tin. Trả cờ `cache: hit` hoặc `cache: miss` qua gRPC trailing metadata.
+   * **Tầng 2 (PostgreSQL Filter):** Chỉ truy vấn và sử dụng các review có cột `is_safe = TRUE` làm context sạch gửi cho LLM.
+2. **Circuit Breaker (Bộ ngắt mạch an toàn):**
+   * Giám sát tỷ lệ lỗi kết nối LLM qua Redis. Tự động chuyển trạng thái `OPEN` (chuyển sang PostgreSQL cache hoặc trả về fallback) sau 5 lỗi liên tiếp trong 30 giây để bảo vệ hệ thống khỏi nghẽn luồng.
+3. **Graceful Shutdown & Auto-Reconnection:**
+   * Lắng nghe tín hiệu `SIGTERM` / `SIGINT`.
+   * Khi tắt, chuyển trạng thái gRPC Health Check thành `NOT_SERVING` và trì hoãn ngắt kết nối `server.stop(grace=5.0)` để hoàn thành các request đang dở dang.
+   * Tự động thử lại kết nối PostgreSQL (5 lần exponential backoff) và Redis khi startup để tránh crash pod nếu dependencies khởi động chậm hơn service.
+4. **OTel Telemetry Sidecar Server (Port 8086):**
+   * Cung cấp cổng phụ HTTP hỗ trợ giám sát và tiêm lỗi:
+     * `POST /replay`: Chạy kịch bản dập lỗi closed-loop.
+     * `GET /trace/<trace_id>`: Lấy vết telemetry đã được che PII lưu trên Redis.
+     * `POST /inject`: Giả lập lỗi 429/timeout để test khả năng chống chịu của server.
 
-### 1. Tổng quan các Endpoint gRPC (Service Endpoints Overview)
-Sơ đồ này biểu diễn các entry-point gRPC chính được dịch vụ hỗ trợ:
+---
 
+## 3. Sơ đồ luồng hoạt động chi tiết (Detailed Code Flowcharts)
+
+### 3.1. Tổng quan các Endpoint gRPC (Service Endpoints Overview)
 ```mermaid
 flowchart TD
     Client([Yêu cầu từ Client]) --> Endpoints{Yêu cầu gọi Endpoint?}
@@ -57,115 +57,82 @@ flowchart TD
     Endpoints -->|AskProductAIAssistant| Flow3[Luồng Trợ lý AI - RAG]
 ```
 
-### 2. Luồng Khởi tạo Dịch vụ (Initialization Flow)
-Quy trình khởi tạo gRPC server và thiết lập OpenTelemetry telemetry/logging khi khởi động service:
-
+### 3.2. Luồng Khởi tạo Dịch vụ & Graceful Shutdown
 ```mermaid
 flowchart TD
-    Start(["Chạy product_reviews_server.py"]) --> Env["Đọc biến môi trường (Port, LLM, Catalog, DB, etc.)"]
-    Env --> SetFlagd["Cài đặt FlagdProvider cho OpenFeature (Feature Flag)"]
-    SetFlagd --> InitOtel["Khởi tạo OpenTelemetry (Tracer, Meter & Metrics)"]
-    InitOtel --> InitLogs["Cấu hình OpenTelemetry Logger & Exporter"]
-    InitLogs --> CreateServer["Tạo gRPC Server (ThreadPoolExecutor với 10 workers)"]
-    CreateServer --> RegServices["Đăng ký ProductReviewService & Health Service"]
-    RegServices --> ConnectCatalog["Thiết lập grpc.insecure_channel với Product Catalog Service"]
-    ConnectCatalog --> StartListen["Khởi động gRPC Server & lắng nghe kết nối"]
+    Start(["Chạy product_reviews_server.py"]) --> Env["Đọc biến môi trường"]
+    Env --> DBConnect{"Thử kết nối PostgreSQL & Redis"}
+    DBConnect -->|Thất bại| Retry["Retry Connection (Backoff 5 lần)"]
+    Retry --> DBConnect
+    DBConnect -->|Thành công| InitOtel["Khởi tạo OpenTelemetry & Prometheus Metrics"]
+    InitOtel --> CreateServer["Tạo gRPC Server & Đăng ký Health Check (SERVING)"]
+    CreateServer --> RegisterSignal["Đăng ký Bắt Tín Hiệu SIGTERM/SIGINT"]
+    RegisterSignal --> StartListen["Khởi động gRPC Server & Lắng nghe kết nối"]
+    
+    StartListen -->|Nhận SIGTERM/SIGINT| HealthNotServing["Đổi Health status -> NOT_SERVING"]
+    HealthNotServing --> WaitGrace["Trì hoãn & Tắt server qua server.stop(grace=5.0)"]
+    WaitGrace --> EndService(["Dịch vụ tắt an toàn"])
 ```
 
-### 3. Luồng Database Queries (GetProductReviews & GetAverageProductReviewScore)
-Cách thức xử lý các truy vấn trực tiếp vào PostgreSQL database được chia làm 2 luồng độc lập để hiển thị rõ ràng nhất:
-
-#### 3.1. Luồng xử lý GetProductReviews
+### 3.3. Luồng Database Queries
 ```mermaid
 flowchart TD
     ReqReviews(["Nhận GetProductReviews"]) --> SpanReviews["Bắt đầu trace span 'get_product_reviews'"]
-    SpanReviews --> FetchDB["Truy vấn reviews.productreviews từ DB Postgres"]
+    SpanReviews --> FetchDB["Truy vấn DB Postgres: Chỉ lấy dòng is_safe = TRUE"]
     FetchDB --> LoopReviews["Lặp qua các bản ghi & thêm vào Response"]
     LoopReviews --> CountMetric["Tăng metric 'app_product_review_counter'"]
     CountMetric --> EndSpanReviews["Kết thúc trace span"]
     EndSpanReviews --> RetReviews(["Trả về GetProductReviewsResponse"])
 ```
 
-#### 3.2. Luồng xử lý GetAverageProductReviewScore
+### 3.4. Luồng xử lý AskProductAIAssistant (RAG Pipeline)
 ```mermaid
 flowchart TD
-    ReqScore(["Nhận GetAverageProductReviewScore"]) --> SpanScore["Bắt đầu trace span 'get_average_product_review_score'"]
-    SpanScore --> FetchAvgDB["Tính điểm trung bình AVG(score) từ DB Postgres"]
-    FetchAvgDB --> SetScore["Gán average_score vào Response"]
-    SetScore --> EndSpanScore["Kết thúc trace span"]
-    EndSpanScore --> RetScore(["Trả về GetAverageProductReviewScoreResponse"])
+    ReqAI(["Nhận AskProductAIAssistant - product_id, question, user_id"]) --> SpanAI["Bắt đầu trace span"]
+    SpanAI --> InputFilter{"Chạy check_input - Bộ lọc đầu vào"}
+    InputFilter -->|Không an toàn / Injection| RetBlocked["Gán blocked_reason làm response"]
+    
+    InputFilter -->|An toàn| CheckCB{"Circuit Breaker có OPEN?"}
+    CheckCB -->|Đúng| RetFallback["Trả về Fallback / Cache message"]
+    
+    CheckCB -->|Sai| BuildKey["Tạo Cache Key SHA256 (user_id + question + product_id)"]
+    BuildKey --> LookupCache{"Tra cứu Redis Cache"}
+    
+    LookupCache -->|Cache HIT| AddHitHeader["Gán metadata 'cache: hit'"]
+    AddHitHeader --> RetCache["Trả kết quả từ Cache"]
+    
+    LookupCache -->|Cache MISS| AddMissHeader["Gán metadata 'cache: miss'"]
+    AddMissHeader --> CallLLM["Gọi Candidate LLM (Bedrock / OpenAI)"]
+    
+    CallLLM -->|LLM Lỗi / Timeout| FallbackMsg["Sử dụng FALLBACK_SUMMARY_MESSAGE"]
+    CallLLM -->|LLM Thành công| OutputFilter["Lọc PII & leak system prompt ở đầu ra"]
+    
+    OutputFilter --> CallJudge["Gọi Giám khảo call_summary_judge để chấm Fidelity"]
+    CallJudge --> CheckClaims{"Phát hiện claim unsupported / contradicted?"}
+    
+    CheckClaims -->|Có - Không trung thực| RejectSummary["Trả về UNVERIFIED_SUMMARY_MESSAGE (Không ghi Cache)"]
+    CheckClaims -->|Không - Hoàn toàn trung thực| SaveCache["Ghi kết quả vào Redis Cache kèm Metadata"]
+    SaveCache --> ApproveSummary["Trả về kết quả tóm tắt cho khách"]
+    
+    RetBlocked --> EndSpanAI["Kết thúc trace span & Trả về Response"]
+    RetFallback --> EndSpanAI
+    RetCache --> EndSpanAI
+    FallbackMsg --> EndSpanAI
+    RejectSummary --> EndSpanAI
+    ApproveSummary --> EndSpanAI
 ```
 
-### 4. Luồng xử lý AskProductAIAssistant (RAG Pipeline)
-Quy trình phức tạp nhất thực thi RAG 2-turn, điều hướng Feature Flag và tương tác với mô hình LLM:
+---
 
-```mermaid
-flowchart TD
-    ReqAI(["Nhận AskProductAIAssistant"]) --> SpanAI["Bắt đầu trace span 'get_ai_assistant_response'"]
-    SpanAI --> FlagRate{"Feature Flag 'llmRateLimitError' bật?"}
-    
-    FlagRate -->|Đang bật| RandCheck{"Số ngẫu nhiên < 0.5?"}
-    FlagRate -->|Đang tắt| NormalClient["Khởi tạo OpenAI Client (llm_base_url, llm_api_key)"]
-    
-    RandCheck -->|Đúng - Giả lập lỗi 429| MockClient["Khởi tạo OpenAI Client trỏ về Mock LLM"]
-    RandCheck -->|Sai| NormalClient
-    
-    MockClient --> CallMock["Gọi Mock LLM với model 'techx-llm-rate-limit'"]
-    CallMock --> TryCatch{"Bắt lỗi Exception 429?"}
-    TryCatch -->|Có lỗi| RecException["Ghi Exception vào Span (ERROR status)"]
-    RecException --> RetFallback["Trả về phản hồi lỗi hệ thống thân thiện"]
-    TryCatch -->|Không lỗi| NormalClient
-    
-    NormalClient --> CallLLM1["Gọi LLM lần 1 (prompt + danh sách tools, tool_choice='auto')"]
-    CallLLM1 --> ToolReq{"LLM yêu cầu gọi Tool?"}
-    
-    ToolReq -->|Không| RetNormal["Lấy nội dung câu trả lời trực tiếp"]
-    ToolReq -->|Có| AppendCalls["Thêm tin nhắn Assistant chứa tool_calls vào messages"]
-    
-    AppendCalls --> LoopTools["Lặp qua từng tool_call yêu cầu từ LLM"]
-    LoopTools --> ToolType{"Loại Tool?"}
-    
-    ToolType -->|fetch_product_reviews| RunReviewTool["Gọi fetch_product_reviews (Truy vấn DB Postgres)"]
-    ToolType -->|fetch_product_info| RunInfoTool["Gọi fetch_product_info (gRPC tới Product Catalog)"]
-    ToolType -->|Khác| RaiseToolErr["Ném lỗi Exception"]
-    
-    RunReviewTool --> AppendToolMsg["Nối kết quả trả về từ tool vào messages (role='tool')"]
-    RunInfoTool --> AppendToolMsg
-    
-    AppendToolMsg --> FlagInaccurate{"Feature Flag 'llmInaccurateResponse' bật AND ID == 'L9ECAV7KIM'?"}
-    
-    FlagInaccurate -->|Đúng| PromptInaccurate["Thêm prompt yêu cầu trả lời SAI lệch"]
-    FlagInaccurate -->|Sai| PromptAccurate["Thêm prompt yêu cầu trả lời ĐÚNG thực tế"]
-    
-    PromptInaccurate --> CallLLM2["Gọi LLM lần 2 để đúc kết câu trả lời cuối cùng"]
-    PromptAccurate --> CallLLM2
-    
-    CallLLM2 --> SetResult["Gán phản hồi từ LLM lần 2 làm kết quả final"]
-    
-    RetNormal --> IncMetric["Tăng metric 'app_ai_assistant_counter'"]
-    SetResult --> IncMetric
-    RetFallback --> IncMetric
-    
-    IncMetric --> EndSpanAI["Kết thúc trace span"]
-    EndSpanAI --> RetAIResponse(["Trả về AskProductAIAssistantResponse"])
-```
+## 4. Cấu hình Biến Môi trường (Environment Variables)
 
-## Chi tiết các luồng xử lý chính
+Các tham số cấu hình chính trong file `.env` hoặc `.env.override`:
 
-### 1. Luồng Lấy Đánh Giá & Điểm Số
-* **`GetProductReviews`**: Truy vấn danh sách đánh giá từ cơ sở dữ liệu Postgres bằng hàm `fetch_product_reviews_from_db`, ghi nhận số lượng review nhận được vào OpenTelemetry metric `app_product_review_counter`, sau đó trả về danh sách dưới định dạng protobuf.
-* **`GetAverageProductReviewScore`**: Truy vấn điểm đánh giá trung bình từ database và trả về.
-
-### 2. Luồng Trợ lý AI (`AskProductAIAssistant`)
-* **Bước 1: Chống chịu sự cố (Fault Tolerance)**
-  * Kiểm tra Feature Flag `llmRateLimitError`. Nếu được bật bởi Ban Tổ Chức, hệ thống giả lập lỗi Rate Limit (429) với tỷ lệ 50% và trả về thông báo lỗi thân thiện để tránh làm sập client.
-* **Bước 2: Gọi LLM Lần 1 (Giai đoạn Đề xuất Hành động)**
-  * Tạo kết nối đến LLM (theo API OpenAI tương thích). Gửi kèm danh sách `tools` định nghĩa trong mã nguồn (gồm `fetch_product_reviews` và `fetch_product_info`).
-* **Bước 3: Thực thi Tool (nếu LLM yêu cầu)**
-  * Nếu LLM quyết định cần gọi tool, hệ thống sẽ thực thi các hàm truy vấn DB (`fetch_product_reviews` hoặc `fetch_product_info`) cục bộ.
-  * Kết quả trả về từ tool được chuyển thành văn bản JSON và chèn vào lịch sử hội thoại (`messages`).
-* **Bước 4: Gọi LLM Lần 2 (Giai đoạn Tổng hợp câu trả lời)**
-  * Hệ thống kiểm tra Feature Flag `llmInaccurateResponse` trên sản phẩm test (`L9ECAV7KIM`) để điều hướng hành vi sinh phản hồi (sinh câu trả lời đúng hay cố tình sai lệch).
-  * Gọi LLM lần 2 để đúc kết câu trả lời cuối cùng dựa trên các dữ liệu thực tế thu thập được từ tool.
-* **Bước 5: Trả kết quả**
-  * Tăng chỉ số metric `app_ai_assistant_counter` và trả câu trả lời cho Client.
+| Biến môi trường | Giá trị mặc định | Giải thích |
+| :--- | :--- | :--- |
+| `CACHE_TYPE` | `redis` | Loại cache sử dụng (`redis` hoặc `none`). |
+| `REDIS_HOST` | `localhost` | Endpoint máy chủ Redis Cache. |
+| `REDIS_PORT` | `6379` | Cổng kết nối Redis. |
+| `DB_CONNECTION_STRING` | *Postgres URI* | Connection string kết nối PostgreSQL. |
+| `LLM_BASE_URL` | *AWS / OpenAI Endpoint* | Đường dẫn gọi API của LLM. |
+| `LLM_MODEL` | `techx-llm` | Tên mô hình Candidate. |
