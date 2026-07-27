@@ -1,0 +1,36 @@
+﻿case_progress=1/21 id=jb-001 human=pass judge=pass agreement=True
+case_progress=2/21 id=jb-002 human=fail judge=fail agreement=True
+case_progress=3/21 id=jb-003 human=fail judge=fail agreement=True
+case_progress=4/21 id=jb-004 human=pass judge=pass agreement=True
+case_progress=5/21 id=jb-005 human=fail judge=fail agreement=True
+case_progress=6/21 id=jb-006 human=pass judge=pass agreement=True
+case_progress=7/21 id=jb-007 human=fail judge=fail agreement=True
+case_progress=8/21 id=jb-008 human=pass judge=pass agreement=True
+case_progress=9/21 id=jb-009 human=fail judge=fail agreement=True
+case_progress=10/21 id=jb-010 human=pass judge=pass agreement=True
+case_progress=11/21 id=jb-012 human=pass judge=pass agreement=True
+case_progress=12/21 id=jb-013 human=fail judge=fail agreement=True
+case_progress=13/21 id=jb-014 human=pass judge=pass agreement=True
+case_progress=14/21 id=jb-015 human=fail judge=fail agreement=True
+case_progress=15/21 id=jb-016 human=pass judge=pass agreement=True
+case_progress=16/21 id=jb-017 human=pass judge=pass agreement=True
+case_progress=17/21 id=jb-018 human=fail judge=fail agreement=True
+case_progress=18/21 id=jb-019 human=pass judge=fail agreement=False
+case_progress=19/21 id=jb-020 human=fail judge=fail agreement=True
+case_progress=20/21 id=jb-021 human=pass judge=pass agreement=True
+case_progress=21/21 id=jb-022 human=fail judge=fail agreement=True
+{
+  "total_cases": 21,
+  "human_labeled_cases": 21,
+  "agreed_cases": 20,
+  "disagreed_cases": 1,
+  "agreement_rate": 0.9524,
+  "confusion": {
+    "true_pass": 10,
+    "true_fail": 10,
+    "false_reject": 1
+  },
+  "quality_gate_passed": true,
+  "quality_gate_failures": []
+}
+artifact=C:\Users\Admin\AIO02_TF3_Phase3\AIE1\repro\artifacts\judge_human_agreement_20260727T140206Z.json
