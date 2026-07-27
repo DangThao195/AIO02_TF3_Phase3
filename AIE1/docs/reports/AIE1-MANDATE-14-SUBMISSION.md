@@ -77,11 +77,27 @@ make eval-mandate14
 ---
 
 ## 🔒 6. Kết Quả Kiểm Thử Trụ Cột An Toàn & Bảo Mật (Safety Guardrails)
-Bộ thử nghiệm tự động chạy qua **150+ cases tấn công** được thiết kế nghiêm ngặt:
-*   **Rò rỉ PII (PII Leakage Rate):** **`0.0%`** (Tất cả SĐT, Email, Passport, CCCD, Thẻ ngân hàng đều được ẩn danh/che giấu hoàn hảo qua Middleware filter trước khi gọi LLM và ra output).
-*   **Lộ System Prompt:** **`0.0%`** (Chặn đứng các câu hỏi cố tình truy vấn system instructions).
-*   **Chặn Prompt Injection (Attack Block Rate):** **`100.0%`** (Nhận diện và chặn đứng các mã độc prompt injection nhét trong review DB hay gửi trực tiếp qua text).
-*   **Abstention Rate (Từ chối RAG ngoài phạm vi):** Câu hỏi ngoài phạm vi hoặc không có dữ liệu gốc đều được trả về thông báo lỗi chuẩn hoặc `"không có thông tin"`, triệt tiêu hoàn toàn bịa đặt thông tin.
+*Đo lường tự động công khai qua tệp bằng chứng [security_false_block_runtime_bedrock_v2_20260727.json](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/repro/artifacts/security_false_block_runtime_bedrock_v2_20260727.json) (186 cases):*
+
+*   **Chặn Prompt Injection (Injection Block Rate):** **`100.0%`** (Chặn thành công 118/118 ca tấn công Prompt Injection, bao gồm các payload mã hóa Base64, Hex, ROT13, System Prompt Leak, Jailbreak).
+*   **Tỷ Lệ Chặn Nhầm (False Block Rate):** **`0.0%`** (0/68 ca kiểm thử lành tính bị chặn nhầm, đảm bảo 100% trải nghiệm người dùng bình thường không bị ảnh hưởng).
+*   **Tỷ Lệ Tấn Công Thành Công (Attack Success Rate):** **`0.0%`** (0/118 ca tấn công khai thác thành công dữ liệu cấm).
+*   **Rò Rỉ PII (PII Leakage Rate):** **`0.0%`** (Tất cả SĐT, Email, Passport, CCCD, Thẻ ngân hàng đều được ẩn danh/che giấu hoàn hảo qua PII Scrubbing Layer trước khi tới LLM và output).
+*   **Lộ System Prompt:** **`0.0%`** (Chặn đứng hoàn toàn các câu hỏi truy vấn system instructions).
+*   **Abstention Rate (Từ chối RAG ngoài phạm vi):** **`100.0%`** (100% câu hỏi ngoài phạm vi hoặc thiếu thông tin được từ chối hợp lệ).
+*   **Trạng Thái Quality Gate An Toàn:** **`PASSED`** (Tất cả tiêu chí an toàn đều vượt ngưỡng nghiệm thu).
+
+---
+
+## 🎯 6.1. Kết Quả Kiểm Thử Độ Chính Xác RAG & Quality Gate (RAG Accuracy & Quality Gate)
+*Đo lường tự động công khai qua tệp bằng chứng [rag_accuracy_runtime_bedrock_usage_fix2_20260727.json](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/repro/artifacts/rag_accuracy_runtime_bedrock_usage_fix2_20260727.json) (59 cases):*
+
+| Nhóm Ca Kiểm Thử (Category) | Số Ca (Total) | Đạt (Passed) | Thất Bại (Failed) | Tỷ Lệ Đạt (Pass Rate) | Trạng Thái Quality Gate |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Normal (Hỏi đáp hợp lệ)** | 44 | 43 | 1 | **`97.73%`** | ✅ Vượt ngưỡng (≥ 80%) |
+| **Unanswerable (Thiếu dữ liệu)** | 15 | 15 | 0 | **`100.0%`** | ✅ Vượt ngưỡng (100%) |
+| **Off-topic (Ngoại vi)** | 9 | 9 | 0 | **`100.0%`** | ✅ Vượt ngưỡng (100%) |
+| **TỔNG THỂ (Overall)** | **59** | **58** | **1** | **`98.31%`** | **`PASSED`** |
 
 ---
 
@@ -102,13 +118,15 @@ Bộ thử nghiệm tự động chạy qua **150+ cases tấn công** được 
 ---
 
 ## 📁 8. Các Tài Liệu Minh Chứng Đi Kèm (Artifacts)
-*   **Báo cáo hiệu năng chi tiết:** [cost_latency_baseline.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/repro/artifacts/cost_latency_baseline.md)
+*   **Artifact JSON Đánh Giá An Toàn v2 (27/07):** [security_false_block_runtime_bedrock_v2_20260727.json](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/repro/artifacts/security_false_block_runtime_bedrock_v2_20260727.json)
+*   **Artifact JSON Đánh Giá RAG Accuracy v2 (27/07):** [rag_accuracy_runtime_bedrock_usage_fix2_20260727.json](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/repro/artifacts/rag_accuracy_runtime_bedrock_usage_fix2_20260727.json)
+*   **Báo cáo hiệu năng chi tiết:** [cost_latency_baseline.json](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/repro/artifacts/cost_latency_baseline.json)
 *   **Báo cáo chi tiết Rubrics & Hiệu chỉnh LLM Judge:** [0007-FIDELITY-JUDGE-RUBRICS-AND-EVALUATION.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/analysis/0007-FIDELITY-JUDGE-RUBRICS-AND-EVALUATION.md)
-*   **Tệp dữ liệu cấu trúc gốc JSON:** [cost_latency_baseline.json](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/repro/artifacts/cost_latency_baseline.json)
 
 ### Bộ tài liệu ADR Ký Tên Duyệt:
 1.  [0003-AI-TRUST-SAFETY-GUARDRAILS.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/adr/0003-AI-TRUST-SAFETY-GUARDRAILS.md) *(Bảo mật & An toàn AI)*
 2.  [0004-SUMMARY-FIDELITY-EVALUATION.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/adr/0004-SUMMARY-FIDELITY-EVALUATION.md) *(Độ trung thực RAG)*
-3.  [0005-CACHING-STRATEGY.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/adr/0005-CACHING-STRATEGY.md) *(Thiết kế Caching)*
+3.  [0005-CACHING-STRATEGY.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/adr/0005-CACHING-STRATEGY.md) *(Thiết kế Caching - User Isolation)*
 4.  [0006-COST-LATENCY-MEASUREMENT-AND-CACHING.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/adr/0006-COST-LATENCY-MEASUREMENT-AND-CACHING.md) *(Nghiệm thu đo lường Caching)*
-5.  [0007-FALLBACK-OVERRIDE-AND-TELEMETRY.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/adr/0007-FALLBACK-OVERRIDE-AND-TELEMETRY.md) *(Cổng override Actuator)*
+5.  [0007-FALLBACK-OVERRIDE-AND-TELEMETRY.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/adr/0007-FALLBACK-OVERRIDE-AND-TELEMETRY.md) *(Circuit Breaker, Error Injection & Telemetry)*
+6.  [0008-runtime-llm-trace-auditability.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/adr/0008-runtime-llm-trace-auditability.md) *(LLM Observability, Trace & Replay)*
