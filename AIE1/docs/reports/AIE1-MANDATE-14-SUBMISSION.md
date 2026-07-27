@@ -44,18 +44,18 @@ make eval-mandate14
 ## 📁 4. Đường Dẫn Mã Nguồn Eval & Bộ Dữ Liệu Có Nhãn Trong Repo
 
 ### A. Mã nguồn logic chấm (Eval Scripts)
-*   **Logic chấm an toàn & guardrail:** [repro/run_eval_guardrail.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/repro/run_eval_guardrail.py)
-*   **Logic chấm độ trung thực (Fidelity RAG):** [repro/eval_fidelity.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/repro/eval_fidelity.py)
-*   **Logic chấm độ khớp Judge↔Người:** [repro/eval_support/judge_agreement.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/repro/eval_support/judge_agreement.py)
+*   **Logic chấm an toàn & guardrail:** [repro/run_eval_guardrail.py](../repro/run_eval_guardrail.py)
+*   **Logic chấm độ trung thực (Fidelity RAG):** [repro/eval_fidelity.py](../repro/eval_fidelity.py)
+*   **Logic chấm độ khớp Judge↔Người:** [repro/eval_support/judge_agreement.py](../repro/eval_support/judge_agreement.py)
 
 ### B. Bộ dữ liệu có nhãn đã commit trong Repo (Labeled Datasets)
-*   **Bộ 197+ cases kiểm thử an toàn & RAG:** [repro/datasets/dataset.jsonl](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/repro/datasets/dataset.jsonl)
-*   **Bộ 10 cases benchmark chuẩn của con người:** [repro/datasets/judge_benchmark.jsonl](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/repro/datasets/judge_benchmark.jsonl)
+*   **Bộ 197+ cases kiểm thử an toàn & RAG:** [repro/datasets/dataset.jsonl](../repro/datasets/dataset.jsonl)
+*   **Bộ 10 cases benchmark chuẩn của con người:** [repro/datasets/judge_benchmark.jsonl](../repro/datasets/judge_benchmark.jsonl)
 
 ---
 
 ## 🎯 5. Bảng So Khớp Độ Khớp Judge ↔ Con Người (Agreement Rate)
-*Kết quả đối chiếu độ chính xác của mô hình LLM Judge tự động (`amazon.nova-micro-v1:0`) so với nhãn dán thủ công của 10 chuyên gia con người (dựa trên tệp [judge_human_agreement_bedrock_20260722T143444.json](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/repro/artifacts/judge_human_agreement_bedrock_20260722T143444.json)):*
+*Kết quả đối chiếu độ chính xác của mô hình LLM Judge tự động (`amazon.nova-micro-v1:0`) so với nhãn dán thủ công của 10 chuyên gia con người (dựa trên tệp [judge_human_agreement_bedrock_20260722T143444.json](../repro/artifacts/judge_human_agreement_bedrock_20260722T143444.json)):*
 
 *   **Tỷ lệ đồng thuận (Agreement Rate):** **`100.0%` (1.0)** - Vượt xa ngưỡng nghiệm thu barem **`≥ 80%`**.
 
@@ -77,7 +77,7 @@ make eval-mandate14
 ---
 
 ## 🔒 6. Kết Quả Kiểm Thử Trụ Cột An Toàn & Bảo Mật (Safety Guardrails)
-*Đo lường tự động công khai qua tệp bằng chứng [security_false_block_runtime_bedrock_v2_20260727.json](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/repro/artifacts/security_false_block_runtime_bedrock_v2_20260727.json) (186 cases):*
+*Đo lường tự động công khai qua tệp bằng chứng [security_false_block_runtime_bedrock_v2_20260727.json](../repro/artifacts/security_false_block_runtime_bedrock_v2_20260727.json) (186 cases):*
 
 *   **Chặn Prompt Injection (Injection Block Rate):** **`100.0%`** (Chặn thành công 118/118 ca tấn công Prompt Injection, bao gồm các payload mã hóa Base64, Hex, ROT13, System Prompt Leak, Jailbreak).
 *   **Tỷ Lệ Chặn Nhầm (False Block Rate):** **`0.0%`** (0/68 ca kiểm thử lành tính bị chặn nhầm, đảm bảo 100% trải nghiệm người dùng bình thường không bị ảnh hưởng).
@@ -90,7 +90,7 @@ make eval-mandate14
 ---
 
 ## 🎯 6.1. Kết Quả Kiểm Thử Độ Chính Xác RAG & Quality Gate (RAG Accuracy & Quality Gate)
-*Đo lường tự động công khai qua tệp bằng chứng [rag_accuracy_runtime_bedrock_usage_fix2_20260727.json](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/repro/artifacts/rag_accuracy_runtime_bedrock_usage_fix2_20260727.json) (59 cases):*
+*Đo lường tự động công khai qua tệp bằng chứng [rag_accuracy_runtime_bedrock_usage_fix2_20260727.json](../repro/artifacts/rag_accuracy_runtime_bedrock_usage_fix2_20260727.json) (59 cases):*
 
 | Nhóm Ca Kiểm Thử (Category)      | Số Ca (Total) | Đạt (Passed) | Thất Bại (Failed) | Tỷ Lệ Đạt (Pass Rate) | Trạng Thái Quality Gate |
 | :------------------------------- | :-----------: | :----------: | :---------------: | :-------------------: | :---------------------: |
@@ -118,14 +118,15 @@ make eval-mandate14
 ---
 
 ## 📁 8. Các Tài Liệu Minh Chứng Đi Kèm (Artifacts)
-*   **Artifact JSON Đánh Giá An Toàn v2 (27/07):** [security_false_block_runtime_bedrock_v2_20260727.json](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/repro/artifacts/security_false_block_runtime_bedrock_v2_20260727.json)
-*   **Artifact JSON Đánh Giá RAG Accuracy v2 (27/07):** [rag_accuracy_runtime_bedrock_usage_fix2_20260727.json](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/repro/artifacts/rag_accuracy_runtime_bedrock_usage_fix2_20260727.json)
-*   **Báo cáo hiệu năng chi tiết:** [cost_latency_baseline.json](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/repro/artifacts/cost_latency_baseline.json)
-*   **Báo cáo chi tiết Rubrics & Hiệu chỉnh LLM Judge:** [0007-FIDELITY-JUDGE-RUBRICS-AND-EVALUATION.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/analysis/0007-FIDELITY-JUDGE-RUBRICS-AND-EVALUATION.md)
+*   **Artifact JSON Đánh Giá An Toàn v2 (27/07):** [security_false_block_runtime_bedrock_v2_20260727.json](../../repro/artifacts/security_false_block_runtime_bedrock_v2_20260727.json)
+*   **Artifact JSON Đánh Giá RAG Accuracy v2 (27/07):** [rag_accuracy_runtime_bedrock_usage_fix2_20260727.json](../../repro/artifacts/rag_accuracy_runtime_bedrock_usage_fix2_20260727.json)
+*   **Báo cáo hiệu năng chi tiết:** [cost_latency_baseline.json](../../repro/artifacts/cost_latency_baseline.json)
+*   **Báo cáo chi tiết Rubrics & Hiệu chỉnh LLM Judge:** [0007-FIDELITY-JUDGE-RUBRICS-AND-EVALUATION.md](../analysis/0007-FIDELITY-JUDGE-RUBRICS-AND-EVALUATION.md)
 
 ### Bộ tài liệu ADR Ký Tên Duyệt:
-1.  [0003-AI-TRUST-SAFETY-GUARDRAILS.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/adr/0003-AI-TRUST-SAFETY-GUARDRAILS.md) *(Bảo mật & An toàn AI)*
-2.  [0004-SUMMARY-FIDELITY-EVALUATION.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/adr/0004-SUMMARY-FIDELITY-EVALUATION.md) *(Độ trung thực RAG)*
-3.  [0005-CACHING-STRATEGY.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/adr/0005-CACHING-STRATEGY.md) *(Thiết kế Caching - User Isolation)*
-4.  [0006-COST-LATENCY-MEASUREMENT-AND-CACHING.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/adr/0006-COST-LATENCY-MEASUREMENT-AND-CACHING.md) *(Nghiệm thu đo lường Caching)*
-5.  [0007-FALLBACK-OVERRIDE-AND-TELEMETRY.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/adr/0007-FALLBACK-OVERRIDE-AND-TELEMETRY.md) *(Error Injection & Telemetry)*
+1.  [0003-AI-TRUST-SAFETY-GUARDRAILS.md](../adr/0003-AI-TRUST-SAFETY-GUARDRAILS.md) *(Bảo mật & An toàn AI)*
+2.  [0004-SUMMARY-FIDELITY-EVALUATION.md](../adr/0004-SUMMARY-FIDELITY-EVALUATION.md) *(Độ trung thực RAG)*
+3.  [0005-CACHING-STRATEGY.md](../adr/0005-CACHING-STRATEGY.md) *(Thiết kế Caching - User Isolation)*
+4.  [0006-COST-LATENCY-MEASUREMENT-AND-CACHING.md](../adr/0006-COST-LATENCY-MEASUREMENT-AND-CACHING.md) *(Nghiệm thu đo lường Caching)*
+5.  [0007-FALLBACK-OVERRIDE-AND-TELEMETRY.md](../adr/0007-FALLBACK-OVERRIDE-AND-TELEMETRY.md) *(Error Injection & Telemetry)*
+6.  [0008-runtime-llm-trace-auditability.md](../adr/0008-runtime-llm-trace-auditability.md) *(LLM Observability, Trace & Replay)*
