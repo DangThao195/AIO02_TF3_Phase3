@@ -1,0 +1,18 @@
+2026-07-14 22:12:25,338 - botocore.credentials - INFO - Found credentials in environment variables.
+2026-07-14 22:12:25,512 - main - INFO - Product reviews service started, listening on port 8085
+2026-07-14 22:12:28,217 - main - INFO - Receive AskProductAIAssistant for product id:L9ECAV7KIM, question: Can you summarize the product reviews?
+2026-07-14 22:12:28,342 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "L9ECAV7KIM"
+name: "Lens Cleaning Kit"
+description: "Wipe away dust, dirt, fingerprints and other particles on your lenses to see clearly with the Lens Cleaning Kit. This cleaning kit works on all glass and optical surfaces, including telescopes, binoculars, spotting scopes, monoculars, microscopes, and even your camera lenses, computer screens, and mobile devices.  The kit comes complete with a retractable lens brush to remove dust particles and dirt and two options to clean smudges and fingerprints off of your optics, pre-moistened lens wipes and a bottled lens cleaning fluid with soft cloth."
+picture: "LensCleaningKit.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 21
+  nanos: 950000000
+}
+categories: "accessories"
+'
+2026-07-14 22:12:28,344 - main - INFO - Using env override for feature flag llmInaccurateResponse: False
+2026-07-14 22:12:28,344 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-14 22:12:31,480 - main - INFO - Summary approved by evaluator for product_id:L9ECAV7KIM judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 unsupported=0 contradicted=0
+2026-07-14 22:12:31,481 - main - INFO - Returning an AI assistant response: 'The reviews highlight the kit's effectiveness on various optics and surfaces, praising its gentle and residue-free cleaning properties.'
