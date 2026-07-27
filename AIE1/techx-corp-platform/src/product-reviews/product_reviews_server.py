@@ -250,11 +250,12 @@ def _sanitize_prompt_value(value):
 
 def _normalized_search_text(value):
     normalized = unicodedata.normalize("NFKC", value or "").lower()
-    return "".join(
+    stripped = "".join(
         character
         for character in unicodedata.normalize("NFKD", normalized)
         if not unicodedata.combining(character)
     )
+    return stripped.replace("đ", "d")
 
 
 def is_summary_request(question):
@@ -321,9 +322,12 @@ def build_system_prompt():
         "If there are zero reviews, or reviews contain only ratings without text, answer only rating/count questions from scores; for descriptive questions return exactly 'NO_INFO'. "
         "Do not repeat or restate the user's question in the answer. "
         "Avoid unsupported superlatives or rankings such as 'most', 'best', or 'top' unless the reviews explicitly rank them; if the user asks what reviewers like most, summarize the recurring positive themes instead. "
+        "Avoid absolute claims such as 'all customers', 'everyone', or 'every reviewer' unless every supplied review explicitly supports that exact claim. "
         "Match the user's language when possible. "
         "The user may ask in Vietnamese; product-review phrases such as 'sản phẩm này', 'người dùng', 'đánh giá', 'phản hồi', 'bộ vệ sinh ống kính này', or 'ống kính' are in scope. "
         "Do not return OUT_OF_SCOPE only because the question is in Vietnamese. "
+        "Vietnamese product-review phrases such as 'sản phẩm này', 'người dùng', 'đánh giá', 'phản hồi', 'bộ vệ sinh ống kính này', or 'ống kính' are in scope. "
+        "Answer only the aspect the user asks about; do not add unrelated positive themes from other reviews. "
         "Do not volunteer rating statistics or negative-review counts unless the question asks for them. "
         "For sentiment questions, any review with a score below 3 stars counts as a negative review. "
         "STRICT RULES - you MUST follow these without exception:\n"
@@ -521,6 +525,95 @@ def answer_deterministic_rating_question(question, reviews):
     return None
 
 
+def answer_deterministic_absence_question(question, reviews):
+    """Answer drawback/improvement absence questions from review text and scores."""
+    normalized = _normalized_search_text(question)
+    asks_drawback = any(
+        term in normalized
+        for term in (
+            "drawback",
+            "downside",
+            "cons",
+            "negative point",
+            "diem tru",
+            "diem yeu",
+            "han che",
+            "khuyet diem",
+        )
+    )
+    asks_improvement = any(
+        term in normalized
+        for term in (
+            "improvement",
+            "improve",
+            "suggest",
+            "cai thien",
+            "de xuat",
+            "gop y",
+        )
+    )
+    if not asks_drawback and not asks_improvement:
+        return None
+
+    review_rows = reviews or []
+    if not review_rows:
+        return None
+
+    negative_markers = (
+        "bad",
+        "poor",
+        "problem",
+        "issue",
+        "complaint",
+        "disappointed",
+        "difficult",
+        "broken",
+        "scratch",
+        "sticky",
+        "leaves residue",
+        "left residue",
+        "leaving residue",
+        "damaged",
+        "doesn't",
+        "didn't",
+        "khong",
+        "te",
+        "kem",
+        "loi",
+        "van de",
+        "that vong",
+    )
+    explicit_issues = []
+    scores = []
+    for review in review_rows:
+        try:
+            score = float(review.get("score"))
+            scores.append(score)
+        except (TypeError, ValueError, AttributeError):
+            score = None
+        description = _normalized_search_text(str(review.get("description", "")))
+        if (score is not None and score < 3.0) or any(marker in description for marker in negative_markers):
+            explicit_issues.append(str(review.get("description", "")).strip())
+
+    vi_question = any(term in normalized for term in ("diem tru", "cai thien", "de xuat", "khach hang"))
+    if explicit_issues:
+        issue_summary = "; ".join(item for item in explicit_issues[:2] if item)
+        if vi_question:
+            return f"Các review có nhắc một vài điểm cần chú ý: {issue_summary}."
+        return f"The reviews mention a few issues to note: {issue_summary}."
+
+    if scores and min(scores) >= 3.0:
+        if asks_improvement:
+            if vi_question:
+                return "Các review hiện không nêu đề xuất cải thiện cụ thể; phản hồi nhìn chung là tích cực."
+            return "The reviews do not mention specific improvement suggestions; the feedback is generally positive."
+        if vi_question:
+            return "Các review hiện không nêu điểm trừ cụ thể; phản hồi nhìn chung là tích cực."
+        return "The reviews do not mention specific drawbacks; the feedback is generally positive."
+
+    return None
+
+
 def post_process_output(result, question=""):
     if not result:
         return ""
@@ -614,6 +707,7 @@ def build_bedrock_user_prompt(question, product_info_json, safe_reviews_json, ma
         "Do not repeat or restate the user's question in the answer. "
         "Avoid unsupported superlatives or rankings such as 'most', 'best', 'top', or Vietnamese 'nhất' unless the reviews explicitly rank them; when asked what reviewers like most, answer with recurring positive themes instead of claiming a measured ranking. "
         "Vietnamese product-review questions are in scope; treat terms like 'người dùng', 'đánh giá', 'phản hồi', 'sản phẩm này', and 'bộ vệ sinh ống kính này' as references to the provided product/reviews. "
+        "Avoid absolute claims such as 'all customers', 'everyone', or 'every reviewer' unless every supplied review explicitly supports that exact claim. Prefer 'reviewers generally' when evidence shows a positive trend. "
         "Never return OUT_OF_SCOPE only because the question is written in Vietnamese. "
         "Match the user's language when possible."
         f"{extra_instruction}"
@@ -1057,6 +1151,11 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                     safe_question,
                     raw_reviews_for_judge,
                 )
+                if deterministic_answer is None:
+                    deterministic_answer = answer_deterministic_absence_question(
+                        safe_question,
+                        raw_reviews_for_judge,
+                    )
                 if deterministic_answer is not None:
                     result = deterministic_answer
                     judge_status = "deterministic"
@@ -1103,12 +1202,15 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                         )
 
                 result = post_process_output(final_text, safe_question)
-                if result == NO_INFO_MESSAGE and is_summary_request(safe_question) and raw_reviews_for_judge:
+                if result == NO_INFO_MESSAGE and is_product_related_question(safe_question) and raw_reviews_for_judge:
                     retry_prompt = (
                         grounded_prompt
-                        + "\nThe reviews are present. Re-check them once and summarize only directly supported "
-                        "positive or negative aspects requested by the question. Return NO_INFO only if no review "
-                        "contains any relevant aspect."
+                        + "\nThe reviews are present. Re-check them once and answer only the requested aspect "
+                        "using direct product/review evidence. If the question asks about historical content, "
+                        "value, surfaces, use cases, drawbacks, or improvement suggestions, inspect the review "
+                        "text before returning NO_INFO. If reviews explicitly contain no drawbacks or no "
+                        "improvement suggestions, say that directly instead of returning NO_INFO. Return NO_INFO "
+                        "only if no review or product data directly supports the requested aspect."
                     )
                     retry_text = call_candidate_bedrock(system_prompt, retry_prompt)
                     if retry_text != FALLBACK_SUMMARY_MESSAGE:

@@ -1,0 +1,1314 @@
+2026-07-27 03:54:48,637 - opentelemetry._logs._internal - WARNING - Overriding of current LoggerProvider is not allowed
+2026-07-27 03:54:49,606 - botocore.credentials - INFO - Found credentials in shared credentials file: ~/.aws/credentials
+2026-07-27 03:55:02,930 - main - INFO - Connecting to Product Catalog at product-catalog:3550 (Attempt 1/5)...
+2026-07-27 03:55:03,055 - main - INFO - Successfully connected to Product Catalog Service.
+2026-07-27 03:55:03,125 - main - INFO - Product reviews service started, listening on port 3551
+2026-07-27 03:55:03,147 - main - INFO - LLM trace HTTP endpoint started on port 8086
+2026-07-27 03:55:24,948 - main - INFO - Receive AskProductAIAssistant product_id=L9ECAV7KIM question_sha256=3736fd02ff76e165 question_length=39
+2026-07-27 03:55:25,111 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "L9ECAV7KIM"
+name: "Lens Cleaning Kit"
+description: "Wipe away dust, dirt, fingerprints and other particles on your lenses to see clearly with the Lens Cleaning Kit. This cleaning kit works on all glass and optical surfaces, including telescopes, binoculars, spotting scopes, monoculars, microscopes, and even your camera lenses, computer screens, and mobile devices.  The kit comes complete with a retractable lens brush to remove dust particles and dirt and two options to clean smudges and fingerprints off of your optics, pre-moistened lens wipes and a bottled lens cleaning fluid with soft cloth."
+picture: "LensCleaningKit.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 21
+  nanos: 950000000
+}
+categories: "accessories"
+'
+2026-07-27 03:55:25,165 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:55:26,691 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1682 output_tokens=59 total_tokens=1741 latency_ms=1516.02
+2026-07-27 03:55:26,697 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:55:28,998 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1751 output_tokens=293 total_tokens=2044 latency_ms=2287.50
+2026-07-27 03:55:29,007 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:55:29,008 - main - INFO - Grounded answer approved for product_id:L9ECAV7KIM judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=4
+2026-07-27 03:55:29,012 - main - INFO - AI_OUTCOME product_id=L9ECAV7KIM stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:55:29,016 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:55:29,017 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:55:29,023 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=44b4575f38032a31da6da6a43827e7e2 redis_keys=product_reviews:llm_trace:44b4575f38032a31da6da6a43827e7e2,trace:44b4575f38032a31da6da6a43827e7e2 ttl_seconds=86400
+2026-07-27 03:55:29,026 - guardrails.cache - INFO - [CACHE] Save success! Key: 53b284c8f9ddfc44a0788f91e001023967a2ec44807727e0a8b267714b15ee73, TTL: 86400s
+2026-07-27 03:55:29,526 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:55:29,752 - main - INFO - Receive AskProductAIAssistant product_id=0PUK6V6EV0 question_sha256=4809f69760bb8daf question_length=52
+2026-07-27 03:55:29,831 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "0PUK6V6EV0"
+name: "Solar System Color Imager"
+description: "You have your new telescope and have observed Saturn and Jupiter. Now you\'re ready to take the next step and start imaging them. But where do you begin? The NexImage 10 Solar System Imager is the perfect solution."
+picture: "SolarSystemColorImager.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 175
+}
+categories: "accessories"
+categories: "telescopes"
+'
+2026-07-27 03:55:29,952 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:55:30,528 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1608 output_tokens=18 total_tokens=1626 latency_ms=563.73
+2026-07-27 03:55:30,531 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:55:32,069 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1637 output_tokens=152 total_tokens=1789 latency_ms=1528.76
+2026-07-27 03:55:32,079 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:55:32,081 - main - INFO - Grounded answer approved for product_id:0PUK6V6EV0 judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=1
+2026-07-27 03:55:32,083 - main - INFO - AI_OUTCOME product_id=0PUK6V6EV0 stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:55:32,084 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:55:32,085 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:55:32,085 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:55:32,088 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=8da2cdaf75851904e3ff922d33c660eb redis_keys=product_reviews:llm_trace:8da2cdaf75851904e3ff922d33c660eb,trace:8da2cdaf75851904e3ff922d33c660eb ttl_seconds=86400
+2026-07-27 03:55:32,089 - guardrails.cache - INFO - [CACHE] Save success! Key: 7b4db18db23c7de76db4a22e998c71d645dbcd19c63626c6929ca5291edb8598, TTL: 86400s
+2026-07-27 03:55:32,261 - main - INFO - Receive AskProductAIAssistant product_id=L9ECAV7KIM question_sha256=161f3b503776539c question_length=36
+2026-07-27 03:55:32,281 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "L9ECAV7KIM"
+name: "Lens Cleaning Kit"
+description: "Wipe away dust, dirt, fingerprints and other particles on your lenses to see clearly with the Lens Cleaning Kit. This cleaning kit works on all glass and optical surfaces, including telescopes, binoculars, spotting scopes, monoculars, microscopes, and even your camera lenses, computer screens, and mobile devices.  The kit comes complete with a retractable lens brush to remove dust particles and dirt and two options to clean smudges and fingerprints off of your optics, pre-moistened lens wipes and a bottled lens cleaning fluid with soft cloth."
+picture: "LensCleaningKit.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 21
+  nanos: 950000000
+}
+categories: "accessories"
+'
+2026-07-27 03:55:32,287 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:55:32,930 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1677 output_tokens=36 total_tokens=1713 latency_ms=630.66
+2026-07-27 03:55:32,933 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:55:34,455 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1723 output_tokens=139 total_tokens=1862 latency_ms=1487.05
+2026-07-27 03:55:34,460 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:55:34,461 - main - INFO - Grounded answer approved for product_id:L9ECAV7KIM judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=1
+2026-07-27 03:55:34,461 - main - INFO - AI_OUTCOME product_id=L9ECAV7KIM stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:55:34,463 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:55:34,464 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:55:34,464 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:55:34,468 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=0dc8b8931b7e4a8a5a63b98dcdf4a5f6 redis_keys=product_reviews:llm_trace:0dc8b8931b7e4a8a5a63b98dcdf4a5f6,trace:0dc8b8931b7e4a8a5a63b98dcdf4a5f6 ttl_seconds=86400
+2026-07-27 03:55:34,472 - guardrails.cache - INFO - [CACHE] Save success! Key: 348b9611dc93b89c1310de85ea5e71283ef7001ed624d439b449b79fb26fd7a9, TTL: 86400s
+2026-07-27 03:55:34,595 - main - INFO - Receive AskProductAIAssistant product_id=9SIQT8TOJO question_sha256=5fa57309d2928a8f question_length=56
+2026-07-27 03:55:34,622 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "9SIQT8TOJO"
+name: "Optical Tube Assembly"
+description: "Capturing impressive deep-sky astroimages is easier than ever with Rowe-Ackermann Schmidt Astrograph (RASA) V2, the perfect companion to today\'s top DSLR or astronomical CCD cameras. This fast, wide-field f/2.2 system allows for shorter exposure times compared to traditional f/10 astroimaging, without sacrificing resolution. Because shorter sub-exposure times are possible, your equatorial mount won\'t need to accurately track over extended periods. The short focal length also lessens equatorial tracking demands. In many cases, autoguiding will not be required."
+picture: "OpticalTubeAssembly.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 3599
+}
+categories: "accessories"
+categories: "telescopes"
+categories: "assembly"
+'
+2026-07-27 03:55:34,627 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:55:35,382 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1699 output_tokens=60 total_tokens=1759 latency_ms=744.54
+2026-07-27 03:55:35,393 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:55:37,149 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1768 output_tokens=196 total_tokens=1964 latency_ms=1732.58
+2026-07-27 03:55:37,301 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:55:37,417 - main - INFO - Grounded answer approved for product_id:9SIQT8TOJO judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=4
+2026-07-27 03:55:37,429 - main - INFO - AI_OUTCOME product_id=9SIQT8TOJO stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:55:37,431 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:55:37,435 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:55:37,435 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:55:37,439 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=c5a94070c3702aa3cb369f5b544de85e redis_keys=product_reviews:llm_trace:c5a94070c3702aa3cb369f5b544de85e,trace:c5a94070c3702aa3cb369f5b544de85e ttl_seconds=86400
+2026-07-27 03:55:37,442 - guardrails.cache - INFO - [CACHE] Save success! Key: 7997a3a9c6651f58cd1cc89623c579f4690122c8dc84d23b771c0d69b84a1980, TTL: 86400s
+2026-07-27 03:55:37,534 - main - INFO - Receive AskProductAIAssistant product_id=0PUK6V6EV0 question_sha256=676724ebb24de35d question_length=67
+2026-07-27 03:55:37,558 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "0PUK6V6EV0"
+name: "Solar System Color Imager"
+description: "You have your new telescope and have observed Saturn and Jupiter. Now you\'re ready to take the next step and start imaging them. But where do you begin? The NexImage 10 Solar System Imager is the perfect solution."
+picture: "SolarSystemColorImager.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 175
+}
+categories: "accessories"
+categories: "telescopes"
+'
+2026-07-27 03:55:37,563 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:55:38,347 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1610 output_tokens=74 total_tokens=1684 latency_ms=771.90
+2026-07-27 03:55:38,353 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:55:41,039 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1695 output_tokens=333 total_tokens=2028 latency_ms=2672.05
+2026-07-27 03:55:41,048 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:55:41,049 - main - INFO - Grounded answer approved for product_id:0PUK6V6EV0 judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=4
+2026-07-27 03:55:41,052 - main - INFO - AI_OUTCOME product_id=0PUK6V6EV0 stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:55:41,053 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:55:41,055 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:55:41,058 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:55:41,062 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=0a0a1d24a6577ba21e7c8e3a833ba512 redis_keys=product_reviews:llm_trace:0a0a1d24a6577ba21e7c8e3a833ba512,trace:0a0a1d24a6577ba21e7c8e3a833ba512 ttl_seconds=86400
+2026-07-27 03:55:41,063 - guardrails.cache - INFO - [CACHE] Save success! Key: 12a509d3794b4f64cb440d5a58ce7ab6421206714ad7d2080e265c1ae6e3de70, TTL: 86400s
+2026-07-27 03:55:41,280 - main - INFO - Receive AskProductAIAssistant product_id=L9ECAV7KIM question_sha256=8444f00d81b00c55 question_length=22
+2026-07-27 03:55:41,292 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "L9ECAV7KIM"
+name: "Lens Cleaning Kit"
+description: "Wipe away dust, dirt, fingerprints and other particles on your lenses to see clearly with the Lens Cleaning Kit. This cleaning kit works on all glass and optical surfaces, including telescopes, binoculars, spotting scopes, monoculars, microscopes, and even your camera lenses, computer screens, and mobile devices.  The kit comes complete with a retractable lens brush to remove dust particles and dirt and two options to clean smudges and fingerprints off of your optics, pre-moistened lens wipes and a bottled lens cleaning fluid with soft cloth."
+picture: "LensCleaningKit.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 21
+  nanos: 950000000
+}
+categories: "accessories"
+'
+2026-07-27 03:55:41,297 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:55:41,944 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1672 output_tokens=28 total_tokens=1700 latency_ms=639.17
+2026-07-27 03:55:42,006 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:55:45,004 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1710 output_tokens=187 total_tokens=1897 latency_ms=2929.48
+2026-07-27 03:55:45,009 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:55:45,009 - main - WARNING - Grounded answer rejected for product_id:L9ECAV7KIM judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 unsupported=1 contradicted=0 reason=Durability is not explicitly mentioned in the product info. However, effectiveness and gentleness are mentioned in multiple reviews, and one review specifically mentions keeping expensive equipment in pristine condition.
+2026-07-27 03:55:45,010 - main - INFO - AI_OUTCOME product_id=L9ECAV7KIM stage=runtime_judge outcome=rejected provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:55:45,011 - main - INFO - Returning AI assistant response class=The summary cannot be verified. Please try again later.
+2026-07-27 03:55:45,012 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:55:45,013 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:55:45,015 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=ca9a502255aa9b7e977ff058c26686b6 redis_keys=product_reviews:llm_trace:ca9a502255aa9b7e977ff058c26686b6,trace:ca9a502255aa9b7e977ff058c26686b6 ttl_seconds=86400
+2026-07-27 03:55:45,207 - main - INFO - Receive AskProductAIAssistant product_id=1YMWWN1N4O question_sha256=943eaef5ffbc59b8 question_length=47
+2026-07-27 03:55:45,411 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "1YMWWN1N4O"
+name: "Eclipsmart Travel Refractor Telescope"
+description: "Dedicated white-light solar scope for the observer on the go. The 50mm refracting solar scope uses Solar Safe, ISO compliant, full-aperture glass filter material to ensure the safest view of solar events.  The kit comes complete with everything you need, including the dedicated travel solar scope, a Solar Safe finderscope, tripod, a high quality 20mm (18x) Kellner eyepiece and a nylon backpack to carry everything in.  This Travel Solar Scope makes it easy to share the Sun as well as partial and total solar eclipses with the whole family and offers much higher magnifications than you would otherwise get using handheld solar viewers or binoculars."
+picture: "EclipsmartTravelRefractorTelescope.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 129
+  nanos: 950000000
+}
+categories: "telescopes"
+categories: "travel"
+'
+2026-07-27 03:55:45,422 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:55:46,197 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1728 output_tokens=43 total_tokens=1771 latency_ms=764.21
+2026-07-27 03:55:46,204 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:55:48,494 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1782 output_tokens=96 total_tokens=1878 latency_ms=2176.14
+2026-07-27 03:55:48,498 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:55:48,499 - main - INFO - Grounded answer approved for product_id:1YMWWN1N4O judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=1
+2026-07-27 03:55:48,499 - main - INFO - AI_OUTCOME product_id=1YMWWN1N4O stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:55:48,500 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:55:48,501 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:55:48,502 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:55:48,505 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=36da02fd7f657ea3fbbe00575cc18347 redis_keys=product_reviews:llm_trace:36da02fd7f657ea3fbbe00575cc18347,trace:36da02fd7f657ea3fbbe00575cc18347 ttl_seconds=86400
+2026-07-27 03:55:48,506 - guardrails.cache - INFO - [CACHE] Save success! Key: 9160a500b99bb49ff38d3a6e810ef26342b9dff2e1a48128b2d41e13bf8c40d0, TTL: 86400s
+2026-07-27 03:55:48,559 - main - INFO - Receive AskProductAIAssistant product_id=L9ECAV7KIM question_sha256=8fd801aa73752724 question_length=37
+2026-07-27 03:55:48,571 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "L9ECAV7KIM"
+name: "Lens Cleaning Kit"
+description: "Wipe away dust, dirt, fingerprints and other particles on your lenses to see clearly with the Lens Cleaning Kit. This cleaning kit works on all glass and optical surfaces, including telescopes, binoculars, spotting scopes, monoculars, microscopes, and even your camera lenses, computer screens, and mobile devices.  The kit comes complete with a retractable lens brush to remove dust particles and dirt and two options to clean smudges and fingerprints off of your optics, pre-moistened lens wipes and a bottled lens cleaning fluid with soft cloth."
+picture: "LensCleaningKit.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 21
+  nanos: 950000000
+}
+categories: "accessories"
+'
+2026-07-27 03:55:48,576 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:55:49,280 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1681 output_tokens=49 total_tokens=1730 latency_ms=695.05
+2026-07-27 03:55:49,283 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:55:51,190 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1740 output_tokens=267 total_tokens=2007 latency_ms=1889.09
+2026-07-27 03:55:51,194 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:55:51,195 - main - INFO - Grounded answer approved for product_id:L9ECAV7KIM judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=3
+2026-07-27 03:55:51,195 - main - INFO - AI_OUTCOME product_id=L9ECAV7KIM stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:55:51,197 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:55:51,198 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:55:51,198 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:55:51,201 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=f7d6b11cc26eb3c9595715a6bee55b3b redis_keys=product_reviews:llm_trace:f7d6b11cc26eb3c9595715a6bee55b3b,trace:f7d6b11cc26eb3c9595715a6bee55b3b ttl_seconds=86400
+2026-07-27 03:55:51,204 - guardrails.cache - INFO - [CACHE] Save success! Key: 5ae07fdc1686865d0f2a10ee2d2c8d4c215aa7aeb6b0aa34de35f22b30d8a489, TTL: 86400s
+2026-07-27 03:55:51,255 - main - INFO - Receive AskProductAIAssistant product_id=HQTGWGPNH4 question_sha256=6f7590c3af1abb56 question_length=56
+2026-07-27 03:55:51,271 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "HQTGWGPNH4"
+name: "The Comet Book"
+description: "A 16th-century treatise on comets, created anonymously in Flanders (now northern France) and now held at the Universitätsbibliothek Kassel. Commonly known as The Comet Book (or Kometenbuch in German), its full title translates as \"Comets and their General and Particular Meanings, According to Ptolomeé, Albumasar, Haly, Aliquind and other Astrologers\". The image is from https://publicdomainreview.org/collection/the-comet-book, made available by the Universitätsbibliothek Kassel under a CC-BY SA 4.0 license (https://creativecommons.org/licenses/by-sa/4.0/)"
+picture: "TheCometBook.jpg"
+price_usd {
+  currency_code: "USD"
+  nanos: 990000000
+}
+categories: "books"
+'
+2026-07-27 03:55:51,276 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:55:52,041 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1702 output_tokens=34 total_tokens=1736 latency_ms=754.52
+2026-07-27 03:55:52,046 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:55:54,414 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1745 output_tokens=404 total_tokens=2149 latency_ms=2353.37
+2026-07-27 03:55:54,418 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:55:54,418 - main - INFO - Grounded answer approved for product_id:HQTGWGPNH4 judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=3
+2026-07-27 03:55:54,420 - main - INFO - AI_OUTCOME product_id=HQTGWGPNH4 stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:55:54,421 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:55:54,422 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:55:54,422 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:55:54,424 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=1b82013c245853a19782f57221d58044 redis_keys=product_reviews:llm_trace:1b82013c245853a19782f57221d58044,trace:1b82013c245853a19782f57221d58044 ttl_seconds=86400
+2026-07-27 03:55:54,427 - guardrails.cache - INFO - [CACHE] Save success! Key: 2ab60b33c516f4be8c3edf325faf1ec231bafd9a6e6cf7dc71e226f15f053dfb, TTL: 86400s
+2026-07-27 03:55:54,438 - main - INFO - Receive AskProductAIAssistant product_id=9SIQT8TOJO question_sha256=c53bb9189929a9a2 question_length=64
+2026-07-27 03:55:54,450 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "9SIQT8TOJO"
+name: "Optical Tube Assembly"
+description: "Capturing impressive deep-sky astroimages is easier than ever with Rowe-Ackermann Schmidt Astrograph (RASA) V2, the perfect companion to today\'s top DSLR or astronomical CCD cameras. This fast, wide-field f/2.2 system allows for shorter exposure times compared to traditional f/10 astroimaging, without sacrificing resolution. Because shorter sub-exposure times are possible, your equatorial mount won\'t need to accurately track over extended periods. The short focal length also lessens equatorial tracking demands. In many cases, autoguiding will not be required."
+picture: "OpticalTubeAssembly.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 3599
+}
+categories: "accessories"
+categories: "telescopes"
+categories: "assembly"
+'
+2026-07-27 03:55:54,455 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:55:55,044 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1698 output_tokens=26 total_tokens=1724 latency_ms=579.13
+2026-07-27 03:55:55,049 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:55:57,065 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1733 output_tokens=247 total_tokens=1980 latency_ms=1995.46
+2026-07-27 03:55:57,102 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:55:57,104 - main - INFO - Grounded answer approved for product_id:9SIQT8TOJO judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=2
+2026-07-27 03:55:57,107 - main - INFO - AI_OUTCOME product_id=9SIQT8TOJO stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:55:57,111 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:55:57,111 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:55:57,113 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:55:57,119 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=c8a7de18ca2af89a4a035e55f3a7f52f redis_keys=product_reviews:llm_trace:c8a7de18ca2af89a4a035e55f3a7f52f,trace:c8a7de18ca2af89a4a035e55f3a7f52f ttl_seconds=86400
+2026-07-27 03:55:57,121 - guardrails.cache - INFO - [CACHE] Save success! Key: 5b9c173dfb24316ec86b58033813925f7b0a4e83a067ed68264507a5b9106e08, TTL: 86400s
+2026-07-27 03:55:57,283 - main - INFO - Receive AskProductAIAssistant product_id=L9ECAV7KIM question_sha256=a300dcb43c624aff question_length=46
+2026-07-27 03:55:57,299 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "L9ECAV7KIM"
+name: "Lens Cleaning Kit"
+description: "Wipe away dust, dirt, fingerprints and other particles on your lenses to see clearly with the Lens Cleaning Kit. This cleaning kit works on all glass and optical surfaces, including telescopes, binoculars, spotting scopes, monoculars, microscopes, and even your camera lenses, computer screens, and mobile devices.  The kit comes complete with a retractable lens brush to remove dust particles and dirt and two options to clean smudges and fingerprints off of your optics, pre-moistened lens wipes and a bottled lens cleaning fluid with soft cloth."
+picture: "LensCleaningKit.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 21
+  nanos: 950000000
+}
+categories: "accessories"
+'
+2026-07-27 03:55:57,305 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:55:58,056 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1689 output_tokens=50 total_tokens=1739 latency_ms=743.27
+2026-07-27 03:55:58,087 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:56:01,721 - guardrails.evaluator - WARNING - Bedrock judge tool mode failed; retrying JSON text mode: An error occurred (ModelErrorException) when calling the Converse operation: Model produced invalid sequence as part of ToolUse. Please refer to the model tool use troubleshooting guide.
+2026-07-27 03:56:03,207 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1292 output_tokens=362 total_tokens=1654 latency_ms=5087.08
+2026-07-27 03:56:03,239 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:56:03,435 - main - INFO - Grounded answer approved for product_id:L9ECAV7KIM judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=4
+2026-07-27 03:56:03,437 - main - INFO - AI_OUTCOME product_id=L9ECAV7KIM stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:56:03,439 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:56:03,439 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:56:03,440 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:56:03,443 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=3f440c74575e2d514deb292249e4bb25 redis_keys=product_reviews:llm_trace:3f440c74575e2d514deb292249e4bb25,trace:3f440c74575e2d514deb292249e4bb25 ttl_seconds=86400
+2026-07-27 03:56:03,444 - guardrails.cache - INFO - [CACHE] Save success! Key: dea7d36e545d95410c2cee28932ee931f6ab3854dbaca2d28ea12185f3b652a7, TTL: 86400s
+2026-07-27 03:56:05,296 - main - INFO - Receive AskProductAIAssistant product_id=L9ECAV7KIM question_sha256=bf8f2ec946a9948e question_length=49
+2026-07-27 03:56:05,308 - main - INFO - AI_OUTCOME product_id=L9ECAV7KIM stage=deterministic_rating outcome=answered
+2026-07-27 03:56:05,310 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:56:05,312 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=7cd145a706aa9883572c37844dcc6ce7 redis_keys=product_reviews:llm_trace:7cd145a706aa9883572c37844dcc6ce7,trace:7cd145a706aa9883572c37844dcc6ce7 ttl_seconds=86400
+2026-07-27 03:56:07,680 - main - INFO - Receive AskProductAIAssistant product_id=L9ECAV7KIM question_sha256=19dee3fee1d66473 question_length=41
+2026-07-27 03:56:07,706 - main - INFO - AI_OUTCOME product_id=L9ECAV7KIM stage=deterministic_rating outcome=answered
+2026-07-27 03:56:07,708 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:56:07,712 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=d13e52f5ecae06a6f8a955503442af7d redis_keys=product_reviews:llm_trace:d13e52f5ecae06a6f8a955503442af7d,trace:d13e52f5ecae06a6f8a955503442af7d ttl_seconds=86400
+2026-07-27 03:56:10,291 - main - INFO - Receive AskProductAIAssistant product_id=OLJCESPC7Z question_sha256=e89df5f339650df0 question_length=64
+2026-07-27 03:56:13,187 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "OLJCESPC7Z"
+name: "National Park Foundation Explorascope"
+description: "The National Park Foundation\'s (NPF) Explorascope 60AZ is a manual alt-azimuth, refractor telescope perfect for celestial viewing on the go. The NPF Explorascope 60 can view the planets, moon, star clusters and brighter deep sky objects like the Orion Nebula and Andromeda Galaxy."
+picture: "NationalParkFoundationExplorascope.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 101
+  nanos: 960000000
+}
+categories: "telescopes"
+'
+2026-07-27 03:56:13,371 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:56:15,456 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1653 output_tokens=53 total_tokens=1706 latency_ms=963.58
+2026-07-27 03:56:15,463 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:56:17,573 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1715 output_tokens=274 total_tokens=1989 latency_ms=2094.16
+2026-07-27 03:56:17,584 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:56:17,585 - main - INFO - Grounded answer approved for product_id:OLJCESPC7Z judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=5
+2026-07-27 03:56:17,586 - main - INFO - AI_OUTCOME product_id=OLJCESPC7Z stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:56:17,587 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:56:17,588 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:56:17,589 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:56:17,591 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=d62e0ea9338eae9ad840242c30086d39 redis_keys=product_reviews:llm_trace:d62e0ea9338eae9ad840242c30086d39,trace:d62e0ea9338eae9ad840242c30086d39 ttl_seconds=86400
+2026-07-27 03:56:17,593 - guardrails.cache - INFO - [CACHE] Save success! Key: 7ff80b1a0c0c2cb8a39f47618f1e40b657318f0cf8bc357a9a49f240993ff4d9, TTL: 86400s
+2026-07-27 03:56:17,753 - main - INFO - Receive AskProductAIAssistant product_id=2ZYFJ3GM2N question_sha256=09623c64e2cf7a85 question_length=56
+2026-07-27 03:56:17,777 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "2ZYFJ3GM2N"
+name: "Roof Binoculars"
+description: "This versatile, all-around binocular is a great choice for the trail, the stadium, the arena, or just about anywhere you want a close-up view of the action without sacrificing brightness or detail. It\'s an especially great companion for nature observation and bird watching, with ED glass that helps you spot the subtlest field markings and a close focus of just 6.5 feet."
+picture: "RoofBinoculars.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 209
+  nanos: 950000000
+}
+categories: "binoculars"
+'
+2026-07-27 03:56:17,782 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:56:18,456 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1650 output_tokens=45 total_tokens=1695 latency_ms=666.28
+2026-07-27 03:56:18,459 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:56:20,234 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1705 output_tokens=212 total_tokens=1917 latency_ms=1760.59
+2026-07-27 03:56:20,238 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:56:20,238 - main - INFO - Grounded answer approved for product_id:2ZYFJ3GM2N judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=4
+2026-07-27 03:56:20,239 - main - INFO - AI_OUTCOME product_id=2ZYFJ3GM2N stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:56:20,240 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:56:20,241 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:56:20,241 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:56:20,243 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=8470dd03e557ad91c46603a66a9abb1b redis_keys=product_reviews:llm_trace:8470dd03e557ad91c46603a66a9abb1b,trace:8470dd03e557ad91c46603a66a9abb1b ttl_seconds=86400
+2026-07-27 03:56:20,244 - guardrails.cache - INFO - [CACHE] Save success! Key: 5be913f181fb9c209df52137fcf342d222e4f19022c5a083ab37f7859e8028b1, TTL: 86400s
+2026-07-27 03:56:20,363 - main - INFO - Receive AskProductAIAssistant product_id=L9ECAV7KIM question_sha256=0289dc3555d0046f question_length=68
+2026-07-27 03:56:20,389 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "L9ECAV7KIM"
+name: "Lens Cleaning Kit"
+description: "Wipe away dust, dirt, fingerprints and other particles on your lenses to see clearly with the Lens Cleaning Kit. This cleaning kit works on all glass and optical surfaces, including telescopes, binoculars, spotting scopes, monoculars, microscopes, and even your camera lenses, computer screens, and mobile devices.  The kit comes complete with a retractable lens brush to remove dust particles and dirt and two options to clean smudges and fingerprints off of your optics, pre-moistened lens wipes and a bottled lens cleaning fluid with soft cloth."
+picture: "LensCleaningKit.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 21
+  nanos: 950000000
+}
+categories: "accessories"
+'
+2026-07-27 03:56:20,394 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:56:21,159 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1674 output_tokens=39 total_tokens=1713 latency_ms=754.60
+2026-07-27 03:56:21,162 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:56:22,038 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1766 output_tokens=55 total_tokens=1821 latency_ms=875.55
+2026-07-27 03:56:22,041 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:56:22,043 - main - INFO - AI_OUTCOME product_id=L9ECAV7KIM stage=candidate_semantic_retry outcome=answered
+2026-07-27 03:56:24,466 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1739 output_tokens=139 total_tokens=1878 latency_ms=2413.48
+2026-07-27 03:56:24,480 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:56:24,482 - main - INFO - Grounded answer approved for product_id:L9ECAV7KIM judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=2
+2026-07-27 03:56:24,483 - main - INFO - AI_OUTCOME product_id=L9ECAV7KIM stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:56:24,485 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:56:24,488 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:56:24,489 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:56:24,495 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=cba99459fd2f878fb5addae79f12241e redis_keys=product_reviews:llm_trace:cba99459fd2f878fb5addae79f12241e,trace:cba99459fd2f878fb5addae79f12241e ttl_seconds=86400
+2026-07-27 03:56:24,499 - guardrails.cache - INFO - [CACHE] Save success! Key: 4674d0577545eca67670d6046b4d9e2864d45cd3b951c3a86a53bb4a4c5a1d6e, TTL: 86400s
+2026-07-27 03:56:24,790 - main - INFO - Receive AskProductAIAssistant product_id=0PUK6V6EV0 question_sha256=cb17b8885bad322f question_length=59
+2026-07-27 03:56:24,804 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "0PUK6V6EV0"
+name: "Solar System Color Imager"
+description: "You have your new telescope and have observed Saturn and Jupiter. Now you\'re ready to take the next step and start imaging them. But where do you begin? The NexImage 10 Solar System Imager is the perfect solution."
+picture: "SolarSystemColorImager.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 175
+}
+categories: "accessories"
+categories: "telescopes"
+'
+2026-07-27 03:56:24,809 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:56:25,500 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1611 output_tokens=30 total_tokens=1641 latency_ms=682.82
+2026-07-27 03:56:25,506 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:56:27,164 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1653 output_tokens=188 total_tokens=1841 latency_ms=1646.48
+2026-07-27 03:56:27,168 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:56:27,168 - main - INFO - Grounded answer approved for product_id:0PUK6V6EV0 judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=2
+2026-07-27 03:56:27,170 - main - INFO - AI_OUTCOME product_id=0PUK6V6EV0 stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:56:27,171 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:56:27,173 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:56:27,173 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:56:27,176 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=27ee6ffa126da66583210cda889269f9 redis_keys=product_reviews:llm_trace:27ee6ffa126da66583210cda889269f9,trace:27ee6ffa126da66583210cda889269f9 ttl_seconds=86400
+2026-07-27 03:56:27,178 - guardrails.cache - INFO - [CACHE] Save success! Key: a9111cc4f5fca78ff39b2dfe77941fc662e2daec00e830da6a7bf3f1ea894b3b, TTL: 86400s
+2026-07-27 03:56:27,189 - main - INFO - Receive AskProductAIAssistant product_id=L9ECAV7KIM question_sha256=1cb9c6223e1efdc3 question_length=50
+2026-07-27 03:56:27,204 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "L9ECAV7KIM"
+name: "Lens Cleaning Kit"
+description: "Wipe away dust, dirt, fingerprints and other particles on your lenses to see clearly with the Lens Cleaning Kit. This cleaning kit works on all glass and optical surfaces, including telescopes, binoculars, spotting scopes, monoculars, microscopes, and even your camera lenses, computer screens, and mobile devices.  The kit comes complete with a retractable lens brush to remove dust particles and dirt and two options to clean smudges and fingerprints off of your optics, pre-moistened lens wipes and a bottled lens cleaning fluid with soft cloth."
+picture: "LensCleaningKit.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 21
+  nanos: 950000000
+}
+categories: "accessories"
+'
+2026-07-27 03:56:27,212 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:56:27,779 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1670 output_tokens=25 total_tokens=1695 latency_ms=558.02
+2026-07-27 03:56:27,782 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:56:29,156 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1705 output_tokens=79 total_tokens=1784 latency_ms=1365.71
+2026-07-27 03:56:29,161 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:56:29,162 - main - INFO - Grounded answer approved for product_id:L9ECAV7KIM judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=1
+2026-07-27 03:56:29,163 - main - INFO - AI_OUTCOME product_id=L9ECAV7KIM stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:56:29,165 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:56:29,166 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:56:29,166 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:56:29,169 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=876f4773923e33b7833f44a65fac2bdb redis_keys=product_reviews:llm_trace:876f4773923e33b7833f44a65fac2bdb,trace:876f4773923e33b7833f44a65fac2bdb ttl_seconds=86400
+2026-07-27 03:56:29,171 - guardrails.cache - INFO - [CACHE] Save success! Key: ad3453342e5ff4a8fd13afc7ba716cf32347cc31faf92db62ad35d4df471aecd, TTL: 86400s
+2026-07-27 03:56:29,338 - main - INFO - Receive AskProductAIAssistant product_id=L9ECAV7KIM question_sha256=aaa930c40b7d73c3 question_length=41
+2026-07-27 03:56:29,354 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "L9ECAV7KIM"
+name: "Lens Cleaning Kit"
+description: "Wipe away dust, dirt, fingerprints and other particles on your lenses to see clearly with the Lens Cleaning Kit. This cleaning kit works on all glass and optical surfaces, including telescopes, binoculars, spotting scopes, monoculars, microscopes, and even your camera lenses, computer screens, and mobile devices.  The kit comes complete with a retractable lens brush to remove dust particles and dirt and two options to clean smudges and fingerprints off of your optics, pre-moistened lens wipes and a bottled lens cleaning fluid with soft cloth."
+picture: "LensCleaningKit.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 21
+  nanos: 950000000
+}
+categories: "accessories"
+'
+2026-07-27 03:56:29,366 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:56:30,059 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1669 output_tokens=41 total_tokens=1710 latency_ms=675.79
+2026-07-27 03:56:30,066 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:56:31,695 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1720 output_tokens=193 total_tokens=1913 latency_ms=1630.31
+2026-07-27 03:56:31,703 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:56:31,710 - main - INFO - Grounded answer approved for product_id:L9ECAV7KIM judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=3
+2026-07-27 03:56:31,711 - main - INFO - AI_OUTCOME product_id=L9ECAV7KIM stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:56:31,712 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:56:31,714 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:56:31,717 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:56:31,719 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=935700cb40aa062d93c917715fa31550 redis_keys=product_reviews:llm_trace:935700cb40aa062d93c917715fa31550,trace:935700cb40aa062d93c917715fa31550 ttl_seconds=86400
+2026-07-27 03:56:31,724 - guardrails.cache - INFO - [CACHE] Save success! Key: 95fe0fe1edfb714c03d58282e35988cea400018cd2e658095f06bd186afe88c5, TTL: 86400s
+2026-07-27 03:56:31,988 - main - INFO - Receive AskProductAIAssistant product_id=L9ECAV7KIM question_sha256=16258c8fe2c98872 question_length=43
+2026-07-27 03:56:32,046 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "L9ECAV7KIM"
+name: "Lens Cleaning Kit"
+description: "Wipe away dust, dirt, fingerprints and other particles on your lenses to see clearly with the Lens Cleaning Kit. This cleaning kit works on all glass and optical surfaces, including telescopes, binoculars, spotting scopes, monoculars, microscopes, and even your camera lenses, computer screens, and mobile devices.  The kit comes complete with a retractable lens brush to remove dust particles and dirt and two options to clean smudges and fingerprints off of your optics, pre-moistened lens wipes and a bottled lens cleaning fluid with soft cloth."
+picture: "LensCleaningKit.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 21
+  nanos: 950000000
+}
+categories: "accessories"
+'
+2026-07-27 03:56:32,054 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:56:32,719 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1669 output_tokens=27 total_tokens=1696 latency_ms=651.34
+2026-07-27 03:56:32,728 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:56:35,018 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1706 output_tokens=382 total_tokens=2088 latency_ms=2257.68
+2026-07-27 03:56:35,023 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:56:35,024 - main - INFO - Grounded answer approved for product_id:L9ECAV7KIM judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=3
+2026-07-27 03:56:35,024 - main - INFO - AI_OUTCOME product_id=L9ECAV7KIM stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:56:35,026 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:56:35,027 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:56:35,030 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:56:35,033 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=68a3ef114fd83f2cad2e10afd776e0e9 redis_keys=product_reviews:llm_trace:68a3ef114fd83f2cad2e10afd776e0e9,trace:68a3ef114fd83f2cad2e10afd776e0e9 ttl_seconds=86400
+2026-07-27 03:56:35,036 - guardrails.cache - INFO - [CACHE] Save success! Key: 84943ce0d929d8f0d83309e90dd948d6eda07ede3664e13fec4c3538ed0877b7, TTL: 86400s
+2026-07-27 03:56:35,118 - main - INFO - Receive AskProductAIAssistant product_id=L9ECAV7KIM question_sha256=f7d06c499bd64a36 question_length=51
+2026-07-27 03:56:35,138 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "L9ECAV7KIM"
+name: "Lens Cleaning Kit"
+description: "Wipe away dust, dirt, fingerprints and other particles on your lenses to see clearly with the Lens Cleaning Kit. This cleaning kit works on all glass and optical surfaces, including telescopes, binoculars, spotting scopes, monoculars, microscopes, and even your camera lenses, computer screens, and mobile devices.  The kit comes complete with a retractable lens brush to remove dust particles and dirt and two options to clean smudges and fingerprints off of your optics, pre-moistened lens wipes and a bottled lens cleaning fluid with soft cloth."
+picture: "LensCleaningKit.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 21
+  nanos: 950000000
+}
+categories: "accessories"
+'
+2026-07-27 03:56:35,145 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:56:35,858 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1671 output_tokens=48 total_tokens=1719 latency_ms=704.65
+2026-07-27 03:56:35,863 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:56:37,982 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1729 output_tokens=337 total_tokens=2066 latency_ms=2103.10
+2026-07-27 03:56:37,988 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:56:37,988 - main - INFO - Grounded answer approved for product_id:L9ECAV7KIM judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=5
+2026-07-27 03:56:37,989 - main - INFO - AI_OUTCOME product_id=L9ECAV7KIM stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:56:37,991 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:56:37,992 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:56:37,992 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:56:37,995 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=f8bf3a24ed02bf1935f210862e7536fd redis_keys=product_reviews:llm_trace:f8bf3a24ed02bf1935f210862e7536fd,trace:f8bf3a24ed02bf1935f210862e7536fd ttl_seconds=86400
+2026-07-27 03:56:37,997 - guardrails.cache - INFO - [CACHE] Save success! Key: 0e76479f7605713a57e2040d1d2e0db43e85e67555f54251385ab93838c62bb2, TTL: 86400s
+2026-07-27 03:56:38,049 - main - INFO - Receive AskProductAIAssistant product_id=1YMWWN1N4O question_sha256=80a16a19fa6e0ffc question_length=61
+2026-07-27 03:56:38,061 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "1YMWWN1N4O"
+name: "Eclipsmart Travel Refractor Telescope"
+description: "Dedicated white-light solar scope for the observer on the go. The 50mm refracting solar scope uses Solar Safe, ISO compliant, full-aperture glass filter material to ensure the safest view of solar events.  The kit comes complete with everything you need, including the dedicated travel solar scope, a Solar Safe finderscope, tripod, a high quality 20mm (18x) Kellner eyepiece and a nylon backpack to carry everything in.  This Travel Solar Scope makes it easy to share the Sun as well as partial and total solar eclipses with the whole family and offers much higher magnifications than you would otherwise get using handheld solar viewers or binoculars."
+picture: "EclipsmartTravelRefractorTelescope.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 129
+  nanos: 950000000
+}
+categories: "telescopes"
+categories: "travel"
+'
+2026-07-27 03:56:38,068 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:56:39,110 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1730 output_tokens=47 total_tokens=1777 latency_ms=1031.46
+2026-07-27 03:56:39,114 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:56:40,631 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1788 output_tokens=107 total_tokens=1895 latency_ms=1504.54
+2026-07-27 03:56:40,635 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:56:40,636 - main - INFO - Grounded answer approved for product_id:1YMWWN1N4O judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=1
+2026-07-27 03:56:40,636 - main - INFO - AI_OUTCOME product_id=1YMWWN1N4O stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:56:40,638 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:56:40,639 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:56:40,639 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:56:40,745 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=f3c72da627233d2961c63b954449e126 redis_keys=product_reviews:llm_trace:f3c72da627233d2961c63b954449e126,trace:f3c72da627233d2961c63b954449e126 ttl_seconds=86400
+2026-07-27 03:56:40,757 - guardrails.cache - INFO - [CACHE] Save success! Key: f087d9201fe8d5c5b0884e7756129be759defc5f9ec3d4f778298de64f394d6b, TTL: 86400s
+2026-07-27 03:56:40,873 - main - INFO - Receive AskProductAIAssistant product_id=L9ECAV7KIM question_sha256=79d3fac252e8d488 question_length=54
+2026-07-27 03:56:40,919 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "L9ECAV7KIM"
+name: "Lens Cleaning Kit"
+description: "Wipe away dust, dirt, fingerprints and other particles on your lenses to see clearly with the Lens Cleaning Kit. This cleaning kit works on all glass and optical surfaces, including telescopes, binoculars, spotting scopes, monoculars, microscopes, and even your camera lenses, computer screens, and mobile devices.  The kit comes complete with a retractable lens brush to remove dust particles and dirt and two options to clean smudges and fingerprints off of your optics, pre-moistened lens wipes and a bottled lens cleaning fluid with soft cloth."
+picture: "LensCleaningKit.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 21
+  nanos: 950000000
+}
+categories: "accessories"
+'
+2026-07-27 03:56:40,929 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:56:41,617 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1671 output_tokens=47 total_tokens=1718 latency_ms=672.85
+2026-07-27 03:56:41,623 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:56:43,966 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1728 output_tokens=378 total_tokens=2106 latency_ms=2317.73
+2026-07-27 03:56:43,970 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:56:43,971 - main - INFO - Grounded answer approved for product_id:L9ECAV7KIM judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=5
+2026-07-27 03:56:43,972 - main - INFO - AI_OUTCOME product_id=L9ECAV7KIM stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:56:43,973 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:56:43,973 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:56:43,975 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:56:43,977 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=64b25896724b995173737e33eeda5a7a redis_keys=product_reviews:llm_trace:64b25896724b995173737e33eeda5a7a,trace:64b25896724b995173737e33eeda5a7a ttl_seconds=86400
+2026-07-27 03:56:43,979 - guardrails.cache - INFO - [CACHE] Save success! Key: 751bffdd9a74a9af67a3c1f8bdfe9a2ebe9ee51cf947033af7572a2a49059180, TTL: 86400s
+2026-07-27 03:56:44,029 - main - INFO - Receive AskProductAIAssistant product_id=66VCHSJNUP question_sha256=02818727b2d8b9ff question_length=69
+2026-07-27 03:56:44,046 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "66VCHSJNUP"
+name: "Starsense Explorer Refractor Telescope"
+description: "The first telescope that uses your smartphone to analyze the night sky and calculate its position in real time. StarSense Explorer is ideal for beginners thanks to the app\'s user-friendly interface and detailed tutorials. It\'s like having your own personal tour guide of the night sky"
+picture: "StarsenseExplorer.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 349
+  nanos: 950000000
+}
+categories: "telescopes"
+'
+2026-07-27 03:56:44,051 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:56:44,720 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1638 output_tokens=34 total_tokens=1672 latency_ms=658.95
+2026-07-27 03:56:44,722 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:56:47,190 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1681 output_tokens=428 total_tokens=2109 latency_ms=2455.01
+2026-07-27 03:56:47,200 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:56:47,243 - main - INFO - Grounded answer approved for product_id:66VCHSJNUP judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=4
+2026-07-27 03:56:47,307 - main - INFO - AI_OUTCOME product_id=66VCHSJNUP stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:56:47,312 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:56:47,371 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:56:47,677 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:56:48,162 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=b5c58cf76ebce7344b426a59553eed6d redis_keys=product_reviews:llm_trace:b5c58cf76ebce7344b426a59553eed6d,trace:b5c58cf76ebce7344b426a59553eed6d ttl_seconds=86400
+2026-07-27 03:56:49,466 - guardrails.cache - INFO - [CACHE] Save success! Key: fcd047ee155a7df9fc3d10964e0522fd669ba97eb1abb8e6144797df4cbcb4a6, TTL: 86400s
+2026-07-27 03:56:49,557 - main - INFO - Receive AskProductAIAssistant product_id=L9ECAV7KIM question_sha256=f05e4ce168e16b1d question_length=39
+2026-07-27 03:56:49,570 - main - INFO - AI_OUTCOME product_id=L9ECAV7KIM stage=deterministic_rating outcome=answered
+2026-07-27 03:56:49,614 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:56:49,621 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=3db55489d1965b8af2d7e7e345f848df redis_keys=product_reviews:llm_trace:3db55489d1965b8af2d7e7e345f848df,trace:3db55489d1965b8af2d7e7e345f848df ttl_seconds=86400
+2026-07-27 03:56:49,890 - main - INFO - Receive AskProductAIAssistant product_id=L9ECAV7KIM question_sha256=878d9663613745dc question_length=43
+2026-07-27 03:56:49,903 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "L9ECAV7KIM"
+name: "Lens Cleaning Kit"
+description: "Wipe away dust, dirt, fingerprints and other particles on your lenses to see clearly with the Lens Cleaning Kit. This cleaning kit works on all glass and optical surfaces, including telescopes, binoculars, spotting scopes, monoculars, microscopes, and even your camera lenses, computer screens, and mobile devices.  The kit comes complete with a retractable lens brush to remove dust particles and dirt and two options to clean smudges and fingerprints off of your optics, pre-moistened lens wipes and a bottled lens cleaning fluid with soft cloth."
+picture: "LensCleaningKit.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 21
+  nanos: 950000000
+}
+categories: "accessories"
+'
+2026-07-27 03:56:49,909 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:56:50,788 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1670 output_tokens=4 total_tokens=1674 latency_ms=871.08
+2026-07-27 03:56:50,911 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:56:51,607 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1762 output_tokens=4 total_tokens=1766 latency_ms=583.53
+2026-07-27 03:56:51,788 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:56:51,790 - main - INFO - AI_OUTCOME product_id=L9ECAV7KIM stage=candidate_semantic_retry outcome=no_info
+2026-07-27 03:56:51,793 - main - INFO - AI_OUTCOME product_id=L9ECAV7KIM stage=runtime_judge outcome=skipped provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:56:51,834 - main - INFO - Returning AI assistant response class=No information in reviews.
+2026-07-27 03:56:51,838 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:56:51,842 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=01914ac91a3ff8d3c371bd222fb4cfe1 redis_keys=product_reviews:llm_trace:01914ac91a3ff8d3c371bd222fb4cfe1,trace:01914ac91a3ff8d3c371bd222fb4cfe1 ttl_seconds=86400
+2026-07-27 03:56:52,143 - main - INFO - Receive AskProductAIAssistant product_id=OLJCESPC7Z question_sha256=4750f478e92fd7e4 question_length=29
+2026-07-27 03:56:52,213 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "OLJCESPC7Z"
+name: "National Park Foundation Explorascope"
+description: "The National Park Foundation\'s (NPF) Explorascope 60AZ is a manual alt-azimuth, refractor telescope perfect for celestial viewing on the go. The NPF Explorascope 60 can view the planets, moon, star clusters and brighter deep sky objects like the Orion Nebula and Andromeda Galaxy."
+picture: "NationalParkFoundationExplorascope.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 101
+  nanos: 960000000
+}
+categories: "telescopes"
+'
+2026-07-27 03:56:52,258 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:56:54,806 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1648 output_tokens=4 total_tokens=1652 latency_ms=960.28
+2026-07-27 03:56:55,116 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:56:55,784 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1740 output_tokens=4 total_tokens=1744 latency_ms=595.40
+2026-07-27 03:56:55,859 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:56:55,867 - main - INFO - AI_OUTCOME product_id=OLJCESPC7Z stage=candidate_semantic_retry outcome=no_info
+2026-07-27 03:56:55,875 - main - INFO - AI_OUTCOME product_id=OLJCESPC7Z stage=runtime_judge outcome=skipped provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:56:55,941 - main - INFO - Returning AI assistant response class=No information in reviews.
+2026-07-27 03:56:55,952 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:56:55,997 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=b815c809d55b845de06051098bc9b9ca redis_keys=product_reviews:llm_trace:b815c809d55b845de06051098bc9b9ca,trace:b815c809d55b845de06051098bc9b9ca ttl_seconds=86400
+2026-07-27 03:56:56,080 - main - INFO - Receive AskProductAIAssistant product_id=2ZYFJ3GM2N question_sha256=22dd0e3c8500485f question_length=46
+2026-07-27 03:56:56,120 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "2ZYFJ3GM2N"
+name: "Roof Binoculars"
+description: "This versatile, all-around binocular is a great choice for the trail, the stadium, the arena, or just about anywhere you want a close-up view of the action without sacrificing brightness or detail. It\'s an especially great companion for nature observation and bird watching, with ED glass that helps you spot the subtlest field markings and a close focus of just 6.5 feet."
+picture: "RoofBinoculars.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 209
+  nanos: 950000000
+}
+categories: "binoculars"
+'
+2026-07-27 03:56:56,134 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:56:56,657 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1649 output_tokens=4 total_tokens=1653 latency_ms=502.91
+2026-07-27 03:56:56,661 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:56:57,153 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1741 output_tokens=4 total_tokens=1745 latency_ms=490.40
+2026-07-27 03:56:57,168 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:56:57,190 - main - INFO - AI_OUTCOME product_id=2ZYFJ3GM2N stage=candidate_semantic_retry outcome=no_info
+2026-07-27 03:56:57,197 - main - INFO - AI_OUTCOME product_id=2ZYFJ3GM2N stage=runtime_judge outcome=skipped provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:56:57,198 - main - INFO - Returning AI assistant response class=No information in reviews.
+2026-07-27 03:56:57,199 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:56:57,203 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=f5f556565c5c1c0be0b807f6596e33a4 redis_keys=product_reviews:llm_trace:f5f556565c5c1c0be0b807f6596e33a4,trace:f5f556565c5c1c0be0b807f6596e33a4 ttl_seconds=86400
+2026-07-27 03:56:57,261 - main - INFO - Receive AskProductAIAssistant product_id=HQTGWGPNH4 question_sha256=1ec1dce95df7f3ac question_length=39
+2026-07-27 03:56:57,314 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "HQTGWGPNH4"
+name: "The Comet Book"
+description: "A 16th-century treatise on comets, created anonymously in Flanders (now northern France) and now held at the Universitätsbibliothek Kassel. Commonly known as The Comet Book (or Kometenbuch in German), its full title translates as \"Comets and their General and Particular Meanings, According to Ptolomeé, Albumasar, Haly, Aliquind and other Astrologers\". The image is from https://publicdomainreview.org/collection/the-comet-book, made available by the Universitätsbibliothek Kassel under a CC-BY SA 4.0 license (https://creativecommons.org/licenses/by-sa/4.0/)"
+picture: "TheCometBook.jpg"
+price_usd {
+  currency_code: "USD"
+  nanos: 990000000
+}
+categories: "books"
+'
+2026-07-27 03:56:57,344 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:56:57,881 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1699 output_tokens=4 total_tokens=1703 latency_ms=508.32
+2026-07-27 03:56:57,884 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:56:58,382 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1791 output_tokens=4 total_tokens=1795 latency_ms=497.39
+2026-07-27 03:56:58,385 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:56:58,386 - main - INFO - AI_OUTCOME product_id=HQTGWGPNH4 stage=candidate_semantic_retry outcome=no_info
+2026-07-27 03:56:58,387 - main - INFO - AI_OUTCOME product_id=HQTGWGPNH4 stage=runtime_judge outcome=skipped provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:56:58,388 - main - INFO - Returning AI assistant response class=No information in reviews.
+2026-07-27 03:56:58,389 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:56:58,391 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=abf4b9066f1a12c693f0c002d9a0d1a1 redis_keys=product_reviews:llm_trace:abf4b9066f1a12c693f0c002d9a0d1a1,trace:abf4b9066f1a12c693f0c002d9a0d1a1 ttl_seconds=86400
+2026-07-27 03:56:58,576 - main - INFO - Receive AskProductAIAssistant product_id=1YMWWN1N4O question_sha256=9815813cb147c884 question_length=43
+2026-07-27 03:56:58,697 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "1YMWWN1N4O"
+name: "Eclipsmart Travel Refractor Telescope"
+description: "Dedicated white-light solar scope for the observer on the go. The 50mm refracting solar scope uses Solar Safe, ISO compliant, full-aperture glass filter material to ensure the safest view of solar events.  The kit comes complete with everything you need, including the dedicated travel solar scope, a Solar Safe finderscope, tripod, a high quality 20mm (18x) Kellner eyepiece and a nylon backpack to carry everything in.  This Travel Solar Scope makes it easy to share the Sun as well as partial and total solar eclipses with the whole family and offers much higher magnifications than you would otherwise get using handheld solar viewers or binoculars."
+picture: "EclipsmartTravelRefractorTelescope.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 129
+  nanos: 950000000
+}
+categories: "telescopes"
+categories: "travel"
+'
+2026-07-27 03:56:58,702 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:56:59,206 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1726 output_tokens=4 total_tokens=1730 latency_ms=493.34
+2026-07-27 03:56:59,213 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:56:59,761 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1818 output_tokens=4 total_tokens=1822 latency_ms=546.57
+2026-07-27 03:56:59,763 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:56:59,764 - main - INFO - AI_OUTCOME product_id=1YMWWN1N4O stage=candidate_semantic_retry outcome=no_info
+2026-07-27 03:56:59,764 - main - INFO - AI_OUTCOME product_id=1YMWWN1N4O stage=runtime_judge outcome=skipped provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:56:59,765 - main - INFO - Returning AI assistant response class=No information in reviews.
+2026-07-27 03:56:59,766 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:56:59,770 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=ecb71b55a7e3dc03c45d2c15f0149abb redis_keys=product_reviews:llm_trace:ecb71b55a7e3dc03c45d2c15f0149abb,trace:ecb71b55a7e3dc03c45d2c15f0149abb ttl_seconds=86400
+2026-07-27 03:56:59,838 - main - INFO - Receive AskProductAIAssistant product_id=2ZYFJ3GM2N question_sha256=106a6f7842e7f8aa question_length=58
+2026-07-27 03:56:59,927 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "2ZYFJ3GM2N"
+name: "Roof Binoculars"
+description: "This versatile, all-around binocular is a great choice for the trail, the stadium, the arena, or just about anywhere you want a close-up view of the action without sacrificing brightness or detail. It\'s an especially great companion for nature observation and bird watching, with ED glass that helps you spot the subtlest field markings and a close focus of just 6.5 feet."
+picture: "RoofBinoculars.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 209
+  nanos: 950000000
+}
+categories: "binoculars"
+'
+2026-07-27 03:56:59,939 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:57:00,571 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1650 output_tokens=21 total_tokens=1671 latency_ms=619.30
+2026-07-27 03:57:00,577 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:02,022 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1681 output_tokens=115 total_tokens=1796 latency_ms=1433.34
+2026-07-27 03:57:02,028 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:02,029 - main - INFO - Grounded answer approved for product_id:2ZYFJ3GM2N judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=1
+2026-07-27 03:57:02,030 - main - INFO - AI_OUTCOME product_id=2ZYFJ3GM2N stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:57:02,033 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:57:02,033 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:57:02,034 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:57:02,038 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=d098fe36e9bd4e437b8307e05a95afb2 redis_keys=product_reviews:llm_trace:d098fe36e9bd4e437b8307e05a95afb2,trace:d098fe36e9bd4e437b8307e05a95afb2 ttl_seconds=86400
+2026-07-27 03:57:02,040 - guardrails.cache - INFO - [CACHE] Save success! Key: b058574a104710b26b3dfd0e2efebda4ceb77b52033eb0e526cc96cbf7847dda, TTL: 86400s
+2026-07-27 03:57:02,090 - main - INFO - Receive AskProductAIAssistant product_id=1YMWWN1N4O question_sha256=87172119b8287f36 question_length=53
+2026-07-27 03:57:02,138 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "1YMWWN1N4O"
+name: "Eclipsmart Travel Refractor Telescope"
+description: "Dedicated white-light solar scope for the observer on the go. The 50mm refracting solar scope uses Solar Safe, ISO compliant, full-aperture glass filter material to ensure the safest view of solar events.  The kit comes complete with everything you need, including the dedicated travel solar scope, a Solar Safe finderscope, tripod, a high quality 20mm (18x) Kellner eyepiece and a nylon backpack to carry everything in.  This Travel Solar Scope makes it easy to share the Sun as well as partial and total solar eclipses with the whole family and offers much higher magnifications than you would otherwise get using handheld solar viewers or binoculars."
+picture: "EclipsmartTravelRefractorTelescope.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 129
+  nanos: 950000000
+}
+categories: "telescopes"
+categories: "travel"
+'
+2026-07-27 03:57:02,182 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:57:03,028 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1728 output_tokens=40 total_tokens=1768 latency_ms=820.43
+2026-07-27 03:57:03,031 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:04,709 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1779 output_tokens=207 total_tokens=1986 latency_ms=1663.24
+2026-07-27 03:57:04,713 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:04,714 - main - INFO - Grounded answer approved for product_id:1YMWWN1N4O judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=3
+2026-07-27 03:57:04,715 - main - INFO - AI_OUTCOME product_id=1YMWWN1N4O stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:57:04,716 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:57:04,717 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:57:04,718 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:57:04,720 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=b7f5c90abe7b36ecd1adf7e8f7d8a21d redis_keys=product_reviews:llm_trace:b7f5c90abe7b36ecd1adf7e8f7d8a21d,trace:b7f5c90abe7b36ecd1adf7e8f7d8a21d ttl_seconds=86400
+2026-07-27 03:57:04,723 - guardrails.cache - INFO - [CACHE] Save success! Key: 712ce0ef20fb742d40889850a87bbb4bd3f7e4aa30f395db829d58395d3f0bc1, TTL: 86400s
+2026-07-27 03:57:04,775 - main - INFO - Receive AskProductAIAssistant product_id=2ZYFJ3GM2N question_sha256=5ba23db4b2b83102 question_length=55
+2026-07-27 03:57:04,790 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "2ZYFJ3GM2N"
+name: "Roof Binoculars"
+description: "This versatile, all-around binocular is a great choice for the trail, the stadium, the arena, or just about anywhere you want a close-up view of the action without sacrificing brightness or detail. It\'s an especially great companion for nature observation and bird watching, with ED glass that helps you spot the subtlest field markings and a close focus of just 6.5 feet."
+picture: "RoofBinoculars.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 209
+  nanos: 950000000
+}
+categories: "binoculars"
+'
+2026-07-27 03:57:04,795 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:57:05,435 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1650 output_tokens=22 total_tokens=1672 latency_ms=631.74
+2026-07-27 03:57:05,441 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:06,833 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1682 output_tokens=106 total_tokens=1788 latency_ms=1359.48
+2026-07-27 03:57:06,839 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:06,839 - main - INFO - Grounded answer approved for product_id:2ZYFJ3GM2N judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=1
+2026-07-27 03:57:06,840 - main - INFO - AI_OUTCOME product_id=2ZYFJ3GM2N stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:57:06,841 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:57:06,842 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:57:06,843 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:57:06,846 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=1f1ab7c73e4c3eeabdecc4ae80807148 redis_keys=product_reviews:llm_trace:1f1ab7c73e4c3eeabdecc4ae80807148,trace:1f1ab7c73e4c3eeabdecc4ae80807148 ttl_seconds=86400
+2026-07-27 03:57:06,847 - guardrails.cache - INFO - [CACHE] Save success! Key: b8998df933f06eb54264d50a95c25f970155f8cf21bff4b05c8dc994d4e67024, TTL: 86400s
+2026-07-27 03:57:06,902 - main - INFO - Receive AskProductAIAssistant product_id=OLJCESPC7Z question_sha256=46e920b13240b363 question_length=51
+2026-07-27 03:57:07,204 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "OLJCESPC7Z"
+name: "National Park Foundation Explorascope"
+description: "The National Park Foundation\'s (NPF) Explorascope 60AZ is a manual alt-azimuth, refractor telescope perfect for celestial viewing on the go. The NPF Explorascope 60 can view the planets, moon, star clusters and brighter deep sky objects like the Orion Nebula and Andromeda Galaxy."
+picture: "NationalParkFoundationExplorascope.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 101
+  nanos: 960000000
+}
+categories: "telescopes"
+'
+2026-07-27 03:57:07,219 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:57:07,923 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1651 output_tokens=36 total_tokens=1687 latency_ms=692.49
+2026-07-27 03:57:07,971 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:09,342 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1696 output_tokens=85 total_tokens=1781 latency_ms=1292.76
+2026-07-27 03:57:09,349 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:09,350 - main - INFO - Grounded answer approved for product_id:OLJCESPC7Z judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=1
+2026-07-27 03:57:09,351 - main - INFO - AI_OUTCOME product_id=OLJCESPC7Z stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:57:09,352 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:57:09,354 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:57:09,354 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:57:09,358 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=34f5a686a787fd1378ce9c1753887453 redis_keys=product_reviews:llm_trace:34f5a686a787fd1378ce9c1753887453,trace:34f5a686a787fd1378ce9c1753887453 ttl_seconds=86400
+2026-07-27 03:57:09,360 - guardrails.cache - INFO - [CACHE] Save success! Key: d05a536f735e35396f2702a6044c089f9c68c0e4fe9390b6743bcc38fb707ec2, TTL: 86400s
+2026-07-27 03:57:09,415 - main - INFO - Receive AskProductAIAssistant product_id=L9ECAV7KIM question_sha256=1ad7e7d44d721273 question_length=59
+2026-07-27 03:57:09,430 - main - INFO - AI_OUTCOME product_id=L9ECAV7KIM stage=deterministic_rating outcome=answered
+2026-07-27 03:57:09,431 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:57:09,436 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=9bbcf65223901b09624333072ef417d4 redis_keys=product_reviews:llm_trace:9bbcf65223901b09624333072ef417d4,trace:9bbcf65223901b09624333072ef417d4 ttl_seconds=86400
+2026-07-27 03:57:09,630 - main - INFO - Receive AskProductAIAssistant product_id=66VCHSJNUP question_sha256=b6db0d2efbbb6d3d question_length=43
+2026-07-27 03:57:09,645 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "66VCHSJNUP"
+name: "Starsense Explorer Refractor Telescope"
+description: "The first telescope that uses your smartphone to analyze the night sky and calculate its position in real time. StarSense Explorer is ideal for beginners thanks to the app\'s user-friendly interface and detailed tutorials. It\'s like having your own personal tour guide of the night sky"
+picture: "StarsenseExplorer.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 349
+  nanos: 950000000
+}
+categories: "telescopes"
+'
+2026-07-27 03:57:09,651 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:57:10,304 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1635 output_tokens=31 total_tokens=1666 latency_ms=634.68
+2026-07-27 03:57:10,333 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:12,478 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1675 output_tokens=130 total_tokens=1805 latency_ms=2075.75
+2026-07-27 03:57:12,717 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:12,774 - main - INFO - Grounded answer approved for product_id:66VCHSJNUP judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=1
+2026-07-27 03:57:12,775 - main - INFO - AI_OUTCOME product_id=66VCHSJNUP stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:57:12,777 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:57:12,779 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:57:12,780 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:57:12,786 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=1b66515ce480ed1cc752283623e10852 redis_keys=product_reviews:llm_trace:1b66515ce480ed1cc752283623e10852,trace:1b66515ce480ed1cc752283623e10852 ttl_seconds=86400
+2026-07-27 03:57:12,788 - guardrails.cache - INFO - [CACHE] Save success! Key: c59049a6711ea9ac8f1ac877a1e38a19381f7325245a49ef3ecbada6fe98db3d, TTL: 86400s
+2026-07-27 03:57:13,078 - main - INFO - Receive AskProductAIAssistant product_id=HQTGWGPNH4 question_sha256=4b6978e7fc6ba60a question_length=70
+2026-07-27 03:57:13,198 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "HQTGWGPNH4"
+name: "The Comet Book"
+description: "A 16th-century treatise on comets, created anonymously in Flanders (now northern France) and now held at the Universitätsbibliothek Kassel. Commonly known as The Comet Book (or Kometenbuch in German), its full title translates as \"Comets and their General and Particular Meanings, According to Ptolomeé, Albumasar, Haly, Aliquind and other Astrologers\". The image is from https://publicdomainreview.org/collection/the-comet-book, made available by the Universitätsbibliothek Kassel under a CC-BY SA 4.0 license (https://creativecommons.org/licenses/by-sa/4.0/)"
+picture: "TheCometBook.jpg"
+price_usd {
+  currency_code: "USD"
+  nanos: 990000000
+}
+categories: "books"
+'
+2026-07-27 03:57:13,329 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:57:13,990 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1702 output_tokens=38 total_tokens=1740 latency_ms=613.03
+2026-07-27 03:57:13,995 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:15,581 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1749 output_tokens=133 total_tokens=1882 latency_ms=1550.22
+2026-07-27 03:57:15,590 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:15,591 - main - INFO - Grounded answer approved for product_id:HQTGWGPNH4 judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=3
+2026-07-27 03:57:15,594 - main - INFO - AI_OUTCOME product_id=HQTGWGPNH4 stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:57:15,596 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:57:15,598 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:57:15,605 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:57:15,609 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=113096c4399a1331cc21995d08f44fa2 redis_keys=product_reviews:llm_trace:113096c4399a1331cc21995d08f44fa2,trace:113096c4399a1331cc21995d08f44fa2 ttl_seconds=86400
+2026-07-27 03:57:15,612 - guardrails.cache - INFO - [CACHE] Save success! Key: c226e490a49992fb00bfc4abf7d5b3acf17d36da4d66cdb9efe8dba2158a73b6, TTL: 86400s
+2026-07-27 03:57:15,663 - main - INFO - Receive AskProductAIAssistant product_id=9SIQT8TOJO question_sha256=18ef1ad502f82a2b question_length=59
+2026-07-27 03:57:15,677 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "9SIQT8TOJO"
+name: "Optical Tube Assembly"
+description: "Capturing impressive deep-sky astroimages is easier than ever with Rowe-Ackermann Schmidt Astrograph (RASA) V2, the perfect companion to today\'s top DSLR or astronomical CCD cameras. This fast, wide-field f/2.2 system allows for shorter exposure times compared to traditional f/10 astroimaging, without sacrificing resolution. Because shorter sub-exposure times are possible, your equatorial mount won\'t need to accurately track over extended periods. The short focal length also lessens equatorial tracking demands. In many cases, autoguiding will not be required."
+picture: "OpticalTubeAssembly.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 3599
+}
+categories: "accessories"
+categories: "telescopes"
+categories: "assembly"
+'
+2026-07-27 03:57:15,683 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:57:16,513 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1697 output_tokens=70 total_tokens=1767 latency_ms=817.50
+2026-07-27 03:57:16,516 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:17,865 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1776 output_tokens=108 total_tokens=1884 latency_ms=1334.75
+2026-07-27 03:57:17,868 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:17,868 - main - INFO - Grounded answer approved for product_id:9SIQT8TOJO judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=1
+2026-07-27 03:57:17,869 - main - INFO - AI_OUTCOME product_id=9SIQT8TOJO stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:57:17,870 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:57:17,871 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:57:17,871 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:57:17,873 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=c86102edba80dfa04a13f2fc5af826fe redis_keys=product_reviews:llm_trace:c86102edba80dfa04a13f2fc5af826fe,trace:c86102edba80dfa04a13f2fc5af826fe ttl_seconds=86400
+2026-07-27 03:57:17,874 - guardrails.cache - INFO - [CACHE] Save success! Key: 3f0f45734d901a1412c564caa2ea0b4ad073398669868f82b35be0827bc5aa44, TTL: 86400s
+2026-07-27 03:57:18,072 - main - INFO - Receive AskProductAIAssistant product_id=0PUK6V6EV0 question_sha256=d807b02b098640bb question_length=61
+2026-07-27 03:57:18,299 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "0PUK6V6EV0"
+name: "Solar System Color Imager"
+description: "You have your new telescope and have observed Saturn and Jupiter. Now you\'re ready to take the next step and start imaging them. But where do you begin? The NexImage 10 Solar System Imager is the perfect solution."
+picture: "SolarSystemColorImager.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 175
+}
+categories: "accessories"
+categories: "telescopes"
+'
+2026-07-27 03:57:18,309 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:57:18,877 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1610 output_tokens=19 total_tokens=1629 latency_ms=544.79
+2026-07-27 03:57:18,886 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:20,348 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1640 output_tokens=126 total_tokens=1766 latency_ms=1450.59
+2026-07-27 03:57:20,353 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:20,354 - main - INFO - Grounded answer approved for product_id:0PUK6V6EV0 judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=1
+2026-07-27 03:57:20,356 - main - INFO - AI_OUTCOME product_id=0PUK6V6EV0 stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:57:20,357 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:57:20,358 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:57:20,359 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:57:20,361 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=c718df37f6a22b77b0fe10876d531c31 redis_keys=product_reviews:llm_trace:c718df37f6a22b77b0fe10876d531c31,trace:c718df37f6a22b77b0fe10876d531c31 ttl_seconds=86400
+2026-07-27 03:57:20,363 - guardrails.cache - INFO - [CACHE] Save success! Key: 40a963df47d1d0c4d4dc8374b2b3a54879f7354a7c3527ca88cba66bff77c384, TTL: 86400s
+2026-07-27 03:57:20,414 - main - INFO - Receive AskProductAIAssistant product_id=L9ECAV7KIM question_sha256=aab97bceffb8a1d2 question_length=53
+2026-07-27 03:57:20,429 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "L9ECAV7KIM"
+name: "Lens Cleaning Kit"
+description: "Wipe away dust, dirt, fingerprints and other particles on your lenses to see clearly with the Lens Cleaning Kit. This cleaning kit works on all glass and optical surfaces, including telescopes, binoculars, spotting scopes, monoculars, microscopes, and even your camera lenses, computer screens, and mobile devices.  The kit comes complete with a retractable lens brush to remove dust particles and dirt and two options to clean smudges and fingerprints off of your optics, pre-moistened lens wipes and a bottled lens cleaning fluid with soft cloth."
+picture: "LensCleaningKit.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 21
+  nanos: 950000000
+}
+categories: "accessories"
+'
+2026-07-27 03:57:20,433 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:57:21,175 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1685 output_tokens=51 total_tokens=1736 latency_ms=731.43
+2026-07-27 03:57:21,179 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:22,655 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1746 output_tokens=137 total_tokens=1883 latency_ms=1461.65
+2026-07-27 03:57:22,664 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:22,665 - main - INFO - Grounded answer approved for product_id:L9ECAV7KIM judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=1
+2026-07-27 03:57:22,666 - main - INFO - AI_OUTCOME product_id=L9ECAV7KIM stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:57:22,669 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:57:22,671 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:57:22,672 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:57:22,675 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=2018f450cced39ac068fc65d52d42d89 redis_keys=product_reviews:llm_trace:2018f450cced39ac068fc65d52d42d89,trace:2018f450cced39ac068fc65d52d42d89 ttl_seconds=86400
+2026-07-27 03:57:22,678 - guardrails.cache - INFO - [CACHE] Save success! Key: 1ee543ef290e4d832a8062c8a4debc2f5e80e1d6000c2e879e709f0e31510f21, TTL: 86400s
+2026-07-27 03:57:22,978 - main - INFO - Receive AskProductAIAssistant product_id=L9ECAV7KIM question_sha256=8904c9559bca07b3 question_length=51
+2026-07-27 03:57:22,995 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "L9ECAV7KIM"
+name: "Lens Cleaning Kit"
+description: "Wipe away dust, dirt, fingerprints and other particles on your lenses to see clearly with the Lens Cleaning Kit. This cleaning kit works on all glass and optical surfaces, including telescopes, binoculars, spotting scopes, monoculars, microscopes, and even your camera lenses, computer screens, and mobile devices.  The kit comes complete with a retractable lens brush to remove dust particles and dirt and two options to clean smudges and fingerprints off of your optics, pre-moistened lens wipes and a bottled lens cleaning fluid with soft cloth."
+picture: "LensCleaningKit.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 21
+  nanos: 950000000
+}
+categories: "accessories"
+'
+2026-07-27 03:57:23,000 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:57:23,936 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1682 output_tokens=53 total_tokens=1735 latency_ms=926.96
+2026-07-27 03:57:23,942 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:26,805 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1745 output_tokens=377 total_tokens=2122 latency_ms=2849.53
+2026-07-27 03:57:26,810 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:26,810 - main - INFO - Grounded answer approved for product_id:L9ECAV7KIM judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=4
+2026-07-27 03:57:26,811 - main - INFO - AI_OUTCOME product_id=L9ECAV7KIM stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:57:26,814 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:57:26,815 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:57:26,815 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:57:26,819 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=2f8fcb65f22ac9b73eb219337aa191e2 redis_keys=product_reviews:llm_trace:2f8fcb65f22ac9b73eb219337aa191e2,trace:2f8fcb65f22ac9b73eb219337aa191e2 ttl_seconds=86400
+2026-07-27 03:57:26,821 - guardrails.cache - INFO - [CACHE] Save success! Key: 0c4ddeb2eb834b0143b9a49cd055f2accfb442841053a11a35507c65a4751228, TTL: 86400s
+2026-07-27 03:57:26,874 - main - INFO - Receive AskProductAIAssistant product_id=L9ECAV7KIM question_sha256=766884eaea963734 question_length=29
+2026-07-27 03:57:26,887 - main - INFO - AI_OUTCOME product_id=L9ECAV7KIM stage=deterministic_rating outcome=answered
+2026-07-27 03:57:26,888 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:57:26,890 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=b3880eef58c7b1bf9065fc72b2807982 redis_keys=product_reviews:llm_trace:b3880eef58c7b1bf9065fc72b2807982,trace:b3880eef58c7b1bf9065fc72b2807982 ttl_seconds=86400
+2026-07-27 03:57:27,066 - main - INFO - Receive AskProductAIAssistant product_id=LS4PSXUNUM question_sha256=81b1f5405f47f24e question_length=60
+2026-07-27 03:57:27,136 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "LS4PSXUNUM"
+name: "Red Flashlight"
+description: "This 3-in-1 device features a 3-mode red flashlight, a hand warmer, and a portable power bank for recharging your personal electronics on the go. Whether you use it to light the way at an techx star party, a night walk, or wildlife research, ThermoTorch 3 Astro Red\'s rugged, IPX4-rated design will withstand your everyday activities."
+picture: "RedFlashlight.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 57
+  nanos: 80000000
+}
+categories: "accessories"
+categories: "flashlights"
+'
+2026-07-27 03:57:27,141 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:57:28,056 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1664 output_tokens=96 total_tokens=1760 latency_ms=905.86
+2026-07-27 03:57:28,059 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:30,639 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1775 output_tokens=318 total_tokens=2093 latency_ms=2565.08
+2026-07-27 03:57:30,645 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:30,646 - main - INFO - Grounded answer approved for product_id:LS4PSXUNUM judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=6
+2026-07-27 03:57:30,648 - main - INFO - AI_OUTCOME product_id=LS4PSXUNUM stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:57:30,651 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:57:30,656 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:57:30,657 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:57:30,664 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=54e058b7e5e2f387f839a5685a101f54 redis_keys=product_reviews:llm_trace:54e058b7e5e2f387f839a5685a101f54,trace:54e058b7e5e2f387f839a5685a101f54 ttl_seconds=86400
+2026-07-27 03:57:30,688 - guardrails.cache - INFO - [CACHE] Save success! Key: 161d41619a52d147dae4f0503c8cd5aae602c9edf75ca1c0923f1a445b72427a, TTL: 86400s
+2026-07-27 03:57:30,702 - main - INFO - Receive AskProductAIAssistant product_id=0PUK6V6EV0 question_sha256=876ac31426816efa question_length=43
+2026-07-27 03:57:30,717 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "0PUK6V6EV0"
+name: "Solar System Color Imager"
+description: "You have your new telescope and have observed Saturn and Jupiter. Now you\'re ready to take the next step and start imaging them. But where do you begin? The NexImage 10 Solar System Imager is the perfect solution."
+picture: "SolarSystemColorImager.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 175
+}
+categories: "accessories"
+categories: "telescopes"
+'
+2026-07-27 03:57:30,804 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:57:31,307 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1607 output_tokens=4 total_tokens=1611 latency_ms=491.87
+2026-07-27 03:57:31,310 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:31,848 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1699 output_tokens=4 total_tokens=1703 latency_ms=536.49
+2026-07-27 03:57:31,856 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:31,857 - main - INFO - AI_OUTCOME product_id=0PUK6V6EV0 stage=candidate_semantic_retry outcome=no_info
+2026-07-27 03:57:31,859 - main - INFO - AI_OUTCOME product_id=0PUK6V6EV0 stage=runtime_judge outcome=skipped provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:57:31,861 - main - INFO - Returning AI assistant response class=No information in reviews.
+2026-07-27 03:57:31,863 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:57:31,870 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=78f936fc57df9c0f2b0084c552172f63 redis_keys=product_reviews:llm_trace:78f936fc57df9c0f2b0084c552172f63,trace:78f936fc57df9c0f2b0084c552172f63 ttl_seconds=86400
+2026-07-27 03:57:31,932 - main - INFO - Receive AskProductAIAssistant product_id=LS4PSXUNUM question_sha256=76fe65715f7cb0ec question_length=42
+2026-07-27 03:57:31,946 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "LS4PSXUNUM"
+name: "Red Flashlight"
+description: "This 3-in-1 device features a 3-mode red flashlight, a hand warmer, and a portable power bank for recharging your personal electronics on the go. Whether you use it to light the way at an techx star party, a night walk, or wildlife research, ThermoTorch 3 Astro Red\'s rugged, IPX4-rated design will withstand your everyday activities."
+picture: "RedFlashlight.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 57
+  nanos: 80000000
+}
+categories: "accessories"
+categories: "flashlights"
+'
+2026-07-27 03:57:31,951 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:57:32,541 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1659 output_tokens=6 total_tokens=1665 latency_ms=582.71
+2026-07-27 03:57:32,543 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:33,058 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1751 output_tokens=6 total_tokens=1757 latency_ms=513.79
+2026-07-27 03:57:33,060 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:33,061 - main - INFO - AI_OUTCOME product_id=LS4PSXUNUM stage=candidate_semantic_retry outcome=no_info
+2026-07-27 03:57:33,062 - main - INFO - AI_OUTCOME product_id=LS4PSXUNUM stage=runtime_judge outcome=skipped provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:57:33,062 - main - INFO - Returning AI assistant response class=No information in reviews.
+2026-07-27 03:57:33,063 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:57:33,065 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=4d6db56555358b31cd8486a5d1a19785 redis_keys=product_reviews:llm_trace:4d6db56555358b31cd8486a5d1a19785,trace:4d6db56555358b31cd8486a5d1a19785 ttl_seconds=86400
+2026-07-27 03:57:33,164 - main - INFO - Receive AskProductAIAssistant product_id=HQTGWGPNH4 question_sha256=1597c894d5db4840 question_length=38
+2026-07-27 03:57:33,177 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "HQTGWGPNH4"
+name: "The Comet Book"
+description: "A 16th-century treatise on comets, created anonymously in Flanders (now northern France) and now held at the Universitätsbibliothek Kassel. Commonly known as The Comet Book (or Kometenbuch in German), its full title translates as \"Comets and their General and Particular Meanings, According to Ptolomeé, Albumasar, Haly, Aliquind and other Astrologers\". The image is from https://publicdomainreview.org/collection/the-comet-book, made available by the Universitätsbibliothek Kassel under a CC-BY SA 4.0 license (https://creativecommons.org/licenses/by-sa/4.0/)"
+picture: "TheCometBook.jpg"
+price_usd {
+  currency_code: "USD"
+  nanos: 990000000
+}
+categories: "books"
+'
+2026-07-27 03:57:33,186 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:57:33,693 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1699 output_tokens=6 total_tokens=1705 latency_ms=497.43
+2026-07-27 03:57:33,696 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:34,306 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1791 output_tokens=6 total_tokens=1797 latency_ms=608.72
+2026-07-27 03:57:34,350 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:34,352 - main - INFO - AI_OUTCOME product_id=HQTGWGPNH4 stage=candidate_semantic_retry outcome=no_info
+2026-07-27 03:57:34,353 - main - INFO - AI_OUTCOME product_id=HQTGWGPNH4 stage=runtime_judge outcome=skipped provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:57:34,355 - main - INFO - Returning AI assistant response class=No information in reviews.
+2026-07-27 03:57:34,356 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:57:34,358 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=c3e4ff214e2675ec7a3150b6983cb9a2 redis_keys=product_reviews:llm_trace:c3e4ff214e2675ec7a3150b6983cb9a2,trace:c3e4ff214e2675ec7a3150b6983cb9a2 ttl_seconds=86400
+2026-07-27 03:57:34,413 - main - INFO - Receive AskProductAIAssistant product_id=6E92ZMYYFZ question_sha256=3136e23c14b31e86 question_length=49
+2026-07-27 03:57:34,428 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "6E92ZMYYFZ"
+name: "Solar Filter"
+description: "Enhance your viewing experience with EclipSmart Solar Filter for 8\" telescopes. With two Velcro straps and four self-adhesive Velcro pads for added safety, you can be assured that the solar filter cannot be accidentally knocked off and will provide Solar Safe, ISO compliant viewing."
+picture: "SolarFilter.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 69
+  nanos: 950000000
+}
+categories: "accessories"
+categories: "telescopes"
+'
+2026-07-27 03:57:34,434 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:57:34,971 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1637 output_tokens=4 total_tokens=1641 latency_ms=526.94
+2026-07-27 03:57:34,974 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:35,609 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1729 output_tokens=4 total_tokens=1733 latency_ms=634.28
+2026-07-27 03:57:35,613 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:35,613 - main - INFO - AI_OUTCOME product_id=6E92ZMYYFZ stage=candidate_semantic_retry outcome=no_info
+2026-07-27 03:57:35,614 - main - INFO - AI_OUTCOME product_id=6E92ZMYYFZ stage=runtime_judge outcome=skipped provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:57:35,615 - main - INFO - Returning AI assistant response class=No information in reviews.
+2026-07-27 03:57:35,616 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:57:35,620 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=08e7372d4bed86ae5d823350ade5cc4b redis_keys=product_reviews:llm_trace:08e7372d4bed86ae5d823350ade5cc4b,trace:08e7372d4bed86ae5d823350ade5cc4b ttl_seconds=86400
+2026-07-27 03:57:35,677 - main - INFO - Receive AskProductAIAssistant product_id=OLJCESPC7Z question_sha256=c90e224775dacfef question_length=48
+2026-07-27 03:57:35,705 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "OLJCESPC7Z"
+name: "National Park Foundation Explorascope"
+description: "The National Park Foundation\'s (NPF) Explorascope 60AZ is a manual alt-azimuth, refractor telescope perfect for celestial viewing on the go. The NPF Explorascope 60 can view the planets, moon, star clusters and brighter deep sky objects like the Orion Nebula and Andromeda Galaxy."
+picture: "NationalParkFoundationExplorascope.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 101
+  nanos: 960000000
+}
+categories: "telescopes"
+'
+2026-07-27 03:57:35,723 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:57:36,210 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1653 output_tokens=4 total_tokens=1657 latency_ms=475.81
+2026-07-27 03:57:36,215 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:36,220 - main - INFO - AI_OUTCOME product_id=OLJCESPC7Z stage=runtime_judge outcome=skipped provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:57:36,229 - main - INFO - Returning AI assistant response class=No information in reviews.
+2026-07-27 03:57:36,232 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:57:36,237 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=6edeb45ce4996735f1b4e4244b8b3feb redis_keys=product_reviews:llm_trace:6edeb45ce4996735f1b4e4244b8b3feb,trace:6edeb45ce4996735f1b4e4244b8b3feb ttl_seconds=86400
+2026-07-27 03:57:36,309 - main - INFO - Receive AskProductAIAssistant product_id=9SIQT8TOJO question_sha256=515876eda069b514 question_length=60
+2026-07-27 03:57:36,341 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "9SIQT8TOJO"
+name: "Optical Tube Assembly"
+description: "Capturing impressive deep-sky astroimages is easier than ever with Rowe-Ackermann Schmidt Astrograph (RASA) V2, the perfect companion to today\'s top DSLR or astronomical CCD cameras. This fast, wide-field f/2.2 system allows for shorter exposure times compared to traditional f/10 astroimaging, without sacrificing resolution. Because shorter sub-exposure times are possible, your equatorial mount won\'t need to accurately track over extended periods. The short focal length also lessens equatorial tracking demands. In many cases, autoguiding will not be required."
+picture: "OpticalTubeAssembly.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 3599
+}
+categories: "accessories"
+categories: "telescopes"
+categories: "assembly"
+'
+2026-07-27 03:57:36,351 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:57:36,946 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1699 output_tokens=4 total_tokens=1703 latency_ms=570.98
+2026-07-27 03:57:36,950 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:37,482 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1791 output_tokens=4 total_tokens=1795 latency_ms=530.82
+2026-07-27 03:57:37,487 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:37,488 - main - INFO - AI_OUTCOME product_id=9SIQT8TOJO stage=candidate_semantic_retry outcome=no_info
+2026-07-27 03:57:37,490 - main - INFO - AI_OUTCOME product_id=9SIQT8TOJO stage=runtime_judge outcome=skipped provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:57:37,491 - main - INFO - Returning AI assistant response class=No information in reviews.
+2026-07-27 03:57:37,493 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:57:37,500 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=d90384f0be3ddbe605b9490d6cf222e2 redis_keys=product_reviews:llm_trace:d90384f0be3ddbe605b9490d6cf222e2,trace:d90384f0be3ddbe605b9490d6cf222e2 ttl_seconds=86400
+2026-07-27 03:57:37,556 - main - INFO - Receive AskProductAIAssistant product_id=6E92ZMYYFZ question_sha256=f8db9a6dab63d061 question_length=47
+2026-07-27 03:57:37,584 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "6E92ZMYYFZ"
+name: "Solar Filter"
+description: "Enhance your viewing experience with EclipSmart Solar Filter for 8\" telescopes. With two Velcro straps and four self-adhesive Velcro pads for added safety, you can be assured that the solar filter cannot be accidentally knocked off and will provide Solar Safe, ISO compliant viewing."
+picture: "SolarFilter.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 69
+  nanos: 950000000
+}
+categories: "accessories"
+categories: "telescopes"
+'
+2026-07-27 03:57:37,589 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:57:38,420 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1636 output_tokens=52 total_tokens=1688 latency_ms=818.52
+2026-07-27 03:57:38,427 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:40,107 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1698 output_tokens=158 total_tokens=1856 latency_ms=1666.07
+2026-07-27 03:57:40,120 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:40,126 - main - INFO - Grounded answer approved for product_id:6E92ZMYYFZ judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=1
+2026-07-27 03:57:40,135 - main - INFO - AI_OUTCOME product_id=6E92ZMYYFZ stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:57:40,138 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:57:40,138 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:57:40,139 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:57:40,143 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=4a21a66c1bb10fdc866abd12a9cf3db6 redis_keys=product_reviews:llm_trace:4a21a66c1bb10fdc866abd12a9cf3db6,trace:4a21a66c1bb10fdc866abd12a9cf3db6 ttl_seconds=86400
+2026-07-27 03:57:40,145 - guardrails.cache - INFO - [CACHE] Save success! Key: 35ba6bdc26ee6ce66cb918f7b6ae96cc71bf09eaf13b7fffd68b722f95f8c0b5, TTL: 86400s
+2026-07-27 03:57:40,201 - main - INFO - Receive AskProductAIAssistant product_id=HQTGWGPNH4 question_sha256=32f195b657332aab question_length=73
+2026-07-27 03:57:40,216 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "HQTGWGPNH4"
+name: "The Comet Book"
+description: "A 16th-century treatise on comets, created anonymously in Flanders (now northern France) and now held at the Universitätsbibliothek Kassel. Commonly known as The Comet Book (or Kometenbuch in German), its full title translates as \"Comets and their General and Particular Meanings, According to Ptolomeé, Albumasar, Haly, Aliquind and other Astrologers\". The image is from https://publicdomainreview.org/collection/the-comet-book, made available by the Universitätsbibliothek Kassel under a CC-BY SA 4.0 license (https://creativecommons.org/licenses/by-sa/4.0/)"
+picture: "TheCometBook.jpg"
+price_usd {
+  currency_code: "USD"
+  nanos: 990000000
+}
+categories: "books"
+'
+2026-07-27 03:57:40,226 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:57:40,994 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1704 output_tokens=33 total_tokens=1737 latency_ms=749.49
+2026-07-27 03:57:40,998 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:43,270 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1746 output_tokens=75 total_tokens=1821 latency_ms=2259.75
+2026-07-27 03:57:43,278 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:43,279 - main - INFO - Grounded answer approved for product_id:HQTGWGPNH4 judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=1
+2026-07-27 03:57:43,280 - main - INFO - AI_OUTCOME product_id=HQTGWGPNH4 stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:57:43,283 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:57:43,285 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:57:43,288 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:57:43,294 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=60ad631a575e316e1a95822aa27a0c76 redis_keys=product_reviews:llm_trace:60ad631a575e316e1a95822aa27a0c76,trace:60ad631a575e316e1a95822aa27a0c76 ttl_seconds=86400
+2026-07-27 03:57:43,297 - guardrails.cache - INFO - [CACHE] Save success! Key: 41c85a2918a4adb63ae7c110662556291d5c5258d92fa6bbf49a7ebcf5a568c9, TTL: 86400s
+2026-07-27 03:57:43,440 - main - INFO - Receive AskProductAIAssistant product_id=L9ECAV7KIM question_sha256=b7f24212322c643a question_length=47
+2026-07-27 03:57:43,518 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "L9ECAV7KIM"
+name: "Lens Cleaning Kit"
+description: "Wipe away dust, dirt, fingerprints and other particles on your lenses to see clearly with the Lens Cleaning Kit. This cleaning kit works on all glass and optical surfaces, including telescopes, binoculars, spotting scopes, monoculars, microscopes, and even your camera lenses, computer screens, and mobile devices.  The kit comes complete with a retractable lens brush to remove dust particles and dirt and two options to clean smudges and fingerprints off of your optics, pre-moistened lens wipes and a bottled lens cleaning fluid with soft cloth."
+picture: "LensCleaningKit.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 21
+  nanos: 950000000
+}
+categories: "accessories"
+'
+2026-07-27 03:57:43,551 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:57:44,514 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1683 output_tokens=82 total_tokens=1765 latency_ms=948.39
+2026-07-27 03:57:44,528 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:46,912 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1775 output_tokens=357 total_tokens=2132 latency_ms=2370.04
+2026-07-27 03:57:46,919 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:46,926 - main - INFO - Grounded answer approved for product_id:L9ECAV7KIM judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=3
+2026-07-27 03:57:46,931 - main - INFO - AI_OUTCOME product_id=L9ECAV7KIM stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:57:46,933 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:57:46,937 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:57:46,942 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:57:46,946 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=8354db40e615654275dfc2b16e10849c redis_keys=product_reviews:llm_trace:8354db40e615654275dfc2b16e10849c,trace:8354db40e615654275dfc2b16e10849c ttl_seconds=86400
+2026-07-27 03:57:46,954 - guardrails.cache - INFO - [CACHE] Save success! Key: 0d4666de734b293d50d6f221993e63d8d067510ab5e20b40f2f8892da32ddb09, TTL: 86400s
+2026-07-27 03:57:47,013 - main - INFO - Receive AskProductAIAssistant product_id=L9ECAV7KIM question_sha256=1970aae86c830405 question_length=44
+2026-07-27 03:57:47,046 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "L9ECAV7KIM"
+name: "Lens Cleaning Kit"
+description: "Wipe away dust, dirt, fingerprints and other particles on your lenses to see clearly with the Lens Cleaning Kit. This cleaning kit works on all glass and optical surfaces, including telescopes, binoculars, spotting scopes, monoculars, microscopes, and even your camera lenses, computer screens, and mobile devices.  The kit comes complete with a retractable lens brush to remove dust particles and dirt and two options to clean smudges and fingerprints off of your optics, pre-moistened lens wipes and a bottled lens cleaning fluid with soft cloth."
+picture: "LensCleaningKit.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 21
+  nanos: 950000000
+}
+categories: "accessories"
+'
+2026-07-27 03:57:47,054 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:57:47,850 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1680 output_tokens=30 total_tokens=1710 latency_ms=780.47
+2026-07-27 03:57:47,855 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:49,327 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1720 output_tokens=132 total_tokens=1852 latency_ms=1458.17
+2026-07-27 03:57:49,350 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:49,359 - main - INFO - Grounded answer approved for product_id:L9ECAV7KIM judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=1
+2026-07-27 03:57:49,366 - main - INFO - AI_OUTCOME product_id=L9ECAV7KIM stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:57:49,368 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:57:49,372 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:57:49,378 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:57:49,381 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=d257c46e0e84c22ea08c1086e588bc5e redis_keys=product_reviews:llm_trace:d257c46e0e84c22ea08c1086e588bc5e,trace:d257c46e0e84c22ea08c1086e588bc5e ttl_seconds=86400
+2026-07-27 03:57:49,387 - guardrails.cache - INFO - [CACHE] Save success! Key: 9d9347f22cab244c2e69bca3b7a49241ba36df4fdfdc990b56ef302940975c18, TTL: 86400s
+2026-07-27 03:57:49,448 - main - INFO - Receive AskProductAIAssistant product_id=L9ECAV7KIM question_sha256=e4710a1fb9795d32 question_length=62
+2026-07-27 03:57:49,464 - main - INFO - AI_OUTCOME product_id=L9ECAV7KIM stage=deterministic_rating outcome=answered
+2026-07-27 03:57:49,464 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:57:49,468 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=2d5c314376e7c79eebee38fd1a6047a8 redis_keys=product_reviews:llm_trace:2d5c314376e7c79eebee38fd1a6047a8,trace:2d5c314376e7c79eebee38fd1a6047a8 ttl_seconds=86400
+2026-07-27 03:57:49,521 - main - INFO - Receive AskProductAIAssistant product_id=L9ECAV7KIM question_sha256=f3f131240efce0b2 question_length=67
+2026-07-27 03:57:49,622 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "L9ECAV7KIM"
+name: "Lens Cleaning Kit"
+description: "Wipe away dust, dirt, fingerprints and other particles on your lenses to see clearly with the Lens Cleaning Kit. This cleaning kit works on all glass and optical surfaces, including telescopes, binoculars, spotting scopes, monoculars, microscopes, and even your camera lenses, computer screens, and mobile devices.  The kit comes complete with a retractable lens brush to remove dust particles and dirt and two options to clean smudges and fingerprints off of your optics, pre-moistened lens wipes and a bottled lens cleaning fluid with soft cloth."
+picture: "LensCleaningKit.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 21
+  nanos: 950000000
+}
+categories: "accessories"
+'
+2026-07-27 03:57:49,645 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:57:50,196 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1674 output_tokens=4 total_tokens=1678 latency_ms=525.85
+2026-07-27 03:57:50,199 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:50,200 - main - INFO - AI_OUTCOME product_id=L9ECAV7KIM stage=runtime_judge outcome=skipped provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:57:50,200 - main - INFO - Returning AI assistant response class=No information in reviews.
+2026-07-27 03:57:50,201 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:57:50,205 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=d039a51ae83ba5f84718274553d3fdcc redis_keys=product_reviews:llm_trace:d039a51ae83ba5f84718274553d3fdcc,trace:d039a51ae83ba5f84718274553d3fdcc ttl_seconds=86400
+2026-07-27 03:57:50,256 - main - INFO - Receive AskProductAIAssistant product_id=L9ECAV7KIM question_sha256=3f08782f8b39757b question_length=78
+2026-07-27 03:57:50,269 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "L9ECAV7KIM"
+name: "Lens Cleaning Kit"
+description: "Wipe away dust, dirt, fingerprints and other particles on your lenses to see clearly with the Lens Cleaning Kit. This cleaning kit works on all glass and optical surfaces, including telescopes, binoculars, spotting scopes, monoculars, microscopes, and even your camera lenses, computer screens, and mobile devices.  The kit comes complete with a retractable lens brush to remove dust particles and dirt and two options to clean smudges and fingerprints off of your optics, pre-moistened lens wipes and a bottled lens cleaning fluid with soft cloth."
+picture: "LensCleaningKit.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 21
+  nanos: 950000000
+}
+categories: "accessories"
+'
+2026-07-27 03:57:50,275 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:57:50,783 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1675 output_tokens=4 total_tokens=1679 latency_ms=498.43
+2026-07-27 03:57:50,785 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:51,283 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1767 output_tokens=4 total_tokens=1771 latency_ms=496.00
+2026-07-27 03:57:51,285 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:51,286 - main - INFO - AI_OUTCOME product_id=L9ECAV7KIM stage=candidate_semantic_retry outcome=no_info
+2026-07-27 03:57:51,288 - main - INFO - AI_OUTCOME product_id=L9ECAV7KIM stage=runtime_judge outcome=skipped provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:57:51,295 - main - INFO - Returning AI assistant response class=No information in reviews.
+2026-07-27 03:57:51,296 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:57:51,299 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=9ecb7e37f065da4302e766acb1eb8ad0 redis_keys=product_reviews:llm_trace:9ecb7e37f065da4302e766acb1eb8ad0,trace:9ecb7e37f065da4302e766acb1eb8ad0 ttl_seconds=86400
+2026-07-27 03:57:51,393 - main - INFO - Receive AskProductAIAssistant product_id=L9ECAV7KIM question_sha256=a82c123b823a72d0 question_length=75
+2026-07-27 03:57:51,406 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "L9ECAV7KIM"
+name: "Lens Cleaning Kit"
+description: "Wipe away dust, dirt, fingerprints and other particles on your lenses to see clearly with the Lens Cleaning Kit. This cleaning kit works on all glass and optical surfaces, including telescopes, binoculars, spotting scopes, monoculars, microscopes, and even your camera lenses, computer screens, and mobile devices.  The kit comes complete with a retractable lens brush to remove dust particles and dirt and two options to clean smudges and fingerprints off of your optics, pre-moistened lens wipes and a bottled lens cleaning fluid with soft cloth."
+picture: "LensCleaningKit.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 21
+  nanos: 950000000
+}
+categories: "accessories"
+'
+2026-07-27 03:57:51,411 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:57:52,019 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1675 output_tokens=41 total_tokens=1716 latency_ms=593.54
+2026-07-27 03:57:52,021 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:54,912 - guardrails.evaluator - INFO - AI_USAGE role=judge provider=bedrock model=amazon.nova-micro-v1:0 input_tokens=1726 output_tokens=102 total_tokens=1828 latency_ms=1993.37
+2026-07-27 03:57:54,918 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:54,919 - main - INFO - Grounded answer approved for product_id:L9ECAV7KIM judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 claims=1
+2026-07-27 03:57:54,921 - main - INFO - AI_OUTCOME product_id=L9ECAV7KIM stage=runtime_judge outcome=approved provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:57:54,923 - main - INFO - Returning AI assistant response class=grounded_answer
+2026-07-27 03:57:54,926 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:57:54,926 - main - ERROR - Failed to write audit log to RDS: permission denied for sequence fidelity_audit_id_seq
+
+2026-07-27 03:57:54,934 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=4bd787b2dbaf2cd75d583611744943e6 redis_keys=product_reviews:llm_trace:4bd787b2dbaf2cd75d583611744943e6,trace:4bd787b2dbaf2cd75d583611744943e6 ttl_seconds=86400
+2026-07-27 03:57:54,936 - guardrails.cache - INFO - [CACHE] Save success! Key: c6a9af69ebf1abaf1eeae9df1b3586a7068e77f506ebe3cd2be182a18bc23707, TTL: 86400s
+2026-07-27 03:57:55,101 - main - INFO - Receive AskProductAIAssistant product_id=L9ECAV7KIM question_sha256=ae7846e653d9f1f4 question_length=107
+2026-07-27 03:57:55,118 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "L9ECAV7KIM"
+name: "Lens Cleaning Kit"
+description: "Wipe away dust, dirt, fingerprints and other particles on your lenses to see clearly with the Lens Cleaning Kit. This cleaning kit works on all glass and optical surfaces, including telescopes, binoculars, spotting scopes, monoculars, microscopes, and even your camera lenses, computer screens, and mobile devices.  The kit comes complete with a retractable lens brush to remove dust particles and dirt and two options to clean smudges and fingerprints off of your optics, pre-moistened lens wipes and a bottled lens cleaning fluid with soft cloth."
+picture: "LensCleaningKit.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 21
+  nanos: 950000000
+}
+categories: "accessories"
+'
+2026-07-27 03:57:55,123 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:57:55,631 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1680 output_tokens=4 total_tokens=1684 latency_ms=497.77
+2026-07-27 03:57:55,634 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:56,165 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1772 output_tokens=6 total_tokens=1778 latency_ms=529.65
+2026-07-27 03:57:56,174 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:56,177 - main - INFO - AI_OUTCOME product_id=L9ECAV7KIM stage=candidate_semantic_retry outcome=no_info
+2026-07-27 03:57:56,180 - main - INFO - AI_OUTCOME product_id=L9ECAV7KIM stage=runtime_judge outcome=skipped provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:57:56,183 - main - INFO - Returning AI assistant response class=No information in reviews.
+2026-07-27 03:57:56,185 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:57:56,191 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=479945128edb2a070dd42b5831fb2944 redis_keys=product_reviews:llm_trace:479945128edb2a070dd42b5831fb2944,trace:479945128edb2a070dd42b5831fb2944 ttl_seconds=86400
+2026-07-27 03:57:56,285 - main - INFO - Receive AskProductAIAssistant product_id=L9ECAV7KIM question_sha256=6a621f0085c5e88a question_length=76
+2026-07-27 03:57:56,347 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "L9ECAV7KIM"
+name: "Lens Cleaning Kit"
+description: "Wipe away dust, dirt, fingerprints and other particles on your lenses to see clearly with the Lens Cleaning Kit. This cleaning kit works on all glass and optical surfaces, including telescopes, binoculars, spotting scopes, monoculars, microscopes, and even your camera lenses, computer screens, and mobile devices.  The kit comes complete with a retractable lens brush to remove dust particles and dirt and two options to clean smudges and fingerprints off of your optics, pre-moistened lens wipes and a bottled lens cleaning fluid with soft cloth."
+picture: "LensCleaningKit.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 21
+  nanos: 950000000
+}
+categories: "accessories"
+'
+2026-07-27 03:57:56,360 - main - INFO - llmInaccurateResponse feature flag: False
+2026-07-27 03:57:57,154 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1675 output_tokens=4 total_tokens=1679 latency_ms=777.04
+2026-07-27 03:57:57,159 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:57,653 - main - INFO - AI_USAGE role=candidate provider=bedrock model=amazon.nova-lite-v1:0 input_tokens=1767 output_tokens=4 total_tokens=1771 latency_ms=492.97
+2026-07-27 03:57:57,658 - guardrails.circuit_breaker - INFO - [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
+2026-07-27 03:57:57,659 - main - INFO - AI_OUTCOME product_id=L9ECAV7KIM stage=candidate_semantic_retry outcome=no_info
+2026-07-27 03:57:57,660 - main - INFO - AI_OUTCOME product_id=L9ECAV7KIM stage=runtime_judge outcome=skipped provider=bedrock model=amazon.nova-micro-v1:0
+2026-07-27 03:57:57,661 - main - INFO - Returning AI assistant response class=No information in reviews.
+2026-07-27 03:57:57,662 - main - INFO - [CACHE] Set trailing metadata cache=miss
+2026-07-27 03:57:57,665 - guardrails.llm_trace - INFO - LLM_TRACE_SAVED trace_id=827792063bcd533b24c2d3499cc03337 redis_keys=product_reviews:llm_trace:827792063bcd533b24c2d3499cc03337,trace:827792063bcd533b24c2d3499cc03337 ttl_seconds=86400

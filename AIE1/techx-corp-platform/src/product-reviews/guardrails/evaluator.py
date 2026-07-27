@@ -359,29 +359,54 @@ def evaluate_summary_fidelity(
                 retries={"max_attempts": 1, "mode": "standard"},
             ),
         )
+        try:
+            response = client.converse(
+                modelId=judge_model,
+                system=[{"text": JUDGE_SYSTEM_PROMPT}],
+                messages=[{"role": "user", "content": [{"text": judge_prompt}]}],
+                inferenceConfig={"temperature": 0.0, "maxTokens": MAX_JUDGE_OUTPUT_TOKENS},
+                toolConfig=JUDGE_TOOL_CONFIG,
+            )
+            latency_ms = (time.perf_counter() - started) * 1000
+            _log_usage("judge", "bedrock", judge_model, response, latency_ms)
+            content_blocks = response["output"]["message"]["content"]
+            tool_payload = next(
+                (
+                    block["toolUse"].get("input")
+                    for block in content_blocks
+                    if isinstance(block, dict)
+                    and isinstance(block.get("toolUse"), dict)
+                    and block["toolUse"].get("name") == JUDGE_TOOL_NAME
+                ),
+                None,
+            )
+            if not isinstance(tool_payload, dict):
+                raise TransientJudgeResponseError("Judge did not return the required structured tool payload.")
+            return _normalize_payload(tool_payload)
+        except Exception as tool_exc:
+            if "ToolUse" not in str(tool_exc) and "tool" not in str(tool_exc).lower():
+                raise
+            logger.warning("Bedrock judge tool mode failed; retrying JSON text mode: %s", tool_exc)
+
+        json_mode_prompt = (
+            judge_prompt
+            + "\n\nTool mode failed. Return only a strict JSON object with keys claims and reason. "
+            "Do not include markdown, prose, or code fences."
+        )
         response = client.converse(
             modelId=judge_model,
             system=[{"text": JUDGE_SYSTEM_PROMPT}],
-            messages=[{"role": "user", "content": [{"text": judge_prompt}]}],
+            messages=[{"role": "user", "content": [{"text": json_mode_prompt}]}],
             inferenceConfig={"temperature": 0.0, "maxTokens": MAX_JUDGE_OUTPUT_TOKENS},
-            toolConfig=JUDGE_TOOL_CONFIG,
         )
         latency_ms = (time.perf_counter() - started) * 1000
         _log_usage("judge", "bedrock", judge_model, response, latency_ms)
-        content_blocks = response["output"]["message"]["content"]
-        tool_payload = next(
-            (
-                block["toolUse"].get("input")
-                for block in content_blocks
-                if isinstance(block, dict)
-                and isinstance(block.get("toolUse"), dict)
-                and block["toolUse"].get("name") == JUDGE_TOOL_NAME
-            ),
-            None,
+        response_text = "".join(
+            block.get("text", "")
+            for block in response["output"]["message"]["content"]
+            if isinstance(block, dict)
         )
-        if not isinstance(tool_payload, dict):
-            raise TransientJudgeResponseError("Judge did not return the required structured tool payload.")
-        return _normalize_payload(tool_payload)
+        return _normalize_payload(_parse_json_payload(response_text))
     else:
         from openai import OpenAI
 
