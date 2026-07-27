@@ -165,6 +165,13 @@ from guardrails.fallback import with_fallback, handle_exception
 from guardrails.evaluator import evaluate_summary_fidelity
 from guardrails.circuit_breaker import circuit_breaker
 from guardrails.tool_validator import validate_tool_arguments
+from guardrails.error_injection import (
+    clear_error_injection,
+    get_injected_error_type,
+    get_injection_status,
+    set_error_injection,
+    VALID_ERROR_TYPES,
+)
 from guardrails.llm_trace import (
     attach_trace_metadata,
     build_runtime_trace_record,
@@ -196,7 +203,18 @@ judge_provider = None
 judge_region = "us-east-1"
 judge_timeout_seconds = 10.0
 llm_timeout_seconds = 10.0
-judge_all_grounded_answers = True
+tracer = trace.get_tracer_provider().get_tracer("product-reviews-service")
+meter = metrics.get_meter_provider().get_meter("product-reviews-service")
+
+class _DummyCounter:
+    def add(self, *args, **kwargs):
+        pass
+
+product_review_svc_metrics = {
+    "app_product_review_counter": _DummyCounter(),
+    "app_ai_assistant_counter": _DummyCounter(),
+    "app_ai_fallback_total": _DummyCounter(),
+}
 
 FALLBACK_SUMMARY_MESSAGE = "The AI is busy right now. Please try again later."
 UNVERIFIED_SUMMARY_MESSAGE = "The summary cannot be verified. Please try again later."
@@ -955,6 +973,46 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                 product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
                 return finalize_response(FALLBACK_SUMMARY_MESSAGE, outcome="fallback", fallback_reason="circuit_breaker_open")
 
+            # --- Error Injection Endpoint hook (Task 3) ---
+            # Ưu tiên trước x-force-llm-error metadata để AIOps có thể
+            # bơm lỗi qua HTTP mà không cần gửi gRPC header.
+            injected_err = get_injected_error_type()
+            if injected_err:
+                logger.warning(
+                    "[ERROR_INJECTION] Active injection error_type=%s for product_id=%s",
+                    injected_err,
+                    request_product_id,
+                )
+                span.set_attribute("app.fallback.triggered", True)
+                span.set_attribute("app.fallback.source", "error_injection")
+                span.set_attribute("app.error_injection.type", injected_err)
+                if injected_err == "circuit_breaker":
+                    # Simulate circuit breaker trip via actual CB record_failure
+                    circuit_breaker.record_failure()
+                    product_review_svc_metrics["app_ai_fallback_total"].add(
+                        1, {"source": "circuit_breaker", "error": "injected"}
+                    )
+                    product_review_svc_metrics["app_ai_assistant_counter"].add(
+                        1, {"product.id": request_product_id}
+                    )
+                    return finalize_response(
+                        FALLBACK_SUMMARY_MESSAGE,
+                        outcome="fallback",
+                        fallback_reason="error_injection_circuit_breaker",
+                    )
+                else:
+                    product_review_svc_metrics["app_ai_fallback_total"].add(
+                        1, {"source": "error_injection", "error": injected_err}
+                    )
+                    product_review_svc_metrics["app_ai_assistant_counter"].add(
+                        1, {"product.id": request_product_id}
+                    )
+                    return finalize_response(
+                        FALLBACK_SUMMARY_MESSAGE,
+                        outcome="fallback",
+                        fallback_reason=f"error_injection_{injected_err}",
+                    )
+
             force_err_code = None
             if context:
                 try:
@@ -1439,6 +1497,10 @@ class LLMTraceHTTPHandler(BaseHTTPRequestHandler):
             self._send_json(200, trace_record)
             return
 
+        if parsed.path == "/inject/error":
+            self._send_json(200, get_injection_status())
+            return
+
         self._send_json(404, {"error": "not_found"})
 
     def do_POST(self):
@@ -1447,6 +1509,37 @@ class LLMTraceHTTPHandler(BaseHTTPRequestHandler):
             return
 
         parsed = urlparse(self.path)
+
+        if parsed.path == "/inject/error":
+            try:
+                payload = self._read_json_body()
+                active = payload.get("active", True)
+                if active is False or str(active).lower() in ("false", "0", "no", "off"):
+                    clear_error_injection()
+                    logger.info("[ERROR_INJECTION] HTTP endpoint: injection cleared.")
+                    self._send_json(200, {"ok": True, "active": False, "error_type": None})
+                else:
+                    error_type = str(payload.get("error_type") or "").strip()
+                    if not error_type:
+                        raise ValueError("error_type is required")
+                    if error_type not in VALID_ERROR_TYPES:
+                        raise ValueError(
+                            f"Invalid error_type '{error_type}'. "
+                            f"Valid: {sorted(VALID_ERROR_TYPES)}"
+                        )
+                    set_error_injection(error_type)
+                    logger.warning(
+                        "[ERROR_INJECTION] HTTP endpoint: injection activated. error_type=%s",
+                        error_type,
+                    )
+                    self._send_json(200, {"ok": True, "active": True, "error_type": error_type})
+            except ValueError as exc:
+                self._send_json(400, {"error": "bad_request", "message": str(exc)})
+            except Exception as exc:
+                logger.exception("[ERROR_INJECTION] HTTP endpoint error: %s", exc)
+                self._send_json(500, {"error": "inject_failed"})
+            return
+
         if parsed.path != "/replay":
             self._send_json(404, {"error": "not_found"})
             return
