@@ -334,11 +334,11 @@ def build_runtime_prompts(request_product_id, question):
     )
     if uses_mock_llm:
         user_prompt = f"Answer the following question about product ID:{request_product_id}: {question}"
-        accurate_prompt = f"Based on the tool results, answer only the aspect asked in the original question about product ID:{request_product_id}. Understand the user's question even when it is not English, but always write the final answer in English. Do not volunteer ratings or negative-review counts unless asked. {strict_grounding_clause} For sparse or rating-only reviews, answer only rating/count questions; otherwise return NO_INFO. For supported normal review questions, provide a useful 2-4 sentence answer with concrete review-backed details."
+        accurate_prompt = f"Based on the tool results, answer only the aspect asked in the original question about product ID:{request_product_id}. Understand the user's question even when it is not English, but always write the final answer in English. Do not volunteer ratings or negative-review counts unless asked. {strict_grounding_clause} For sparse or rating-only reviews, answer only rating/count questions; otherwise return NO_INFO. For supported normal review questions, provide a concise answer in at most 3 sentences with concrete review-backed details."
         inaccurate_prompt = f"Based on the tool results, answer the original question about product ID, but make the answer inaccurate:{request_product_id}. Keep the response concise as a short paragraph of 2-3 sentences."
     else:
         user_prompt = f"Answer the following question about this product: {question}"
-        accurate_prompt = f"Based on the tool results, answer only the aspect asked in the original question about this product. Understand the user's question even when it is not English, but always write the final answer in English. Do not volunteer ratings or negative-review counts unless asked. {strict_grounding_clause} For sparse or rating-only reviews, answer only rating/count questions; otherwise return NO_INFO. For supported normal review questions, provide a useful 2-4 sentence answer with concrete review-backed details."
+        accurate_prompt = f"Based on the tool results, answer only the aspect asked in the original question about this product. Understand the user's question even when it is not English, but always write the final answer in English. Do not volunteer ratings or negative-review counts unless asked. {strict_grounding_clause} For sparse or rating-only reviews, answer only rating/count questions; otherwise return NO_INFO. For supported normal review questions, provide a concise answer in at most 3 sentences with concrete review-backed details."
         inaccurate_prompt = "Based on the tool results, answer the original question about this product, but make the answer inaccurate. Keep the response concise as a short paragraph of 2-3 sentences."
     return user_prompt, accurate_prompt, inaccurate_prompt
 
@@ -353,8 +353,8 @@ def build_system_prompt():
         "[Rating/Score] <value> | [User] <anonymized reviewer id> | [Review Content] <review text>. "
         "Use only these fields as evidence: cite or paraphrase only details present in [Review Content] or product data. "
         "Understand user questions in any language, but always write the final answer in English. "
-        "For supported normal review questions, give a natural, useful 2-4 sentence answer with concrete details from the reviews/product data. "
-        "GROUNDING BOUND: only summarize an aspect if it has Direct Evidence, meaning the aspect is explicitly stated in a review's [Review Content] or in the product data. Do not volunteer 'related' or 'closest' evidence as a substitute answer for an aspect that lacks Direct Evidence. "
+        "For supported normal review questions, give a natural, useful answer in at most 3 concise sentences with concrete details from the reviews/product data. When answering a summary or general review question, structure the response to cover: (1) overall reception/rating, (2) specific praised features with evidence, and (3) any noted limitations — each as a distinct statement so that factual claims can be individually verified. "
+        "GROUNDING BOUND: only summarize an aspect if it has Direct Evidence, meaning the aspect is explicitly stated in a review's [Review Content] or in the product data. Do not volunteer 'related' or 'closest' evidence as a substitute answer for an aspect that lacks Direct Evidence. Never include a feature (e.g., 'lightweight', 'portable', 'durable') unless a review or product description explicitly uses that word or a direct synonym — omit it entirely if the word is not present in the evidence. "
         "If the requested aspect is not directly and explicitly supported by [Review Content] or product data, respond with exactly 'NO_INFO'. "
         "For simple direct questions, be concise but include the key evidence when useful. "
         "If there are zero reviews, or reviews contain only ratings without text, answer only rating/count questions from scores; for descriptive questions return exactly 'NO_INFO'. "
@@ -367,6 +367,7 @@ def build_system_prompt():
         "Vietnamese product-review phrases such as 'sản phẩm này', 'người dùng', 'đánh giá', 'phản hồi', 'bộ vệ sinh ống kính này', or 'ống kính' are in scope. "
         "Answer only the aspect the user asks about; do not add unrelated positive themes from other reviews. "
         "Do not volunteer rating statistics or negative-review counts unless the question asks for them. "
+        "STRICT GROUNDING: Every individual claim in the response must be directly supported by an explicit statement in a [Review Content] or product data. Do not infer, assume, or paraphrase a feature (e.g., 'lightweight', 'portable', 'durable', 'waterproof') unless a reviewer or product description literally uses that word or an unambiguous synonym. If a feature is not explicitly named in the evidence, omit it entirely rather than including it as an unsupported claim. "
         "For sentiment questions, any review with a score below 3 stars counts as a negative review. "
         "STRICT RULES - you MUST follow these without exception:\n"
         "1. If the question is NOT about this product (its info or reviews) (e.g. math, general knowledge, coding, weather, anything unrelated to the product): respond with exactly 'OUT_OF_SCOPE'.\n"
@@ -872,6 +873,7 @@ def build_bedrock_user_prompt(question, product_info_json, safe_reviews_json, ma
         "Answer only from the provided product info and GROUNDED_CONTEXT reviews. "
         "Answer only the aspect explicitly requested by the question. "
         "Do not volunteer rating statistics or statements about negative reviews unless the question asks about ratings or sentiment. "
+        "STRICT GROUNDING: Every individual claim in the response must be directly supported by an explicit statement in a [Review Content] or trusted_product_info. Do not infer, assume, or paraphrase a feature (e.g., 'lightweight', 'portable', 'durable') unless a review or product description explicitly uses that word or an unambiguous synonym. Omit any feature that is not literally stated in the evidence. "
         "For sentiment questions, any review with a score below 3 stars counts as a negative review. "
         "For questions about whether there were any negative reviews, determine the answer from the review scores. If no review is below 3 stars, explicitly answer that there were no negative reviews instead of returning NO_INFO. "
         "If trusted_review_facts.review_count is 0, return NO_INFO for every descriptive question. "
@@ -880,7 +882,7 @@ def build_bedrock_user_prompt(question, product_info_json, safe_reviews_json, ma
         "If the requested aspect has no Direct Evidence in GROUNDED_CONTEXT or trusted_product_info, respond with exactly 'NO_INFO'. "
         "If the question is unrelated to the product, respond with exactly 'OUT_OF_SCOPE'. "
         "Understand user questions in any language, but always write the final answer in English. "
-        "For supported normal review questions, answer naturally in 2-4 concise sentences and include concrete review-backed details such as mentioned strengths, use cases, repeated reviewer themes, or rating patterns when asked. "
+        "For supported normal review questions, answer naturally in at most 3 concise sentences and include concrete review-backed details such as mentioned strengths, use cases, repeated reviewer themes, or rating patterns when asked. When answering a summary or general review question, structure the response to cover distinct points — overall reception, specific praised features with evidence, and any noted limitations — so each factual claim can be individually verified. Never include a feature (e.g., 'lightweight', 'portable', 'durable') unless a [Review Content] or trusted_product_info explicitly uses that word or a direct synonym. "
         "If trusted_review_facts.sparse_evidence is true, do not generalize, infer, or imply features, quality, or reliability beyond what those 1-2 text reviews literally state; never extrapolate one reviewer's experience into a general product trait. "
         "When summarizing repeated themes, say 'reviewers mention' or 'reviews indicate' rather than inventing exact counts unless the count is available in trusted_review_facts. "
         "For direct yes/no questions, answer directly and add the supporting evidence in one short follow-up sentence when useful. "

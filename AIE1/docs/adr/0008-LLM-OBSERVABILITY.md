@@ -75,6 +75,12 @@ Bổ sung một lớp theo dõi (trace layer) thực tế cho `AskProductAIAssis
 - Câu hỏi, review, và câu trả lời raw cố ý không được lưu để bảo mật. Debug cần đối chiếu mã hash.
 
 ### 2.2 Tóm tắt Lược đồ Trace (Trace schema summary)
+
+File minh chứng trace thực tế (smoke-test capture, hai trace: grounded answer + cache-hit cùng câu hỏi):
+```
+AIE1/repro/artifacts/llm_trace_smoketest_20260727T000000Z.json
+```
+
 Ví dụ các trường (fields):
 ```json
 {
