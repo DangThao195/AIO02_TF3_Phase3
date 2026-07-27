@@ -163,3 +163,67 @@ def get_review_version(product_id: str) -> str:
     finally:
         if connection is not None:
             db_pool.putconn(connection)
+
+
+def save_product_summary(product_id: str, summary_text: str, rating_distribution: str = None, review_version: str = None) -> bool:
+    """Lưu hoặc ghi đè bản tóm tắt sản phẩm mới nhất vào bảng reviews.product_summaries (Task 2)."""
+    connection = None
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            query = """
+                INSERT INTO reviews.product_summaries (product_id, summary_text, rating_distribution, review_version, updated_at)
+                VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (product_id)
+                DO UPDATE SET
+                    summary_text = EXCLUDED.summary_text,
+                    rating_distribution = EXCLUDED.rating_distribution,
+                    review_version = EXCLUDED.review_version,
+                    updated_at = CURRENT_TIMESTAMP;
+            """
+            cursor.execute(query, (product_id, summary_text, rating_distribution, review_version))
+        connection.commit()
+        logger.info("[DATABASE] Saved static summary for product_id: %s", product_id)
+        return True
+    except Exception as e:
+        if connection is not None:
+            connection.rollback()
+        logger.error("[DATABASE] Error saving product summary for product_id %s: %s", product_id, e)
+        raise e
+    finally:
+        if connection is not None:
+            db_pool.putconn(connection)
+
+
+def fetch_product_summary_from_db(product_id: str) -> dict | None:
+    """Truy vấn bản tóm tắt tĩnh đã phê duyệt từ bảng reviews.product_summaries (Task 3 / Tầng 2 Fallback)."""
+    connection = None
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            query = """
+                SELECT product_id, summary_text, rating_distribution, review_version, updated_at
+                FROM reviews.product_summaries
+                WHERE product_id = %s
+            """
+            cursor.execute(query, (product_id,))
+            row = cursor.fetchone()
+        connection.commit()
+        if row:
+            return {
+                "product_id": row[0],
+                "summary_text": row[1],
+                "rating_distribution": row[2],
+                "review_version": row[3],
+                "updated_at": row[4],
+            }
+        return None
+    except Exception as e:
+        if connection is not None:
+            connection.rollback()
+        logger.error("[DATABASE] Error fetching product summary for product_id %s: %s", product_id, e)
+        raise e
+    finally:
+        if connection is not None:
+            db_pool.putconn(connection)
+
