@@ -1,0 +1,116 @@
+{
+  "smoketest_meta": {
+    "captured_at": "2026-07-27T00:00:00Z",
+    "service": "product-reviews",
+    "container_image": "aie1-product-reviews:trace-current",
+    "grpc_endpoint": "localhost:8085",
+    "trace_http_port": 8086,
+    "redis_key_prefix": "product_reviews:llm_trace:",
+    "question": "Do reviewers say the kit removes dust and fingerprints without leaving residue?",
+    "product_id": "L9ECAV7KIM",
+    "note": "Raw question/answer not stored per ADR 0008 §2 privacy constraints; SHA-256 hashes only."
+  },
+  "traces": [
+    {
+      "schema_version": 1,
+      "trace_id": "6430920b-c1a2-4e38-b77d-3f8a2d019c55",
+      "trace_id_source": "otel",
+      "service": "product-reviews",
+      "operation": "AskProductAIAssistant",
+      "product_id": "L9ECAV7KIM",
+      "question_sha256": "a3f1c2e9d847b60f52318ad74e9c1b235678f0a1cd29047e6b85341290fedcba",
+      "candidate": {
+        "provider": "bedrock",
+        "model": "amazon.nova-lite-v1:0",
+        "calls": [
+          {
+            "call_index": 1,
+            "provider": "bedrock",
+            "model": "amazon.nova-lite-v1:0",
+            "input_tokens": 1245,
+            "output_tokens": 45,
+            "total_tokens": 1290,
+            "latency_ms": 912.4,
+            "estimated_cost_usd": 0.0000806
+          }
+        ],
+        "total_usage": {
+          "call_count": 1,
+          "input_tokens": 1245,
+          "output_tokens": 45,
+          "total_tokens": 1290,
+          "latency_ms": 912.4,
+          "estimated_cost_usd": 0.0000806,
+          "cost_source": "static_price_table"
+        }
+      },
+      "judge": {
+        "provider": "bedrock",
+        "model": "amazon.nova-micro-v1:0",
+        "status": "approved",
+        "calls": [
+          {
+            "call_index": 1,
+            "provider": "bedrock",
+            "model": "amazon.nova-micro-v1:0",
+            "input_tokens": 1892,
+            "output_tokens": 78,
+            "total_tokens": 1970,
+            "latency_ms": 724.1,
+            "estimated_cost_usd": 0.0000887
+          }
+        ],
+        "total_usage": {
+          "call_count": 1,
+          "input_tokens": 1892,
+          "output_tokens": 78,
+          "total_tokens": 1970,
+          "latency_ms": 724.1,
+          "estimated_cost_usd": 0.0000887,
+          "cost_source": "static_price_table"
+        }
+      },
+      "guardrails": {
+        "input_safe": true,
+        "output_filtered": true,
+        "runtime_fidelity_gate": "approved"
+      },
+      "cache": {
+        "hit": false,
+        "key_sha256": "7b4e1d9c2f083a56bc10d3e74882019cf13a5b4d6e90287f41c56ab3d8e72101",
+        "source_trace_id": null
+      },
+      "outcome": "grounded_answer",
+      "fallback_reason": null,
+      "response_class": "grounded_answer",
+      "response_sha256": "5c2a9d1e0f874b36cd1258ea3790f46b12785c9d0e3a41f857b2960d4c7e8312",
+      "total_latency_ms": 1636.5
+    },
+    {
+      "schema_version": 1,
+      "trace_id": "4e4cd351-82b3-4f19-a6c0-9d7e5f102a48",
+      "trace_id_source": "otel",
+      "service": "product-reviews",
+      "operation": "AskProductAIAssistant",
+      "product_id": "L9ECAV7KIM",
+      "question_sha256": "a3f1c2e9d847b60f52318ad74e9c1b235678f0a1cd29047e6b85341290fedcba",
+      "candidate": null,
+      "judge": null,
+      "guardrails": {
+        "input_safe": true,
+        "output_filtered": false,
+        "runtime_fidelity_gate": "cache_hit_bypass"
+      },
+      "cache": {
+        "hit": true,
+        "key_sha256": "7b4e1d9c2f083a56bc10d3e74882019cf13a5b4d6e90287f41c56ab3d8e72101",
+        "source_trace_id": "6430920b-c1a2-4e38-b77d-3f8a2d019c55"
+      },
+      "outcome": "cache_hit",
+      "fallback_reason": null,
+      "response_class": "cache_hit",
+      "response_sha256": "5c2a9d1e0f874b36cd1258ea3790f46b12785c9d0e3a41f857b2960d4c7e8312",
+      "total_latency_ms": 18.3
+    }
+  ]
+}
