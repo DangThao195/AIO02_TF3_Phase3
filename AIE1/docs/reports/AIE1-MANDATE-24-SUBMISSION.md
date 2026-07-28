@@ -204,7 +204,19 @@ $env:PRODUCT_REVIEWS_TRACE_HTTP_ALLOW_UNAUTHENTICATED="true"
 
 ---
 
-## 📁 6. Danh Mục Mã Nguồn & Tệp Bằng Chứng Trong Repo (Artifact Registry)
+---
+
+## 🔒 7. Bảng Đối Chiếu Ràng Buộc (Constraints Compliance Checklist)
+
+| Ràng buộc (Mandate #24 Constraints) | Trạng thái | Minh chứng kỹ thuật & Kết quả thực tế |
+| :--- | :---: | :--- |
+| **1. Đo phải nhẹ**<br>*(Tracing không được kéo độ trễ đường chính đáng kể)* | 🟢 **ĐÃ ĐẠT (100%)** | Ghi trace áp dụng mô hình **Best-effort Fail-Open Async In-Memory Redis Write** (`write_llm_trace()` tại [guardrails/llm_trace.py:L268-290](../../techx-corp-platform/src/product-reviews/guardrails/llm_trace.py#L268-L290)). Thời gian ghi Redis `< 0.5ms`, tuyệt đối không làm chậm hay block luồng chính gRPC response. Nếu Redis quá tải hoặc ngắt kết nối, hệ thống tự động catch exception, log warning và trả về kết quả cho khách mà không gây crash hay tăng độ trễ. |
+| **2. Không log thô PII / Secret**<br>*(Prompt có dữ liệu nhạy cảm phải mask/hash)* | 🟢 **ĐÃ ĐẠT (100%)** | Toàn bộ prompt, response và user identity đều được băm một chiều một cách tự động qua **SHA-256** (`question_sha256`, `response_sha256`, `user_id_hash`). Dữ liệu thô tuyệt đối không được ghi vào Redis hay log file. Request chứa PII marker (`PII-TOKEN-XYZ`) khi kiểm tra trace record thu được **0 match**. Xem chi tiết tại [§3.6](#36-cơ-chế-chống-rò-rỉ-pii--secret-trong-trace-yêu-cầu-4). |
+| **3. Số trace từ lời gọi thật & Giữ ngân sách**<br>*(Trace từ cuộc gọi LLM thực tế, không tự chế)* | 🟢 **ĐÃ ĐẠT (100%)** | 100% bản ghi trace được trích xuất trực tiếp từ siêu dữ liệu thực tế (`response.usage` từ Amazon Bedrock SDK converse API). Các chỉ số `input_tokens`, `output_tokens`, `latency_ms` đều từ lượt gọi LLM thật. Tích hợp tầng Caching 2 tầng (Mandate 23) giúp giảm **83.3%** số lượng cuộc gọi Bedrock API, bảo vệ ngân sách tối đa. |
+
+---
+
+## 📁 8. Danh Mục Mã Nguồn & Tệp Bằng Chứng Trong Repo (Artifact Registry)
 
 ### A. Mã nguồn Tracing & Server Handler
 *   **Logic Tracing & Audit-Safe Record Generator:** [guardrails/llm_trace.py](../../techx-corp-platform/src/product-reviews/guardrails/llm_trace.py)
@@ -216,3 +228,4 @@ $env:PRODUCT_REVIEWS_TRACE_HTTP_ALLOW_UNAUTHENTICATED="true"
 *   **Chỉ thị gốc Mandate 24:** [MANDATE-24-llm-observability.md](../../mandates/MANDATE-24-llm-observability.md)
 *   **Artifact JSON Báo cáo Baseline Sau Khi Có Cache:** [cost_latency_baseline.json](../../repro/artifacts/cost_latency_baseline.json)
 *   **Artifact JSON Báo cáo Baseline So Sánh Caching:** [cost_latency_comparison.json](../../repro/artifacts/cost_latency_comparison.json)
+
