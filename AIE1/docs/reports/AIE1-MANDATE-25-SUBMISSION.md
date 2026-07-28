@@ -58,14 +58,12 @@ Tài liệu này tổng hợp toàn bộ bằng chứng nghiệm thu hệ thốn
 - **Cổng HTTP phụ (Port 8086):** Phục vụ 2 endpoints `/inject/error` (`POST` & `GET`) cho phép AIOps kích hoạt hoặc xóa trạng thái lỗi giả lập.
 - **AIOps Closed-Loop Simulation:** Kiểm chứng chu trình 5 bước tự động qua script `aiops_replay_sim.py`, ghi nhận nhật ký audit trail công khai tại [audit_log.jsonl](../../techx-corp-platform/src/product-reviews/logs/audit_log.jsonl).
 
-### 3.6 Số Liệu Đo Lường Nâng Cao (% Request Giữ Được & Độ Trễ Đường Lui)
-> **Minh chứng điểm vượt chỉ tiêu (Bonus Evaluation Metrics):**
-- **Tỷ Lệ Request Giữ Được Khi Provider Lỗi (% Requests Preserved):** **`100.0%`** (Hệ thống tuyệt đối không sinh status 500 hay treo stream; 100% request khi Provider sập đều nhận phản hồi có kiểm soát).
-- **Tỷ Lệ Giảm Lỗi AIOps Auto-Remediation:** Tỷ lệ lỗi gRPC giảm từ **82.0%** khi gặp LLM spike xuống còn **0.0%** ngay sau khi hạ cấp sang Fallback (Xem nhật ký đối soát [audit_log.jsonl](../../techx-corp-platform/src/product-reviews/logs/audit_log.jsonl)).
-- **Độ Trễ Đường Lui (Fallback Latency):**
-  - **Tier 2 Fallback (PostgreSQL Static Summary):** **`< 4.4 ms`** (Ghi nhận tại `cost_latency_comparison.json`).
-  - **Tier 3 Fallback (Safe Abstention Notice):** **`< 0.2 ms`**.
-  *(So với độ trễ LLM Bedrock ban đầu từ 1,600ms đến 2,800ms, đường lui có tốc độ đáp ứng nhanh hơn **360x đến 640x**)*.
+### 3.6 Nguồn Tệp Bằng Chứng Cho Các Chỉ Số Đo Lường Nâng Cao
+> **Nguồn dữ liệu trích xuất từ các tệp bằng chứng thực tế trong Repository:**
+- **Tỷ Lệ Request Giữ Được Khi Provider Lỗi (`100.0%` Preserved, 0 Status 500):** Được chứng minh qua 22/22 ca Unit Test Passed trong [test_error_injection.py](../../techx-corp-platform/src/product-reviews/test_error_injection.py) và kịch bản mô phỏng AIOps.
+- **Tỷ Lệ Giảm Lỗi AIOps Auto-Remediation (Từ 82.0% xuống 0.0%):** Trích xuất từ tệp nhật ký kiểm toán thực tế [logs/audit_log.jsonl:L9-14](../../techx-corp-platform/src/product-reviews/logs/audit_log.jsonl#L9-L14) (`phase: trigger` `simulated_error_rate: 0.82` $\rightarrow$ `phase: verify` `simulated_error_rate_after_fallback: 0.0`).
+- **Độ Trễ Đường Lui (Fallback Latency < 4.4ms):** Trích xuất từ tệp đo lường benchmark thực tế [cost_latency_comparison.json:L26](../../repro/artifacts/cost_latency_comparison.json#L26) (`"p50_latency_seconds": 0.0044` cho Tier 2 static DB lookup) và `cost_latency_baseline.json:L56`.
+
 
 
 ---
