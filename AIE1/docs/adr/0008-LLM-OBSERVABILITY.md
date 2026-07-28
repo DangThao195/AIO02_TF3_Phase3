@@ -5,7 +5,7 @@
 > * Tác giả: Thịnh (AIE1) và Khoa (Leader AIE1)
 > * Ngày tạo: 2026-07-27
 > * Ngày cập nhật: 2026-07-27
-> * Dự án: AIE1 - Tối ưu & Vận hành Tầng AI (Task Force 1 - Mandate #24)
+> * Dự án: AIE1 - Tối ưu & Vận hành Tầng AI (Task Force 3 - Mandate #24)
 
 ---
 
@@ -177,6 +177,11 @@ $env:PRODUCT_REVIEWS_TRACE_TTL_SECONDS="86400"
 
 ## 3. Thống kê Chi phí Lũy kế & Token Usage theo Model
 
+File minh chứng cost/latency thực tế (baseline measurement):
+```
+AIE1/repro/artifacts/cost_latency_baseline.json
+```
+
 Bảng tổng hợp dựa trên báo cáo kiểm thử và đơn giá dự kiến của Amazon Nova:
 
 | Vai trò (Role) | Mô hình (Model) | Số lượt gọi (Calls) | Input Tokens | Output Tokens | Tổng Token (Total) | Chi phí ước tính (USD) |
@@ -184,6 +189,26 @@ Bảng tổng hợp dựa trên báo cáo kiểm thử và đơn giá dự kiế
 | Candidate | `amazon.nova-lite-v1:0` | 70 | 118,259 | 1,749 | 120,008 | $0.0075153 |
 | Judge | `amazon.nova-micro-v1:0` | 37 | 63,711 | 6,715 | 70,426 | $0.0031700 |
 | **Tổng cộng** | | **107** | **181,970** | **8,464** | **190,434** | **$0.0106853** |
+
+### 3.1 Dữ liệu Baseline Đo lường Thực tế (từ `cost_latency_baseline.json`)
+
+> `run_id`: 2026-07-23T10:27:18+07:00 — 6 normal cases chạy tuần tự, so sánh 3 kịch bản: Before Cache / Cold Cache / Hot Cache.
+
+**Đơn giá mô hình:**
+- `amazon.nova-lite-v1:0`: $0.06 / 1M input tokens, $0.24 / 1M output tokens
+- `amazon.nova-micro-v1:0`: $0.035 / 1M input tokens, $0.14 / 1M output tokens
+
+| Kịch bản | Calls | Input Tokens | Output Tokens | Tổng Token | Chi phí (USD) | Latency mean (s) | Latency p50 (s) | Latency p95 (s) |
+| :--- | :---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Before Cache (Baseline) | 12 | 13,058 | 730 | 13,788 | $0.000695 | 2.8922 | 2.8213 | 3.4962 |
+| After Cache — Cold | 6 | 6,529 | 365 | 6,894 | $0.000348 | 6.2786 | 4.0820 | 17.6619 |
+| After Cache — Hot | 2 | 2,176 | 121 | 2,297 | $0.000116 | 3.3389 | 0.0044 | 15.0109 |
+
+**Kết quả tối ưu hóa:**
+- Speedup p50: **641.2×** (từ 2.8213s xuống 0.0044s khi cache hit)
+- Tiết kiệm chi phí: **83.3%** giảm LLM calls, tokens và USD trên Hot Cache
+- Token tiết kiệm: **11,491 tokens** (13,788 baseline → 2,297 hot cache)
+- Pass rate: 0.8333 ở cả 3 kịch bản (cải thiện qua prompt optimization → 100% ở eval mới nhất)
 
 ## 4. Bằng chứng kiểm chứng thực tế
 
