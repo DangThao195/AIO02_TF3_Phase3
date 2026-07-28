@@ -192,8 +192,8 @@ Tất cả prompt, response và user identity đều được băm một chiều
     "operation": "AskProductAIAssistant"
   },
   "time_window": {
-    "start_time": "2026-07-27T00:00:00Z",
-    "end_time": "2026-07-28T15:00:00Z"
+    "start_time": "2026-07-23T10:27:18+07:00",
+    "end_time": "2026-07-27T00:00:00Z"
   },
   "summary_by_model": {
     "candidate_model": {
