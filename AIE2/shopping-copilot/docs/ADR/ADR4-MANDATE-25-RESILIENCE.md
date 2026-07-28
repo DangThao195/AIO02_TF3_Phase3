@@ -19,7 +19,7 @@ Hệ thống Shopping Copilot phụ thuộc vào AWS Bedrock LLM provider bên n
 
 **Yêu cầu MANDATE #25**: Hệ thống phải **degrade có kiểm soát** - không gục, không bịa dữ liệu, luôn có đường lui an toàn.
 
-**Tham chiếu Mandate gốc**: [MANDATE-25-ai-resilience-fallback.md](../../../MANDATE-25-ai-resilience-fallback.md)
+**Tham chiếu Mandate gốc**: [MANDATE-25-ai-resilience-fallback.md](../../../../MANDATE-25-ai-resilience-fallback.md)
 
 ---
 
@@ -336,7 +336,7 @@ All 5 MANDATE #25 requirements implemented, tested, and ready for grading.
 
 ## REFERENCES
 
-- **Mandate**: [`MANDATE-25-ai-resilience-fallback.md`](../../../MANDATE-25-ai-resilience-fallback.md) (root)
+- **Mandate**: [`MANDATE-25-ai-resilience-fallback.md`](../../../../MANDATE-25-ai-resilience-fallback.md) (Phase3 root)
 - **Test Cases**: [`mandate25/mandate_25_testcases.json`](../../mandate25/mandate_25_testcases.json)
 - **Test Results**: [`mandate25/mandate_25_test_results.json`](../../mandate25/mandate_25_test_results.json)
 - **Test Runner**: [`mandate25/run_mandate_25_tests.py`](../../mandate25/run_mandate_25_tests.py)

@@ -1,0 +1,132 @@
+{
+  "suite_name": "MANDATE #24 - LLM Observability (Model Call Black Box)",
+  "date": "2026-07-27T16:47:48.932655",
+  "tests": [
+    {
+      "test_id": 1,
+      "test_name": "Trace ghi đủ trường lõi",
+      "scenarios": {
+        "1a": {
+          "status": "PASS",
+          "fields_verified": 18,
+          "expected_fields": [
+            "trace_id",
+            "request_id",
+            "parent_span_id",
+            "surface",
+            "layer",
+            "model",
+            "model_version",
+            "session_id",
+            "user_id",
+            "timestamp",
+            "latency_ms",
+            "prompt_tokens",
+            "completion_tokens",
+            "total_tokens",
+            "estimated_cost_usd",
+            "outcome",
+            "prompt_preview",
+            "prompt_masked"
+          ]
+        },
+        "1b": {
+          "status": "PASS",
+          "prompt_tokens": 120,
+          "completion_tokens": 45,
+          "cost": 1.8e-05
+        }
+      },
+      "overall": "PASS"
+    },
+    {
+      "test_id": 2,
+      "test_name": "Dựng lại request chain",
+      "scenarios": {
+        "2a": {
+          "status": "PASS",
+          "recovered_count": 4,
+          "layers_order": [
+            "intent_parser",
+            "planner",
+            "synthesis",
+            "faithfulness_guard"
+          ]
+        },
+        "2b": {
+          "status": "PASS",
+          "request_a_count": 2,
+          "request_b_count": 1
+        }
+      },
+      "overall": "PASS"
+    },
+    {
+      "test_id": 3,
+      "test_name": "Aggregate view tổng hợp",
+      "scenarios": {
+        "3a": {
+          "status": "PASS",
+          "total_calls": 3,
+          "per_layer": {
+            "intent_parser": 2,
+            "synthesis": 1
+          }
+        },
+        "3b": {
+          "status": "PASS",
+          "in_window_calls_24h": 3,
+          "in_window_calls_1h": 3
+        }
+      },
+      "overall": "PASS"
+    },
+    {
+      "test_id": 4,
+      "test_name": "PII/Secret không lộ thô",
+      "scenarios": {
+        "4a": {
+          "status": "PASS",
+          "input": "My email is test@gmail.com, please help",
+          "masked_output": "My email is [EMAIL_REDACTED], please help"
+        },
+        "4b": {
+          "status": "PASS",
+          "pii_types_tested": 2,
+          "ssn_masked": true,
+          "card_masked": true
+        },
+        "4c": {
+          "status": "PASS",
+          "session_hashed": true,
+          "user_hashed": true,
+          "hash_length": 16
+        }
+      },
+      "overall": "PASS"
+    },
+    {
+      "test_id": 5,
+      "test_name": "Outcome error/fallback được ghi",
+      "scenarios": {
+        "5a": {
+          "status": "PASS",
+          "outcome": "error",
+          "error_msg": "Bedrock TimeoutException"
+        },
+        "5b": {
+          "status": "PASS",
+          "outcome": "fallback",
+          "error_msg": "heuristic fallback"
+        }
+      },
+      "overall": "PASS"
+    }
+  ],
+  "summary": {
+    "total_tests": 5,
+    "passed": 5,
+    "failed": 0,
+    "pass_rate": "100.0%"
+  }
+}
