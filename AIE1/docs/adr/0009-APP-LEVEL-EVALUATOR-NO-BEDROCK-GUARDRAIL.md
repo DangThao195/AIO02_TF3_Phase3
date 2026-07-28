@@ -14,7 +14,7 @@
 Audit CDO (xem `docs/reports/product-reviews-readonly-audit-2026-07-26.md`) xác nhận:
 
 - Guardrail `shopping-copilot-guardrail` tồn tại ở `us-east-1`, nhưng Product Reviews **không cấu hình Guardrail ID** và **không có quyền `bedrock:ApplyGuardrail`**.
-- IAM Inline Policy `techx-tf3/product-reviews-bedrock` hiện chỉ cấp `bedrock:InvokeModel` cho 2 model Nova Lite và Nova Micro.
+- IAM Inline Policy `techx-tf3/product-reviews-bedrock` (*tên viết tắt trong audit gốc; tên chính xác là `techx-corp-tf3-product-reviews-bedrock`, xem Phụ lục A*) hiện chỉ cấp `bedrock:InvokeModel` cho 2 model Nova Lite và Nova Micro.
 
 Audit yêu cầu làm rõ: nếu App-level Evaluator đã đủ, hãy văn bản hóa quyết định đó và giữ nguyên IAM.
 
@@ -24,7 +24,7 @@ Audit yêu cầu làm rõ: nếu App-level Evaluator đã đủ, hãy văn bản
 
 **Product Reviews sử dụng bộ lọc an toàn và fidelity evaluator tự phát triển ở tầng ứng dụng. Không tích hợp AWS Bedrock Guardrail (`shopping-copilot-guardrail`).**
 
-IAM Inline Policy `techx-tf3/product-reviews-bedrock` được giữ nguyên tối giản, chỉ cấp `bedrock:InvokeModel`.
+IAM Inline Policy `techx-corp-tf3-product-reviews-bedrock` được giữ nguyên tối giản, chỉ cấp `bedrock:InvokeModel` và `bedrock:InvokeModelWithResponseStream` trên đúng 2 model đã duyệt (xem Phụ lục A).
 
 ---
 
@@ -64,7 +64,7 @@ Cấp `bedrock:ApplyGuardrail` trong khi không có code path nào gọi API đ�
 
 ## 4. Phạm vi áp dụng
 
-Quyết định này chỉ áp dụng cho service **Product Reviews** (`techx-tf3/product-reviews-bedrock`).
+Quyết định này chỉ áp dụng cho service **Product Reviews** (`techx-corp-tf3-product-reviews-bedrock`).
 
 Các service khác (ví dụ: shopping-copilot) có thể có yêu cầu khác và được phép tích hợp `shopping-copilot-guardrail` theo nhu cầu riêng.
 
@@ -90,3 +90,88 @@ Quyết định này cần được xem xét lại nếu:
 | `docs/tasks/JIRA_TODO_SPECIAL.md` (Ticket S4) | Yêu cầu văn bản hóa quyết định này |
 | `repro/artifacts/fidelity_eval_20260727T162702Z.json` | Bằng chứng Pass Rate 100% |
 | `repro/artifacts/judge_human_agreement_20260727T140206Z.json` | Bằng chứng Agreement Rate 95.24% |
+
+---
+
+## Phụ lục A: Xác minh IAM Inline Policy (2026-07-27)
+
+**Người thực hiện:** Thịnh (AIE1)
+**Thời điểm:** 2026-07-27
+**Phương pháp:** Truy vấn trực tiếp AWS IAM qua CLI (không dựa vào tài liệu audit trước đó).
+
+**Bước 1 — Xác định Role:**
+
+```powershell
+aws iam list-roles --query "Roles[?contains(RoleName,'product-reviews') || contains(RoleName,'techx-tf3')].RoleName"
+```
+
+Kết quả:
+```json
+[
+    "techx-corp-tf3-product-reviews-bedrock",
+    "techx-tf3-mandate-reviewer"
+]
+```
+
+**Bước 2 — Xác định tên Inline Policy gắn trong Role:**
+
+```powershell
+aws iam list-role-policies --role-name techx-corp-tf3-product-reviews-bedrock
+```
+
+Kết quả:
+```json
+{
+    "PolicyNames": [
+        "techx-corp-tf3-product-reviews-bedrock"
+    ]
+}
+```
+
+Role chỉ có **duy nhất 1 inline policy**, không có policy nào khác đính kèm.
+
+**Bước 3 — Lấy nội dung đầy đủ Policy Document:**
+
+```powershell
+aws iam get-role-policy --role-name techx-corp-tf3-product-reviews-bedrock --policy-name techx-corp-tf3-product-reviews-bedrock --output json --no-cli-pager
+```
+
+Kết quả:
+```json
+{
+    "RoleName": "techx-corp-tf3-product-reviews-bedrock",
+    "PolicyName": "techx-corp-tf3-product-reviews-bedrock",
+    "PolicyDocument": {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Action": [
+                    "bedrock:InvokeModel",
+                    "bedrock:InvokeModelWithResponseStream"
+                ],
+                "Effect": "Allow",
+                "Resource": [
+                    "arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-lite-v1:0",
+                    "arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-micro-v1:0"
+                ],
+                "Sid": "InvokeApprovedBedrockModels"
+            }
+        ]
+    }
+}
+```
+
+**Kết luận xác minh:**
+
+| Tiêu chí | Kết quả | Đạt |
+|:---|:---|:---:|
+| Chỉ có 1 Statement duy nhất | Đúng — không có Statement thứ 2 nào khác | ✅ |
+| Action giới hạn ở mức tối thiểu cần thiết | `bedrock:InvokeModel`, `bedrock:InvokeModelWithResponseStream` — không có action nào khác | ✅ |
+| Không có `bedrock:ApplyGuardrail` | Xác nhận không xuất hiện trong policy | ✅ |
+| Không có `bedrock:Converse` / `bedrock:ConverseStream` | Xác nhận không xuất hiện trong policy | ✅ |
+| Resource giới hạn đúng 2 model đã duyệt | 2 ARN cụ thể (Nova Lite, Nova Micro) tại `us-east-1`, không có wildcard `*` | ✅ |
+| Không có Role/Policy nào khác gắn thêm | Role chỉ có 1 inline policy duy nhất | ✅ |
+
+**Ghi chú:** ADR mục 2 ban đầu chỉ liệt kê `bedrock:InvokeModel`. Xác minh thực tế cho thấy policy có thêm `bedrock:InvokeModelWithResponseStream` (phục vụ streaming response từ `product_reviews_server.py`). Đây vẫn là action tối thiểu cần thiết, không phải quyền thừa — đã cập nhật mục 2 cho khớp với thực tế.
+
+**Kết luận:** IAM Inline Policy tuân thủ đầy đủ nguyên tắc **Least Privilege**. Không cần thay đổi. Task S4 (kiểm tra IAM, đảm bảo không cấp thừa quyền) — **hoàn tất**.
