@@ -58,6 +58,16 @@ Tài liệu này tổng hợp toàn bộ bằng chứng nghiệm thu hệ thốn
 - **Cổng HTTP phụ (Port 8086):** Phục vụ 2 endpoints `/inject/error` (`POST` & `GET`) cho phép AIOps kích hoạt hoặc xóa trạng thái lỗi giả lập.
 - **AIOps Closed-Loop Simulation:** Kiểm chứng chu trình 5 bước tự động qua script `aiops_replay_sim.py`, ghi nhận nhật ký audit trail công khai tại [audit_log.jsonl](../../techx-corp-platform/src/product-reviews/logs/audit_log.jsonl).
 
+### 3.6 Số Liệu Đo Lường Nâng Cao (% Request Giữ Được & Độ Trễ Đường Lui)
+> **Minh chứng điểm vượt chỉ tiêu (Bonus Evaluation Metrics):**
+- **Tỷ Lệ Request Giữ Được Khi Provider Lỗi (% Requests Preserved):** **`100.0%`** (Hệ thống tuyệt đối không sinh status 500 hay treo stream; 100% request khi Provider sập đều nhận phản hồi có kiểm soát).
+- **Tỷ Lệ Giảm Lỗi AIOps Auto-Remediation:** Tỷ lệ lỗi gRPC giảm từ **82.0%** khi gặp LLM spike xuống còn **0.0%** ngay sau khi hạ cấp sang Fallback (Xem nhật ký đối soát [audit_log.jsonl](../../techx-corp-platform/src/product-reviews/logs/audit_log.jsonl)).
+- **Độ Trễ Đường Lui (Fallback Latency):**
+  - **Tier 2 Fallback (PostgreSQL Static Summary):** **`< 4.4 ms`** (Ghi nhận tại `cost_latency_comparison.json`).
+  - **Tier 3 Fallback (Safe Abstention Notice):** **`< 0.2 ms`**.
+  *(So với độ trễ LLM Bedrock ban đầu từ 1,600ms đến 2,800ms, đường lui có tốc độ đáp ứng nhanh hơn **360x đến 640x**)*.
+
+
 ---
 
 ## 📸 4. Bộ Snapshots Dữ Liệu Kiểm Thử Thực Tế Trong Repo
