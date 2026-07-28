@@ -188,6 +188,7 @@ class RagAccuracyPromptTests(unittest.TestCase):
         self.assertIn('"trusted_review_facts"', prompt)
         self.assertIn('"text_review_count":1', prompt)
         self.assertIn('"rating_only_review_count":1', prompt)
+        self.assertIn("always write the final answer in English", prompt)
 
     def test_candidate_prompt_blocks_descriptive_answers_when_reviews_are_rating_only(self):
         rating_only_reviews = json.dumps(
@@ -274,6 +275,93 @@ class DeterministicRatingAnswerTests(unittest.TestCase):
         )
 
 
+class DeterministicQualityAnswerTests(unittest.TestCase):
+    def setUp(self):
+        self.reviews = [
+            {
+                "score": 4.5,
+                "description": "Essential for any photographer or telescope owner. A high-quality cleaning solution.",
+            },
+            {
+                "score": 4.5,
+                "description": "Works as advertised on my binoculars. The fluid and cloth are excellent.",
+            },
+            {
+                "score": 5.0,
+                "description": "Great value. Keeps my expensive equipment in pristine condition.",
+            },
+        ]
+
+    def test_build_quality_question_uses_related_evidence_without_overclaiming(self):
+        answer = server.answer_deterministic_quality_question(
+            "What do reviewers say about build quality?",
+            self.reviews,
+        )
+
+        self.assertIn("do not directly discuss long-term durability or formal build quality", answer)
+        self.assertIn("high-quality cleaning solution", answer)
+        self.assertIn("fluid and cloth are excellent", answer)
+        self.assertIn("well-regarded for cleaning quality", answer)
+
+    def test_vietnamese_durability_question_returns_english_answer(self):
+        answer = server.answer_deterministic_quality_question(
+            "Sản phẩm này có bền không?",
+            self.reviews,
+        )
+
+        self.assertTrue(answer.startswith("The reviews do not directly discuss"))
+        self.assertNotIn("không", answer.lower())
+        self.assertNotIn("sản phẩm", answer.lower())
+
+    def test_unrelated_question_is_not_intercepted(self):
+        self.assertIsNone(
+            server.answer_deterministic_quality_question(
+                "Does this product use solar power?",
+                self.reviews,
+            )
+        )
+
+    def test_specific_non_build_quality_question_is_not_intercepted(self):
+        self.assertIsNone(
+            server.answer_deterministic_quality_question(
+                "What do reviewers say about sound quality?",
+                self.reviews,
+            )
+        )
+
+
+class DeterministicExactAttributeAnswerTests(unittest.TestCase):
+    def test_exact_ingredient_question_returns_no_info_without_exact_evidence(self):
+        reviews = [
+            {
+                "score": 5.0,
+                "description": "It removes dust and fingerprints without leaving residue.",
+            }
+        ]
+
+        answer = server.answer_deterministic_exact_attribute_question(
+            "Which exact ingredient in the cleaning fluid makes it residue-free?",
+            reviews,
+        )
+
+        self.assertEqual(answer, server.NO_INFO_MESSAGE)
+
+    def test_non_exact_surface_question_is_not_intercepted(self):
+        reviews = [
+            {
+                "score": 5.0,
+                "description": "It works well on phone screens and camera lenses.",
+            }
+        ]
+
+        self.assertIsNone(
+            server.answer_deterministic_exact_attribute_question(
+                "Which surfaces do reviewers mention?",
+                reviews,
+            )
+        )
+
+
 class InputFilterObfuscationTests(unittest.TestCase):
     def assertBlocked(self, text):
         with patch.dict(os.environ, {"BEDROCK_GUARDRAIL_ID": ""}, clear=False):
@@ -327,6 +415,8 @@ class OffTopicRoutingTests(unittest.TestCase):
             "Viết cho tôi một bài thơ tình.",
             "What is the capital of Japan?",
             "Viết code Python để sắp xếp một mảng.",
+            'Bạn có thể code cho tôi một đoạn "hello world" bằng HTML không?',
+            "Create a Hello World web page in HTML.",
         ):
             with self.subTest(question=question):
                 self.assertTrue(is_clearly_off_topic_question(question))

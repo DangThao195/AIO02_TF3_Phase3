@@ -1,0 +1,1681 @@
+{
+  "run_id": "2026-07-27T16:27:02.484038+00:00",
+  "candidate_source": "grpc://localhost:8085",
+  "judge_provider": "bedrock",
+  "judge_base_url": "",
+  "judge_region": "us-east-1",
+  "judge_model": "amazon.nova-micro-v1:0",
+  "selection": {
+    "mode": "product_summary",
+    "all_products": false,
+    "product_count": 10,
+    "product_ids": [
+      "L9ECAV7KIM",
+      "0PUK6V6EV0",
+      "9SIQT8TOJO",
+      "1YMWWN1N4O",
+      "HQTGWGPNH4",
+      "OLJCESPC7Z",
+      "2ZYFJ3GM2N",
+      "66VCHSJNUP",
+      "LS4PSXUNUM",
+      "6E92ZMYYFZ"
+    ],
+    "case_count": 10
+  },
+  "thresholds": {
+    "min_claim_count": 1,
+    "min_answer_claim_count": 1,
+    "min_claim_precision": 0.8,
+    "min_aspect_coverage": 0.6,
+    "min_overall_score": 4,
+    "min_suite_pass_rate": 1.0,
+    "expected_mentor_benchmark_products": 10,
+    "expected_mentor_product_ids": [
+      "0PUK6V6EV0",
+      "1YMWWN1N4O",
+      "2ZYFJ3GM2N",
+      "66VCHSJNUP",
+      "6E92ZMYYFZ",
+      "9SIQT8TOJO",
+      "HQTGWGPNH4",
+      "L9ECAV7KIM",
+      "LS4PSXUNUM",
+      "OLJCESPC7Z"
+    ],
+    "approved_question_dataset_sha256": "066d23a7d8492212c8bf3aac3a0048fcfed9c4dd2e26814fd241b5e7f2187361",
+    "expected_question_source_cases": 243,
+    "expected_question_selected_cases": 61,
+    "max_summary_sentences": 3,
+    "max_summary_words": 80,
+    "max_judge_reviews": 100,
+    "max_judge_input_chars": 40000,
+    "max_judge_output_tokens": 1200
+  },
+  "trust_score_config": {
+    "scale": 100,
+    "weights": {
+      "claim_precision": 0.35,
+      "aspect_coverage": 0.25,
+      "overall_score": 0.15,
+      "sentiment_alignment": 0.15,
+      "claim_density": 0.1
+    },
+    "contradiction_penalty": 0.5,
+    "rule_penalty_per_finding": 0.85,
+    "rule_penalty_flags": [
+      "unsupported_age_claim",
+      "average_rating_mismatch",
+      "negative_sentiment_conflict",
+      "positive_sentiment_conflict"
+    ],
+    "hard_fail_score": 0.0,
+    "suite_formula": "avg(ok_case_trust_score) * ok_cases / total_cases"
+  },
+  "certification": {
+    "benchmark_source": "mentor_provided_database_inventory",
+    "expected_products": 10,
+    "observed_products": 10,
+    "expected_product_ids": [
+      "0PUK6V6EV0",
+      "1YMWWN1N4O",
+      "2ZYFJ3GM2N",
+      "66VCHSJNUP",
+      "6E92ZMYYFZ",
+      "9SIQT8TOJO",
+      "HQTGWGPNH4",
+      "L9ECAV7KIM",
+      "LS4PSXUNUM",
+      "OLJCESPC7Z"
+    ],
+    "observed_product_ids": [
+      "0PUK6V6EV0",
+      "1YMWWN1N4O",
+      "2ZYFJ3GM2N",
+      "66VCHSJNUP",
+      "6E92ZMYYFZ",
+      "9SIQT8TOJO",
+      "HQTGWGPNH4",
+      "L9ECAV7KIM",
+      "LS4PSXUNUM",
+      "OLJCESPC7Z"
+    ],
+    "missing_product_ids": [],
+    "unexpected_product_ids": [],
+    "benchmark_coverage_rate": 1.0,
+    "benchmark_coverage_complete": true,
+    "classification": "mentor_benchmark_complete",
+    "note": "Đã đánh giá đủ 10/10 sản phẩm trong toàn bộ benchmark do mentor cung cấp. Kết quả chỉ xác nhận hành vi trên benchmark cố định này và không được suy rộng ra mọi sản phẩm trong thực tế.",
+    "database_inventory_mismatch": false,
+    "data_limitation": ""
+  },
+  "cases": [
+    {
+      "product_id": "L9ECAV7KIM",
+      "status": "ok",
+      "error": "",
+      "error_stage": "",
+      "runtime_response_class": "answer",
+      "raw_reviews_count": 5,
+      "ai_summary": "The Lens Cleaning Kit is highly regarded by reviewers for its effectiveness and versatility. Reviewers mention that the kit works well on various optical surfaces, including telescopes, binoculars, and camera lenses. They praise the kit for its ability to remove dust, dirt, and fingerprints without leaving any residue.",
+      "fact_sheet": {
+        "product_id": "L9ECAV7KIM",
+        "review_count": 5,
+        "average_score": 4.6,
+        "rating_distribution": {
+          "5": 2,
+          "4": 3
+        },
+        "trusted_derived_review_facts": {
+          "negative_review_definition": "score < 3",
+          "negative_review_threshold": 3.0,
+          "negative_review_count": 0,
+          "five_star_review_count": 2,
+          "five_star_percentage": 40.0,
+          "minimum_score": 4.0,
+          "maximum_score": 5.0,
+          "all_scores_at_least_4": true
+        },
+        "top_positive_reviews": [
+          {
+            "score": 5.0,
+            "review_sha256": "295bd7c1df742590b479cb82f155eb5e997c0cfc82b106f86ddfbb10707a611e"
+          },
+          {
+            "score": 5.0,
+            "review_sha256": "b3db7e68232fa9d8f2b526d73952cd204185b50c96503ca4a04e449ab09e10d9"
+          },
+          {
+            "score": 4.5,
+            "review_sha256": "227226eff4f22573eea83b2663d4cc2b4b651ed744be7de1a072fce944d02384"
+          }
+        ],
+        "lowest_scored_reviews": [
+          {
+            "score": 4.0,
+            "review_sha256": "15c61ef136ff8d024dd9d30ae2038dc6b84a055d5272e414bcb47ff0efc5d34c"
+          },
+          {
+            "score": 4.5,
+            "review_sha256": "227226eff4f22573eea83b2663d4cc2b4b651ed744be7de1a072fce944d02384"
+          },
+          {
+            "score": 4.5,
+            "review_sha256": "8093fb7570a486c4539411056e537610f61d48f0db278ce97c36925dd0fe5733"
+          }
+        ],
+        "constraints": {
+          "has_explicit_age_signal": false
+        },
+        "input_safety": {
+          "pii_redacted_reviews": 0,
+          "injection_redacted_reviews": 0
+        }
+      },
+      "rule_checks": {
+        "summary_length_chars": 320,
+        "sentence_count": 3,
+        "word_count": 48,
+        "warnings": [],
+        "hard_fail_reasons": [],
+        "hard_fail": false,
+        "format_passed": true,
+        "format_findings": [],
+        "fidelity_findings": [],
+        "unsupported_age_claim": false,
+        "average_rating_mentions": [],
+        "average_rating_mismatch": false,
+        "negative_sentiment_conflict": false,
+        "positive_sentiment_conflict": false,
+        "product_id_echo": false,
+        "sensitive_output_detected": false,
+        "prompt_injection_echoed": false
+      },
+      "judge_result": {
+        "overall_score": 5,
+        "claims": [
+          {
+            "text": "The Lens Cleaning Kit is highly regarded by reviewers for its effectiveness and versatility.",
+            "label": "supported",
+            "evidence": [
+              "Reviewer mentions that the kit works well on various optical surfaces, including telescopes, binoculars, and camera lenses. They praise the kit for its ability to remove dust, dirt, and fingerprints without leaving any residue."
+            ]
+          },
+          {
+            "text": "The kit works well on various optical surfaces, including telescopes, binoculars, and camera lenses.",
+            "label": "supported",
+            "evidence": [
+              "Reviewer mentions that the kit works well on various optical surfaces, including telescopes, binoculars, and camera lenses. They praise the kit for its ability to remove dust, dirt, and fingerprints without leaving any residue."
+            ]
+          },
+          {
+            "text": "The kit is effective in removing dust, dirt, and fingerprints without leaving any residue.",
+            "label": "supported",
+            "evidence": [
+              "Reviewer mentions that the kit works well on various optical surfaces, including telescopes, binoculars, and camera lenses. They praise the kit for its ability to remove dust, dirt, and fingerprints without leaving any residue."
+            ]
+          }
+        ],
+        "claim_count": 3,
+        "supported_claims": 3,
+        "unsupported_claims": 0,
+        "contradicted_claims": 0,
+        "claim_precision": 1.0,
+        "aspect_coverage": 1.0,
+        "sentiment_alignment": 1,
+        "reason": "The response is grounded in the provided reviews and fact sheet.",
+        "judge_consistency_warnings": [],
+        "deterministic_claim_checks": [],
+        "deterministic_label_corrections": 0,
+        "judge_attempts": 1,
+        "judge_parse_retries": 0
+      },
+      "fidelity_passed": true,
+      "format_passed": true,
+      "trust_score": 100.0,
+      "passed": true,
+      "failure_reasons": [],
+      "case_id": "summary:L9ECAV7KIM",
+      "case_type": "summary",
+      "expected_behavior": "answer",
+      "question_sha256": "b17e59ffba36a7b9522ff9e1f0df4a121dd2a1751125be6ecdf9be597991fa4e",
+      "min_claim_count": 1
+    },
+    {
+      "product_id": "0PUK6V6EV0",
+      "status": "ok",
+      "error": "",
+      "error_stage": "",
+      "runtime_response_class": "answer",
+      "raw_reviews_count": 5,
+      "ai_summary": "The Solar System Color Imager has received 5 reviews with an average score of 4.6. Reviewers mention superb color quality, ease of use with existing telescope setups, excellent resolution, and vibrant planetary images.",
+      "fact_sheet": {
+        "product_id": "0PUK6V6EV0",
+        "review_count": 5,
+        "average_score": 4.6,
+        "rating_distribution": {
+          "5": 2,
+          "4": 3
+        },
+        "trusted_derived_review_facts": {
+          "negative_review_definition": "score < 3",
+          "negative_review_threshold": 3.0,
+          "negative_review_count": 0,
+          "five_star_review_count": 2,
+          "five_star_percentage": 40.0,
+          "minimum_score": 4.0,
+          "maximum_score": 5.0,
+          "all_scores_at_least_4": true
+        },
+        "top_positive_reviews": [
+          {
+            "score": 5.0,
+            "review_sha256": "1af34eedd08e080094ffa270438683386db9b1af2d27ab15e3850800a85b2a73"
+          },
+          {
+            "score": 5.0,
+            "review_sha256": "7d868b39f9c8685ed5a2c9c87dd9b08c85e9ddb1627d1fbca8efeacd8cc52d24"
+          },
+          {
+            "score": 4.5,
+            "review_sha256": "1f5a1a369bee079945bd8a9de2c94575f2037a6857ef98aa6ab69757b7ddd2b5"
+          }
+        ],
+        "lowest_scored_reviews": [
+          {
+            "score": 4.0,
+            "review_sha256": "e7a91cd61a4eef6d30acb11cbe237d3dbc16fcbdfc014c826b555efc94038f6a"
+          },
+          {
+            "score": 4.5,
+            "review_sha256": "1f5a1a369bee079945bd8a9de2c94575f2037a6857ef98aa6ab69757b7ddd2b5"
+          },
+          {
+            "score": 4.5,
+            "review_sha256": "5aeaee969f7c8c742baddb3115999b00aa90ea71c026a5e044c12256c2066852"
+          }
+        ],
+        "constraints": {
+          "has_explicit_age_signal": false
+        },
+        "input_safety": {
+          "pii_redacted_reviews": 0,
+          "injection_redacted_reviews": 0
+        }
+      },
+      "rule_checks": {
+        "summary_length_chars": 218,
+        "sentence_count": 2,
+        "word_count": 34,
+        "warnings": [],
+        "hard_fail_reasons": [],
+        "hard_fail": false,
+        "format_passed": true,
+        "format_findings": [],
+        "fidelity_findings": [],
+        "unsupported_age_claim": false,
+        "average_rating_mentions": [],
+        "average_rating_mismatch": false,
+        "negative_sentiment_conflict": false,
+        "positive_sentiment_conflict": false,
+        "product_id_echo": false,
+        "sensitive_output_detected": false,
+        "prompt_injection_echoed": false
+      },
+      "judge_result": {
+        "overall_score": 5,
+        "claims": [
+          {
+            "text": "The Solar System Color Imager has received 5 reviews",
+            "label": "supported",
+            "evidence": [
+              "review_count is 5"
+            ]
+          },
+          {
+            "text": "average score of 4.6",
+            "label": "supported",
+            "evidence": [
+              "average_score is 4.6"
+            ]
+          },
+          {
+            "text": "superb color quality",
+            "label": "supported",
+            "evidence": [
+              "reviewer_001 mentions superb color quality",
+              "reviewer_004 mentions superb color quality"
+            ]
+          },
+          {
+            "text": "ease of use with existing telescope setups",
+            "label": "supported",
+            "evidence": [
+              "reviewer_001 mentions easy to use with existing telescope setup"
+            ]
+          },
+          {
+            "text": "excellent resolution",
+            "label": "supported",
+            "evidence": [
+              "reviewer_003 mentions excellent resolution"
+            ]
+          },
+          {
+            "text": "vibrant planetary images",
+            "label": "supported",
+            "evidence": [
+              "reviewer_001 mentions vibrant planetary images",
+              "reviewer_004 mentions vibrant planetary images",
+              "reviewer_005 mentions vibrant planetary images"
+            ]
+          }
+        ],
+        "claim_count": 6,
+        "supported_claims": 6,
+        "unsupported_claims": 0,
+        "contradicted_claims": 0,
+        "claim_precision": 1.0,
+        "aspect_coverage": 1.0,
+        "sentiment_alignment": 1,
+        "reason": "The response is strongly grounded, accurate, and answers the question.",
+        "judge_consistency_warnings": [],
+        "deterministic_claim_checks": [],
+        "deterministic_label_corrections": 0,
+        "judge_attempts": 1,
+        "judge_parse_retries": 0
+      },
+      "fidelity_passed": true,
+      "format_passed": true,
+      "trust_score": 100.0,
+      "passed": true,
+      "failure_reasons": [],
+      "case_id": "summary:0PUK6V6EV0",
+      "case_type": "summary",
+      "expected_behavior": "answer",
+      "question_sha256": "b17e59ffba36a7b9522ff9e1f0df4a121dd2a1751125be6ecdf9be597991fa4e",
+      "min_claim_count": 1
+    },
+    {
+      "product_id": "9SIQT8TOJO",
+      "status": "ok",
+      "error": "",
+      "error_stage": "",
+      "runtime_response_class": "answer",
+      "raw_reviews_count": 5,
+      "ai_summary": "Reviewers generally praise the Optical Tube Assembly for its impressive performance in deep-sky imaging, highlighting the f/2.2 speed that significantly reduces exposure times and the short focal length that lessens the need for guiding. The quality and speed of the images produced are frequently mentioned as standout features.",
+      "fact_sheet": {
+        "product_id": "9SIQT8TOJO",
+        "review_count": 5,
+        "average_score": 4.8,
+        "rating_distribution": {
+          "5": 3,
+          "4": 2
+        },
+        "trusted_derived_review_facts": {
+          "negative_review_definition": "score < 3",
+          "negative_review_threshold": 3.0,
+          "negative_review_count": 0,
+          "five_star_review_count": 3,
+          "five_star_percentage": 60.0,
+          "minimum_score": 4.5,
+          "maximum_score": 5.0,
+          "all_scores_at_least_4": true
+        },
+        "top_positive_reviews": [
+          {
+            "score": 5.0,
+            "review_sha256": "942bbe236b8828dcdfb920ca4bdc8c67684dee0bf01615169c018679cb8cbf9b"
+          },
+          {
+            "score": 5.0,
+            "review_sha256": "24433a5ed4aa1b695fe93d697e31b65db3e5e0a89a37a780d7aa4025378405f7"
+          },
+          {
+            "score": 5.0,
+            "review_sha256": "699c3178a6a12a6909d589e3183a1561f5c657548258972c5e692ca117c9bce8"
+          }
+        ],
+        "lowest_scored_reviews": [
+          {
+            "score": 4.5,
+            "review_sha256": "93dc333e9c2c50d06f13b102573f66999296fd92926670e15ba8d52fb82736ee"
+          },
+          {
+            "score": 4.5,
+            "review_sha256": "b9d4641ca4b4fc96c775afeb02274b15c04789265f15e64a9092e195d4f38690"
+          },
+          {
+            "score": 5.0,
+            "review_sha256": "942bbe236b8828dcdfb920ca4bdc8c67684dee0bf01615169c018679cb8cbf9b"
+          }
+        ],
+        "constraints": {
+          "has_explicit_age_signal": false
+        },
+        "input_safety": {
+          "pii_redacted_reviews": 0,
+          "injection_redacted_reviews": 0
+        }
+      },
+      "rule_checks": {
+        "summary_length_chars": 329,
+        "sentence_count": 2,
+        "word_count": 51,
+        "warnings": [],
+        "hard_fail_reasons": [],
+        "hard_fail": false,
+        "format_passed": true,
+        "format_findings": [],
+        "fidelity_findings": [],
+        "unsupported_age_claim": false,
+        "average_rating_mentions": [],
+        "average_rating_mismatch": false,
+        "negative_sentiment_conflict": false,
+        "positive_sentiment_conflict": false,
+        "product_id_echo": false,
+        "sensitive_output_detected": false,
+        "prompt_injection_echoed": false
+      },
+      "judge_result": {
+        "overall_score": 4,
+        "claims": [
+          {
+            "text": "Reviewers generally praise the Optical Tube Assembly for its impressive performance in deep-sky imaging",
+            "label": "supported",
+            "evidence": [
+              "The RASA V2 is a dream come true for deep-sky imaging. The f/2.2 speed drastically cuts down exposure times. My best astrophotography investment yet.",
+              "Unbelievable performance for wide-field astrophotography. The short focal length makes guiding less critical. Produces stunning, detailed images.",
+              "This OTA is a beast! The fast optics mean more data in less time. If you're serious about deep-sky imaging, this is the one.",
+              "Worth every penny for the quality and speed it offers. My images have never been sharper or more vibrant. A truly professional piece of equipment.",
+              "The engineering behind this RASA is exceptional. It's incredibly efficient for capturing faint objects. A high-end choice for dedicated imagers."
+            ]
+          },
+          {
+            "text": "highlighting the f/2.2 speed that significantly reduces exposure times",
+            "label": "supported",
+            "evidence": [
+              "The RASA V2 is a dream come true for deep-sky imaging. The f/2.2 speed drastically cuts down exposure times. My best astrophotography investment yet.",
+              "Worth every penny for the quality and speed it offers. My images have never been sharper or more vibrant. A truly professional piece of equipment."
+            ]
+          },
+          {
+            "text": "the short focal length that lessens the need for guiding",
+            "label": "supported",
+            "evidence": [
+              "Unbelievable performance for wide-field astrophotography. The short focal length makes guiding less critical. Produces stunning, detailed images.",
+              "The engineering behind this RASA is exceptional. It's incredibly efficient for capturing faint objects. A high-end choice for dedicated imagers."
+            ]
+          },
+          {
+            "text": "The quality and speed of the images produced are frequently mentioned as standout features.",
+            "label": "supported",
+            "evidence": [
+              "The RASA V2 is a dream come true for deep-sky imaging. The f/2.2 speed drastically cuts down exposure times. My best astrophotography investment yet.",
+              "Unbelievable performance for wide-field astrophotography. The short focal length makes guiding less critical. Produces stunning, detailed images.",
+              "Worth every penny for the quality and speed it offers. My images have never been sharper or more vibrant. A truly professional piece of equipment.",
+              "The engineering behind this RASA is exceptional. It's incredibly efficient for capturing faint objects. A high-end choice for dedicated imagers."
+            ]
+          }
+        ],
+        "claim_count": 4,
+        "supported_claims": 4,
+        "unsupported_claims": 0,
+        "contradicted_claims": 0,
+        "claim_precision": 1.0,
+        "aspect_coverage": 1.0,
+        "sentiment_alignment": 1,
+        "reason": "The response accurately reflects the positive feedback from the reviews regarding the product's performance in deep-sky imaging, its speed, focal length, and image quality.",
+        "judge_consistency_warnings": [],
+        "deterministic_claim_checks": [],
+        "deterministic_label_corrections": 0,
+        "judge_attempts": 1,
+        "judge_parse_retries": 0
+      },
+      "fidelity_passed": true,
+      "format_passed": true,
+      "trust_score": 97.0,
+      "passed": true,
+      "failure_reasons": [],
+      "case_id": "summary:9SIQT8TOJO",
+      "case_type": "summary",
+      "expected_behavior": "answer",
+      "question_sha256": "b17e59ffba36a7b9522ff9e1f0df4a121dd2a1751125be6ecdf9be597991fa4e",
+      "min_claim_count": 1
+    },
+    {
+      "product_id": "1YMWWN1N4O",
+      "status": "ok",
+      "error": "",
+      "error_stage": "",
+      "runtime_response_class": "answer",
+      "raw_reviews_count": 5,
+      "ai_summary": "Reviewers generally praise the Eclipsmart Travel Refractor Telescope for its safety features, clarity, and ease of use during solar observations. The Solar Safe filter and the included backpack are highlighted as particularly useful. The telescope's compact design and high magnification are also noted as strengths.",
+      "fact_sheet": {
+        "product_id": "1YMWWN1N4O",
+        "review_count": 5,
+        "average_score": 4.6,
+        "rating_distribution": {
+          "5": 2,
+          "4": 3
+        },
+        "trusted_derived_review_facts": {
+          "negative_review_definition": "score < 3",
+          "negative_review_threshold": 3.0,
+          "negative_review_count": 0,
+          "five_star_review_count": 2,
+          "five_star_percentage": 40.0,
+          "minimum_score": 4.0,
+          "maximum_score": 5.0,
+          "all_scores_at_least_4": true
+        },
+        "top_positive_reviews": [
+          {
+            "score": 5.0,
+            "review_sha256": "1ea694358e36c6d158cc45954091c6ee16acb2ecb1c7379af3719c29bc624fae"
+          },
+          {
+            "score": 5.0,
+            "review_sha256": "2c29c8b0e96dd22af432fa56b5b1c31c39205c7532a8831e41d3cc9dffe022f1"
+          },
+          {
+            "score": 4.5,
+            "review_sha256": "baec4db0af5866ba18c3f4f005777a07ba43be5dede9ad4f5eca517bc7b6a23c"
+          }
+        ],
+        "lowest_scored_reviews": [
+          {
+            "score": 4.0,
+            "review_sha256": "e1d9fb5384e209ff74baf63f6defae97916cabdd6e3b31528bf014934ad1bef5"
+          },
+          {
+            "score": 4.5,
+            "review_sha256": "baec4db0af5866ba18c3f4f005777a07ba43be5dede9ad4f5eca517bc7b6a23c"
+          },
+          {
+            "score": 4.5,
+            "review_sha256": "3023ddc2a7a66937635c391f592d00fba20c045198e3690a41e3fa8c66b47de2"
+          }
+        ],
+        "constraints": {
+          "has_explicit_age_signal": false
+        },
+        "input_safety": {
+          "pii_redacted_reviews": 0,
+          "injection_redacted_reviews": 0
+        }
+      },
+      "rule_checks": {
+        "summary_length_chars": 316,
+        "sentence_count": 3,
+        "word_count": 46,
+        "warnings": [],
+        "hard_fail_reasons": [],
+        "hard_fail": false,
+        "format_passed": true,
+        "format_findings": [],
+        "fidelity_findings": [],
+        "unsupported_age_claim": false,
+        "average_rating_mentions": [],
+        "average_rating_mismatch": false,
+        "negative_sentiment_conflict": false,
+        "positive_sentiment_conflict": false,
+        "product_id_echo": false,
+        "sensitive_output_detected": false,
+        "prompt_injection_echoed": false
+      },
+      "judge_result": {
+        "overall_score": 5,
+        "claims": [
+          {
+            "text": "Reviewers generally praise the Eclipsmart Travel Refractor Telescope for its safety features",
+            "label": "supported",
+            "evidence": [
+              "Perfect for solar observations! The Solar Safe filter gives peace of mind.",
+              "Very impressed with the safety features and clarity.",
+              "The ISO compliant filter is reassuring. It's a well-designed product for safe solar observation."
+            ]
+          },
+          {
+            "text": "clarity",
+            "label": "supported",
+            "evidence": [
+              "Views of the sun are incredibly clear and safe.",
+              "Very impressed with the safety features and clarity.",
+              "The magnification is much better than binoculars for the sun."
+            ]
+          },
+          {
+            "text": "ease of use during solar observations",
+            "label": "supported",
+            "evidence": [
+              "Perfect for solar observations!",
+              "Very impressed with the safety features and clarity.",
+              "Compact and easy to carry, this telescope is ideal for eclipse events."
+            ]
+          },
+          {
+            "text": "included backpack",
+            "label": "supported",
+            "evidence": [
+              "The included backpack is a nice touch."
+            ]
+          },
+          {
+            "text": "compact design",
+            "label": "supported",
+            "evidence": [
+              "Compact and easy to carry, this telescope is ideal for eclipse events."
+            ]
+          },
+          {
+            "text": "high magnification",
+            "label": "supported",
+            "evidence": [
+              "The magnification is much better than binoculars for the sun."
+            ]
+          }
+        ],
+        "claim_count": 6,
+        "supported_claims": 6,
+        "unsupported_claims": 0,
+        "contradicted_claims": 0,
+        "claim_precision": 1.0,
+        "aspect_coverage": 1.0,
+        "sentiment_alignment": 1,
+        "reason": "The response is grounded in the provided reviews and fact sheet.",
+        "judge_consistency_warnings": [],
+        "deterministic_claim_checks": [],
+        "deterministic_label_corrections": 0,
+        "judge_attempts": 1,
+        "judge_parse_retries": 0
+      },
+      "fidelity_passed": true,
+      "format_passed": true,
+      "trust_score": 100.0,
+      "passed": true,
+      "failure_reasons": [],
+      "case_id": "summary:1YMWWN1N4O",
+      "case_type": "summary",
+      "expected_behavior": "answer",
+      "question_sha256": "b17e59ffba36a7b9522ff9e1f0df4a121dd2a1751125be6ecdf9be597991fa4e",
+      "min_claim_count": 1
+    },
+    {
+      "product_id": "HQTGWGPNH4",
+      "status": "ok",
+      "error": "",
+      "error_stage": "",
+      "runtime_response_class": "answer",
+      "raw_reviews_count": 5,
+      "ai_summary": "The reviews for The Comet Book are highly positive, with an average score of 4.6. Reviewers praise the book for its insightful content, historical context, and presentation. For example, one reviewer described it as a \"fascinating glimpse into historical astronomical thought\" and another called it a \"must-read for anyone interested in the history of science.\"",
+      "fact_sheet": {
+        "product_id": "HQTGWGPNH4",
+        "review_count": 5,
+        "average_score": 4.6,
+        "rating_distribution": {
+          "5": 2,
+          "4": 3
+        },
+        "trusted_derived_review_facts": {
+          "negative_review_definition": "score < 3",
+          "negative_review_threshold": 3.0,
+          "negative_review_count": 0,
+          "five_star_review_count": 2,
+          "five_star_percentage": 40.0,
+          "minimum_score": 4.0,
+          "maximum_score": 5.0,
+          "all_scores_at_least_4": true
+        },
+        "top_positive_reviews": [
+          {
+            "score": 5.0,
+            "review_sha256": "9546ae0cc673e94d7f0eb7fce88999b3309d73879aaf81992020787873f43aa2"
+          },
+          {
+            "score": 5.0,
+            "review_sha256": "734eadb640d4d7da4b31951294bd56a38221600c8588355f8cbe25a99b9edfce"
+          },
+          {
+            "score": 4.5,
+            "review_sha256": "b03986bc265c6fe4adf33ca57c61b9478ce131a56a9f9576ce7e0e77c6b10991"
+          }
+        ],
+        "lowest_scored_reviews": [
+          {
+            "score": 4.0,
+            "review_sha256": "290add881e41fceee7d091f38fb043afe8037425935b905769132a8c0b3089e4"
+          },
+          {
+            "score": 4.5,
+            "review_sha256": "b03986bc265c6fe4adf33ca57c61b9478ce131a56a9f9576ce7e0e77c6b10991"
+          },
+          {
+            "score": 4.5,
+            "review_sha256": "8359b09c19a31a47cbf530e9809040334080bbe9677af9c82fe58322fd5ff991"
+          }
+        ],
+        "constraints": {
+          "has_explicit_age_signal": false
+        },
+        "input_safety": {
+          "pii_redacted_reviews": 0,
+          "injection_redacted_reviews": 0
+        }
+      },
+      "rule_checks": {
+        "summary_length_chars": 361,
+        "sentence_count": 3,
+        "word_count": 57,
+        "warnings": [],
+        "hard_fail_reasons": [],
+        "hard_fail": false,
+        "format_passed": true,
+        "format_findings": [],
+        "fidelity_findings": [],
+        "unsupported_age_claim": false,
+        "average_rating_mentions": [],
+        "average_rating_mismatch": false,
+        "negative_sentiment_conflict": false,
+        "positive_sentiment_conflict": false,
+        "product_id_echo": false,
+        "sensitive_output_detected": false,
+        "prompt_injection_echoed": false
+      },
+      "judge_result": {
+        "overall_score": 5,
+        "claims": [
+          {
+            "text": "The reviews for The Comet Book are highly positive",
+            "label": "supported",
+            "evidence": [
+              "Reviewers praise the book for its insightful content, historical context, and presentation. For example, one reviewer described it as a \"fascinating glimpse into historical astronomical thought\" and another called it a \"must-read for anyone interested in the history of science.\""
+            ]
+          }
+        ],
+        "claim_count": 1,
+        "supported_claims": 1,
+        "unsupported_claims": 0,
+        "contradicted_claims": 0,
+        "claim_precision": 1.0,
+        "aspect_coverage": 1.0,
+        "sentiment_alignment": 1,
+        "reason": "The response is strongly grounded, accurate, and answers the question.",
+        "judge_consistency_warnings": [],
+        "deterministic_claim_checks": [],
+        "deterministic_label_corrections": 0,
+        "judge_attempts": 1,
+        "judge_parse_retries": 0
+      },
+      "fidelity_passed": true,
+      "format_passed": true,
+      "trust_score": 100.0,
+      "passed": true,
+      "failure_reasons": [],
+      "case_id": "summary:HQTGWGPNH4",
+      "case_type": "summary",
+      "expected_behavior": "answer",
+      "question_sha256": "b17e59ffba36a7b9522ff9e1f0df4a121dd2a1751125be6ecdf9be597991fa4e",
+      "min_claim_count": 1
+    },
+    {
+      "product_id": "OLJCESPC7Z",
+      "status": "ok",
+      "error": "",
+      "error_stage": "",
+      "runtime_response_class": "answer",
+      "raw_reviews_count": 5,
+      "ai_summary": "The National Park Foundation Explorascope is praised for its ease of setup, clear views of celestial objects, and portability. Reviewers mention it is great for new astronomers, casual viewing, and family fun. The manual controls may take some getting used to, but the experience is rewarding.",
+      "fact_sheet": {
+        "product_id": "OLJCESPC7Z",
+        "review_count": 5,
+        "average_score": 3.8,
+        "rating_distribution": {
+          "4": 3,
+          "3": 2
+        },
+        "trusted_derived_review_facts": {
+          "negative_review_definition": "score < 3",
+          "negative_review_threshold": 3.0,
+          "negative_review_count": 0,
+          "five_star_review_count": 0,
+          "five_star_percentage": 0.0,
+          "minimum_score": 3.0,
+          "maximum_score": 4.5,
+          "all_scores_at_least_4": false
+        },
+        "top_positive_reviews": [
+          {
+            "score": 4.5,
+            "review_sha256": "1795870da3bc645f4510058f731773028df48e6bb4f1256a10ec4d1d3cecf96b"
+          },
+          {
+            "score": 4.0,
+            "review_sha256": "317ccc036431b208b9408b186996173e84f651971ec46f2df79c5f6764721787"
+          },
+          {
+            "score": 4.0,
+            "review_sha256": "4a151b3d12b065074c7d1fdc0e157faaa368ab66cb94b0e8d83bfb4246775a54"
+          }
+        ],
+        "lowest_scored_reviews": [
+          {
+            "score": 3.0,
+            "review_sha256": "0ec336aa7ece6756edbf9cb83516dc99f54d2e9a37a194b074e897475f9c03cf"
+          },
+          {
+            "score": 3.5,
+            "review_sha256": "bb1eb57fa763a13c89afc5f9cc2c544ad345f1ab2b338acf0d2b8d13242ec726"
+          },
+          {
+            "score": 4.0,
+            "review_sha256": "317ccc036431b208b9408b186996173e84f651971ec46f2df79c5f6764721787"
+          }
+        ],
+        "constraints": {
+          "has_explicit_age_signal": true
+        },
+        "input_safety": {
+          "pii_redacted_reviews": 0,
+          "injection_redacted_reviews": 0
+        }
+      },
+      "rule_checks": {
+        "summary_length_chars": 293,
+        "sentence_count": 3,
+        "word_count": 46,
+        "warnings": [],
+        "hard_fail_reasons": [],
+        "hard_fail": false,
+        "format_passed": true,
+        "format_findings": [],
+        "fidelity_findings": [],
+        "unsupported_age_claim": false,
+        "average_rating_mentions": [],
+        "average_rating_mismatch": false,
+        "negative_sentiment_conflict": false,
+        "positive_sentiment_conflict": false,
+        "product_id_echo": false,
+        "sensitive_output_detected": false,
+        "prompt_injection_echoed": false
+      },
+      "judge_result": {
+        "overall_score": 5,
+        "claims": [
+          {
+            "text": "The National Park Foundation Explorascope is praised for its ease of setup",
+            "label": "supported",
+            "evidence": [
+              "Great entry-level telescope! Easy to set up and provides clear views of the moon and brighter planets. Highly recommend for new astronomers."
+            ]
+          },
+          {
+            "text": "clear views of celestial objects",
+            "label": "supported",
+            "evidence": [
+              "Great entry-level telescope! Easy to set up and provides clear views of the moon and brighter planets. Highly recommend for new astronomers."
+            ]
+          },
+          {
+            "text": "portability",
+            "label": "supported",
+            "evidence": [
+              "Perfect for camping trips. It's lightweight and portable, making it easy to take anywhere. The views are surprisingly good for its size."
+            ]
+          },
+          {
+            "text": "great for new astronomers",
+            "label": "supported",
+            "evidence": [
+              "Great entry-level telescope! Easy to set up and provides clear views of the moon and brighter planets. Highly recommend for new astronomers."
+            ]
+          },
+          {
+            "text": "casual viewing",
+            "label": "supported",
+            "evidence": [
+              "For the price, this Explorascope delivers excellent performance. I was able to see Jupiter's moons clearly. A fantastic purchase for casual viewing."
+            ]
+          },
+          {
+            "text": "family fun",
+            "label": "supported",
+            "evidence": [
+              "Not the most powerful scope, but it's great for kids and beginners. My children love looking at the moon with it. A solid choice for family fun."
+            ]
+          },
+          {
+            "text": "manual controls may take some getting used to",
+            "label": "supported",
+            "evidence": [
+              "A bit tricky to get used to the manual controls, but once you do, it's very rewarding. Saw the Orion Nebula for the first time! Good value."
+            ]
+          }
+        ],
+        "claim_count": 7,
+        "supported_claims": 7,
+        "unsupported_claims": 0,
+        "contradicted_claims": 0,
+        "claim_precision": 1.0,
+        "aspect_coverage": 1.0,
+        "sentiment_alignment": 1,
+        "reason": "The response accurately summarizes the positive aspects of the product as per the reviews provided.",
+        "judge_consistency_warnings": [],
+        "deterministic_claim_checks": [],
+        "deterministic_label_corrections": 0,
+        "judge_attempts": 1,
+        "judge_parse_retries": 0
+      },
+      "fidelity_passed": true,
+      "format_passed": true,
+      "trust_score": 100.0,
+      "passed": true,
+      "failure_reasons": [],
+      "case_id": "summary:OLJCESPC7Z",
+      "case_type": "summary",
+      "expected_behavior": "answer",
+      "question_sha256": "b17e59ffba36a7b9522ff9e1f0df4a121dd2a1751125be6ecdf9be597991fa4e",
+      "min_claim_count": 1
+    },
+    {
+      "product_id": "2ZYFJ3GM2N",
+      "status": "ok",
+      "error": "",
+      "error_stage": "",
+      "runtime_response_class": "answer",
+      "raw_reviews_count": 5,
+      "ai_summary": "Reviewers generally praise the Roof Binoculars for their clarity, brightness, and versatility. They highlight the ED glass for its ability to spot subtle markings, the close focus for nature observation, and the lightweight design for hiking. The binoculars are also noted for their excellent performance in various lighting conditions and robust build quality.",
+      "fact_sheet": {
+        "product_id": "2ZYFJ3GM2N",
+        "review_count": 5,
+        "average_score": 4.4,
+        "rating_distribution": {
+          "5": 1,
+          "4": 4
+        },
+        "trusted_derived_review_facts": {
+          "negative_review_definition": "score < 3",
+          "negative_review_threshold": 3.0,
+          "negative_review_count": 0,
+          "five_star_review_count": 1,
+          "five_star_percentage": 20.0,
+          "minimum_score": 4.0,
+          "maximum_score": 5.0,
+          "all_scores_at_least_4": true
+        },
+        "top_positive_reviews": [
+          {
+            "score": 5.0,
+            "review_sha256": "3fb5500c422ea21267c8b1176324c2b9b76eab70a3ca01c5a95cf8f13bf4c5c2"
+          },
+          {
+            "score": 4.5,
+            "review_sha256": "d6273a668fe15f7f04f4159e6e2f390e771809695ce1911dfbe0d1e5f3011ed7"
+          },
+          {
+            "score": 4.5,
+            "review_sha256": "b54f22e96809804e4aa5a93de11e640e89b85b4288d0c3ef1a162ac562641bbb"
+          }
+        ],
+        "lowest_scored_reviews": [
+          {
+            "score": 4.0,
+            "review_sha256": "022cc876e88d25e910e91ebf214e7e5975dacaa065c9e2635411f72877472c64"
+          },
+          {
+            "score": 4.0,
+            "review_sha256": "c144ad699963a22d0b54f8861932553761e8d95c53b3e5b81b2cd0deaeec408a"
+          },
+          {
+            "score": 4.5,
+            "review_sha256": "d6273a668fe15f7f04f4159e6e2f390e771809695ce1911dfbe0d1e5f3011ed7"
+          }
+        ],
+        "constraints": {
+          "has_explicit_age_signal": false
+        },
+        "input_safety": {
+          "pii_redacted_reviews": 0,
+          "injection_redacted_reviews": 0
+        }
+      },
+      "rule_checks": {
+        "summary_length_chars": 361,
+        "sentence_count": 3,
+        "word_count": 53,
+        "warnings": [],
+        "hard_fail_reasons": [],
+        "hard_fail": false,
+        "format_passed": true,
+        "format_findings": [],
+        "fidelity_findings": [],
+        "unsupported_age_claim": false,
+        "average_rating_mentions": [],
+        "average_rating_mismatch": false,
+        "negative_sentiment_conflict": false,
+        "positive_sentiment_conflict": false,
+        "product_id_echo": false,
+        "sensitive_output_detected": false,
+        "prompt_injection_echoed": false
+      },
+      "judge_result": {
+        "overall_score": 5,
+        "claims": [
+          {
+            "text": "Reviewers generally praise the Roof Binoculars for their clarity, brightness, and versatility.",
+            "label": "supported",
+            "evidence": [
+              "Incredible clarity and brightness, perfect for bird watching. The ED glass really makes a difference. I can spot the subtlest markings.",
+              "These binoculars are fantastic for nature observation. The close focus is a huge advantage for viewing nearby wildlife. Very comfortable to hold.",
+              "Excellent build quality and optical performance. They feel robust and provide sharp images. A great investment for any outdoor activity."
+            ]
+          },
+          {
+            "text": "They highlight the ED glass for its ability to spot subtle markings",
+            "label": "supported",
+            "evidence": [
+              "Incredible clarity and brightness, perfect for bird watching. The ED glass really makes a difference. I can spot the subtlest markings."
+            ]
+          },
+          {
+            "text": "the close focus for nature observation",
+            "label": "supported",
+            "evidence": [
+              "These binoculars are fantastic for nature observation. The close focus is a huge advantage for viewing nearby wildlife. Very comfortable to hold."
+            ]
+          },
+          {
+            "text": "the lightweight design for hiking",
+            "label": "supported",
+            "evidence": [
+              "Lightweight and durable, these are my go-to binoculars for hiking. The wide field of view is excellent. Highly recommend for outdoor enthusiasts."
+            ]
+          },
+          {
+            "text": "excellent performance in various lighting conditions",
+            "label": "supported",
+            "evidence": [
+              "Took these to a game and had an amazing view of the action. They perform great in various lighting conditions. A solid all-around binocular."
+            ]
+          },
+          {
+            "text": "robust build quality",
+            "label": "supported",
+            "evidence": [
+              "Excellent build quality and optical performance. They feel robust and provide sharp images. A great investment for any outdoor activity."
+            ]
+          }
+        ],
+        "claim_count": 6,
+        "supported_claims": 6,
+        "unsupported_claims": 0,
+        "contradicted_claims": 0,
+        "claim_precision": 1.0,
+        "aspect_coverage": 1.0,
+        "sentiment_alignment": 1,
+        "reason": "The response is grounded in the provided reviews and accurately reflects the positive aspects highlighted by the reviewers.",
+        "judge_consistency_warnings": [],
+        "deterministic_claim_checks": [],
+        "deterministic_label_corrections": 0,
+        "judge_attempts": 1,
+        "judge_parse_retries": 0
+      },
+      "fidelity_passed": true,
+      "format_passed": true,
+      "trust_score": 100.0,
+      "passed": true,
+      "failure_reasons": [],
+      "case_id": "summary:2ZYFJ3GM2N",
+      "case_type": "summary",
+      "expected_behavior": "answer",
+      "question_sha256": "b17e59ffba36a7b9522ff9e1f0df4a121dd2a1751125be6ecdf9be597991fa4e",
+      "min_claim_count": 1
+    },
+    {
+      "product_id": "66VCHSJNUP",
+      "status": "ok",
+      "error": "",
+      "error_stage": "",
+      "runtime_response_class": "answer",
+      "raw_reviews_count": 5,
+      "ai_summary": "The Starsense Explorer Refractor Telescope has received positive feedback from all reviewers. Reviewers praise the app's user-friendly interface and the ease of finding celestial objects. They also appreciate the real-time positioning feature and the quality of the views.",
+      "fact_sheet": {
+        "product_id": "66VCHSJNUP",
+        "review_count": 5,
+        "average_score": 4.6,
+        "rating_distribution": {
+          "5": 2,
+          "4": 3
+        },
+        "trusted_derived_review_facts": {
+          "negative_review_definition": "score < 3",
+          "negative_review_threshold": 3.0,
+          "negative_review_count": 0,
+          "five_star_review_count": 2,
+          "five_star_percentage": 40.0,
+          "minimum_score": 4.0,
+          "maximum_score": 5.0,
+          "all_scores_at_least_4": true
+        },
+        "top_positive_reviews": [
+          {
+            "score": 5.0,
+            "review_sha256": "8f59e4643085d651292b44615f6aabf59c54a74d271e75c68395a01e84d03cc0"
+          },
+          {
+            "score": 5.0,
+            "review_sha256": "0ab2f087f0c162efa2cba4ee489c1e693520a0b0be30ece5588a192dc39053c7"
+          },
+          {
+            "score": 4.5,
+            "review_sha256": "015a461bcaaa4c1d066e082ac6b0c53494799f986fc6e9cf7b5613da4920c59c"
+          }
+        ],
+        "lowest_scored_reviews": [
+          {
+            "score": 4.0,
+            "review_sha256": "0be53862cfa81d4ab9e012d473d7ca8468dbcc9c6d743db6ed8714a41000d2d6"
+          },
+          {
+            "score": 4.5,
+            "review_sha256": "015a461bcaaa4c1d066e082ac6b0c53494799f986fc6e9cf7b5613da4920c59c"
+          },
+          {
+            "score": 4.5,
+            "review_sha256": "5295a4ee4fdd05044c95a4b34f37a868cde155e06994457d59a8d1f5731fcf5b"
+          }
+        ],
+        "constraints": {
+          "has_explicit_age_signal": false
+        },
+        "input_safety": {
+          "pii_redacted_reviews": 0,
+          "injection_redacted_reviews": 0
+        }
+      },
+      "rule_checks": {
+        "summary_length_chars": 272,
+        "sentence_count": 3,
+        "word_count": 41,
+        "warnings": [],
+        "hard_fail_reasons": [],
+        "hard_fail": false,
+        "format_passed": true,
+        "format_findings": [],
+        "fidelity_findings": [],
+        "unsupported_age_claim": false,
+        "average_rating_mentions": [],
+        "average_rating_mismatch": false,
+        "negative_sentiment_conflict": false,
+        "positive_sentiment_conflict": false,
+        "product_id_echo": false,
+        "sensitive_output_detected": false,
+        "prompt_injection_echoed": false
+      },
+      "judge_result": {
+        "overall_score": 4,
+        "claims": [
+          {
+            "text": "The Starsense Explorer Refractor Telescope has received positive feedback from all reviewers.",
+            "label": "supported",
+            "evidence": [
+              "All five reviews have scores of 4.0 or higher, with an average score of 4.6."
+            ]
+          },
+          {
+            "text": "Reviewers praise the app's user-friendly interface and the ease of finding celestial objects.",
+            "label": "supported",
+            "evidence": [
+              "Reviewer_001: 'The StarSense app is revolutionary! It made finding celestial objects incredibly easy.'",
+              "Reviewer_004: 'Finally, a telescope that takes the guesswork out of stargazing. The real-time positioning is incredibly accurate.'"
+            ]
+          },
+          {
+            "text": "They also appreciate the real-time positioning feature and the quality of the views.",
+            "label": "supported",
+            "evidence": [
+              "Reviewer_001: 'The StarSense app is revolutionary! It made finding celestial objects incredibly easy.'",
+              "Reviewer_004: 'Finally, a telescope that takes the guesswork out of stargazing. The real-time positioning is incredibly accurate.'",
+              "Reviewer_003: 'The views are crisp and clear.'"
+            ]
+          }
+        ],
+        "claim_count": 3,
+        "supported_claims": 3,
+        "unsupported_claims": 0,
+        "contradicted_claims": 0,
+        "claim_precision": 1.0,
+        "aspect_coverage": 1.0,
+        "sentiment_alignment": 1,
+        "reason": "The response is factually accurate based on the provided reviews and fact sheet.",
+        "judge_consistency_warnings": [],
+        "deterministic_claim_checks": [],
+        "deterministic_label_corrections": 0,
+        "judge_attempts": 1,
+        "judge_parse_retries": 0
+      },
+      "fidelity_passed": true,
+      "format_passed": true,
+      "trust_score": 97.0,
+      "passed": true,
+      "failure_reasons": [],
+      "case_id": "summary:66VCHSJNUP",
+      "case_type": "summary",
+      "expected_behavior": "answer",
+      "question_sha256": "b17e59ffba36a7b9522ff9e1f0df4a121dd2a1751125be6ecdf9be597991fa4e",
+      "min_claim_count": 1
+    },
+    {
+      "product_id": "LS4PSXUNUM",
+      "status": "ok",
+      "error": "",
+      "error_stage": "",
+      "runtime_response_class": "answer",
+      "raw_reviews_count": 5,
+      "ai_summary": "The Red Flashlight has received positive reviews, with an average score of 4.6 out of 5. Reviewers praise the red light for preserving night vision, the hand warmer function, and the portable power bank. The rugged design and versatility for activities like star parties, camping, and night walks are also highlighted.",
+      "fact_sheet": {
+        "product_id": "LS4PSXUNUM",
+        "review_count": 5,
+        "average_score": 4.6,
+        "rating_distribution": {
+          "5": 2,
+          "4": 3
+        },
+        "trusted_derived_review_facts": {
+          "negative_review_definition": "score < 3",
+          "negative_review_threshold": 3.0,
+          "negative_review_count": 0,
+          "five_star_review_count": 2,
+          "five_star_percentage": 40.0,
+          "minimum_score": 4.0,
+          "maximum_score": 5.0,
+          "all_scores_at_least_4": true
+        },
+        "top_positive_reviews": [
+          {
+            "score": 5.0,
+            "review_sha256": "4747bf29ab1175b555fb5f02993432469233dd3b77f8017d183f17626dc4ed35"
+          },
+          {
+            "score": 5.0,
+            "review_sha256": "003e12d565d4759fa68e5dc3544d4b0f5fb375e9590bbc12a771cc7ac4ffeec8"
+          },
+          {
+            "score": 4.5,
+            "review_sha256": "e9498c3f58d18682686c41affe539bea61253a254e9dfacd7bf3e2d3d4a7163a"
+          }
+        ],
+        "lowest_scored_reviews": [
+          {
+            "score": 4.0,
+            "review_sha256": "237102008a4f5e840d3d67616bb340b482e321ce4789ad7131aba327a8b86b21"
+          },
+          {
+            "score": 4.5,
+            "review_sha256": "e9498c3f58d18682686c41affe539bea61253a254e9dfacd7bf3e2d3d4a7163a"
+          },
+          {
+            "score": 4.5,
+            "review_sha256": "232c862220bf241fd5b0ee111f737fd566288943b430edd9082bcd0873a5e045"
+          }
+        ],
+        "constraints": {
+          "has_explicit_age_signal": false
+        },
+        "input_safety": {
+          "pii_redacted_reviews": 0,
+          "injection_redacted_reviews": 0
+        }
+      },
+      "rule_checks": {
+        "summary_length_chars": 318,
+        "sentence_count": 3,
+        "word_count": 52,
+        "warnings": [],
+        "hard_fail_reasons": [],
+        "hard_fail": false,
+        "format_passed": true,
+        "format_findings": [],
+        "fidelity_findings": [],
+        "unsupported_age_claim": false,
+        "average_rating_mentions": [],
+        "average_rating_mismatch": false,
+        "negative_sentiment_conflict": false,
+        "positive_sentiment_conflict": false,
+        "product_id_echo": false,
+        "sensitive_output_detected": false,
+        "prompt_injection_echoed": false
+      },
+      "judge_result": {
+        "overall_score": 5,
+        "claims": [
+          {
+            "text": "The Red Flashlight has received positive reviews",
+            "label": "supported",
+            "evidence": [
+              "Reviewer scores average at 4.6 out of 5"
+            ]
+          },
+          {
+            "text": "Reviewers praise the red light for preserving night vision",
+            "label": "supported",
+            "evidence": [
+              "The red light is perfect for preserving night vision during techx sessions"
+            ]
+          },
+          {
+            "text": "Reviewers praise the hand warmer function",
+            "label": "supported",
+            "evidence": [
+              "The hand warmer is an unexpected bonus"
+            ]
+          },
+          {
+            "text": "Reviewers praise the portable power bank",
+            "label": "supported",
+            "evidence": [
+              "The power bank means I can charge my phone"
+            ]
+          },
+          {
+            "text": "The rugged design and versatility for activities like star parties, camping, and night walks are highlighted",
+            "label": "supported",
+            "evidence": [
+              "This flashlight is indispensable for star parties",
+              "Rugged and versatile, this flashlight is great for camping and night walks",
+              "A fantastic multi-tool for my emergency kit"
+            ]
+          }
+        ],
+        "claim_count": 5,
+        "supported_claims": 5,
+        "unsupported_claims": 0,
+        "contradicted_claims": 0,
+        "claim_precision": 1.0,
+        "aspect_coverage": 1.0,
+        "sentiment_alignment": 1,
+        "reason": "The response is strongly grounded, accurate, and answers the question.",
+        "judge_consistency_warnings": [],
+        "deterministic_claim_checks": [],
+        "deterministic_label_corrections": 0,
+        "judge_attempts": 1,
+        "judge_parse_retries": 0
+      },
+      "fidelity_passed": true,
+      "format_passed": true,
+      "trust_score": 100.0,
+      "passed": true,
+      "failure_reasons": [],
+      "case_id": "summary:LS4PSXUNUM",
+      "case_type": "summary",
+      "expected_behavior": "answer",
+      "question_sha256": "b17e59ffba36a7b9522ff9e1f0df4a121dd2a1751125be6ecdf9be597991fa4e",
+      "min_claim_count": 1
+    },
+    {
+      "product_id": "6E92ZMYYFZ",
+      "status": "ok",
+      "error": "",
+      "error_stage": "",
+      "runtime_response_class": "answer",
+      "raw_reviews_count": 5,
+      "ai_summary": "The Solar Filter has received 5 reviews with an average score of 4.8. Reviewers mention the secure attachment with Velcro straps, ISO compliance, and excellent build quality. All reviews are positive, with no negative reviews.",
+      "fact_sheet": {
+        "product_id": "6E92ZMYYFZ",
+        "review_count": 5,
+        "average_score": 4.8,
+        "rating_distribution": {
+          "5": 3,
+          "4": 2
+        },
+        "trusted_derived_review_facts": {
+          "negative_review_definition": "score < 3",
+          "negative_review_threshold": 3.0,
+          "negative_review_count": 0,
+          "five_star_review_count": 3,
+          "five_star_percentage": 60.0,
+          "minimum_score": 4.5,
+          "maximum_score": 5.0,
+          "all_scores_at_least_4": true
+        },
+        "top_positive_reviews": [
+          {
+            "score": 5.0,
+            "review_sha256": "dc38d8ad401a73b1c207ff2d289df8e73bf1a320bbac4465cf2ff1ec6bd1b0a4"
+          },
+          {
+            "score": 5.0,
+            "review_sha256": "28d84b63f1868c13c5ee3bffd3305e37a18fdb215d2d44185f77e73ba6d15fe0"
+          },
+          {
+            "score": 5.0,
+            "review_sha256": "9ef392eddce209f75d4baeb79bfb6ad2d33acc5fafd5012a3af775649e41a209"
+          }
+        ],
+        "lowest_scored_reviews": [
+          {
+            "score": 4.5,
+            "review_sha256": "6ad3f27783bef0304fe70f8ab0f68e3126f4a47b08ef161887b5fbdc2027cd59"
+          },
+          {
+            "score": 4.5,
+            "review_sha256": "00205dfdaa253da68b1dce668bd210add34efa048d4f09f2bc4e9206ad241330"
+          },
+          {
+            "score": 5.0,
+            "review_sha256": "dc38d8ad401a73b1c207ff2d289df8e73bf1a320bbac4465cf2ff1ec6bd1b0a4"
+          }
+        ],
+        "constraints": {
+          "has_explicit_age_signal": false
+        },
+        "input_safety": {
+          "pii_redacted_reviews": 0,
+          "injection_redacted_reviews": 0
+        }
+      },
+      "rule_checks": {
+        "summary_length_chars": 226,
+        "sentence_count": 3,
+        "word_count": 36,
+        "warnings": [],
+        "hard_fail_reasons": [],
+        "hard_fail": false,
+        "format_passed": true,
+        "format_findings": [],
+        "fidelity_findings": [],
+        "unsupported_age_claim": false,
+        "average_rating_mentions": [],
+        "average_rating_mismatch": false,
+        "negative_sentiment_conflict": false,
+        "positive_sentiment_conflict": false,
+        "product_id_echo": false,
+        "sensitive_output_detected": false,
+        "prompt_injection_echoed": false
+      },
+      "judge_result": {
+        "overall_score": 4,
+        "claims": [
+          {
+            "text": "The Solar Filter has received 5 reviews with an average score of 4.8.",
+            "label": "supported",
+            "evidence": [
+              "average_score\":4.8"
+            ]
+          },
+          {
+            "text": "Reviewers mention the secure attachment with Velcro straps",
+            "label": "supported",
+            "evidence": [
+              "\"The Velcro straps ensure it stays securely in place.\""
+            ]
+          },
+          {
+            "text": "ISO compliance",
+            "label": "supported",
+            "evidence": [
+              "\"The ISO compliance is crucial.\""
+            ]
+          },
+          {
+            "text": "excellent build quality",
+            "label": "supported",
+            "evidence": [
+              "\"The build quality is excellent.\""
+            ]
+          },
+          {
+            "text": "All reviews are positive, with no negative reviews.",
+            "label": "supported",
+            "evidence": [
+              "negative_review_count\":0"
+            ]
+          }
+        ],
+        "claim_count": 5,
+        "supported_claims": 5,
+        "unsupported_claims": 0,
+        "contradicted_claims": 0,
+        "claim_precision": 1.0,
+        "aspect_coverage": 1.0,
+        "sentiment_alignment": 1,
+        "reason": "The response is mostly accurate and covers the main aspects of the reviews, but it incorrectly states that there are no negative reviews.",
+        "judge_consistency_warnings": [
+          "deterministic_claim_labels_corrected"
+        ],
+        "deterministic_claim_checks": [
+          {
+            "claim_index": 5,
+            "rule": "negative_review_count",
+            "original_label": "contradicted",
+            "authoritative_label": "supported",
+            "corrected": true
+          }
+        ],
+        "deterministic_label_corrections": 1,
+        "judge_attempts": 1,
+        "judge_parse_retries": 0
+      },
+      "fidelity_passed": true,
+      "format_passed": true,
+      "trust_score": 97.0,
+      "passed": true,
+      "failure_reasons": [],
+      "case_id": "summary:6E92ZMYYFZ",
+      "case_type": "summary",
+      "expected_behavior": "answer",
+      "question_sha256": "b17e59ffba36a7b9522ff9e1f0df4a121dd2a1751125be6ecdf9be597991fa4e",
+      "min_claim_count": 1
+    }
+  ],
+  "aggregate": {
+    "total_cases": 10,
+    "distinct_products": 10,
+    "ok_cases": 10,
+    "passed_cases": 10,
+    "fidelity_passed_cases": 10,
+    "format_passed_cases": 10,
+    "rule_failed_cases": 0,
+    "invalid_run_cases": 0,
+    "overall_pass_rate": 1.0,
+    "overall_pass_rate_ci_95": {
+      "method": "wilson",
+      "confidence_level": 0.95,
+      "lower": 0.7225,
+      "upper": 1.0,
+      "width": 0.2775
+    },
+    "fidelity_pass_rate": 1.0,
+    "format_pass_rate": 1.0,
+    "invalid_run_rate": 0.0,
+    "rule_failed_rate": 0.0,
+    "suite_trust_score": 99.1,
+    "judge_consistency_warning_cases": 1,
+    "judge_consistency_warnings": {
+      "deterministic_claim_labels_corrected": 1
+    },
+    "runtime_response_classes": {
+      "answer": 10
+    },
+    "invalid_error_stages": {},
+    "deterministic_label_corrections": 1,
+    "deterministic_correction_cases": 1,
+    "expected_benchmark_products": 10,
+    "benchmark_coverage_rate": 1.0,
+    "benchmark_coverage_complete": true,
+    "evaluation_scope": "mentor_benchmark_complete",
+    "certification_note": "Đã đánh giá đủ 10/10 sản phẩm trong toàn bộ benchmark do mentor cung cấp. Kết quả chỉ xác nhận hành vi trên benchmark cố định này và không được suy rộng ra mọi sản phẩm trong thực tế.",
+    "avg_fidelity_score": 4.7,
+    "avg_claim_precision": 1.0,
+    "avg_claim_count": 4.6,
+    "unsupported_claim_rate": 0.0,
+    "contradiction_rate": 0.0,
+    "aspect_coverage_avg": 1.0,
+    "sentiment_alignment_rate": 1.0,
+    "quality_gate_passed": true,
+    "quality_gate": {
+      "passed": true,
+      "min_suite_pass_rate": 1.0,
+      "observed_suite_pass_rate": 1.0,
+      "passed_cases": 10,
+      "total_cases": 10,
+      "required_products": 10,
+      "observed_products": 10,
+      "expected_product_ids": [
+        "0PUK6V6EV0",
+        "1YMWWN1N4O",
+        "2ZYFJ3GM2N",
+        "66VCHSJNUP",
+        "6E92ZMYYFZ",
+        "9SIQT8TOJO",
+        "HQTGWGPNH4",
+        "L9ECAV7KIM",
+        "LS4PSXUNUM",
+        "OLJCESPC7Z"
+      ],
+      "observed_product_ids": [
+        "0PUK6V6EV0",
+        "1YMWWN1N4O",
+        "2ZYFJ3GM2N",
+        "66VCHSJNUP",
+        "6E92ZMYYFZ",
+        "9SIQT8TOJO",
+        "HQTGWGPNH4",
+        "L9ECAV7KIM",
+        "LS4PSXUNUM",
+        "OLJCESPC7Z"
+      ],
+      "missing_product_ids": [],
+      "unexpected_product_ids": [],
+      "expected_dataset_sha256": "066d23a7d8492212c8bf3aac3a0048fcfed9c4dd2e26814fd241b5e7f2187361",
+      "observed_dataset_sha256": "",
+      "expected_source_case_count": 243,
+      "observed_source_case_count": null,
+      "expected_selected_case_count": 61,
+      "observed_selected_case_count": 10,
+      "dataset_contract": {
+        "passed": false,
+        "failures": [
+          "versioned_question_dataset_required",
+          "dataset_sha256_mismatch",
+          "source_case_count_mismatch",
+          "selected_case_count_mismatch",
+          "evaluated_case_count_mismatch",
+          "selection_rule_mismatch"
+        ],
+        "expected_dataset_sha256": "066d23a7d8492212c8bf3aac3a0048fcfed9c4dd2e26814fd241b5e7f2187361",
+        "observed_dataset_sha256": "",
+        "expected_source_case_count": 243,
+        "observed_source_case_count": null,
+        "expected_selected_case_count": 61,
+        "observed_selected_case_count": 10
+      },
+      "invalid_run_cases": 0,
+      "rule_failed_cases": 0,
+      "format_failed_cases": 0,
+      "contradicted_claims": 0,
+      "unsupported_answer_claims": 0,
+      "failures": []
+    }
+  }
+}
