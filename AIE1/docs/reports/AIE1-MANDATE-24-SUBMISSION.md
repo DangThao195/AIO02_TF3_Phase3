@@ -229,3 +229,18 @@ $env:PRODUCT_REVIEWS_TRACE_HTTP_ALLOW_UNAUTHENTICATED="true"
 *   **Artifact JSON Báo cáo Baseline Sau Khi Có Cache:** [cost_latency_baseline.json](../../repro/artifacts/cost_latency_baseline.json)
 *   **Artifact JSON Báo cáo Baseline So Sánh Caching:** [cost_latency_comparison.json](../../repro/artifacts/cost_latency_comparison.json)
 
+---
+
+## 📦 9. Danh Mục Nộp Jira Ticket `AI MANDATE #24` & Quy Trình Ngày Chấm
+
+Dưới đây là checklist nội dung hoàn chỉnh sẵn sàng dán trực tiếp vào **Jira Ticket `AI MANDATE #24`**:
+
+| Hạng mục Nộp (Artifact Required) | Đường dẫn & Kết xuất chuẩn bị | Hướng dẫn Ngày Chấm cho Mentor / BTC |
+| :--- | :--- | :--- |
+| **1. Link PR / Commit** | Commit Hash: [`63bc37f`](https://github.com/DangThao195/AIO02_TF3_Phase3/commit/63bc37f)<br>Nhánh: `feature/product-review` | Mentor kiểm tra diff thay đổi mã nguồn Tracing & HTTP server. |
+| **2. Cửa Replay bơm request từ ngoài** | Endpoint: `POST http://localhost:8086/replay`<br>Headers: `Content-Type: application/json` | BTC gửi request: `{"question": "Do reviewers say the kit removes dust?", "product_id": "L9ECAV7KIM"}` $\rightarrow$ Nhận phản hồi kèm `trace_id`. |
+| **3. Cửa `fetch trace theo id`** | Endpoint: `GET http://localhost:8086/trace/{trace_id}` | BTC lấy `trace_id` từ kết quả replay và fetch trace record $\rightarrow$ Xác nhận đủ 8 trường lõi & dựng lại chuỗi cuộc gọi end-to-end. |
+| **4. 1 Trace Lỗi / Fallback (Đội tự trigger)** | Endpoint kích hoạt: `POST http://localhost:8086/inject/error`<br>Payload: `{"active": true, "error_type": "rate_limit_exceeded"}` | BTC hoặc Mentor fetch trace của request lỗi $\rightarrow$ Ghi nhận `outcome: fallback` và `fallback_reason: rate_limit_exceeded`. |
+| **5. 1 View tổng hợp Cost / Latency** | File Artifact: [cost_latency_comparison.json](../../repro/artifacts/cost_latency_comparison.json) & [cost_latency_baseline.json](../../repro/artifacts/cost_latency_baseline.json) | Xem báo cáo tổng hợp chi phí USD, lượng token và độ trễ p50/p95 chia theo mô hình Bedrock Nova Lite / Micro và cửa sổ thời gian. |
+| **6. Kịch bản PII Marker (`PII-TOKEN-XYZ`)** | Prompt: `"Review for PII-TOKEN-XYZ-SECRET"` | BTC gửi request chứa PII marker $\rightarrow$ Fetch trace $\rightarrow$ Xác nhận chuỗi thô **không xuất hiện** (kết quả 0 match, đã băm `question_sha256`). |
+| **7. ADR Ký Tên Duyệt** | Document: [ADR 0008: Runtime LLM Trace & Auditability](../adr/0008-LLM-OBSERVABILITY.md) | Tài liệu kiến trúc ký duyệt đã commit trong repo. |
