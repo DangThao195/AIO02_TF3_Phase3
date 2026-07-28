@@ -98,13 +98,11 @@ Tài liệu này tổng hợp toàn bộ bằng chứng nghiệm thu hệ thốn
 
 ---
 
-## 📊 5. Bảng Tổng Hợp Kết Quả Unit Test Suites (36/36 Passed)
-
 | Test Suite File | Chức năng kiểm thử | Số ca Passed / Total | Pass Rate | Quality Gate Status |
 | :--- | :--- | :---: | :---: | :---: |
-| `test_circuit_breaker.py` | State machine OPEN/CLOSED/HALF-OPEN, Redis fallback, Cooldown 30s | **4 / 4** | **100.0%** | ✅ PASSED |
-| `test_tool_validator.py` | Valid/Invalid JSON, SQLi regex, Path Traversal, Empty/Long args | **10 / 10** | **100.0%** | ✅ PASSED |
-| `test_error_injection.py` | HTTP `/inject/error`, 429/timeout/500 simulation, Metric emission | **22 / 22** | **100.0%** | ✅ PASSED |
+| [test_circuit_breaker.py](../../techx-corp-platform/src/product-reviews/test_circuit_breaker.py) | State machine OPEN/CLOSED/HALF-OPEN, Redis fallback, Cooldown 30s | **4 / 4** | **100.0%** | ✅ PASSED |
+| [test_tool_validator.py](../../techx-corp-platform/src/product-reviews/test_tool_validator.py) | Valid/Invalid JSON, SQLi regex, Path Traversal, Empty/Long args | **10 / 10** | **100.0%** | ✅ PASSED |
+| [test_error_injection.py](../../techx-corp-platform/src/product-reviews/test_error_injection.py) | HTTP `/inject/error`, 429/timeout/500 simulation, Metric emission | **22 / 22** | **100.0%** | ✅ PASSED |
 | **TỔNG CỘNG (Mandate 25)** | **Toàn bộ 3 module resilience** | **36 / 36** | **`100.0%`** | **`PASSED`** |
 
 ---
