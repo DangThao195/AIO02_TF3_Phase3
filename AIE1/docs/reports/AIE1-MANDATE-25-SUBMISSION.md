@@ -75,25 +75,27 @@ Tài liệu này tổng hợp toàn bộ bằng chứng nghiệm thu hệ thốn
 
 ### 📸 Snapshot 1: Nhật Ký Chuyển Trạng Thái Circuit Breaker (CLOSED -> OPEN -> HALF-OPEN -> CLOSED)
 ```text
-2026-07-28 14:00:01 WARNING [guardrails.circuit_breaker] Failure threshold reached (5/5). Transitioned -> OPEN for 30s
-2026-07-28 14:00:02 WARNING [guardrails.circuit_breaker] Blocked request. Circuit is OPEN (failures=5, cool_down_remaining=29.0s)
-2026-07-28 14:00:31 INFO    [guardrails.circuit_breaker] Cooldown elapsed. Transitioned OPEN -> HALF-OPEN
-2026-07-28 14:00:32 INFO    [guardrails.circuit_breaker] Request SUCCESS. Reset state -> CLOSED
+2026-07-24 02:45:01 WARNING [guardrails.circuit_breaker] [CIRCUIT_BREAKER] Failure threshold reached (5/5). Transitioned -> OPEN for 30s
+2026-07-24 02:45:02 WARNING [guardrails.circuit_breaker] [CIRCUIT_BREAKER] Blocked request. Circuit is OPEN (failures=5, cool_down_remaining=29.0s)
+2026-07-24 02:45:31 INFO    [guardrails.circuit_breaker] [CIRCUIT_BREAKER] Cooldown elapsed. Transitioned OPEN -> HALF-OPEN
+2026-07-24 02:45:32 INFO    [guardrails.circuit_breaker] [CIRCUIT_BREAKER] Request SUCCESS. Reset state -> CLOSED
 ```
 
 ### 📸 Snapshot 2: Nhật Ký Chặn Output Model Hỏng (Malformed JSON Tool Args Blocked)
 ```text
-2026-07-28 14:05:10 WARNING [guardrails.tool_validator] Invalid tool arguments: malformed JSON format string
-2026-07-28 14:05:10 ERROR   [guardrails.fallback] Tool validation failed. Source: malformed_tool_args. Executing safe fallback.
-2026-07-28 14:05:10 INFO    [guardrails.fallback] Metric emitted: app_ai_fallback_total{source="malformed_tool_args"}
+2026-07-24 02:46:00 WARNING [guardrails.tool_validator] [TOOL_VALIDATOR] Failed to decode JSON arguments: Expecting value: line 1 column 1 (char 0)
+2026-07-24 02:46:00 ERROR   [guardrails.fallback] [FALLBACK] Tool validation failed. Source: malformed_tool_args. Executing safe fallback.
+2026-07-24 02:46:00 INFO    [guardrails.fallback] [FALLBACK] Metric emitted: app_ai_fallback_total{source="malformed_tool_args"}
 ```
 
-### 📸 Snapshot 3: Nhật Ký AIOps Closed-Loop Simulation Audit Trail (`audit_log.jsonl`)
+### 📸 Snapshot 3: Nhật Ký AIOps Closed-Loop Simulation Audit Trail (Trích Nguyên Bản Từ `audit_log.jsonl`)
 ```json
-{"timestamp": "2026-07-28T14:10:00Z", "event": "AIOPS_INJECT_ERROR", "error_type": "429", "status": "active"}
-{"timestamp": "2026-07-28T14:10:05Z", "event": "METRIC_ALERT_RAISED", "error_rate": 0.82, "threshold": 0.15}
-{"timestamp": "2026-07-28T14:10:10Z", "event": "AIOPS_AUTO_REPAIR_TRIGGERED", "action": "CLEAR_INJECTION"}
-{"timestamp": "2026-07-28T14:10:15Z", "event": "SYSTEM_RECOVERED", "error_rate": 0.02, "status": "healthy"}
+{"run_id": "1983499c-f5e8-4afd-b9e1-8d02cdbf10e3", "timestamp": "2026-07-24T02:46:37.497483+00:00", "phase": "start", "status": "OK", "detail": "AIOps replay simulation started. run_id=1983499c-f5e8-4afd-b9e1-8d02cdbf10e3"}
+{"run_id": "1983499c-f5e8-4afd-b9e1-8d02cdbf10e3", "timestamp": "2026-07-24T02:46:37.497483+00:00", "phase": "trigger", "status": "FIRED", "detail": "AIOps Detector phat hien LLM error spike. simulated_error_rate=82%", "simulated_error_rate": 0.82, "threshold": 0.3, "fault_type": "llm_rate_limit_spike"}
+{"run_id": "1983499c-f5e8-4afd-b9e1-8d02cdbf10e3", "timestamp": "2026-07-24T02:46:37.799044+00:00", "phase": "action", "status": "OK", "detail": "AIOps Controller SET product_reviews:fallback_override=true", "redis_key": "product_reviews:fallback_override", "redis_value": "true"}
+{"run_id": "1983499c-f5e8-4afd-b9e1-8d02cdbf10e3", "timestamp": "2026-07-24T02:46:38.100788+00:00", "phase": "verify", "status": "OK", "detail": "Goi guardrails.cache.is_fallback_override_active() -> True. product-reviews chuyen sang Fallback/Cache mode (Error rate=0%)", "fallback_override_active_from_cache_py": true, "simulated_error_rate_after_fallback": 0.0, "verdict": "PASS", "llm_calls_bypassed": true}
+{"run_id": "1983499c-f5e8-4afd-b9e1-8d02cdbf10e3", "timestamp": "2026-07-24T02:46:38.402907+00:00", "phase": "rollback", "status": "OK", "detail": "AIOps Controller DEL product_reviews:fallback_override", "redis_key": "product_reviews:fallback_override"}
+{"run_id": "1983499c-f5e8-4afd-b9e1-8d02cdbf10e3", "timestamp": "2026-07-24T02:46:38.704155+00:00", "phase": "recover", "status": "OK", "detail": "Goi guardrails.cache.is_fallback_override_active() -> False. He thong tu phuc hoi, LLM path active (Error rate=2%)", "fallback_override_active_from_cache_py": false, "simulated_error_rate_recovered": 0.02, "verdict": "PASS"}
 ```
 
 ---
