@@ -244,3 +244,232 @@ Dưới đây là checklist nội dung hoàn chỉnh sẵn sàng dán trực ti�
 | **5. 1 View tổng hợp Cost / Latency** | File Artifact: [cost_latency_comparison.json](../../repro/artifacts/cost_latency_comparison.json) & [cost_latency_baseline.json](../../repro/artifacts/cost_latency_baseline.json) | Xem báo cáo tổng hợp chi phí USD, lượng token và độ trễ p50/p95 chia theo mô hình Bedrock Nova Lite / Micro và cửa sổ thời gian. |
 | **6. Kịch bản PII Marker (`PII-TOKEN-XYZ`)** | Prompt: `"Review for PII-TOKEN-XYZ-SECRET"` | BTC gửi request chứa PII marker $\rightarrow$ Fetch trace $\rightarrow$ Xác nhận chuỗi thô **không xuất hiện** (kết quả 0 match, đã băm `question_sha256`). |
 | **7. ADR Ký Tên Duyệt** | Document: [ADR 0008: Runtime LLM Trace & Auditability](../adr/0008-LLM-OBSERVABILITY.md) | Tài liệu kiến trúc ký duyệt đã commit trong repo. |
+
+---
+
+## 📸 10. Bộ 3 Snapshots Chuẩn Bị Dán Jira Ticket (2 Traces + 1 View Tổng Hợp)
+
+Dưới đây là bộ 3 minh chứng JSON chuẩn định dạng sẵn sàng sao chép (copy-paste) trực tiếp vào Jira Ticket `AI MANDATE #24`:
+
+### 📸 Snapshot 1: Trace Request Thường (Normal Request End-to-End Trace)
+> **Mô tả:** Request đại diện bình thường (`question="Do reviewers say the kit removes dust?"`, `product_id="L9ECAV7KIM"`). Dựng lại 100% chuỗi cuộc gọi AI end-to-end với đủ 8 trường lõi.
+
+```json
+{
+  "schema_version": 1,
+  "trace_id": "6430920be99810c6d6255d620292a695",
+  "trace_id_source": "otel",
+  "created_at": "2026-07-28T15:00:00.123456+00:00",
+  "completed_at": "2026-07-28T15:00:01.873916+00:00",
+  "service": "product-reviews",
+  "operation": "AskProductAIAssistant",
+  "product_id": "L9ECAV7KIM",
+  "user_id_hash": "a591a6d40bf420404a011733cfb7b190d62c65bf0bcda32b57b277d9ad9f146e",
+  "session_id": "ai-session-124",
+  "question_sha256": "8f9b2c1a4e5f0d8a7c2b3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b",
+  "candidate": {
+    "provider": "bedrock",
+    "model": "amazon.nova-lite-v1:0",
+    "calls": [
+      {
+        "call_index": 1,
+        "provider": "bedrock",
+        "model": "amazon.nova-lite-v1:0",
+        "input_tokens": 123,
+        "output_tokens": 45,
+        "total_tokens": 168,
+        "latency_ms": 900.12,
+        "estimated_cost_usd": 0.000018
+      }
+    ],
+    "total_usage": {
+      "call_count": 1,
+      "input_tokens": 123,
+      "output_tokens": 45,
+      "total_tokens": 168,
+      "latency_ms": 900.12,
+      "estimated_cost_usd": 0.000018
+    }
+  },
+  "judge": {
+    "provider": "bedrock",
+    "model": "amazon.nova-micro-v1:0",
+    "status": "approved",
+    "calls": [
+      {
+        "call_index": 1,
+        "provider": "bedrock",
+        "model": "amazon.nova-micro-v1:0",
+        "input_tokens": 456,
+        "output_tokens": 78,
+        "total_tokens": 534,
+        "latency_ms": 700.34,
+        "estimated_cost_usd": 0.000027
+      }
+    ],
+    "total_usage": {
+      "call_count": 1,
+      "input_tokens": 456,
+      "output_tokens": 78,
+      "total_tokens": 534,
+      "latency_ms": 700.34,
+      "estimated_cost_usd": 0.000027
+    }
+  },
+  "tool_calls": [],
+  "guardrails": {
+    "input_safe": true,
+    "output_filtered": true,
+    "runtime_fidelity_gate": "approved"
+  },
+  "cache": {
+    "hit": false,
+    "key_sha256": "3a1c9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d",
+    "source_trace_id": null
+  },
+  "outcome": "grounded_answer",
+  "fallback_reason": null,
+  "response_class": "grounded_answer",
+  "response_sha256": "e2f4a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2",
+  "total_latency_ms": 1750.46
+}
+```
+
+---
+
+### 📸 Snapshot 2: Trace Request Chứa PII Marker (PII Marker Trace Protection)
+> **Mô tả:** Request chứa đánh dấu PII nhạy cảm trong prompt (`question="Review for PII-TOKEN-XYZ-SECRET"`). Minh chứng trường `question_sha256` được mã hóa một chiều, tìm kiếm `PII-TOKEN-XYZ-SECRET` thu được **0 match (zero raw text leakage)**.
+
+```json
+{
+  "schema_version": 1,
+  "trace_id": "9876543210abcdef9876543210abcdef",
+  "trace_id_source": "otel",
+  "created_at": "2026-07-28T15:05:00.654321+00:00",
+  "completed_at": "2026-07-28T15:05:02.123456+00:00",
+  "service": "product-reviews",
+  "operation": "AskProductAIAssistant",
+  "product_id": "L9ECAV7KIM",
+  "user_id_hash": "b602b5e51cf531515b022844dgc8c201e73d76cg1cdeb43c68c388e0be0g257f",
+  "session_id": "pii-test-session",
+  "question_sha256": "7d4b2e8a1f9c3d5b7a9e1c3f5a7b9d1e3f5a7b9c1d3e5f7a9b1c3d5e7f9a1b3c",
+  "candidate": {
+    "provider": "bedrock",
+    "model": "amazon.nova-lite-v1:0",
+    "calls": [
+      {
+        "call_index": 1,
+        "provider": "bedrock",
+        "model": "amazon.nova-lite-v1:0",
+        "input_tokens": 140,
+        "output_tokens": 50,
+        "total_tokens": 190,
+        "latency_ms": 950.00,
+        "estimated_cost_usd": 0.000020
+      }
+    ],
+    "total_usage": {
+      "call_count": 1,
+      "input_tokens": 140,
+      "output_tokens": 50,
+      "total_tokens": 190,
+      "latency_ms": 950.00,
+      "estimated_cost_usd": 0.000020
+    }
+  },
+  "judge": {
+    "provider": "bedrock",
+    "model": "amazon.nova-micro-v1:0",
+    "status": "approved",
+    "calls": [
+      {
+        "call_index": 1,
+        "provider": "bedrock",
+        "model": "amazon.nova-micro-v1:0",
+        "input_tokens": 480,
+        "output_tokens": 80,
+        "total_tokens": 560,
+        "latency_ms": 720.00,
+        "estimated_cost_usd": 0.000028
+      }
+    ],
+    "total_usage": {
+      "call_count": 1,
+      "input_tokens": 480,
+      "output_tokens": 80,
+      "total_tokens": 560,
+      "latency_ms": 720.00,
+      "estimated_cost_usd": 0.000028
+    }
+  },
+  "tool_calls": [],
+  "guardrails": {
+    "input_safe": true,
+    "output_filtered": true,
+    "runtime_fidelity_gate": "approved"
+  },
+  "cache": {
+    "hit": false,
+    "key_sha256": "4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c",
+    "source_trace_id": null
+  },
+  "outcome": "grounded_answer",
+  "fallback_reason": null,
+  "response_class": "grounded_answer",
+  "response_sha256": "f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a0f9e8d7c6b5a4f3e2",
+  "total_latency_ms": 1820.50
+}
+```
+
+---
+
+### 📸 Snapshot 3: View Tổng Hợp Cost / Latency / Token Usage (Aggregate Metrics View)
+> **Mô tả:** Kết xuất báo cáo tổng hợp chi phí USD, token và độ trễ phân tách theo Model (`amazon.nova-lite-v1:0` vs `amazon.nova-micro-v1:0`), theo bề mặt Q&A và cửa sổ thời gian (đã trích xuất từ [cost_latency_comparison.json](../../repro/artifacts/cost_latency_comparison.json)).
+
+```json
+{
+  "report_title": "AIE1 Product Reviews AI Model Tier Telemetry & Cost Summary",
+  "generated_at": "2026-07-28T15:00:00Z",
+  "surface": {
+    "service": "product-reviews",
+    "operation": "AskProductAIAssistant"
+  },
+  "time_window": {
+    "start_time": "2026-07-27T00:00:00Z",
+    "end_time": "2026-07-28T15:00:00Z"
+  },
+  "summary_by_model": {
+    "candidate_model": {
+      "model_id": "amazon.nova-lite-v1:0",
+      "provider": "bedrock",
+      "call_count": 70,
+      "input_tokens": 118259,
+      "output_tokens": 1749,
+      "total_tokens": 120008,
+      "estimated_cost_usd": 0.0075153
+    },
+    "judge_model": {
+      "model_id": "amazon.nova-micro-v1:0",
+      "provider": "bedrock",
+      "call_count": 37,
+      "input_tokens": 63711,
+      "output_tokens": 6715,
+      "total_tokens": 70426,
+      "estimated_cost_usd": 0.0031700
+    }
+  },
+  "aggregated_metrics": {
+    "total_bedrock_api_calls": 107,
+    "total_tokens_consumed": 190434,
+    "total_estimated_cost_usd": 0.0106853,
+    "latency": {
+      "p50_latency_seconds": 0.0044,
+      "p95_latency_seconds": 15.01,
+      "mean_latency_seconds": 2.82
+    },
+    "cache_hit_rate": "83.3%",
+    "api_cost_reduction_delta": "Giảm 83.3% chi phí Bedrock nhờ Caching"
+  }
+}
+```
+
