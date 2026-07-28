@@ -9,7 +9,7 @@ Tài liệu này tổng hợp toàn bộ bằng chứng nghiệm thu hệ thốn
 
 *   **Task Force AIE1:** Lê Hải Khoa (Leader AIE1), Ngô Thanh Kiên, Nguyễn Tiến Hoàng Thịnh.
 *   **Nhánh làm việc chính thức:** `feature/product-review`
-*   **Commit Tích Hợp LLM Observability:** [`b5661a6`](https://github.com/DangThao195/AIO02_TF3_Phase3/commit/b5661a6)
+*   **Commit Tích Hợp LLM Observability:** [`06f54a1`](https://github.com/DangThao195/AIO02_TF3_Phase3/commit/06f54a1)
 
 ---
 
@@ -17,10 +17,10 @@ Tài liệu này tổng hợp toàn bộ bằng chứng nghiệm thu hệ thốn
 
 | Tiêu chí Chỉ thị (Mandate #24 Spec) | Trạng thái | Minh chứng kỹ thuật & Kết quả thực tế |
 | :--- | :---: | :--- |
-| **DoD 1: ≥ 1 bề mặt AI có Trace đủ 8 trường lõi** | 🟢 **ĐÃ ĐẠT** | Dịch vụ `product-reviews` tự động sinh trace record đủ 8 trường lõi (`trace_id`, `candidate.model`, `input_tokens`/`output_tokens`, `latency_ms`, `estimated_cost_usd`, `outcome`, `user_id_hash`, `session_id`, `created_at`/`completed_at`). Xem [§3.3](#33-dáp-ứng-dầy-dủ-8-trường-lõi-của-yêu-cầu-1) & [§4](#-4-bộ-3-snapshots-dữ-liệu-kiểm-thử-thực-tế-trong-repo). |
-| **DoD 2: Dựng lại 1 request end-to-end** | 🟢 **ĐÃ ĐẠT** | Chỉ với 1 `trace_id` duy nhất từ gRPC metadata `x-trace-id` hoặc `POST /replay`, truy vấn `GET /trace/{trace_id}` dựng lại 100% chuỗi cuộc gọi: Retrieval Postgres $\rightarrow$ Cache Check $\rightarrow$ Candidate Bedrock Nova Lite $\rightarrow$ Judge Bedrock Nova Micro $\rightarrow$ Outcome. Xem [§3.4](#34-khả-năng-truy-vết-end-to-end-yêu-cầu-2). |
-| **DoD 3: 1 View tổng hợp cost / latency** | 🟢 **ĐÃ ĐẠT** | Tệp artifact tổng hợp [cost_latency_comparison.json](../../repro/artifacts/cost_latency_comparison.json) & [cost_latency_baseline.json](../../repro/artifacts/cost_latency_baseline.json) cùng hàm `get_usage_trace()` gom nhóm cost/token/latency theo mô hình, bề mặt Q&A và thời gian mà không cần đọc log thô. Xem [§3.5](#35-view-tổng-hợp-cost--token--latency-yêu-cầu-3). |
-| **DoD 4: Không rò thô PII / Secret** | 🟢 **ĐÃ ĐẠT** | Prompt và response đều được băm một chiều `question_sha256`, `response_sha256` và `user_id_hash`. Request chứa chuỗi PII đánh dấu (ví dụ `PII-TOKEN-XYZ`) khi kiểm tra trace record thu được **0 match (không chứa chuỗi thô)**. Xem [§3.6](#36-cơ-chế-chống-rò-rỉ-pii--secret-yêu-cầu-4). |
+| **DoD 1: ≥ 1 bề mặt AI có Trace đủ 8 trường lõi** | 🟢 **ĐÃ ĐẠT** | Dịch vụ `product-reviews` tự động sinh trace record đủ 8 trường lõi (`trace_id`, `candidate.model`, `input_tokens`/`output_tokens`, `latency_ms`, `estimated_cost_usd`, `outcome`, `user_id_hash`, `session_id`, `created_at`/`completed_at`). Xem [§3.2](#32-dáp-ứng-dầy-dủ-8-trường-lõi-của-yêu-cầu-1) & [§4](#-4-bộ-3-snapshots-dữ-liệu-kiểm-thử-thực-tế-trong-repo). |
+| **DoD 2: Dựng lại 1 request end-to-end** | 🟢 **ĐÃ ĐẠT** | Chỉ với 1 `trace_id` duy nhất từ gRPC metadata `x-trace-id` hoặc `POST /replay`, truy vấn `GET /trace/{trace_id}` dựng lại 100% chuỗi cuộc gọi: Retrieval Postgres $\rightarrow$ Cache Check $\rightarrow$ Candidate Bedrock Nova Lite $\rightarrow$ Judge Bedrock Nova Micro $\rightarrow$ Outcome. Xem [§3.3](#33-khả-năng-truy-vết-end-to-end-yêu-cầu-2). |
+| **DoD 3: 1 View tổng hợp cost / latency** | 🟢 **ĐÃ ĐẠT** | Tệp artifact tổng hợp [cost_latency_comparison.json](../../repro/artifacts/cost_latency_comparison.json) & [cost_latency_baseline.json](../../repro/artifacts/cost_latency_baseline.json) cùng hàm `get_usage_trace()` gom nhóm cost/token/latency theo mô hình, bề mặt Q&A và thời gian mà không cần đọc log thô. Xem [§3.4](#34-view-tổng-hợp-cost--token--latency-yêu-cầu-3). |
+| **DoD 4: Không rò thô PII / Secret** | 🟢 **ĐÃ ĐẠT** | Prompt và response đều được băm một chiều `question_sha256`, `response_sha256` và `user_id_hash`. Request chứa chuỗi PII đánh dấu (ví dụ `PII-TOKEN-XYZ`) khi kiểm tra trace record thu được **0 match (không chứa chuỗi thô)**. Xem [§3.5](#35-cơ-chế-chống-rò-rỉ-pii--secret-yêu-cầu-4). |
 | **DoD 5: ADR Ký Tên Duyệt** | 🟢 **ĐÃ ĐẠT** | Đã hoàn thiện và ký duyệt tài liệu kiến trúc [ADR 0008: LLM Observability](../adr/0008-LLM-OBSERVABILITY.md). |
 | **Ràng buộc 1: Đo phải nhẹ (< 0.5ms overhead)** | 🟢 **ĐÃ ĐẠT** | Ghi trace áp dụng mô hình Async Fail-Open In-Memory Redis Write `write_llm_trace()` tại [guardrails/llm_trace.py:L268-290](../../techx-corp-platform/src/product-reviews/guardrails/llm_trace.py#L268-L290), thời gian ghi `< 0.5ms`, không block luồng chính gRPC. |
 | **Ràng buộc 2: Số trace từ lời gọi thật & Giữ ngân sách** | 🟢 **ĐÃ ĐẠT** | 100% bản ghi trace được trích xuất từ dữ liệu Bedrock SDK converse API thật. Tích hợp Caching (Mandate 23) giúp giảm **83.3%** số lượng cuộc gọi Bedrock API, bảo vệ ngân sách tối đa. |
