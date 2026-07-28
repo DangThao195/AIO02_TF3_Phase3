@@ -17,9 +17,9 @@ import sys
 import os
 import uuid
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import JSONResponse, HTMLResponse, Response
 from pydantic import BaseModel, Field
 from typing import Any, List
 import argparse
@@ -99,6 +99,7 @@ class ChatResponse(BaseModel):
     steps: List[StepInfo] = []
     intent: dict | None = None
     evidence: dict | None = None
+    request_id: str = ""
 
 class ConfirmRequest(BaseModel):
     session_id: str = Field(..., description="ID phiên chat")
@@ -131,6 +132,9 @@ def index():
             "chat": "POST /api/chat",
             "confirm": "POST /api/confirm",
             "health": "GET /health",
+            "traces": "GET /api/traces/{request_id}",
+            "trace_summary": "GET /api/traces/summary?period=24",
+            "trigger_error": "POST /api/traces/trigger-error",
         },
     }
 
@@ -238,17 +242,22 @@ async def api_chat(req: ChatRequest):
         req.session_id, result.get("status")
     )
 
+    request_id = result.get("request_id", "")
     steps_data = result.get("steps", [])
     steps = [StepInfo(**s) for s in steps_data] if steps_data else []
 
-    return ChatResponse(
-        status=result.get("status", "error"),
-        reply=result.get("reply", "Có lỗi xảy ra."),
-        token=result.get("token"),
-        session_id=req.session_id,
-        steps=steps,
-        intent=result.get("intent"),
-        evidence=result.get("evidence"),
+    return JSONResponse(
+        content=ChatResponse(
+            status=result.get("status", "error"),
+            reply=result.get("reply", "Có lỗi xảy ra."),
+            token=result.get("token"),
+            session_id=req.session_id,
+            steps=steps,
+            intent=result.get("intent"),
+            evidence=result.get("evidence"),
+            request_id=request_id,
+        ).model_dump(),
+        headers={"X-Request-ID": request_id} if request_id else {},
     )
 
 
@@ -315,6 +324,71 @@ def debug_ratelimit():
                 for uid, ts_list in rl._requests.items()
             },
         }
+
+
+# ── Trace endpoints (MANDATE #24 — LLM Observability) ──
+
+@app.get("/api/traces/{request_id}")
+def get_trace(request_id: str):
+    """Fetch all traces for a given request_id (full call chain)."""
+    from src.telemetry import get_tracer
+    store = get_tracer()._store
+    traces = store.get_by_request_id(request_id)
+    if not traces:
+        raise HTTPException(status_code=404, detail="No traces found for this request_id")
+    return {"request_id": request_id, "traces": traces}
+
+
+@app.get("/api/traces/summary")
+def trace_summary(period: int = 24):
+    """Aggregated view of LLM call traces over given period (hours)."""
+    from src.telemetry import get_tracer
+    store = get_tracer()._store
+    agg = store.aggregate(period_hours=period)
+    return {
+        "period_hours": period,
+        "summary": agg,
+        "total_calls": sum(s["calls"] for s in agg.values()),
+        "total_cost_usd": round(sum(s["total_cost_usd"] for s in agg.values()), 6),
+        "total_tokens": sum(s["total_tokens"] for s in agg.values()),
+    }
+
+
+@app.post("/api/traces/trigger-error")
+async def trigger_error():
+    """Trigger an LLM call with invalid model to generate error trace."""
+    import uuid
+    from src.telemetry import get_tracer
+    from langchain_core.messages import HumanMessage
+    tracer = get_tracer()
+    trace_id = str(uuid.uuid4())
+    request_id = tracer.create_request_id()
+    try:
+        import os
+        from langchain_aws import ChatBedrockConverse
+        bad_llm = ChatBedrockConverse(
+            model="fake-invalid-model-v0",
+            region_name=os.getenv("BEDROCK_REGION", "ap-southeast-1"),
+        )
+        await bad_llm.ainvoke([HumanMessage(content="test")])
+    except Exception as e:
+        tracer.record_call(
+            trace_id=trace_id,
+            request_id=request_id,
+            layer="triggered_error_test",
+            session_id="",
+            user_id="",
+            prompt_text="test error trigger",
+            response=None,
+            error=str(e),
+            outcome="error",
+            latency_ms=0,
+        )
+    return {
+        "status": "error_trace_generated",
+        "request_id": request_id,
+        "trace_id": trace_id,
+    }
 
 
 # ── Entry point ──
