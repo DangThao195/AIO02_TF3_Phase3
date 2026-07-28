@@ -19,4 +19,17 @@ CREATE TABLE IF NOT EXISTS reviews.fidelity_audit (
 -- Step 4: Grant permissions to otelu user
 GRANT SELECT, INSERT, UPDATE ON reviews.fidelity_audit TO otelu;
 
+-- Step 5: Create reviews.product_summaries table for static summaries (Tier 2 fallback)
+CREATE TABLE IF NOT EXISTS reviews.product_summaries (
+    product_id VARCHAR(50) PRIMARY KEY,
+    summary_text TEXT NOT NULL,
+    rating_distribution TEXT,
+    review_version VARCHAR(100),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Step 6: Grant permissions to otelu user
+GRANT SELECT, INSERT, UPDATE, DELETE ON reviews.product_summaries TO otelu;
+
+
 
