@@ -1,0 +1,1078 @@
+{
+  "mandate": "MANDATE #23 - GenAI Caching & Memory (Enterprise Standard)",
+  "version": "2.0",
+  "description": "Bộ Testcase thực tế chuẩn hóa với 100% expected_cache, Semantic Cache, Short-term, Long-term và Isolation Matrix.",
+  "test_groups": [
+    {
+      "group_name": "1. In-session Memory (Short-term)",
+      "description": "10 Testcases, 1 User -> 1 Session -> 5 Lượt/Session. Kiểm tra giữ ngữ cảnh và Semantic Cache trong phiên.",
+      "testcases": [
+        {
+          "test_id": "STM-001",
+          "user_id": "user_stm_001",
+          "session_id": "session_stm_001",
+          "turns": [
+            {
+              "turn": 1,
+              "request": "tìm kính thiên văn dưới 100 đô",
+              "expected_cache": "miss",
+              "expected": "Trả về danh sách sản phẩm telescope < 100 USD"
+            },
+            {
+              "turn": 2,
+              "request": "cái thứ nhất giá bao nhiêu",
+              "expected_cache": "miss",
+              "expected": "Nhớ sản phẩm thứ 1 từ lượt 1, trả về giá chính xác"
+            },
+            {
+              "turn": 3,
+              "request": "thêm nó vào giỏ hàng",
+              "expected_cache": "miss",
+              "expected": "Nhớ sản phẩm ở lượt 2, tạo token xác nhận"
+            },
+            {
+              "turn": 4,
+              "request": "xác nhận",
+              "expected_cache": "miss",
+              "expected": "Thêm vào giỏ thành công"
+            },
+            {
+              "turn": 5,
+              "request": "giỏ hàng tôi có gì",
+              "expected_cache": "miss",
+              "expected": "Hiển thị sản phẩm vừa thêm"
+            }
+          ]
+        },
+        {
+          "test_id": "STM-002",
+          "user_id": "user_stm_002",
+          "session_id": "session_stm_002",
+          "turns": [
+            {
+              "turn": 1,
+              "request": "có những danh mục sản phẩm nào",
+              "expected_cache": "miss",
+              "expected": "Liệt kê danh mục sản phẩm"
+            },
+            {
+              "turn": 2,
+              "request": "tìm sản phẩm astronomy dưới 50 đô",
+              "expected_cache": "miss",
+              "expected": "Tìm kiếm phụ kiện thiên văn < 50 USD"
+            },
+            {
+              "turn": 3,
+              "request": "sản phẩm đó có review tốt không",
+              "expected_cache": "miss",
+              "expected": "Lấy review của sản phẩm vừa tìm ở lượt 2"
+            },
+            {
+              "turn": 4,
+              "request": "so sánh với sản phẩm thứ hai",
+              "expected_cache": "miss",
+              "expected": "So sánh 2 sản phẩm trong danh sách"
+            },
+            {
+              "turn": 5,
+              "request": "thêm cả hai vào giỏ",
+              "expected_cache": "miss",
+              "expected": "Tạo xác nhận thêm 2 sản phẩm"
+            }
+          ]
+        },
+        {
+          "test_id": "STM-003",
+          "user_id": "user_stm_003",
+          "session_id": "session_stm_003",
+          "turns": [
+            {
+              "turn": 1,
+              "request": "tìm ống nhòm binoculars",
+              "expected_cache": "miss",
+              "expected": "Trả về danh sách ống nhòm"
+            },
+            {
+              "turn": 2,
+              "request": "tìm ống nhòm binoculars",
+              "expected_cache": "hit",
+              "expected": "Exact Cache Hit cho câu hỏi lặp 100%"
+            },
+            {
+              "turn": 3,
+              "request": "cho tôi xem ống nhòm tốt nhất",
+              "expected_cache": "miss",
+              "expected": "Rank ống nhòm theo đánh giá"
+            },
+            {
+              "turn": 4,
+              "request": "chiếc đầu tiên nặng bao nhiêu",
+              "expected_cache": "miss",
+              "expected": "Truy vấn thông số chiếc đầu tiên"
+            },
+            {
+              "turn": 5,
+              "request": "phí giao hàng tới Hà Nội bao nhiêu",
+              "expected_cache": "miss",
+              "expected": "Tính phí vận chuyển tới Hà Nội"
+            }
+          ]
+        },
+        {
+          "test_id": "STM-004",
+          "user_id": "user_stm_004",
+          "session_id": "session_stm_004",
+          "turns": [
+            {
+              "turn": 1,
+              "request": "tìm kính thiên văn dưới 100 đô",
+              "expected_cache": "hit",
+              "expected": "HIT từ Global Shared Pool (câu hỏi công khai)"
+            },
+            {
+              "turn": 2,
+              "request": "tìm kiếm kính thiên văn dưới 100 đô",
+              "expected_cache": "hit",
+              "expected": "Semantic Cache Hit - Khác câu văn nhưng cùng ý nghĩa (>0.90 sim)"
+            },
+            {
+              "turn": 3,
+              "request": "sản phẩm rẻ nhất là cái nào",
+              "expected_cache": "miss",
+              "expected": "Lọc sản phẩm giá thấp nhất"
+            },
+            {
+              "turn": 4,
+              "request": "thêm chiếc đó vào giỏ",
+              "expected_cache": "miss",
+              "expected": "Xác nhận thêm chiếc rẻ nhất"
+            },
+            {
+              "turn": 5,
+              "request": "xác nhận",
+              "expected_cache": "miss",
+              "expected": "Thêm vào giỏ thành công"
+            }
+          ]
+        },
+        {
+          "test_id": "STM-005",
+          "user_id": "user_stm_005",
+          "session_id": "session_stm_005",
+          "turns": [
+            {
+              "turn": 1,
+              "request": "đổi 100 USD sang VND",
+              "expected_cache": "miss",
+              "expected": "Quy đổi 100 USD -> VND"
+            },
+            {
+              "turn": 2,
+              "request": "đổi 100 USD sang VND",
+              "expected_cache": "hit",
+              "expected": "Exact Cache Hit cho câu hỏi đổi tiền trùng 100%"
+            },
+            {
+              "turn": 3,
+              "request": "tìm telescope 500 đô sang VND giá bao nhiêu",
+              "expected_cache": "miss",
+              "expected": "Quy đổi giá telescope 500 USD"
+            },
+            {
+              "turn": 4,
+              "request": "sản phẩm đó có mã gì",
+              "expected_cache": "miss",
+              "expected": "Truy xuất product_id"
+            },
+            {
+              "turn": 5,
+              "request": "xem đánh giá của nó",
+              "expected_cache": "miss",
+              "expected": "Hiển thị review"
+            }
+          ]
+        },
+        {
+          "test_id": "STM-006",
+          "user_id": "user_stm_006",
+          "session_id": "session_stm_006",
+          "turns": [
+            {
+              "turn": 1,
+              "request": "gợi ý phụ kiện thiên văn",
+              "expected_cache": "miss",
+              "expected": "Gợi ý danh sách phụ kiện thiên văn"
+            },
+            {
+              "turn": 2,
+              "request": "món nào dưới 30 đô",
+              "expected_cache": "miss",
+              "expected": "Lọc sản phẩm trong danh sách < 30 USD"
+            },
+            {
+              "turn": 3,
+              "request": "thêm món đầu tiên vào giỏ",
+              "expected_cache": "miss",
+              "expected": "Yêu cầu xác nhận"
+            },
+            {
+              "turn": 4,
+              "request": "hủy bỏ",
+              "expected_cache": "miss",
+              "expected": "Hủy hành động thêm vào giỏ"
+            },
+            {
+              "turn": 5,
+              "request": "giỏ hàng hiện tại",
+              "expected_cache": "miss",
+              "expected": "Xác nhận giỏ chưa bị thêm sản phẩm"
+            }
+          ]
+        },
+        {
+          "test_id": "STM-007",
+          "user_id": "user_stm_007",
+          "session_id": "session_stm_007",
+          "turns": [
+            {
+              "turn": 1,
+              "request": "tóm tắt đánh giá kính thiên văn Celestron",
+              "expected_cache": "miss",
+              "expected": "Tóm tắt review Celestron"
+            },
+            {
+              "turn": 2,
+              "request": "tóm tắt đánh giá kính thiên văn Celestron",
+              "expected_cache": "hit",
+              "expected": "Exact Cache Hit cho câu hỏi tóm tắt review"
+            },
+            {
+              "turn": 3,
+              "request": "điểm đánh giá trung bình bao nhiêu",
+              "expected_cache": "miss",
+              "expected": "Tính rating trung bình"
+            },
+            {
+              "turn": 4,
+              "request": "người mua khen gì nhất",
+              "expected_cache": "miss",
+              "expected": "Trích xuất ưu điểm lớn nhất"
+            },
+            {
+              "turn": 5,
+              "request": "có nên mua không",
+              "expected_cache": "miss",
+              "expected": "Tổng kết lời khuyên mua sắm"
+            }
+          ]
+        },
+        {
+          "test_id": "STM-008",
+          "user_id": "user_stm_008",
+          "session_id": "session_stm_008",
+          "turns": [
+            {
+              "turn": 1,
+              "request": "tìm chân đế kính thiên văn tripod",
+              "expected_cache": "miss",
+              "expected": "Tìm tripod thiên văn"
+            },
+            {
+              "turn": 2,
+              "request": "loại nào chắc chắn nhất",
+              "expected_cache": "miss",
+              "expected": "Khuyên dùng loại chắc chắn"
+            },
+            {
+              "turn": 3,
+              "request": "giá bao nhiêu tiền",
+              "expected_cache": "miss",
+              "expected": "Báo giá sản phẩm"
+            },
+            {
+              "turn": 4,
+              "request": "thêm vào giỏ hàng giúp tôi",
+              "expected_cache": "miss",
+              "expected": "Tạo xác nhận"
+            },
+            {
+              "turn": 5,
+              "request": "xác nhận",
+              "expected_cache": "miss",
+              "expected": "Thêm giỏ thành công"
+            }
+          ]
+        },
+        {
+          "test_id": "STM-009",
+          "user_id": "user_stm_009",
+          "session_id": "session_stm_009",
+          "turns": [
+            {
+              "turn": 1,
+              "request": "tìm ống nhòm du lịch nhỏ gọn",
+              "expected_cache": "miss",
+              "expected": "Trả về ống nhòm compact"
+            },
+            {
+              "turn": 2,
+              "request": "tìm kiếm ống nhòm du lịch nhỏ gọn",
+              "expected_cache": "hit",
+              "expected": "Semantic Cache Hit cho nhu cầu tìm ống nhòm compact"
+            },
+            {
+              "turn": 3,
+              "request": "sản phẩm này chống nước không",
+              "expected_cache": "miss",
+              "expected": "Truy vấn tính năng waterproof"
+            },
+            {
+              "turn": 4,
+              "request": "thêm 2 chiếc vào giỏ hàng",
+              "expected_cache": "miss",
+              "expected": "Xác nhận số lượng 2"
+            },
+            {
+              "turn": 5,
+              "request": "xác nhận",
+              "expected_cache": "miss",
+              "expected": "Thêm 2 chiếc vào giỏ"
+            }
+          ]
+        },
+        {
+          "test_id": "STM-010",
+          "user_id": "user_stm_010",
+          "session_id": "session_stm_010",
+          "turns": [
+            {
+              "turn": 1,
+              "request": "tìm tất cả sản phẩm đang bán",
+              "expected_cache": "miss",
+              "expected": "Liệt kê toàn bộ catalogue"
+            },
+            {
+              "turn": 2,
+              "request": "tìm tất cả sản phẩm đang bán",
+              "expected_cache": "hit",
+              "expected": "Exact Cache Hit cho câu hỏi lấy catalogue"
+            },
+            {
+              "turn": 3,
+              "request": "món nào đắt nhất",
+              "expected_cache": "miss",
+              "expected": "Lọc sản phẩm có giá cao nhất"
+            },
+            {
+              "turn": 4,
+              "request": "món nào rẻ nhất",
+              "expected_cache": "miss",
+              "expected": "Lọc sản phẩm có giá thấp nhất"
+            },
+            {
+              "turn": 5,
+              "request": "tổng cộng có bao nhiêu sản phẩm",
+              "expected_cache": "miss",
+              "expected": "Đếm số lượng sản phẩm"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "group_name": "2. Cross-session Memory (Long-term)",
+      "description": "3 Testcases, 3 User/testcase, 3 Session/user, 5 Lượt/session (Tổng 45 sessions, 225 lượt). Kiểm tra lưu và truy hồi thông tin dài hạn.",
+      "testcases": [
+        {
+          "test_id": "LTM-001",
+          "users": [
+            {
+              "user_id": "user_ltm_101",
+              "sessions": [
+                {
+                  "session_id": "session_ltm_101_a",
+                  "turns": [
+                    { "turn": 1, "request": "tôi bị dị ứng hải sản và thích chụp ảnh thiên văn", "expected_cache": "miss", "expected": "Lưu preference dị ứng hải sản & thích chụp ảnh thiên văn" },
+                    { "turn": 2, "request": "tìm telescope dưới 200 đô", "expected_cache": "miss", "expected": "Lưu preference budget < 200 USD" },
+                    { "turn": 3, "request": "thêm sản phẩm đầu tiên vào giỏ", "expected_cache": "miss", "expected": "Tạo xác nhận thêm sản phẩm" },
+                    { "turn": 4, "request": "xác nhận", "expected_cache": "miss", "expected": "Lưu lịch sử mua sắm" },
+                    { "turn": 5, "request": "cảm ơn bạn", "expected_cache": "miss", "expected": "Chào tạm biệt" }
+                  ]
+                },
+                {
+                  "session_id": "session_ltm_101_b",
+                  "turns": [
+                    { "turn": 1, "request": "gợi ý quà tặng cho tôi", "expected_cache": "miss", "expected": "Nhớ thích chụp ảnh thiên văn từ session A" },
+                    { "turn": 2, "request": "ngân sách của tôi là bao nhiêu", "expected_cache": "miss", "expected": "Nhớ budget < 200 USD từ session A" },
+                    { "turn": 3, "request": "tôi bị dị ứng gì bạn nhớ không", "expected_cache": "miss", "expected": "Nhớ dị ứng hải sản từ session A" },
+                    { "turn": 4, "request": "thêm gợi ý đó vào giỏ", "expected_cache": "miss", "expected": "Tạo xác nhận" },
+                    { "turn": 5, "request": "xác nhận", "expected_cache": "miss", "expected": "Cập nhật giỏ hàng" }
+                  ]
+                },
+                {
+                  "session_id": "session_ltm_101_c",
+                  "turns": [
+                    { "turn": 1, "request": "tôi đã mua gì trước đây", "expected_cache": "miss", "expected": "Lấy lịch sử mua sắm từ session A & B" },
+                    { "turn": 2, "request": "sở thích của tôi là gì", "expected_cache": "miss", "expected": "Truy hồi sở thích chụp ảnh thiên văn" },
+                    { "turn": 3, "request": "gợi ý phụ kiện phù hợp", "expected_cache": "miss", "expected": "Gợi ý phụ kiện dựa trên sở thích thiên văn" },
+                    { "turn": 4, "request": "giá bao nhiêu tiền", "expected_cache": "miss", "expected": "Báo giá phụ kiện" },
+                    { "turn": 5, "request": "lưu thông tin giúp tôi", "expected_cache": "miss", "expected": "Xác nhận lưu thông tin" }
+                  ]
+                }
+              ]
+            },
+            {
+              "user_id": "user_ltm_102",
+              "sessions": [
+                {
+                  "session_id": "session_ltm_102_a",
+                  "turns": [
+                    { "turn": 1, "request": "tôi thích đồ gia dụng hãng LocknLock", "expected_cache": "miss", "expected": "Lưu thương hiệu yêu thích LocknLock" },
+                    { "turn": 2, "request": "ngân sách mua sắm của tôi là 500 nghìn", "expected_cache": "miss", "expected": "Lưu ngân sách 500k" },
+                    { "turn": 3, "request": "tìm sản phẩm gia dụng phù hợp", "expected_cache": "miss", "expected": "Gợi ý đồ gia dụng < 500k" },
+                    { "turn": 4, "request": "thêm vào giỏ", "expected_cache": "miss", "expected": "Tạo xác nhận" },
+                    { "turn": 5, "request": "xác nhận", "expected_cache": "miss", "expected": "Thêm thành công" }
+                  ]
+                },
+                {
+                  "session_id": "session_ltm_102_b",
+                  "turns": [
+                    { "turn": 1, "request": "thương hiệu yêu thích của tôi là gì", "expected_cache": "miss", "expected": "Nhớ thương hiệu LocknLock từ session A" },
+                    { "turn": 2, "request": "tôi muốn tìm quà tân gia", "expected_cache": "miss", "expected": "Gợi ý đồ LocknLock < 500k từ preference" },
+                    { "turn": 3, "request": "chiếc đó giá bao nhiêu", "expected_cache": "miss", "expected": "Báo giá món được chọn" },
+                    { "turn": 4, "request": "thêm vào giỏ", "expected_cache": "miss", "expected": "Tạo xác nhận - PRIVATE keyword" },
+                    { "turn": 5, "request": "xác nhận", "expected_cache": "miss", "expected": "Thêm vào giỏ - PRIVATE keyword không cache global" }
+                  ]
+                },
+                {
+                  "session_id": "session_ltm_102_c",
+                  "turns": [
+                    { "turn": 1, "request": "tổng cộng tôi đã chi bao nhiêu", "expected_cache": "miss", "expected": "Tính tổng lịch sử đơn hàng" },
+                    { "turn": 2, "request": "nhắc lại ngân sách của tôi", "expected_cache": "miss", "expected": "Nhớ ngân sách 500k" },
+                    { "turn": 3, "request": "tôi có lịch sử mua LocknLock không", "expected_cache": "miss", "expected": "Xác nhận lịch sử mua LocknLock" },
+                    { "turn": 4, "request": "xem giỏ hàng", "expected_cache": "miss", "expected": "Xem giỏ hiện tại" },
+                    { "turn": 5, "request": "cảm ơn", "expected_cache": "miss", "expected": "Chào tạm biệt" }
+                  ]
+                }
+              ]
+            },
+            {
+              "user_id": "user_ltm_103",
+              "sessions": [
+                {
+                  "session_id": "session_ltm_103_a",
+                  "turns": [
+                    { "turn": 1, "request": "tôi đang nuôi 2 con mèo", "expected_cache": "miss", "expected": "Lưu thuộc tính nuôi 2 con mèo" },
+                    { "turn": 2, "request": "tìm thức ăn cho thú cưng", "expected_cache": "miss", "expected": "Gợi ý đồ cho mèo" },
+                    { "turn": 3, "request": "thêm hạt cho mèo vào giỏ", "expected_cache": "miss", "expected": "Tạo xác nhận" },
+                    { "turn": 4, "request": "xác nhận", "expected_cache": "miss", "expected": "Lưu lịch sử mua hạt mèo" },
+                    { "turn": 5, "request": "xong rồi", "expected_cache": "miss", "expected": "Kết thúc session A" }
+                  ]
+                },
+                {
+                  "session_id": "session_ltm_103_b",
+                  "turns": [
+                    { "turn": 1, "request": "nhà tôi nuôi con gì bạn nhớ không", "expected_cache": "miss", "expected": "Nhớ nuôi 2 con mèo từ session A" },
+                    { "turn": 2, "request": "gợi ý đồ chơi phù hợp", "expected_cache": "miss", "expected": "Gợi ý đồ chơi cho mèo" },
+                    { "turn": 3, "request": "món nào dưới 20 đô", "expected_cache": "miss", "expected": "Lọc đồ chơi mèo < 20 USD" },
+                    { "turn": 4, "request": "thêm vào giỏ", "expected_cache": "miss", "expected": "PRIVATE keyword - không cache global" },
+                    { "turn": 5, "request": "xác nhận", "expected_cache": "miss", "expected": "PRIVATE keyword - không cache global" }
+                  ]
+                },
+                {
+                  "session_id": "session_ltm_103_c",
+                  "turns": [
+                    { "turn": 1, "request": "liệt kê đồ thú cưng tôi đã mua", "expected_cache": "miss", "expected": "Hiển thị lịch sử mua đồ mèo" },
+                    { "turn": 2, "request": "tôi có nuôi chó không", "expected_cache": "miss", "expected": "Xác nhận không có thông tin nuôi chó, chỉ nuôi mèo" },
+                    { "turn": 3, "request": "gợi ý sản phẩm chăm sóc mèo", "expected_cache": "miss", "expected": "Gợi ý đồ chăm sóc mèo" },
+                    { "turn": 4, "request": "xem giỏ hàng", "expected_cache": "miss", "expected": "Hiển thị giỏ hàng" },
+                    { "turn": 5, "request": "tạm biệt", "expected_cache": "miss", "expected": "Chào tạm biệt" }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "test_id": "LTM-002",
+          "users": [
+            {
+              "user_id": "user_ltm_201",
+              "sessions": [
+                {
+                  "session_id": "session_ltm_201_a",
+                  "turns": [
+                    { "turn": 1, "request": "tôi mua sắm cho câu lạc bộ thiên văn", "expected_cache": "miss", "expected": "Lưu thông tin CLB thiên văn" },
+                    { "turn": 2, "request": "ngân sách câu lạc bộ là 1000 đô", "expected_cache": "miss", "expected": "Lưu budget 1000 USD" },
+                    { "turn": 3, "request": "tìm kính thiên văn chuyên nghiệp", "expected_cache": "miss", "expected": "Gợi ý kính cao cấp" },
+                    { "turn": 4, "request": "thêm vào giỏ", "expected_cache": "miss", "expected": "Tạo xác nhận" },
+                    { "turn": 5, "request": "xác nhận", "expected_cache": "miss", "expected": "Thêm thành công" }
+                  ]
+                },
+                {
+                  "session_id": "session_ltm_201_b",
+                  "turns": [
+                    { "turn": 1, "request": "tôi mua hàng cho tổ chức nào", "expected_cache": "miss", "expected": "Nhớ CLB thiên văn" },
+                    { "turn": 2, "request": "hạn mức ngân sách là bao nhiêu", "expected_cache": "miss", "expected": "Nhớ 1000 USD" },
+                    { "turn": 3, "request": "gợi ý phụ kiện cho CLB", "expected_cache": "miss", "expected": "Gợi ý phụ kiện thiên văn" },
+                    { "turn": 4, "request": "thêm món đắt nhất vào giỏ", "expected_cache": "miss", "expected": "PRIVATE keyword giỏ hàng - không cache global" },
+                    { "turn": 5, "request": "xác nhận", "expected_cache": "miss", "expected": "PRIVATE keyword xác nhận - không cache global" }
+                  ]
+                },
+                {
+                  "session_id": "session_ltm_201_c",
+                  "turns": [
+                    { "turn": 1, "request": "xem lịch sử giao dịch CLB", "expected_cache": "miss", "expected": "Trả về lịch sử đơn hàng" },
+                    { "turn": 2, "request": "tổng tiền đã tiêu", "expected_cache": "miss", "expected": "Tính tổng chi tiêu" },
+                    { "turn": 3, "request": "còn dư bao nhiêu ngân sách", "expected_cache": "miss", "expected": "Tính ngân sách còn lại" },
+                    { "turn": 4, "request": "kiểm tra giỏ hàng", "expected_cache": "miss", "expected": "Hiển thị giỏ hàng" },
+                    { "turn": 5, "request": "kết thúc", "expected_cache": "miss", "expected": "Đóng phiên" }
+                  ]
+                }
+              ]
+            },
+            {
+              "user_id": "user_ltm_202",
+              "sessions": [
+                {
+                  "session_id": "session_ltm_202_a",
+                  "turns": [
+                    { "turn": 1, "request": "tôi là hướng dẫn viên du lịch dã ngoại", "expected_cache": "miss", "expected": "Lưu nghề nghiệp HDV dã ngoại" },
+                    { "turn": 2, "request": "tôi cần ống nhòm binoculars dã ngoại", "expected_cache": "miss", "expected": "Lưu nhu cầu ống nhòm dã ngoại" },
+                    { "turn": 3, "request": "loại nào chống nước tốt nhất", "expected_cache": "miss", "expected": "Lọc ống nhòm waterproof" },
+                    { "turn": 4, "request": "thêm vào giỏ", "expected_cache": "miss", "expected": "Tạo xác nhận" },
+                    { "turn": 5, "request": "xác nhận", "expected_cache": "miss", "expected": "Thêm thành công" }
+                  ]
+                },
+                {
+                  "session_id": "session_ltm_202_b",
+                  "turns": [
+                    { "turn": 1, "request": "nghề nghiệp của tôi là gì", "expected_cache": "miss", "expected": "Nhớ HDV du lịch dã ngoại" },
+                    { "turn": 2, "request": "gợi ý thiết bị đi rừng cho tôi", "expected_cache": "miss", "expected": "Gợi ý thiết bị dã ngoại" },
+                    { "turn": 3, "request": "sản phẩm nào có sẵn", "expected_cache": "miss", "expected": "Hiển thị sản phẩm có sẵn" },
+                    { "turn": 4, "request": "thêm vào giỏ", "expected_cache": "miss", "expected": "PRIVATE keyword - không cache global" },
+                    { "turn": 5, "request": "xác nhận", "expected_cache": "miss", "expected": "PRIVATE keyword - không cache global" }
+                  ]
+                },
+                {
+                  "session_id": "session_ltm_202_c",
+                  "turns": [
+                    { "turn": 1, "request": "tôi đã mua thiết bị dã ngoại nào", "expected_cache": "miss", "expected": "Hiển thị đơn hàng cũ" },
+                    { "turn": 2, "request": "sản phẩm đó có chống nước không", "expected_cache": "miss", "expected": "Xác nhận có tính năng waterproof" },
+                    { "turn": 3, "request": "gợi ý túi đựng ống nhòm", "expected_cache": "miss", "expected": "Gợi ý túi đựng" },
+                    { "turn": 4, "request": "xem giỏ hàng", "expected_cache": "miss", "expected": "Xem giỏ hàng" },
+                    { "turn": 5, "request": "xong", "expected_cache": "miss", "expected": "Đóng phiên" }
+                  ]
+                }
+              ]
+            },
+            {
+              "user_id": "user_ltm_203",
+              "sessions": [
+                {
+                  "session_id": "session_ltm_203_a",
+                  "turns": [
+                    { "turn": 1, "request": "tôi đang học đại học ngành vật lý", "expected_cache": "miss", "expected": "Lưu thông tin SV ngành Vật lý" },
+                    { "turn": 2, "request": "tìm sách hoặc thiết bị thực hành thiên văn", "expected_cache": "miss", "expected": "Gợi ý thiết bị học tập" },
+                    { "turn": 3, "request": "loại nào dưới 100 đô", "expected_cache": "miss", "expected": "Lọc sản phẩm < 100 USD" },
+                    { "turn": 4, "request": "thêm vào giỏ", "expected_cache": "miss", "expected": "Tạo xác nhận" },
+                    { "turn": 5, "request": "xác nhận", "expected_cache": "miss", "expected": "Thêm thành công" }
+                  ]
+                },
+                {
+                  "session_id": "session_ltm_203_b",
+                  "turns": [
+                    { "turn": 1, "request": "tôi học ngành gì bạn nhớ không", "expected_cache": "miss", "expected": "Nhớ SV ngành Vật lý từ session A" },
+                    { "turn": 2, "request": "gợi ý thiết bị phù hợp sinh viên", "expected_cache": "miss", "expected": "Gợi ý thiết bị học tập giá sinh viên" },
+                    { "turn": 3, "request": "món nào có giảm giá", "expected_cache": "miss", "expected": "Hiển thị sản phẩm ưu đãi" },
+                    { "turn": 4, "request": "thêm vào giỏ", "expected_cache": "miss", "expected": "PRIVATE keyword - không cache global" },
+                    { "turn": 5, "request": "xác nhận", "expected_cache": "miss", "expected": "PRIVATE keyword - không cache global" }
+                  ]
+                },
+                {
+                  "session_id": "session_ltm_203_c",
+                  "turns": [
+                    { "turn": 1, "request": "lịch sử mua sắm của sinh viên", "expected_cache": "miss", "expected": "Hiển thị lịch sử mua" },
+                    { "turn": 2, "request": "tổng số tiền đã mua", "expected_cache": "miss", "expected": "Tính tổng tiền" },
+                    { "turn": 3, "request": "tôi có ưu đãi sinh viên không", "expected_cache": "miss", "expected": "Giải đáp ưu đãi" },
+                    { "turn": 4, "request": "xem giỏ hàng", "expected_cache": "miss", "expected": "Hiển thị giỏ" },
+                    { "turn": 5, "request": "tạm biệt", "expected_cache": "miss", "expected": "Kết thúc" }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "test_id": "LTM-003",
+          "users": [
+            {
+              "user_id": "user_ltm_301",
+              "sessions": [
+                {
+                  "session_id": "session_ltm_301_a",
+                  "turns": [
+                    { "turn": 1, "request": "tôi sống tại Đà Nẵng", "expected_cache": "miss", "expected": "Lưu địa điểm Đà Nẵng" },
+                    { "turn": 2, "request": "địa chỉ nhận hàng là 123 Nguyễn Văn Linh Đà Nẵng", "expected_cache": "miss", "expected": "Lưu địa chỉ giao hàng" },
+                    { "turn": 3, "request": "tìm telescope giao nhanh", "expected_cache": "miss", "expected": "Gợi ý telescope" },
+                    { "turn": 4, "request": "thêm vào giỏ", "expected_cache": "miss", "expected": "Tạo xác nhận" },
+                    { "turn": 5, "request": "xác nhận", "expected_cache": "miss", "expected": "Thêm thành công" }
+                  ]
+                },
+                {
+                  "session_id": "session_ltm_301_b",
+                  "turns": [
+                    { "turn": 1, "request": "địa chỉ giao hàng của tôi ở đâu", "expected_cache": "miss", "expected": "Nhớ 123 Nguyễn Văn Linh Đà Nẵng từ session A" },
+                    { "turn": 2, "request": "tính phí giao hàng tới địa chỉ của tôi", "expected_cache": "miss", "expected": "Tự dùng địa chỉ Đà Nẵng để tính phí shipping" },
+                    { "turn": 3, "request": "mất bao lâu thì nhận được hàng", "expected_cache": "miss", "expected": "Báo thời gian giao hàng Đà Nẵng" },
+                    { "turn": 4, "request": "thêm phí giao hàng", "expected_cache": "miss", "expected": "Xác nhận phí shipping" },
+                    { "turn": 5, "request": "xong", "expected_cache": "miss", "expected": "Hoàn tất" }
+                  ]
+                },
+                {
+                  "session_id": "session_ltm_301_c",
+                  "turns": [
+                    { "turn": 1, "request": "tôi ở thành phố nào", "expected_cache": "miss", "expected": "Nhớ thành phố Đà Nẵng" },
+                    { "turn": 2, "request": "xem lại đơn hàng đã giao tới Đà Nẵng", "expected_cache": "miss", "expected": "Hiển thị lịch sử đơn hàng" },
+                    { "turn": 3, "request": "thay đổi địa chỉ được không", "expected_cache": "miss", "expected": "Hướng dẫn đổi địa chỉ" },
+                    { "turn": 4, "request": "xem giỏ hàng", "expected_cache": "miss", "expected": "Hiển thị giỏ" },
+                    { "turn": 5, "request": "cảm ơn", "expected_cache": "miss", "expected": "Tạm biệt" }
+                  ]
+                }
+              ]
+            },
+            {
+              "user_id": "user_ltm_302",
+              "sessions": [
+                {
+                  "session_id": "session_ltm_302_a",
+                  "turns": [
+                    { "turn": 1, "request": "tôi ưu tiên thanh toán qua thẻ VISA", "expected_cache": "miss", "expected": "Lưu pthức thanh toán VISA" },
+                    { "turn": 2, "request": "tìm phụ kiện ống nhòm dưới 50 đô", "expected_cache": "miss", "expected": "Gợi ý phụ kiện < 50 USD" },
+                    { "turn": 3, "request": "thêm vào giỏ", "expected_cache": "miss", "expected": "Tạo xác nhận" },
+                    { "turn": 4, "request": "xác nhận", "expected_cache": "miss", "expected": "Thêm thành công" },
+                    { "turn": 5, "request": "xong", "expected_cache": "miss", "expected": "Đóng phiên" }
+                  ]
+                },
+                {
+                  "session_id": "session_ltm_302_b",
+                  "turns": [
+                    { "turn": 1, "request": "phương thức thanh toán ưu tiên của tôi là gì", "expected_cache": "miss", "expected": "Nhớ thẻ VISA từ session A" },
+                    { "turn": 2, "request": "thanh toán VISA có được giảm giá không", "expected_cache": "miss", "expected": "Giải đáp ưu đãi VISA" },
+                    { "turn": 3, "request": "gợi ý món hàng 20 đô", "expected_cache": "miss", "expected": "Gợi ý món 20 USD" },
+                    { "turn": 4, "request": "thêm vào giỏ", "expected_cache": "miss", "expected": "PRIVATE keyword - không cache global" },
+                    { "turn": 5, "request": "xác nhận", "expected_cache": "miss", "expected": "PRIVATE keyword - không cache global" }
+                  ]
+                },
+                {
+                  "session_id": "session_ltm_302_c",
+                  "turns": [
+                    { "turn": 1, "request": "xem giỏ hàng và phương thức thanh toán", "expected_cache": "miss", "expected": "Hiển thị giỏ hàng & VISA" },
+                    { "turn": 2, "request": "tổng tiền thanh toán", "expected_cache": "miss", "expected": "Tính tổng tiền" },
+                    { "turn": 3, "request": "đặt hàng", "expected_cache": "miss", "expected": "Xác nhận đặt hàng" },
+                    { "turn": 4, "request": "xác nhận", "expected_cache": "miss", "expected": "Hoàn tất" },
+                    { "turn": 5, "request": "tạm biệt", "expected_cache": "miss", "expected": "Kết thúc" }
+                  ]
+                }
+              ]
+            },
+            {
+              "user_id": "user_ltm_303",
+              "sessions": [
+                {
+                  "session_id": "session_ltm_303_a",
+                  "turns": [
+                    { "turn": 1, "request": "tôi chỉ mua hàng vào dịp giảm giá Black Friday", "expected_cache": "miss", "expected": "Lưu thói quen săn sale Black Friday" },
+                    { "turn": 2, "request": "tìm sản phẩm đang giảm giá sâu nhất", "expected_cache": "miss", "expected": "Gợi ý sản phẩm sale" },
+                    { "turn": 3, "request": "thêm vào giỏ", "expected_cache": "miss", "expected": "Tạo xác nhận" },
+                    { "turn": 4, "request": "xác nhận", "expected_cache": "miss", "expected": "Thêm thành công" },
+                    { "turn": 5, "request": "xong", "expected_cache": "miss", "expected": "Đóng phiên" }
+                  ]
+                },
+                {
+                  "session_id": "session_ltm_303_b",
+                  "turns": [
+                    { "turn": 1, "request": "dịp mua sắm yêu thích của tôi là gì", "expected_cache": "miss", "expected": "Nhớ Black Friday từ session A" },
+                    { "turn": 2, "request": "hiện tại có chương trình khuyến mãi nào không", "expected_cache": "miss", "expected": "Hiển thị chương trình khuyến mãi" },
+                    { "turn": 3, "request": "gợi ý món đồ dưới 30 đô sale", "expected_cache": "miss", "expected": "Gợi ý đồ sale < 30 USD" },
+                    { "turn": 4, "request": "thêm vào giỏ", "expected_cache": "miss", "expected": "PRIVATE keyword - không cache global" },
+                    { "turn": 5, "request": "xác nhận", "expected_cache": "miss", "expected": "PRIVATE keyword - không cache global" }
+                  ]
+                },
+                {
+                  "session_id": "session_ltm_303_c",
+                  "turns": [
+                    { "turn": 1, "request": "lịch sử săn sale của tôi", "expected_cache": "miss", "expected": "Hiển thị đơn hàng sale cũ" },
+                    { "turn": 2, "request": "tổng tiết kiệm được bao nhiêu tiền", "expected_cache": "miss", "expected": "Tính tổng tiền tiết kiệm" },
+                    { "turn": 3, "request": "khi nào có sale tiếp theo", "expected_cache": "miss", "expected": "Thông báo lịch sale" },
+                    { "turn": 4, "request": "xem giỏ hàng", "expected_cache": "miss", "expected": "Xem giỏ" },
+                    { "turn": 5, "request": "cảm ơn", "expected_cache": "miss", "expected": "Tạm biệt" }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "group_name": "3. Cross-user Isolation (Leak Prevention)",
+      "description": "5 Testcases, 3 User/testcase, 2 Session/user, 2 Lượt/session (Tổng 30 sessions, 60 lượt). Đảm bảo không rò rỉ Cache hay Memory giữa các User.",
+      "testcases": [
+        {
+          "test_id": "LEAK-001",
+          "description": "Public Catalog Query Sharing — User B/C hỏi câu tìm kiếm sản phẩm public ĐƯỢC HIT từ Global Shared Pool (response công khai không chứa PII). Private queries giỏ hàng/địa chỉ vẫn luôn MISS.",
+          "users": [
+            {
+              "user_id": "user_leak_101",
+              "sessions": [
+                {
+                  "session_id": "sess_leak_101_a",
+                  "turns": [
+                    { "turn": 1, "request": "tìm kính thiên văn dưới 50 đô", "expected_cache": "miss", "expected": "Cache miss cho User A (first call)" },
+                    { "turn": 2, "request": "tìm kính thiên văn dưới 50 đô", "expected_cache": "hit", "expected": "Cache hit riêng cho User A (exact)" }
+                  ]
+                },
+                {
+                  "session_id": "sess_leak_101_b",
+                  "turns": [
+                    { "turn": 1, "request": "tìm kính thiên văn dưới 50 đô", "expected_cache": "hit", "expected": "Cache hit cho User A ở session mới (cross-session)" },
+                    { "turn": 2, "request": "kính thiên văn nào rẻ nhất", "expected_cache": "miss", "expected": "Cache miss (khác query)" }
+                  ]
+                }
+              ]
+            },
+            {
+              "user_id": "user_leak_102",
+              "sessions": [
+                {
+                  "session_id": "sess_leak_102_a",
+                  "turns": [
+                    { "turn": 1, "request": "tìm kính thiên văn dưới 50 đô", "expected_cache": "hit", "expected": "HIT từ Global Shared Pool (câu hỏi public, response không chứa PII)" },
+                    { "turn": 2, "request": "tìm kính thiên văn dưới 50 đô", "expected_cache": "hit", "expected": "Cache hit riêng của User B (warm-up từ global)" }
+                  ]
+                },
+                {
+                  "session_id": "sess_leak_102_b",
+                  "turns": [
+                    { "turn": 1, "request": "tìm kính thiên văn dưới 50 đô", "expected_cache": "hit", "expected": "Semantic/exact hit riêng User B" },
+                    { "turn": 2, "request": "giá bao nhiêu", "expected_cache": "miss", "expected": "Miss (khác query)" }
+                  ]
+                }
+              ]
+            },
+            {
+              "user_id": "user_leak_103",
+              "sessions": [
+                {
+                  "session_id": "sess_leak_103_a",
+                  "turns": [
+                    { "turn": 1, "request": "tìm kính thiên văn dưới 50 đô", "expected_cache": "hit", "expected": "HIT từ Global Shared Pool (câu hỏi public)" },
+                    { "turn": 2, "request": "tìm kính thiên văn dưới 50 đô", "expected_cache": "hit", "expected": "Cache hit riêng User C (warm-up từ global)" }
+                  ]
+                },
+                {
+                  "session_id": "sess_leak_103_b",
+                  "turns": [
+                    { "turn": 1, "request": "kính thiên văn dưới 50 đô", "expected_cache": "hit", "expected": "Semantic/exact hit riêng User C" },
+                    { "turn": 2, "request": "chi tiết sản phẩm", "expected_cache": "miss", "expected": "Miss" }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "test_id": "LEAK-002",
+          "description": "Long-term Memory & Shopping Preferences Isolation — User B không bị dính sở thích hoặc ngân sách mua sắm của User A",
+          "users": [
+            {
+              "user_id": "user_leak_201",
+              "sessions": [
+                {
+                  "session_id": "sess_leak_201_a",
+                  "turns": [
+                    { "turn": 1, "request": "ngân sách của tôi là dưới 100 đô", "expected_cache": "miss", "expected": "Lưu ngân sách 100 USD cho User A" },
+                    { "turn": 2, "request": "sở thích của tôi là tìm ống nhòm ngắm cảnh", "expected_cache": "miss", "expected": "Lưu sở thích ống nhòm cho User A" }
+                  ]
+                },
+                {
+                  "session_id": "sess_leak_201_b",
+                  "turns": [
+                    { "turn": 1, "request": "ngân sách mua sắm của tôi là bao nhiêu", "expected_cache": "miss", "expected": "Trả về ngân sách dưới 100 USD cho User A" },
+                    { "turn": 2, "request": "sở thích mua sắm của tôi là gì", "expected_cache": "miss", "expected": "Trả về sở thích ống nhòm cho User A" }
+                  ]
+                }
+              ]
+            },
+            {
+              "user_id": "user_leak_202",
+              "sessions": [
+                {
+                  "session_id": "sess_leak_202_a",
+                  "turns": [
+                    { "turn": 1, "request": "ngân sách mua sắm của tôi là bao nhiêu", "expected_cache": "miss", "expected": "KHÔNG ĐƯỢC trả về ngân sách 100 USD của User A" },
+                    { "turn": 2, "request": "sở thích mua sắm của tôi là gì", "expected_cache": "miss", "expected": "KHÔNG ĐƯỢC trả về sở thích ống nhòm của User A" }
+                  ]
+                },
+                {
+                  "session_id": "sess_leak_202_b",
+                  "turns": [
+                    { "turn": 1, "request": "gợi ý sản phẩm phù hợp ngân sách của tôi", "expected_cache": "miss", "expected": "Không tự động lấy trần 100 USD của User A" },
+                    { "turn": 2, "request": "gợi ý quà tặng cho tôi", "expected_cache": "miss", "expected": "Không tự động gợi ý ống nhòm của User A" }
+                  ]
+                }
+              ]
+            },
+            {
+              "user_id": "user_leak_203",
+              "sessions": [
+                {
+                  "session_id": "sess_leak_203_a",
+                  "turns": [
+                    { "turn": 1, "request": "sở thích mua sắm của tôi là gì", "expected_cache": "miss", "expected": "Báo chưa có thông tin sở thích cho User C" },
+                    { "turn": 2, "request": "tôi có ngân sách cố định không", "expected_cache": "miss", "expected": "Báo chưa có thông tin ngân sách cho User C" }
+                  ]
+                },
+                {
+                  "session_id": "sess_leak_203_b",
+                  "turns": [
+                    { "turn": 1, "request": "gợi ý quà sinh nhật", "expected_cache": "miss", "expected": "Gợi ý chung không dính data User A" },
+                    { "turn": 2, "request": "cảm ơn", "expected_cache": "miss", "expected": "Tạm biệt" }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "test_id": "LEAK-003",
+          "description": "Cart & Purchase History PII Isolation — User B không thấy giỏ hàng hoặc lịch sử mua hàng của User A",
+          "users": [
+            {
+              "user_id": "user_leak_301",
+              "sessions": [
+                {
+                  "session_id": "sess_leak_301_a",
+                  "turns": [
+                    { "turn": 1, "request": "thêm kính thiên văn Celestron vào giỏ", "expected_cache": "miss", "expected": "Thêm vào giỏ User A" },
+                    { "turn": 2, "request": "xác nhận", "expected_cache": "miss", "expected": "Xác nhận thêm thành công" }
+                  ]
+                },
+                {
+                  "session_id": "sess_leak_301_b",
+                  "turns": [
+                    { "turn": 1, "request": "xem giỏ hàng của tôi", "expected_cache": "miss", "expected": "Hiển thị kính Celestron trong giỏ User A" },
+                    { "turn": 2, "request": "lịch sử đơn hàng của tôi", "expected_cache": "miss", "expected": "Hiển thị đơn hàng của User A" }
+                  ]
+                }
+              ]
+            },
+            {
+              "user_id": "user_leak_302",
+              "sessions": [
+                {
+                  "session_id": "sess_leak_302_a",
+                  "turns": [
+                    { "turn": 1, "request": "xem giỏ hàng của tôi", "expected_cache": "miss", "expected": "MUST BE MISS — Giỏ hàng rỗng, KHÔNG ĐƯỢC thấy kính Celestron của User A" },
+                    { "turn": 2, "request": "lịch sử đơn hàng của tôi", "expected_cache": "miss", "expected": "MUST BE MISS — Không thấy lịch sử đơn hàng của User A" }
+                  ]
+                },
+                {
+                  "session_id": "sess_leak_302_b",
+                  "turns": [
+                    { "turn": 1, "request": "giỏ hàng hiện tại có gì", "expected_cache": "miss", "expected": "Giỏ rỗng cho User B, tuyệt đối không rò rỉ từ User A" },
+                    { "turn": 2, "request": "xem đơn hàng cũ", "expected_cache": "miss", "expected": "Không rò rỉ đơn từ User A" }
+                  ]
+                }
+              ]
+            },
+            {
+              "user_id": "user_leak_303",
+              "sessions": [
+                {
+                  "session_id": "sess_leak_303_a",
+                  "turns": [
+                    { "turn": 1, "request": "xem giỏ hàng của tôi", "expected_cache": "miss", "expected": "Giỏ rỗng cho User C" },
+                    { "turn": 2, "request": "lịch sử mua hàng", "expected_cache": "miss", "expected": "Lịch sử rỗng cho User C" }
+                  ]
+                },
+                {
+                  "session_id": "sess_leak_303_b",
+                  "turns": [
+                    { "turn": 1, "request": "kiểm tra đơn hàng", "expected_cache": "miss", "expected": "Không có đơn hàng rò rỉ" },
+                    { "turn": 2, "request": "kết thúc", "expected_cache": "miss", "expected": "Đóng phiên" }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "test_id": "LEAK-004",
+          "description": "Delivery Address & Shipping Quote PII Isolation — User B không thấy địa chỉ giao hàng hoặc báo giá ship của User A",
+          "users": [
+            {
+              "user_id": "user_leak_401",
+              "sessions": [
+                {
+                  "session_id": "sess_leak_401_a",
+                  "turns": [
+                    { "turn": 1, "request": "địa chỉ nhà tôi là 99 Đường Lê Duẩn Quận 1 TPHCM", "expected_cache": "miss", "expected": "Lưu địa chỉ giao hàng cho User A" },
+                    { "turn": 2, "request": "tính phí giao hàng đến nhà tôi", "expected_cache": "miss", "expected": "Tính phí ship tới Lê Duẩn TPHCM cho User A" }
+                  ]
+                },
+                {
+                  "session_id": "sess_leak_401_b",
+                  "turns": [
+                    { "turn": 1, "request": "địa chỉ giao hàng của tôi ở đâu", "expected_cache": "miss", "expected": "Trả về 99 Lê Duẩn TPHCM cho User A" },
+                    { "turn": 2, "request": "phí shipping bao nhiêu", "expected_cache": "miss", "expected": "Tính phí ship tới Lê Duẩn TPHCM" }
+                  ]
+                }
+              ]
+            },
+            {
+              "user_id": "user_leak_402",
+              "sessions": [
+                {
+                  "session_id": "sess_leak_402_a",
+                  "turns": [
+                    { "turn": 1, "request": "địa chỉ giao hàng của tôi ở đâu", "expected_cache": "miss", "expected": "MUST BE MISS — KHÔNG ĐƯỢC rò rỉ 99 Lê Duẩn TPHCM của User A" },
+                    { "turn": 2, "request": "tính phí giao hàng đến nhà tôi", "expected_cache": "miss", "expected": "MUST BE MISS — Yêu cầu User B nhập địa chỉ mới, không lấy địa chỉ User A" }
+                  ]
+                },
+                {
+                  "session_id": "sess_leak_402_b",
+                  "turns": [
+                    { "turn": 1, "request": "nhà tôi ở thành phố nào", "expected_cache": "miss", "expected": "Báo chưa có thông tin địa chỉ cho User B" },
+                    { "turn": 2, "request": "tính phí giao hàng", "expected_cache": "miss", "expected": "Yêu cầu địa chỉ mới" }
+                  ]
+                }
+              ]
+            },
+            {
+              "user_id": "user_leak_403",
+              "sessions": [
+                {
+                  "session_id": "sess_leak_403_a",
+                  "turns": [
+                    { "turn": 1, "request": "địa chỉ giao hàng của tôi", "expected_cache": "miss", "expected": "Không thấy PII địa chỉ của User A" },
+                    { "turn": 2, "request": "tính phí ship", "expected_cache": "miss", "expected": "Yêu cầu cung cấp địa chỉ mới" }
+                  ]
+                },
+                {
+                  "session_id": "sess_leak_403_b",
+                  "turns": [
+                    { "turn": 1, "request": "tôi ở đâu", "expected_cache": "miss", "expected": "Chưa có thông tin" },
+                    { "turn": 2, "request": "kết thúc", "expected_cache": "miss", "expected": "Đóng phiên" }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "test_id": "LEAK-005",
+          "description": "Semantic Cache & Global Pool Isolation — Tra cứu sản phẩm công khai được HIT từ Global Pool, câu hỏi cá nhân PII luôn MISS.",
+          "users": [
+            {
+              "user_id": "user_leak_501",
+              "sessions": [
+                {
+                  "session_id": "sess_leak_501_a",
+                  "turns": [
+                    { "turn": 1, "request": "cho xem các loại kính thiên văn tốt nhất", "expected_cache": "miss", "expected": "Miss cho User A (first call)" },
+                    { "turn": 2, "request": "cho xem các loại kính thiên văn tốt nhất", "expected_cache": "hit", "expected": "Exact Hit cho User A" }
+                  ]
+                },
+                {
+                  "session_id": "sess_leak_501_b",
+                  "turns": [
+                    { "turn": 1, "request": "cho xem các loại kính thiên văn tốt nhất", "expected_cache": "hit", "expected": "Semantic Hit riêng User A" },
+                    { "turn": 2, "request": "giá sản phẩm top 1", "expected_cache": "miss", "expected": "Miss" }
+                  ]
+                }
+              ]
+            },
+            {
+              "user_id": "user_leak_502",
+              "sessions": [
+                {
+                  "session_id": "sess_leak_502_a",
+                  "turns": [
+                    { "turn": 1, "request": "kính thiên văn nào tốt nhất hiện nay", "expected_cache": "hit", "expected": "HIT từ Global Shared Pool (câu hỏi công khai, không chứa dữ liệu cá nhân)" },
+                    { "turn": 2, "request": "kính thiên văn nào tốt nhất hiện nay", "expected_cache": "hit", "expected": "Hit riêng cho User B (warm-up từ global)" }
+                  ]
+                },
+                {
+                  "session_id": "sess_leak_502_b",
+                  "turns": [
+                    { "turn": 1, "request": "cho xem các loại kính thiên văn tốt nhất", "expected_cache": "hit", "expected": "Semantic Hit riêng User B" },
+                    { "turn": 2, "request": "xem đánh giá", "expected_cache": "miss", "expected": "Miss" }
+                  ]
+                }
+              ]
+            },
+            {
+              "user_id": "user_leak_503",
+              "sessions": [
+                {
+                  "session_id": "sess_leak_503_a",
+                  "turns": [
+                    { "turn": 1, "request": "cho xem các loại kính thiên văn tốt nhất", "expected_cache": "hit", "expected": "HIT từ Global Shared Pool (câu hỏi công khai)" },
+                    { "turn": 2, "request": "cho xem các loại kính thiên văn tốt nhất", "expected_cache": "hit", "expected": "Hit riêng cho User C (warm-up từ global)" }
+                  ]
+                },
+                {
+                  "session_id": "sess_leak_503_b",
+                  "turns": [
+                    { "turn": 1, "request": "kính thiên văn nào tốt nhất hiện nay", "expected_cache": "hit", "expected": "Semantic Hit riêng User C" },
+                    { "turn": 2, "request": "tạm biệt", "expected_cache": "miss", "expected": "Miss" }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "group_name": "4. Cache Hit/Miss & Invalidation",
+      "description": "Kiểm tra Exact Cache, Semantic Cache và Cache Invalidation khi nguồn đổi.",
+      "testcases": [
+        {
+          "test_id": "CACHE-001",
+          "description": "Exact Cache Hit khi trùng 100% câu chữ",
+          "user_id": "user_cache_001",
+          "session_id": "session_cache_001",
+          "turns": [
+            { "turn": 1, "request": "tìm binoculars giá tốt", "expected_cache": "miss", "expected": "First call -> miss" },
+            { "turn": 2, "request": "tìm binoculars giá tốt", "expected_cache": "hit", "expected": "Second call -> exact hit" }
+          ]
+        },
+        {
+          "test_id": "CACHE-002",
+          "description": "Semantic Cache Hit khi khác câu chữ nhưng cùng ý nghĩa",
+          "user_id": "user_cache_002",
+          "session_id": "session_cache_002",
+          "turns": [
+            { "turn": 1, "request": "tìm kính thiên văn dưới 100 đô", "expected_cache": "miss", "expected": "First call -> miss" },
+            { "turn": 2, "request": "tìm kiếm kính thiên văn dưới 100 đô", "expected_cache": "hit", "expected": "Semantic match -> hit" }
+          ]
+        },
+        {
+          "test_id": "CACHE-003",
+          "description": "Cache Invalidation khi nguồn dữ liệu sản phẩm thay đổi",
+          "user_id": "user_cache_003",
+          "session_id": "session_cache_003",
+          "steps": [
+            { "step": 1, "action": "query", "request": "tìm product OLJCESPC7Z", "expected_cache": "miss", "expected": "First call -> miss" },
+            { "step": 2, "action": "query", "request": "tìm product OLJCESPC7Z", "expected_cache": "hit", "expected": "Second call -> hit" },
+            { "step": 3, "action": "invalidate", "entity_type": "product", "entity_id": "OLJCESPC7Z", "expected": "Invalidate cache entries tagged product:OLJCESPC7Z" },
+            { "step": 4, "action": "query", "request": "tìm product OLJCESPC7Z", "expected_cache": "miss", "expected": "Call after invalidation -> MUST BE MISS" }
+          ]
+        }
+      ]
+    }
+  ]
+}
