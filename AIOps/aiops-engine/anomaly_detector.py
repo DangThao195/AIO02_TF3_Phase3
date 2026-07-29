@@ -19,10 +19,25 @@ class AnomalyDetector:
         os.makedirs(self.models_dir, exist_ok=True)
         self.iforest_models = {}
         self.models = self.iforest_models # Backwards compatibility
+        self.frozen_services = set()
         
         # Nạp các model Isolation Forest từ S3/local cache
         self._load_models_from_s3()
         self.load_local_models()
+
+    def freeze_baseline(self, service_name: str):
+        """[DIRECTIVE #28] Đóng băng Baseline thực sự cho service đang trong trạng thái sự cố kéo dài."""
+        self.frozen_services.add(service_name)
+        logger.info(f"[BaselineFreeze] Explicitly FROZE baseline model for service '{service_name}'. Online recalibration blocked.")
+
+    def unfreeze_baseline(self, service_name: str):
+        """Mở đóng băng Baseline sau khi sự cố kết thúc."""
+        self.frozen_services.discard(service_name)
+        logger.info(f"[BaselineFreeze] Unfroze baseline model for service '{service_name}'.")
+
+    def is_baseline_frozen(self, service_name: str) -> bool:
+        """Kiểm tra xem Baseline của service có đang bị đóng băng không."""
+        return service_name in self.frozen_services
 
     def download_models_from_s3(self):
         """Tải các model Isolation Forest từ S3 về models/ nếu có."""

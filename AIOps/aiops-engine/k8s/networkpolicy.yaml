@@ -1,0 +1,62 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: 07-aiops-engine
+  namespace: techx-tf3
+  labels:
+    app.kubernetes.io/name: aiops-engine
+    app.kubernetes.io/managed-by: argocd
+spec:
+  podSelector:
+    matchLabels:
+      app: aiops-engine
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Cho phép Ingress từ Prometheus scraper và internal callers trên targetPort 8000
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus
+    - podSelector:
+        matchLabels:
+          app: prometheus
+    - podSelector:
+        matchLabels:
+          app: frontend
+    ports:
+    - protocol: TCP
+      port: 8000
+  egress:
+  # 1. Chấp nhận DNS resolution nội bộ
+  - to:
+    - namespaceSelector: {}
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # 2. Kubernetes API Server control plane ENIs (Subnet CIDRs: 10.0.0.0/20, 10.0.16.0/20, 10.0.32.0/20)
+  - to:
+    - ipBlock:
+        cidr: 10.0.0.0/16
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 9090
+    - protocol: TCP
+      port: 16686
+    - protocol: TCP
+      port: 9200
+  # 3. AWS Services (S3, Bedrock us-east-1, STS, Slack HTTPS)
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+    ports:
+    - protocol: TCP
+      port: 443
