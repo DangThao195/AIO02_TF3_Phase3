@@ -34,6 +34,7 @@ infra/terraform.tfvars
 Thumbs.db
 .idea/
 .vscode/
+tmp/
 
 # --- Python ---
 __pycache__/
@@ -56,3 +57,7 @@ build/
 /AIE1/techx-corp-platform/src/*
 !/AIE1/techx-corp-platform/src/llm/
 !/AIE1/techx-corp-platform/src/product-reviews/
+!/AIE1/techx-corp-platform/src/frontend/
+!/AIE1/techx-corp-platform/src/frontend-proxy/
+.pytest_cache/
+AIE1/repro/artifacts/*.json
