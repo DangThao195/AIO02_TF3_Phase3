@@ -27,14 +27,14 @@ Nhóm Task Force đã tiến hành đo đạc baseline trên nhiều kịch bả
 
 Dựa trên số liệu đo đạc thực nghiệm chi tiết tại [AI_BASELINE_EVAL.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/AI_BASELINE_EVAL.md):
 
-| Kịch bản | Model | Latency Avg (ms) | Latency p95 (ms) | Tỉ lệ lỗi (%) | Chi phí / 10k reqs | Nhận định kỹ thuật |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Real LLM - Gemini** | `gemini-2.5-flash` | 5624.31 | 6829.13 | 60.00% | - | Lỗi cạn kiệt quota tài khoản miễn phí. |
-| **Real LLM - Groq 8B** | `llama-3.1-8b-instant` | 594.82 | 773.89 | 30.00% | - | Bị lỗi cú pháp Tool Calling. |
-| **Real LLM - Groq 70B** | `llama-3.3-70b-versatile` | 824.67 | 968.81 | 10.00% | ~$5.29 USD | Nhanh, chất lượng tốt nhưng chi phí khá cao. |
-| **Real LLM - Bedrock** | `amazon.nova-lite-v1:0` | **1668.41** | **2281.35** | **0.00%** | **~$0.96 USD** | **Độ ổn định tuyệt đối, giá rẻ vượt trội.** |
-| **Real LLM - Bedrock** | `amazon.nova-micro-v1:0` | 2073.34 | 2959.01 | 0.00% | ~$0.63 USD | Giá rẻ nhất nhưng độ trễ trung bình cao hơn Nova Lite. |
-| **Real LLM - Bedrock** | `meta.llama3-3-70b-instruct`| 7650.01 | 10017.15 | 65.00% | ~$6.27 USD | Bị throttle lỗi gRPC `DeadlineExceeded` liên tục. |
+| Kịch bản                | Model                        | Latency Avg (ms) | Latency p95 (ms) | Tỉ lệ lỗi (%) | Chi phí / 10k reqs | Nhận định kỹ thuật                                     |
+| :---------------------- | :--------------------------- | :--------------- | :--------------- | :------------ | :----------------- | :----------------------------------------------------- |
+| **Real LLM - Gemini**   | `gemini-2.5-flash`           | 5624.31          | 6829.13          | 60.00%        | -                  | Lỗi cạn kiệt quota tài khoản miễn phí.                 |
+| **Real LLM - Groq 8B**  | `llama-3.1-8b-instant`       | 594.82           | 773.89           | 30.00%        | -                  | Bị lỗi cú pháp Tool Calling.                           |
+| **Real LLM - Groq 70B** | `llama-3.3-70b-versatile`    | 824.67           | 968.81           | 10.00%        | ~$5.29 USD         | Nhanh, chất lượng tốt nhưng chi phí khá cao.           |
+| **Real LLM - Bedrock**  | `amazon.nova-lite-v1:0`      | **1668.41**      | **2281.35**      | **0.00%**     | **~$0.96 USD**     | **Độ ổn định tuyệt đối, giá rẻ vượt trội.**            |
+| **Real LLM - Bedrock**  | `amazon.nova-micro-v1:0`     | 2073.34          | 2959.01          | 0.00%         | ~$0.63 USD         | Giá rẻ nhất nhưng độ trễ trung bình cao hơn Nova Lite. |
+| **Real LLM - Bedrock**  | `meta.llama3-3-70b-instruct` | 7650.01          | 10017.15         | 65.00%        | ~$6.27 USD         | Bị throttle lỗi gRPC `DeadlineExceeded` liên tục.      |
 
 > [!TIP]
 > Dữ liệu cho thấy **Amazon Nova Lite** có sự cân bằng hoàn hảo giữa chi phí cực thấp, độ ổn định tuyệt đối (0% lỗi) và độ trễ chấp nhận được (~1.6s).

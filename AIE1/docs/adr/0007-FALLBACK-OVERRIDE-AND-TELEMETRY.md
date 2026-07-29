@@ -37,6 +37,34 @@ Bổ sung counter metric mới vào `metrics.py`:
    * Gọi `server.stop(grace=5.0)` để chờ các gRPC stream/request dở dang hoàn tất trong 5 giây trước khi đóng hoàn toàn.
 3. **Auto-Reconnection cho Dependencies:** Bọc truy vấn PostgreSQL connection pool & Redis client bằng cơ chế retry auto-reconnection để tránh crash startup nếu dependencies khởi động chậm hơn service.
 
+### 2.4 Self-Healing Circuit Breaker Schema & State Machine
+* **Module:** `guardrails/circuit_breaker.py`
+* **Redis Control Keys:**
+  * `product_reviews:cb:state`: State hiện tại (`"CLOSED"`, `"OPEN"`, `"HALF-OPEN"`).
+  * `product_reviews:cb:failures`: Đếm số lần lỗi liên tiếp.
+  * `product_reviews:cb:opened_at`: Timestamp (epoch seconds) thời điểm chuyển sang state `OPEN`.
+* **Hành vi State Machine:**
+  * **CLOSED → OPEN:** Khi số lỗi đếm liên tiếp `>= failure_threshold` (mặc định 5 lỗi). Tự động block mọi request LLM và hạ cấp sang Fallback.
+  * **OPEN → HALF-OPEN:** Khi hết thời gian cooldown (`cooldown_seconds`, mặc định 30.0s), chuyển trạng thái sang `HALF-OPEN` để thử lại (probe request).
+  * **HALF-OPEN → CLOSED:** Nếu request probe thành công (`record_success()`), reset trạng thái về `CLOSED` và đưa `failures = 0`.
+  * **HALF-OPEN → OPEN:** Nếu request probe thất bại (`record_failure()`), lập tức chuyển lại `OPEN` và reset cooldown timer.
+* **In-Memory Fallback:** Tự động fallback sang bộ nhớ RAM cục bộ (`threading.Lock`) nếu kết nối Redis bị gián đoạn.
+
+### 2.5 Dynamic Tool Argument Validation & Security Filter
+* **Module:** `guardrails/tool_validator.py`
+* **Hành vi:**
+  * Kiểm định tham số đầu vào của tool call (`product_id` và JSON payload) trước khi thực thi.
+  * Đảm bảo `product_id` tuân thủ chuẩn định dạng (chỉ chứa kí tự alphanumeric, `-`, `_`, độ dài 1.64) và ngăn chặn Prompt Injection / SQL Injection / Directory Traversal.
+  * Trả về kết quả kiểm định `(is_valid, parsed_args, error_reason)`. Khi vi phạm, hủy bỏ tool execution và trả về lỗi schema an toàn.
+
+### 2.6 HTTP Error Injection Endpoint Schema
+* **Module:** `guardrails/error_injection.py` & HTTP handler `LLMTraceHTTPHandler`
+* **Endpoints:**
+  * `POST /inject/error`: Bơm lỗi giả lập. Body: `{"error_type": "429"|"timeout"|"500"|"circuit_breaker", "active": true|false}`.
+  * `GET /inject/error`: Đọc trạng thái lỗi đang bơm hiện tại.
+* **Redis Key:** `product_reviews:inject_error` (hỗ trợ in-memory fallback).
+* **Hành vi:** Tích hợp trực tiếp tại `get_ai_assistant_response()`. Khi active, ép luồng xử lý hạ cấp sang Fallback Summary ngay lập tức mà không gọi LLM, đồng thời phát sinh Prometheus custom metric `app_ai_fallback_total{source="error_injection", error=error_type}`.
+
 ---
 
 ## 3. Số liệu & Bằng chứng kiểm chứng thực tế (Metrics & Run Verification)

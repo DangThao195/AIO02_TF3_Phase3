@@ -6,7 +6,10 @@
 # Python
 import os
 import hashlib
-import simplejson as json
+try:
+    import simplejson as json
+except ImportError:  # pragma: no cover - local unit-test fallback
+    import json
 
 # Postgres
 import psycopg2
@@ -23,11 +26,13 @@ def must_map_env(key: str):
         raise Exception(f'{key} environment variable must be set')
     return value
 
-db_connection_str = must_map_env('DB_CONNECTION_STRING')
+db_connection_str = os.environ.get('DB_CONNECTION_STRING', '')
 db_pool = None
 
 def init_db_pool(retries: int = 5, delay: float = 2.0):
     global db_pool
+    if not db_connection_str:
+        raise RuntimeError('DB_CONNECTION_STRING environment variable must be set')
     for attempt in range(1, retries + 1):
         try:
             db_pool = ThreadedConnectionPool(minconn=5, maxconn=30, dsn=db_connection_str)

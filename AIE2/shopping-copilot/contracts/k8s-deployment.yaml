@@ -1,0 +1,136 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: shopping-copilot-config
+  namespace: techx-tf3
+  labels:
+    app: shopping-copilot
+    team: aie2
+data:
+  # ── LLM Backend ──────────────────────────────────────────────────
+  BEDROCK_MODEL_ID: "apac.amazon.nova-lite-v1:0"
+  BEDROCK_REGION: "ap-southeast-1"
+
+  # ── Guardrails ────────────────────────────────────────────────────
+  BEDROCK_GUARDRAIL_ID: "3ab7r29x59x4"
+  BEDROCK_GUARDRAIL_VERSION: "DRAFT"
+  BEDROCK_GUARDRAIL_REGION: "us-east-1"
+
+  # ── RAG Knowledge Base ────────────────────────────────────────────
+  BEDROCK_KB_ID: "UCTITOWFHE"
+  BEDROCK_KB_DATA_SOURCE_ID: "OJQNE88GXV"
+  REVIEWS_DATA_SOURCE_ID: "M2YA7L7GEA"
+  PRODUCTS_S3_BUCKET: "techx-products-catalog-2026"
+
+  # ── Database ──────────────────────────────────────────────────────
+  DB_HOST: "postgresql.techx-tf3.svc.cluster.local"
+  DB_PORT: "5432"
+  DB_NAME: "otel"
+  DB_USER: "otelu"
+  DB_CONNECTION_STRING: "host=postgresql.techx-tf3.svc.cluster.local port=5432 user=otelu password=otelp dbname=otel"
+
+  # ── gRPC Microservices (K8s internal DNS) ─────────────────────────
+  CATALOG_ADDR: "product-catalog.techx-tf3.svc.cluster.local:8080"
+  CART_ADDR: "cart.techx-tf3.svc.cluster.local:8080"
+  REVIEWS_ADDR: "product-reviews.techx-tf3.svc.cluster.local:3551"
+  RECO_ADDR: "recommendation.techx-tf3.svc.cluster.local:8080"
+  CURRENCY_ADDR: "currency.techx-tf3.svc.cluster.local:8080"
+  SHIPPING_ADDR: "http://shipping.techx-tf3.svc.cluster.local:8080"
+
+  # ── Session & Cache (Valkey) ──────────────────────────────────────
+  # DB=1 để tách khỏi Cart service (đang dùng DB=0)
+  VALKEY_URL: "redis://valkey-cart.techx-tf3.svc.cluster.local:6379/1"
+
+  # ── CORS ─────────────────────────────────────────────────────────
+  CORS_ALLOWED_ORIGINS: "*"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: shopping-copilot-secret
+  namespace: techx-tf3
+  labels:
+    app: shopping-copilot
+    team: aie2
+type: Opaque
+stringData:
+  DB_PASSWORD: "otelp"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shopping-copilot
+  namespace: techx-tf3
+  labels:
+    app: shopping-copilot
+    team: aie2
+    version: v1.0.0
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: shopping-copilot
+  template:
+    metadata:
+      labels:
+        app: shopping-copilot
+        version: v1.0.0
+    spec:
+      serviceAccountName: shopping-copilot-sa   # IRSA — CDO tạo SA này với IAM Role
+      containers:
+        - name: shopping-copilot
+          image: 197826770971.dkr.ecr.ap-southeast-1.amazonaws.com/shopping-copilot:v1.0.0
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8001
+              name: http
+          envFrom:
+            - configMapRef:
+                name: shopping-copilot-config
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: shopping-copilot-secret
+                  key: DB_PASSWORD
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: shopping-copilot
+  namespace: techx-tf3
+  labels:
+    app: shopping-copilot
+    team: aie2
+spec:
+  selector:
+    app: shopping-copilot
+  ports:
+    - port: 8001
+      targetPort: 8001
+      name: http
+  type: ClusterIP

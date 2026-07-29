@@ -1,0 +1,126 @@
+{
+  "suite_name": "MANDATE #25 - AI Resilience with Controlled Degradation",
+  "date": "2026-07-28T15:57:02.046648",
+  "tests": [
+    {
+      "test_id": 1,
+      "test_name": "Circuit Breaker Opens on Sustained Failure",
+      "scenarios": {
+        "1a": {
+          "status": "PASS",
+          "final_state": "CircuitState.OPEN",
+          "failure_count": 5,
+          "expected": "OPEN after 5 failures"
+        },
+        "1b": {
+          "status": "PASS",
+          "latency_ms": "0.0",
+          "expected": "< 1ms"
+        },
+        "1c": {
+          "status": "PASS",
+          "final_state": "CircuitState.CLOSED",
+          "expected": "CLOSED after 1 success in HALF_OPEN"
+        }
+      },
+      "overall": "PASS"
+    },
+    {
+      "test_id": 2,
+      "test_name": "Retry with Bounded Backoff",
+      "scenarios": {
+        "2a": {
+          "status": "PASS",
+          "transient_detected": true,
+          "permanent_detected": true
+        },
+        "2b": {
+          "status": "FAIL",
+          "backoff_sequence": [
+            1886,
+            3864,
+            7947,
+            7619
+          ],
+          "total_backoff_ms": 13697,
+          "max_backoff_ms": 7947
+        }
+      },
+      "overall": "PASS"
+    },
+    {
+      "test_id": 3,
+      "test_name": "Schema Validation Prevents Garbage",
+      "scenarios": {
+        "3a": {
+          "status": "PASS",
+          "validation_result": "rejected",
+          "fallback_used": true
+        },
+        "3b": {
+          "status": "PASS",
+          "validation_result": "accepted"
+        },
+        "3c": {
+          "status": "PASS",
+          "fallback_has_task_type": true,
+          "fallback_result": "{'task_type': 'search', 'target_entity': 'product', 'product_query': 'tôi muốn tìm laptop giá dưới 2"
+        }
+      },
+      "overall": "PASS"
+    },
+    {
+      "test_id": 4,
+      "test_name": "Safe Degradation (No Fabrication)",
+      "scenarios": {
+        "4a": {
+          "status": "PASS",
+          "messages_tested": 3,
+          "no_fabrication": true
+        },
+        "4b": {
+          "status": "PASS",
+          "fallback_plan": [],
+          "fabricated_tools": 0
+        },
+        "4c": {
+          "status": "PASS",
+          "fabrication_checks": 3,
+          "prices_detected": 0
+        }
+      },
+      "overall": "PASS"
+    },
+    {
+      "test_id": 5,
+      "test_name": "No 500 on Provider Failure",
+      "scenarios": {
+        "5a": {
+          "status": "PASS",
+          "transient_errors_tested": 3,
+          "all_detected": true,
+          "expected_response": 200
+        },
+        "5b": {
+          "status": "PASS",
+          "permanent_errors_tested": 2,
+          "all_detected": true,
+          "expected_response": 200
+        },
+        "5c": {
+          "status": "PASS",
+          "error_type": "json_decode",
+          "crashed": false,
+          "fallback_used": true
+        }
+      },
+      "overall": "PASS"
+    }
+  ],
+  "summary": {
+    "total_tests": 5,
+    "passed": 5,
+    "failed": 0,
+    "pass_rate": "100.0%"
+  }
+}

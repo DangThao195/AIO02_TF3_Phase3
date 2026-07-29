@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package products;
+
+import "google/protobuf/empty.proto";
+
+service Products {
+  rpc GetProduct(GetProductRequest) returns (Product);
+  rpc ListProducts(google.protobuf.Empty) returns (ListProductsResponse);
+  rpc SearchProducts(SearchProductsRequest) returns (ListProductsResponse);
+}
+
+message GetProductRequest {
+  string id = 1;
+}
+
+message SearchProductsRequest {
+  string query = 1;
+}
+
+message Product {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  string picture = 4;
+  string price_currency_code = 5;
+  int64 price_units = 6;
+  int32 price_nanos = 7;
+  string categories = 8;
+}
+
+message ListProductsResponse {
+  repeated Product products = 1;
+}

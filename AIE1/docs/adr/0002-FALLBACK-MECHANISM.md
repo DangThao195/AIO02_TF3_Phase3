@@ -23,7 +23,7 @@ Tầng 1 (Chính)   → AWS Bedrock Nova Lite qua SDK boto3 trực tiếp để 
         ↓ Kiệt sức lần thử lại / Lỗi nghiêm trọng không thể thử lại
 Tầng 2 (Dự phòng 1) → Tóm tắt tĩnh từ PostgreSQL thông qua cơ chế lưu đè khi thành công
         ↓ Không tìm thấy dữ liệu trong cơ sở dữ liệu
-Tầng 3 (Dự phòng 2) → Thông điệp mặc định thân thiện làm phương án cuối cùng
+Tầng 3 (Dự phòng 2) → Thông điệp mặc định: "The AI is busy right now. Please try again later."
 ```
 
 ### 2.1 Cơ chế Thử lại Tự động (Automatic Retry)
@@ -41,7 +41,7 @@ Trước khi quyết định hạ cấp xuống tầng dự phòng tiếp theo, 
 
 1. **Tầng 1 — Chính:** Gọi trực tiếp mô hình qua SDK `boto3` Converse API. Nếu cuộc gọi thành công, dữ liệu được trả về gRPC đồng thời lưu đè vào cơ sở dữ liệu làm bộ nhớ đệm phục vụ cho lần sau. Nếu xảy ra bất kỳ lỗi mạng hoặc lỗi quá thời gian chờ nào sau khi đã thử lại tối đa 3 lần, hệ thống bắt ngoại lệ và hạ cấp xuống Tầng 2.
 2. **Tầng 2 — Tóm tắt tĩnh từ PostgreSQL:** Hệ thống thực hiện truy vấn bảng `product_summaries` trong PostgreSQL theo `product_id`. Nếu tồn tại bản tóm tắt tĩnh được tạo trước bởi tiến trình định kỳ hoặc lưu từ lần chạy thành công trước, hệ thống sẽ trả về bản tóm tắt này. Khách hàng vẫn nhận được thông tin sản phẩm thực tế dù không phải thời gian thực.
-3. **Tầng 3 — Thông điệp mặc định:** Nếu không tìm thấy dòng dữ liệu nào trong cơ sở dữ liệu đối với sản phẩm mới, hệ thống trả về một thông điệp thân thiện cố định: *"Product review summary is temporarily unavailable. Please try again in a few moments."* Tầng này đảm bảo cuộc gọi gRPC luôn thành công và trả về mã HTTP 200 thay vì gây crash giao diện trắng trang.
+3. **Tầng 3 — Thông điệp mặc định:** Nếu không tìm thấy dòng dữ liệu nào trong cơ sở dữ liệu đối với sản phẩm mới (hoặc khi cuộc gọi LLM gặp sự cố hạ tầng), hệ thống trả về thông điệp lỗi tĩnh: *"The AI is busy right now. Please try again later."* Tầng này đảm bảo cuộc gọi gRPC luôn thành công và trả về mã HTTP 200 thay vì gây crash giao diện.
 
 ---
 
@@ -50,6 +50,19 @@ Trước khi quyết định hạ cấp xuống tầng dự phòng tiếp theo, 
 Để phân biệt các phản hồi thực tế và phản hồi dự phòng trên hệ thống giám sát qua Jaeger và Prometheus, chúng tôi bổ sung:
 * **Thuộc tính nhãn (Span Attributes)**:
   * `app.fallback.triggered` kiểu boolean: Đánh dấu có kích hoạt dự phòng hay không.
-  * `app.fallback.source` kiểu string: Ghi nhận nguồn dự phòng, nhận giá trị `database`, `generic_message` hoặc `none`.
+  * `app.fallback.source` kiểu string: Ghi nhận nguồn dự phòng, nhận giá trị `"redis_override"`, `"rate_limit"`, `"timeout"`, `"candidate"`, hoặc `"none"`.
 * **Nhật ký (Logs)**: Ghi log mức độ `WARNING` kèm mã lỗi gốc của Bedrock để phục vụ mục đích kiểm toán.
-* **Chỉ số đo lường (Metrics)**: Đẩy chỉ số counter `app.ai.fallback.total` phân loại theo nhãn `source` để giám sát sức khỏe API LLM.
+* **Chỉ số đo lường (Metrics)**: Đẩy chỉ số counter `app_ai_fallback_total` phân loại theo nhãn `source` để giám sát sức khỏe API LLM.
+
+---
+
+## 4. Hiện trạng Triển khai thực tế
+
+Trong quá trình phát triển mã nguồn thực tế tại [fallback.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/guardrails/fallback.py) and [product_reviews_server.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/product_reviews_server.py), cơ chế fallback đã được tinh chỉnh so với thiết kế 3 tầng ban đầu để tối ưu hóa tài nguyên hệ thống và bảo vệ chất lượng dữ liệu:
+
+* **Bỏ qua Tầng 2 (PostgreSQL Static Summary):** Hệ thống thực tế **chưa triển khai** việc truy cập Postgres để lấy tóm tắt cũ nhằm tránh hiển thị thông tin lỗi thời không đồng bộ với reviews mới cho khách hàng.
+* **Fail-Closed 2 nhánh lỗi tĩnh:**
+  * **Nhánh 1 (Lỗi hạ tầng/API/Timeout):** Trả về `FALLBACK_SUMMARY_MESSAGE` = `"The AI is busy right now. Please try again later."` (sau khi đã retry tự động 3 lần qua tenacity).
+  * **Nhánh 2 (Lỗi chất lượng/Fidelity Gate/Guardrail chặn):** Trả về `UNVERIFIED_SUMMARY_MESSAGE` = `"The summary cannot be verified. Please try again later."`.
+* **Redis Actuator:** Hỗ trợ key `product_reviews:fallback_override` để cưỡng bức chuyển hướng sang fallback theo lệnh điều khiển từ xa của AIOps Engine mà không cần khởi động lại container.
+* **Span Attributes thực tế:** `app.fallback.source` nhận các giá trị: `"redis_override"`, `"rate_limit"`, `"timeout"`, `"candidate"`, hoặc `"none"`. Metric counter là `app_ai_fallback_total`.

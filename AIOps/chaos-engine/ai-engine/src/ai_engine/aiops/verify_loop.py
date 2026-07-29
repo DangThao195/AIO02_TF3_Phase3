@@ -25,6 +25,11 @@ class VerifyResult:
     recovered: bool
     samples: list[float]
     detail: str
+    # G4: phân biệt "đo được và CHƯA hồi phục" với "KHÔNG đo được gì" (recording-rule thiếu
+    # / Prometheus mù). Hai cái này đòi hành động khác nhau: cái đầu → rollback (action không
+    # cứu được), cái sau → escalate người (ta không có quyền kết luận, rollback mù có thể
+    # phá một action đã thành công).
+    blind: bool = False
 
 
 class VerifyLoop:
@@ -49,7 +54,13 @@ class VerifyLoop:
     ) -> VerifyResult:
         """Poll `recovery_query` every poll_s for window_s. Recovered when the value crosses
         `threshold` in the healthy direction (below by default — e.g. error-ratio back under
-        budget). A blind telemetry source is treated as NOT recovered (fail-safe → rollback).
+        budget).
+
+        Ba kết quả (G4):
+          - recovered=True             → action đã cứu, giữ nguyên.
+          - recovered=False, blind=False → ĐO ĐƯỢC và vẫn vỡ → action không cứu → rollback.
+          - recovered=False, blind=True  → KHÔNG đo được mẫu nào (recording-rule thiếu /
+            Prometheus mù) → KHÔNG rollback mù (có thể phá action đã thành công) → escalate.
         """
         samples: list[float] = []
         elapsed = 0
@@ -66,6 +77,7 @@ class VerifyLoop:
                         recovered=True,
                         samples=samples,
                         detail=f"recovered: {value:.4f} crossed {threshold} after {elapsed}s",
+                        blind=False,
                     )
             if elapsed + self._poll_s > self._window_s:
                 break
@@ -73,11 +85,15 @@ class VerifyLoop:
             elapsed += self._poll_s
 
         last = samples[-1] if samples else None
+        is_blind = not samples
         return VerifyResult(
             recovered=False,
             samples=samples,
             detail=(
-                f"NOT recovered after {self._window_s}s "
-                f"(last={last}, threshold={threshold}, blind={not samples})"
+                f"BLIND after {self._window_s}s — query '{recovery_query}' trả 0 mẫu "
+                f"(recording-rule thiếu? Prometheus mù?). KHÔNG kết luận được, cần người."
+                if is_blind else
+                f"NOT recovered after {self._window_s}s (last={last}, threshold={threshold})"
             ),
+            blind=is_blind,
         )

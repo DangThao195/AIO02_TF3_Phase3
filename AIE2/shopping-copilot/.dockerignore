@@ -1,0 +1,41 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+# Virtual environment — không cần trong image
+.venv/
+venv/
+env/
+
+# Local data files (session/cache — được tạo lại khi runtime)
+data/
+*.json
+
+# Test files
+tests/
+test_*.py
+*_test.py
+debug_output.txt
+tmp_*.py
+test_compare.py
+
+# Docs, scripts phụ trợ
+docs/
+reports/
+server-test/
+
+# Environment file (dùng K8s ConfigMap/Secret thay thế)
+.env
+.env.*
+
+# IDE & OS
+.vscode/
+.idea/
+*.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore

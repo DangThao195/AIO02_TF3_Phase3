@@ -145,7 +145,14 @@
   .reply hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
 
   /* ── Confirm button ── */
-  .confirm-area { margin-top: 12px; display: flex; gap: 8px; }
+  .confirm-area {
+    margin-top: 12px; display: flex; gap: 8px;
+    transition: opacity .3s ease, transform .3s ease;
+  }
+  .confirm-area.done {
+    opacity: 0; pointer-events: none; transform: translateY(-4px);
+    /* keep layout space while fading so chat doesn't jump */
+  }
   .btn-confirm {
     padding: 8px 20px; font-size: 13px; font-weight: 600;
     background: var(--primary); color: #fff; border: none;
@@ -158,7 +165,8 @@
     background: var(--surface); color: var(--text-secondary); border: 1px solid var(--border);
     border-radius: var(--radius-sm); cursor: pointer; transition: all .15s;
   }
-  .btn-cancel:hover { background: var(--surface-alt); }
+  .btn-cancel:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-cancel:hover:not(:disabled) { background: var(--surface-alt); }
 
   /* ── Loading ── */
   .loading {
@@ -203,6 +211,261 @@
     .session-id { display: none; }
   }
 
+  /* ── App Container & Sidebar Layout ── */
+  .app-container {
+    display: flex;
+    max-width: 1200px;
+    height: 100vh;
+    margin: 0 auto;
+    background: var(--surface);
+    overflow: hidden;
+  }
+
+  .app {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    border-right: 1px solid var(--border);
+    min-width: 0;
+  }
+
+  .sidebar {
+    width: 380px;
+    background: var(--surface-alt);
+    display: flex;
+    flex-direction: column;
+    padding: 24px;
+    gap: 20px;
+    overflow-y: auto;
+    border-left: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  @media (max-width: 900px) {
+    .app-container { flex-direction: column; }
+    .sidebar { width: 100%; height: auto; border-left: none; border-top: 1px solid var(--border); }
+  }
+
+  .sidebar-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .sidebar-card h3 {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+    margin-bottom: 2px;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .form-group label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+  }
+
+  .form-input-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  .form-input {
+    flex: 1;
+    padding: 8px 12px;
+    font-size: 13px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    outline: none;
+    font-family: var(--font);
+    background: var(--surface-alt);
+    transition: all 0.15s;
+    font-weight: 500;
+  }
+
+  .form-input:focus {
+    border-color: var(--primary);
+    background: var(--surface);
+    box-shadow: 0 0 0 3px rgba(37,99,235,.1);
+  }
+
+  .btn-action {
+    padding: 8px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .btn-action:hover {
+    background: var(--primary-hover);
+  }
+
+  .sidebar-info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+  }
+
+  .sidebar-info-label {
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+
+  .sidebar-info-value {
+    font-family: monospace;
+    background: var(--surface-alt);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    font-size: 12px;
+  }
+
+  /* Cart List Styles */
+  .cart-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .cart-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--surface-alt);
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    border: 1px solid var(--border);
+  }
+
+  .cart-item-details {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .cart-item-name {
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+  }
+
+  .cart-item-price {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .cart-item-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .cart-item-qty {
+    font-size: 11px;
+    background: var(--primary-light);
+    color: var(--primary);
+    padding: 2px 8px;
+    border-radius: 99px;
+    font-weight: 700;
+  }
+
+  .cart-item-total {
+    font-weight: 700;
+    color: var(--success);
+  }
+
+  .cart-empty {
+    font-size: 13px;
+    color: var(--text-muted);
+    text-align: center;
+    padding: 16px 0;
+    font-style: italic;
+  }
+
+  .cart-total-summary {
+    border-top: 2px dashed var(--border);
+    padding-top: 10px;
+    margin-top: 4px;
+    display: flex;
+    justify-content: space-between;
+    font-weight: 700;
+    font-size: 14px;
+  }
+
+  /* Services list */
+  .services-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .service-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    padding: 4px 0;
+  }
+
+  .service-name {
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  .service-status {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 99px;
+    text-transform: uppercase;
+  }
+
+  .service-status.mock {
+    background: var(--warn-bg);
+    color: var(--warn);
+    border: 1px solid var(--warn);
+  }
+
+  .service-status.active {
+    background: var(--success-bg);
+    color: var(--success);
+    border: 1px solid var(--success);
+  }
+
+  /* ── Debug panel ── */
+  .debug-empty {
+    font-size: 12px; color: var(--text-muted); text-align: center;
+    padding: 12px 0; font-style: italic;
+  }
+  .debug-collapsed #debugContent { display: none; }
+
   /* ── Scrollbar ── */
   .chat::-webkit-scrollbar { width: 6px; }
   .chat::-webkit-scrollbar-track { background: transparent; }
@@ -221,49 +484,192 @@
 </head>
 <body>
 
-<div class="app">
-  <!-- Header -->
-  <header class="header">
-    <h1>Shopping <span>Copilot</span></h1>
-    <div class="header-actions">
-      <span class="session-id" id="sessionDisplay" title="Session ID">—</span>
-      <button class="btn-new" onclick="newChat()">+ New Chat</button>
-    </div>
-  </header>
+<div class="app-container">
+  <div class="app">
+    <!-- Header -->
+    <header class="header">
+      <h1>Shopping <span>Copilot</span></h1>
+      <div class="header-actions">
+        <span class="session-id" id="sessionDisplay" title="Session ID">—</span>
+        <button class="btn-new" onclick="newChat()">+ New Chat</button>
+      </div>
+    </header>
 
-  <!-- Chat area -->
-  <div class="chat" id="chat" role="log" aria-live="polite"></div>
+    <!-- Chat area -->
+    <div class="chat" id="chat" role="log" aria-live="polite"></div>
 
-  <!-- Footer / Input -->
-  <footer class="footer">
-    <div class="input-row">
-      <textarea id="input" rows="1" placeholder="Nhập câu hỏi để test..." onkeydown="onKeyDown(event)"></textarea>
-      <button class="btn-send" id="sendBtn" onclick="send()">Gửi</button>
+    <!-- Footer / Input -->
+    <footer class="footer">
+      <div class="input-row">
+        <textarea id="input" rows="1" placeholder="Nhập câu hỏi để test..." onkeydown="onKeyDown(event)"></textarea>
+        <button class="btn-send" id="sendBtn" onclick="send()">Gửi</button>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <!-- Config Card -->
+    <div class="sidebar-card">
+      <h3>Cấu hình phiên Test</h3>
+      
+      <div class="form-group">
+        <label for="userIdInput">User ID (Giỏ hàng)</label>
+        <div class="form-input-row">
+          <input type="text" id="userIdInput" class="form-input" value="test_user_001" />
+          <button class="btn-action" onclick="updateUserId()">Lưu</button>
+        </div>
+      </div>
+
+      <div class="sidebar-info-row">
+        <span class="sidebar-info-label">Session ID:</span>
+        <span class="sidebar-info-value" id="sidebarSessionId">—</span>
+      </div>
     </div>
-  </footer>
+
+    <!-- Cart Card -->
+    <div class="sidebar-card">
+      <h3>Giỏ hàng giả lập (Real-time)</h3>
+      <div class="cart-list" id="cartList">
+        <div class="cart-empty">Không có sản phẩm nào</div>
+      </div>
+    </div>
+
+    <!-- Microservices Card -->
+    <div class="sidebar-card">
+      <h3>Microservices (EKS Mocks)</h3>
+      <div class="services-list">
+        <div class="service-row">
+          <span class="service-name">Product Catalog Service</span>
+          <span class="service-status mock">MOCKING</span>
+        </div>
+        <div class="service-row">
+          <span class="service-name">Cart Service</span>
+          <span class="service-status mock">MOCKING</span>
+        </div>
+        <div class="service-row">
+          <span class="service-name">Currency Service</span>
+          <span class="service-status mock">MOCKING</span>
+        </div>
+        <div class="service-row">
+          <span class="service-name">Recommendation Service</span>
+          <span class="service-status mock">MOCKING</span>
+        </div>
+        <div class="service-row">
+          <span class="service-name">Shipping Service</span>
+          <span class="service-status mock">MOCKING</span>
+        </div>
+        <div class="service-row">
+          <span class="service-name">AWS Bedrock Converse API</span>
+          <span class="service-status active">ACTIVE</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Debug Card -->
+    <div class="sidebar-card" id="debugCard">
+      <h3 style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleDebug()">
+        <span>Debug Log</span>
+        <span id="debugToggle" style="font-size:10px;color:var(--text-muted)">[−]</span>
+      </h3>
+      <div id="debugContent">
+        <div class="debug-empty">Chưa có dữ liệu debug.</div>
+      </div>
+    </div>
+  </aside>
 </div>
 
 <script>
 // ── State ──
 const STATE = {
   sessionId: crypto.randomUUID(),
+  userId: 'test_user_001',
   busy: false,
   pendingToken: null,
 };
 
 const API = '/api/chat';
 const API_CONFIRM = '/api/confirm';
+const API_CART = '/api/cart';
 
 // ── DOM refs ──
 const chat = document.getElementById('chat');
 const input = document.getElementById('input');
 const sendBtn = document.getElementById('sendBtn');
 const sessionDisplay = document.getElementById('sessionDisplay');
+const sidebarSessionId = document.getElementById('sidebarSessionId');
+const userIdInput = document.getElementById('userIdInput');
+const cartList = document.getElementById('cartList');
 
 function updateSessionDisplay() {
   sessionDisplay.textContent = STATE.sessionId.slice(0, 8) + '…';
   sessionDisplay.title = STATE.sessionId;
+  if (sidebarSessionId) {
+    sidebarSessionId.textContent = STATE.sessionId.slice(0, 8) + '…';
+    sidebarSessionId.title = STATE.sessionId;
+  }
 }
+
+// ── Cart Sync ──
+async function loadCart() {
+  try {
+    const res = await fetch(`${API_CART}?user_id=${encodeURIComponent(STATE.userId)}`);
+    if (!res.ok) throw new Error('Cannot load cart');
+    const data = await res.json();
+    renderCart(data.items || []);
+  } catch (err) {
+    console.error('Lỗi khi tải giỏ hàng:', err);
+  }
+}
+
+function renderCart(items) {
+  if (!cartList) return;
+  if (items.length === 0) {
+    cartList.innerHTML = '<div class="cart-empty">Giỏ hàng đang trống</div>';
+    return;
+  }
+
+  let html = '';
+  let total = 0;
+  for (const item of items) {
+    const itemTotal = parseFloat(item.price) * item.quantity;
+    total += itemTotal;
+    html += `
+      <div class="cart-item">
+        <div class="cart-item-details">
+          <div class="cart-item-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</div>
+          <div class="cart-item-price">$${parseFloat(item.price).toFixed(2)}</div>
+        </div>
+        <div class="cart-item-meta">
+          <span class="cart-item-qty">x${item.quantity}</span>
+          <span class="cart-item-total">$${itemTotal.toFixed(2)}</span>
+        </div>
+      </div>
+    `;
+  }
+  
+  html += `
+    <div class="cart-total-summary">
+      <span>Tổng cộng:</span>
+      <span style="color:var(--success)">$${total.toFixed(2)}</span>
+    </div>
+  `;
+  cartList.innerHTML = html;
+}
+
+function updateUserId() {
+  const val = userIdInput.value.trim();
+  if (!val) {
+    showToast('User ID không được để trống.');
+    return;
+  }
+  STATE.userId = val;
+  showToast(`Đã đổi sang User ID: ${val}`);
+  loadCart();
+}
+
+// Gọi load cart lần đầu
+setTimeout(loadCart, 500);
 
 updateSessionDisplay();
 
@@ -290,7 +696,7 @@ async function send() {
       body: JSON.stringify({
         message: text,
         session_id: STATE.sessionId,
-        user_id: 'test-' + crypto.randomUUID().slice(0, 8),
+        user_id: STATE.userId,
       }),
     });
 
@@ -304,6 +710,7 @@ async function send() {
     // Remove loading, append bot response with animated steps
     loadingEl.remove();
     appendBotResponse(data);
+    loadCart();
   } catch (err) {
     loadingEl.remove();
     showToast('Lỗi: ' + err.message);
@@ -315,8 +722,19 @@ async function send() {
 }
 
 // ── Confirmation ──
-async function confirmAction(token) {
+function _disableConfirmArea(areaId) {
+  const area = areaId ? document.getElementById(areaId) : null;
+  if (!area) return;
+  // Disable all buttons immediately to prevent double-click
+  area.querySelectorAll('button').forEach(b => b.disabled = true);
+  // Fade out and hide after animation
+  area.classList.add('done');
+  setTimeout(() => { area.style.display = 'none'; }, 350);
+}
+
+async function confirmAction(token, confirmed = true, areaId = null) {
   STATE.busy = true;
+  _disableConfirmArea(areaId);
   try {
     const res = await fetch(API_CONFIRM, {
       method: 'POST',
@@ -324,11 +742,12 @@ async function confirmAction(token) {
       body: JSON.stringify({
         session_id: STATE.sessionId,
         token: token,
+        confirmed: confirmed,
       }),
     });
     const data = await res.json();
-    // Show confirm result as a bot message
-    appendBotMsg(data.reply || 'Đã xác nhận.');
+    appendBotMsg(data.reply || (confirmed ? 'Đã xác nhận.' : 'Đã hủy.'));
+    loadCart();
   } catch (err) {
     showToast('Lỗi xác nhận: ' + err.message);
   } finally {
@@ -336,8 +755,13 @@ async function confirmAction(token) {
   }
 }
 
-function cancelConfirm() {
-  appendBotMsg('Đã hủy xác nhận.');
+function cancelConfirm(token, areaId = null) {
+  if (!token) {
+    _disableConfirmArea(areaId);
+    appendBotMsg('Đã hủy.');
+    return;
+  }
+  confirmAction(token, false, areaId);
 }
 
 // ── Render helpers ──
@@ -353,7 +777,7 @@ function appendUserMsg(text) {
 function appendBotMsg(text) {
   const div = document.createElement('div');
   div.className = 'msg bot';
-  div.innerHTML = `<div class="bubble"><div class="reply">${escapeHtml(text)}</div></div>`;
+  div.innerHTML = `<div class="bubble"><div class="reply">${renderMarkdown(text)}</div></div>`;
   chat.appendChild(div);
   scrollToBottom();
 }
@@ -376,40 +800,22 @@ function appendBotResponse(data) {
   div.className = 'msg bot';
   div.id = 'bot-' + Date.now();
 
+  // Build bubble — only reply text, no steps
   let html = '<div class="bubble">';
 
-  // Steps section
-  if (steps && steps.length > 0) {
-    html += '<div class="steps" id="steps-' + div.id + '">';
-    for (let i = 0; i < steps.length; i++) {
-      const s = steps[i];
-      const statusClass = statusColor(s.status || '');
-      const icon = statusIcon(s.status || '');
-      html += `<div class="step ${statusClass}-bg" data-step-index="${i}">
-        <div class="step-icon ${statusClass}">${icon}</div>
-        <div class="step-body">
-          <div class="step-action">${escapeHtml(s.action)}</div>
-          <div class="step-detail">${escapeHtml(s.detail || '')}</div>
-        </div>
-        <div class="step-time">${s.duration_ms}ms</div>
-      </div>`;
-    }
-    html += '</div>';
-  }
-
-  // Reply text
   if (status === 'pending') {
-    html += `<div class="reply">${escapeHtml(reply)}</div>`;
-    html += `<div class="confirm-area">
-      <button class="btn-confirm" onclick="confirmAction('${token}')">Xác nhận</button>
-      <button class="btn-cancel" onclick="cancelConfirm()">Hủy</button>
+    html += `<div class="reply">${renderMarkdown(reply)}</div>`;
+    const confirmAreaId = 'confirm-' + Date.now();
+    html += `<div class="confirm-area" id="${confirmAreaId}">
+      <button class="btn-confirm" onclick="confirmAction('${token}', true, '${confirmAreaId}')">Xác nhận</button>
+      <button class="btn-cancel" onclick="cancelConfirm('${token}', '${confirmAreaId}')">Hủy</button>
     </div>`;
   } else if (status === 'ok') {
-    html += `<div class="reply">${escapeHtml(reply)}</div>`;
+    html += `<div class="reply">${renderMarkdown(reply)}</div>`;
   } else if (status === 'error') {
     html += `<div class="reply" style="color:var(--error)">${escapeHtml(reply)}</div>`;
   } else {
-    html += `<div class="reply">${escapeHtml(reply)}</div>`;
+    html += `<div class="reply">${renderMarkdown(reply)}</div>`;
   }
 
   html += '</div>';
@@ -417,17 +823,35 @@ function appendBotResponse(data) {
   chat.appendChild(div);
   scrollToBottom();
 
-  // Animate steps in sequence
-  const stepEls = div.querySelectorAll('.step');
-  if (stepEls.length > 0) {
-    stepEls.forEach((el, i) => {
-      setTimeout(() => el.classList.add('visible'), 100 + i * 200);
-    });
-    // After all steps, scroll again
-    setTimeout(scrollToBottom, 100 + stepEls.length * 200 + 50);
-  } else {
-    scrollToBottom();
+  // Render steps in debug panel instead
+  renderDebugSteps(steps);
+}
+
+function renderDebugSteps(steps) {
+  const debugContent = document.getElementById('debugContent');
+  if (!debugContent) return;
+
+  if (!steps || steps.length === 0) {
+    debugContent.innerHTML = '<div class="debug-empty">Chưa có dữ liệu debug.</div>';
+    return;
   }
+
+  let html = '<div class="steps">';
+  for (let i = 0; i < steps.length; i++) {
+    const s = steps[i];
+    const statusClass = statusColor(s.status || '');
+    const icon = statusIcon(s.status || '');
+    html += `<div class="step ${statusClass}-bg visible" data-step-index="${i}">
+      <div class="step-icon ${statusClass}">${icon}</div>
+      <div class="step-body">
+        <div class="step-action">${escapeHtml(s.action)}</div>
+        <div class="step-detail">${escapeHtml(s.detail || '')}</div>
+      </div>
+      <div class="step-time">${s.duration_ms}ms</div>
+    </div>`;
+  }
+  html += '</div>';
+  debugContent.innerHTML = html;
 }
 
 // ── Utilities ──
@@ -457,6 +881,43 @@ function escapeHtml(text) {
   return d.innerHTML;
 }
 
+function renderMarkdown(text) {
+  if (!text) return '';
+  let html = escapeHtml(text);
+  // inline code (must be before other inline patterns)
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // bold
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  // italic
+  html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  // links [text](url)
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+  // headings ###
+  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+  // horizontal rule
+  html = html.replace(/^---$/gm, '<hr>');
+  // unordered list items
+  html = html.replace(/^[\s]*[-*] (.+)$/gm, '<li>$1</li>');
+  html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
+  // ordered list items
+  html = html.replace(/^[\s]*\d+\. (.+)$/gm, '<li>$1</li>');
+  html = html.replace(/(<li>.*<\/li>\n?)+/g, (m) => {
+    if (!m.startsWith('<ul>')) return '<ol>' + m + '</ol>';
+    return m;
+  });
+  // paragraph breaks (double newline)
+  html = html.replace(/\n\n/g, '</p><p>');
+  // single newline
+  html = html.replace(/\n/g, '<br>');
+  // wrap in <p> if paragraphs present
+  if (html.includes('</p>')) {
+    html = '<p>' + html + '</p>';
+  }
+  return html;
+}
+
 function scrollToBottom() {
   requestAnimationFrame(() => { chat.scrollTop = chat.scrollHeight; });
 }
@@ -480,6 +941,16 @@ function newChat() {
   updateSessionDisplay();
   input.value = '';
   input.focus();
+  // Clear debug panel
+  const debugContent = document.getElementById('debugContent');
+  if (debugContent) debugContent.innerHTML = '<div class="debug-empty">Chưa có dữ liệu debug.</div>';
+}
+
+function toggleDebug() {
+  const card = document.getElementById('debugCard');
+  const toggle = document.getElementById('debugToggle');
+  card.classList.toggle('debug-collapsed');
+  toggle.textContent = card.classList.contains('debug-collapsed') ? '[+]' : '[−]';
 }
 
 function showToast(msg) {

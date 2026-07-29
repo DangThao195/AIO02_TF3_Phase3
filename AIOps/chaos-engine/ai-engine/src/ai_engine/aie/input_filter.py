@@ -23,6 +23,7 @@ class Threat(str, Enum):
 
 
 _INJECTION_PATTERNS = [
+    # English
     r"\bignore (?:all |the |previous |above )?(?:instructions|prompts?|rules?)\b",
     r"\bsystem (?:instruction|prompt|message)\b",
     r"\bdisregard (?:all |the |previous )?(?:instructions|context)\b",
@@ -33,19 +34,30 @@ _INJECTION_PATTERNS = [
     r"\bprint (?:out |the )?(?:your |the )?(?:system )?(?:prompt|config|instructions?)\b",
     r"\breveal (?:your |the )?(?:system )?(?:prompt|instructions?)\b",
     r"\b10\s*/\s*10\b.{0,40}\bbuy (?:it |this )?now\b",
+    # Tiếng Việt — injection nhét trong review / chat (bổ sung theo eval #14)
+    r"bỏ qua (?:mọi |các |hướng dẫn |chỉ dẫn |quy tắc)",
+    r"(?:bỏ|phớt) lờ (?:mọi |các )?(?:hướng dẫn|chỉ dẫn|quy tắc|hệ thống)",
+    r"\bsystem\s*:",                                  # "SYSTEM: bây giờ bạn là..."
+    r"(?:bây giờ |giờ )?bạn (?:là|sẽ là) (?:một )?trợ lý (?:không giới hạn|tự do)",
+    r"thay vào đó (?:hãy |trả lời|nói)",
+    r"quên (?:mọi |các )?(?:hướng dẫn|quy tắc)(?: (?:trên|trước))?",
 ]
 
 _LEAK_PATTERNS = [
     r"\bwhat (?:is|are) your (?:system )?(?:prompt|instructions?)\b",
     r"\bwho are you\b.{0,30}\binstruction",
     r"\byour (?:system )?(?:prompt|configuration|tools?)\b",
+    # Tiếng Việt — yêu cầu lộ system prompt
+    r"(?:cho|show)\s*(?:tôi |mình )?(?:xem |thấy )?(?:system[- ]?prompt|prompt hệ thống|câu lệnh hệ thống)",
+    r"(?:hệ thống|system).{0,20}(?:hướng dẫn|chỉ dẫn) (?:của bạn|gì)",
 ]
 
 _PII_PATTERNS = {
     "email": r"\b[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,255}\.[A-Za-z]{2,10}\b",
 
 
-    "phone": r"(?:\+\d{1,3}[ .-]?)?\(?\d{2,4}\)?[ .-]\d{3,4}[ .-]\d{3,4}\b",
+    # SĐT VN: dạng có phân tách (090 123 4567) HOẶC liền 10-11 số (0909123456, +84...)
+    "phone": r"(?:\+?84|0)(?:\d[ .-]?){8,10}\d",
     "credit_card": r"\b\d{4}[ -]\d{4}[ -]\d{4}[ -]\d{1,4}\b",
 }
 

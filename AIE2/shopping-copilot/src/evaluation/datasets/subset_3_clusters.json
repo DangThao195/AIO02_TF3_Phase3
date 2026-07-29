@@ -1,0 +1,93 @@
+[
+  {
+    "id": "TC_HARD_004",
+    "case_kind": "contextual",
+    "input_text": "Thêm cả hai cái vào giỏ hàng cho tôi.",
+    "setup_turns": [
+      "So sánh giá của Lens Cleaning Kit và Red Flashlight"
+    ],
+    "human_pass": false,
+    "human_score": 1,
+    "human_reason": "Trả lời lỗi chung chung ('Đã có lỗi xảy ra') dù setup evidence có đúng 2 sản phẩm cụ thể (Lens Cleaning Kit, Red Flashlight) để resolve 'cả hai cái'. Không hỏi làm rõ, không xử lý được.",
+    "label_source": "human_verified"
+  },
+  {
+    "id": "TC_UNANS_001",
+    "case_kind": "unanswerable",
+    "input_text": "Chính sách bảo hành của cửa hàng là gì? Thời gian đổi trả bao lâu?",
+    "human_pass": true,
+    "human_score": 5,
+    "human_reason": "Abstain đúng cho câu hỏi bảo hành/đổi trả không có trong DB, redirect hợp lý.",
+    "label_source": "human_verified"
+  },
+  {
+    "id": "TC_UNANS_002",
+    "case_kind": "unanswerable",
+    "input_text": "Kính thiên văn nào được NASA khuyên dùng trong danh sách sản phẩm của bạn?",
+    "human_pass": false,
+    "human_score": 2,
+    "human_reason": "Không abstain cho câu hỏi 'NASA khuyên dùng' (thông tin không có trong DB), lại liệt kê kính thiên văn như thể xác nhận, dễ gây hiểu nhầm. Giá nêu cũng lệch evidence ($101/$129 vs $101.96/$129.95).",
+    "label_source": "human_verified"
+  },
+  {
+    "id": "TC_CTX_001",
+    "case_kind": "contextual",
+    "input_text": "Cho tôi xem chi tiết sản phẩm thứ nhất.",
+    "human_pass": false,
+    "human_score": 2,
+    "human_reason": "Resolve đúng tên sản phẩm đầu tiên (Lens Cleaning Kit) nhưng lại nói giá 'Not provided in the evidence' dù evidence có giá $21.95 rõ ràng — sai sót factual dù đã tìm đúng sản phẩm.",
+    "label_source": "human_verified",
+    "setup_turns": [
+      "Tìm kính thiên văn"
+    ]
+  },
+  {
+    "id": "TC_CTX_002",
+    "case_kind": "contextual",
+    "input_text": "Cái đó bao nhiêu tiền?",
+    "human_pass": false,
+    "human_score": 2,
+    "human_reason": "Reply có chứa placeholder chưa render ('[List available products here if any]') — bug hiển thị khiến câu trả lời không hoàn chỉnh, trông như lỗi implementation hơn là một câu hỏi làm rõ tử tế.",
+    "setup_turns": [],
+    "label_source": "human_verified"
+  },
+  {
+    "id": "TC_CTX_003",
+    "case_kind": "contextual",
+    "input_text": "Thêm cái đầu tiên vào giỏ hàng cho tôi.",
+    "human_pass": true,
+    "human_score": 5,
+    "human_reason": "Resolve đúng 'cái đầu tiên' = Lens Cleaning Kit, hỏi xác nhận trước khi thêm giỏ — đúng cả ngữ cảnh lẫn action-guard.",
+    "setup_turns": [
+      "Tìm các sản phẩm phụ kiện kính thiên văn"
+    ],
+    "label_source": "human_verified"
+  },
+  {
+    "id": "TC_MUL_001",
+    "case_kind": "multilingual",
+    "input_text": "Can you recommend a good astronomy accessory under $50 in Vietnamese?",
+    "human_pass": false,
+    "human_score": 1,
+    "human_reason": "Evidence có sản phẩm dưới $50 (Comet Book, Lens Cleaning Kit) nhưng reply không gợi ý gì, đồng thời không trả lời bằng tiếng Việt như yêu cầu — fail cả về nội dung lẫn ngôn ngữ.",
+    "label_source": "human_verified"
+  },
+  {
+    "id": "TC_MUL_002",
+    "case_kind": "multilingual",
+    "input_text": "Bao nhiêu tiền for the Starsense Explorer telescope?",
+    "human_pass": false,
+    "human_score": 1,
+    "human_reason": "Evidence match chính xác Starsense Explorer với giá $349.95 (matched: true) nhưng reply vẫn nói không có thông tin — bỏ sót dữ liệu rõ ràng có sẵn, đây chính là điểm test multilingual bị fail rõ nhất trong bộ.",
+    "label_source": "human_verified"
+  },
+  {
+    "id": "TC_MUL_003",
+    "case_kind": "multilingual",
+    "input_text": "I want to see all telescopes available. Please list them with prices.",
+    "human_pass": false,
+    "human_score": 2,
+    "human_reason": "Chỉ liệt kê 2 kính thiên văn (National Park, Eclipsmart), bỏ sót Starsense Explorer Refractor Telescope ($349.95) dù sản phẩm này xác nhận category 'telescopes' ở evidence của case khác trong cùng bộ. Giá 2 sản phẩm liệt kê cũng bị làm tròn sai (101.00 vs 101.96, 129.00 vs 129.95).",
+    "label_source": "human_verified"
+  }
+]

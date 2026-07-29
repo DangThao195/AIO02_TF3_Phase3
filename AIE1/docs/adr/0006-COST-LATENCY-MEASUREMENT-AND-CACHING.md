@@ -61,4 +61,4 @@ Số liệu chi tiết đo đạc thực tế đối chiếu trước và sau kh
 
 * [cost_latency_baseline.json](../../repro/artifacts/cost_latency_baseline.json)
 * [cost_latency_baseline.md](../../repro/artifacts/cost_latency_baseline.md)
-* [PRODUCT_REVIEW_SERVER_CACHING_DESIGN.md](../analysis/PRODUCT_REVIEW_SERVER_CACHING_DESIGN.md)
+* [0006-PRODUCT-REVIEW-SERVER-CACHING-DESIGN.md](../analysis/0006-PRODUCT-REVIEW-SERVER-CACHING-DESIGN.md)

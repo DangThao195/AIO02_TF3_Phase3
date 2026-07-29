@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package product_reviews;
+
+import "google/protobuf/empty.proto";
+
+service ProductReviews {
+  rpc CreateReview(CreateReviewRequest) returns (Review);
+  rpc GetReview(GetReviewRequest) returns (Review);
+  rpc ListReviewsByProduct(ListReviewsRequest) returns (ListReviewsResponse);
+  rpc UpdateReview(UpdateReviewRequest) returns (Review);
+  rpc DeleteReview(DeleteReviewRequest) returns (google.protobuf.Empty);
+}
+
+message CreateReviewRequest {
+  string product_id = 1;
+  string username = 2;
+  string description = 3;
+  double score = 4;
+}
+
+message GetReviewRequest {
+  int32 id = 1;
+}
+
+message ListReviewsRequest {
+  string product_id = 1;
+}
+
+message UpdateReviewRequest {
+  int32 id = 1;
+  optional string description = 2;
+  optional double score = 3;
+}
+
+message DeleteReviewRequest {
+  int32 id = 1;
+}
+
+message Review {
+  int32 id = 1;
+  string product_id = 2;
+  string username = 3;
+  string description = 4;
+  double score = 5;
+}
+
+message ListReviewsResponse {
+  repeated Review reviews = 1;
+}

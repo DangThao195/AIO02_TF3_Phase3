@@ -79,7 +79,7 @@ class TestPipelineRunner:
     def _get_agent(self):
         if self._agent is None:
             logger.info("[SETUP] Initializing CopilotAgent...")
-            from agent.copilot_agent import CopilotAgent
+            from src.agent.copilot_agent import CopilotAgent
             self._agent = CopilotAgent()
             logger.info("[SETUP] CopilotAgent ready")
         return self._agent

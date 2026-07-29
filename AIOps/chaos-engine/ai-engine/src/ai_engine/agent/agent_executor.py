@@ -43,6 +43,8 @@ class AgentResult:
     pending_confirmation: str | None = None
     refused: bool = False
     degraded: bool = False
+    # Multi-turn: transcript đầy đủ (user+tool+assistant) để lượt sau truyền lại làm `history`.
+    transcript: list[dict] = field(default_factory=list)
 
 
 class ShoppingCopilot:
@@ -56,7 +58,10 @@ class ShoppingCopilot:
         self._run_tool = run_tool
         self._max_iterations = max_iterations
 
-    def handle(self, user_message: str) -> AgentResult:
+    def handle(self, user_message: str, history: list[dict] | None = None) -> AgentResult:
+        """Xử lý một lượt. `history` = các lượt trước (multi-turn) — MỖI lượt user mới đều
+        bị scan injection lại (attacker có thể nhét lệnh độc ở lượt thứ N, không chỉ lượt đầu).
+        Trả AgentResult; transcript đầy đủ nằm ở `result.transcript` để lượt sau nối tiếp."""
         # Determine max iterations dynamically: compare intent gets 5, others default to constructor value
         max_iters = self._max_iterations
         if self._max_iterations == MAX_ITERATIONS:  # only apply dynamic logic if default was used
@@ -68,27 +73,33 @@ class ShoppingCopilot:
         scan = scan_user_question(user_message)
         if Threat.SYSTEM_LEAK in scan.threats or Threat.PROMPT_INJECTION in scan.threats:
             log.warning("agent refused suspicious input: %s", scan.details)
-            return AgentResult(answer=REFUSAL, refused=True)
+            r = AgentResult(answer=REFUSAL, refused=True)
+            r.transcript = list(history or []) + [{"role": "user", "content": user_message}]
+            return r
 
-        transcript: list[dict] = [{"role": "user", "content": user_message}]
+        # Multi-turn: nối lượt mới vào lịch sử (giữ ngữ cảnh "nó", "cái đầu tiên"...).
+        transcript: list[dict] = list(history or []) + [{"role": "user", "content": user_message}]
 
         try:
             for _ in range(max_iters):
                 turn = self._llm_step(SYSTEM_PROMPT, transcript)
 
                 if turn.final_answer is not None:
-                    return AgentResult(answer=turn.final_answer, used_tools=self._used(transcript))
+                    transcript.append({"role": "assistant", "content": turn.final_answer})
+                    return AgentResult(answer=turn.final_answer, used_tools=self._used(transcript),
+                                       transcript=transcript)
 
                 if turn.tool_call is not None:
                     result = self._handle_tool(turn.tool_call, transcript)
                     if result is not None:
+                        result.transcript = transcript
                         return result
 
 
-            return AgentResult(answer=REFUSAL, degraded=True)
+            return AgentResult(answer=REFUSAL, degraded=True, transcript=transcript)
         except Exception:
             log.exception("agent failed; serving friendly fallback")
-            return AgentResult(answer=FRIENDLY_FALLBACK, degraded=True)
+            return AgentResult(answer=FRIENDLY_FALLBACK, degraded=True, transcript=transcript)
 
     def _handle_tool(self, call: ToolCall, transcript: list[dict]) -> AgentResult | None:
         try:
