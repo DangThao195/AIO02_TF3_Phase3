@@ -3,33 +3,34 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Shopping Copilot — Test</title>
+<title>Shopping Copilot — AI Reasoning & Chatbot</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --bg: #f0f2f5;
-    --surface: #ffffff;
-    --surface-alt: #f8f9fa;
-    --primary: #2563eb;
-    --primary-hover: #1d4ed8;
-    --primary-light: #eff6ff;
-    --text: #1f2937;
-    --text-secondary: #6b7280;
-    --text-muted: #9ca3af;
-    --border: #e5e7eb;
-    --success: #059669;
-    --success-bg: #ecfdf5;
-    --error: #dc2626;
-    --error-bg: #fef2f2;
-    --warn: #d97706;
-    --warn-bg: #fffbeb;
-    --skip: #6b7280;
-    --skip-bg: #f3f4f6;
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface-alt: #0f172a;
+    --card-bg: #1e293b;
+    --primary: #3b82f6;
+    --primary-hover: #2563eb;
+    --primary-light: rgba(59, 130, 246, 0.15);
+    --text: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --border: #334155;
+    --border-light: #475569;
+    --success: #10b981;
+    --success-bg: rgba(16, 185, 129, 0.15);
+    --error: #ef4444;
+    --error-bg: rgba(239, 68, 68, 0.15);
+    --warn: #f59e0b;
+    --warn-bg: rgba(245, 158, 11, 0.15);
+    --purple: #a855f7;
+    --purple-bg: rgba(168, 85, 247, 0.15);
     --radius: 12px;
     --radius-sm: 8px;
-    --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
-    --shadow-lg: 0 4px 16px rgba(0,0,0,.1);
+    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
     --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
   }
 
@@ -39,39 +40,124 @@
     background: var(--bg);
     color: var(--text);
     line-height: 1.6;
+    overflow: hidden;
   }
 
-  /* ── Layout ── */
-  .app { display: flex; flex-direction: column; height: 100vh; max-width: 800px; margin: 0 auto; }
+  /* ── Main Container (3-Column Layout) ── */
+  .app-container {
+    display: grid;
+    grid-template-columns: 340px 1fr 300px;
+    width: 100vw;
+    height: 100vh;
+    background: var(--bg);
+    overflow: hidden;
+  }
+
+  @media (max-width: 1200px) {
+    .app-container { grid-template-columns: 300px 1fr; }
+    .sidebar-right { display: none; }
+  }
+
+  @media (max-width: 800px) {
+    .app-container { grid-template-columns: 1fr; }
+    .sidebar-left { display: none; }
+  }
+
+  /* ── Common Panels ── */
+  .sidebar-left, .sidebar-right {
+    background: #0f172a;
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    gap: 16px;
+    height: 100vh;
+    max-height: 100vh;
+    overflow-y: auto;
+    border-right: 1px solid var(--border);
+  }
+
+  .sidebar-right {
+    border-right: none;
+    border-left: 1px solid var(--border);
+  }
+
+  .app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    max-height: 100vh;
+    overflow: hidden;
+    background: #182234;
+    min-width: 0;
+  }
 
   /* ── Header ── */
   .header {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 16px 24px; background: var(--surface);
+    padding: 16px 20px; background: var(--surface);
     border-bottom: 1px solid var(--border); flex-shrink: 0;
   }
-  .header h1 { font-size: 18px; font-weight: 700; color: var(--text); }
+  .header h1 { font-size: 18px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px; }
   .header h1 span { color: var(--primary); }
-  .header-actions { display: flex; align-items: center; gap: 12px; }
+  .header-actions { display: flex; align-items: center; gap: 10px; }
   .session-id {
-    font-size: 12px; color: var(--text-muted);
-    background: var(--surface-alt); padding: 4px 10px;
+    font-size: 11px; color: var(--text-secondary);
+    background: var(--bg); padding: 4px 10px;
     border-radius: 20px; border: 1px solid var(--border);
-    max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .btn-new {
-    padding: 6px 14px; font-size: 13px; font-weight: 600;
-    background: transparent; color: var(--text-secondary); border: 1px solid var(--border);
+    padding: 6px 14px; font-size: 12px; font-weight: 600;
+    background: var(--primary-light); color: var(--primary); border: 1px solid var(--primary);
     border-radius: var(--radius-sm); cursor: pointer; transition: all .15s;
   }
-  .btn-new:hover { background: var(--surface-alt); color: var(--text); }
+  .btn-new:hover { background: var(--primary); color: #fff; }
 
   /* ── Chat area ── */
-  .chat { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; scroll-behavior: smooth; }
+  .chat {
+    flex: 1 1 0%;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    scroll-behavior: smooth;
+  }
+
+  /* ── Custom Scrollbars (Đảm bảo thanh cuộn luôn rõ ràng) ── */
+  .chat::-webkit-scrollbar,
+  .sidebar-left::-webkit-scrollbar,
+  .sidebar-right::-webkit-scrollbar,
+  .reasoning-steps::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .chat::-webkit-scrollbar-track,
+  .sidebar-left::-webkit-scrollbar-track,
+  .sidebar-right::-webkit-scrollbar-track,
+  .reasoning-steps::-webkit-scrollbar-track {
+    background: #0f172a;
+    border-radius: 4px;
+  }
+  .chat::-webkit-scrollbar-thumb,
+  .sidebar-left::-webkit-scrollbar-thumb,
+  .sidebar-right::-webkit-scrollbar-thumb,
+  .reasoning-steps::-webkit-scrollbar-thumb {
+    background: #334155;
+    border-radius: 4px;
+    border: 2px solid #0f172a;
+  }
+  .chat::-webkit-scrollbar-thumb:hover,
+  .sidebar-left::-webkit-scrollbar-thumb:hover,
+  .sidebar-right::-webkit-scrollbar-thumb:hover,
+  .reasoning-steps::-webkit-scrollbar-thumb:hover {
+    background: #475569;
+  }
   .chat:empty::after {
-    content: 'Gửi tin nhắn để bắt đầu kiểm tra.';
+    content: '💬 Nhập câu hỏi bên dưới để xem AI Reasoning & Kết quả realtime...';
     display: block; text-align: center; color: var(--text-muted);
-    font-size: 14px; margin-top: 40px;
+    font-size: 14px; margin-top: 60px;
   }
 
   /* ── Messages ── */
@@ -82,7 +168,7 @@
   .msg.user .bubble {
     background: var(--primary); color: #fff;
     padding: 10px 16px; border-radius: 18px 18px 4px 18px;
-    font-size: 14px; word-break: break-word;
+    font-size: 14px; word-break: break-word; box-shadow: var(--shadow);
   }
 
   .msg.bot .bubble {
@@ -91,102 +177,54 @@
     box-shadow: var(--shadow);
   }
 
-  /* ── Steps timeline ── */
-  .steps { display: flex; flex-direction: column; gap: 6px; margin: 0 0 12px; }
-  .step {
-    display: flex; align-items: stretch; gap: 10px;
-    padding: 8px 12px; border-radius: var(--radius-sm);
-    font-size: 13px; line-height: 1.4;
-    opacity: 0; transform: translateY(6px);
-    transition: opacity .3s ease, transform .3s ease;
-  }
-  .step.visible { opacity: 1; transform: translateY(0); }
-
-  .step-icon {
-    flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 12px; font-weight: 700;
-  }
-  .step-icon.ok { background: var(--success-bg); color: var(--success); }
-  .step-icon.pass { background: var(--success-bg); color: var(--success); }
-  .step-icon.error { background: var(--error-bg); color: var(--error); }
-  .step-icon.block { background: var(--error-bg); color: var(--error); }
-  .step-icon.skip { background: var(--skip-bg); color: var(--skip); }
-  .step-icon.warn { background: var(--warn-bg); color: var(--warn); }
-
-  .step-body { flex: 1; min-width: 0; }
-  .step-action { font-weight: 600; color: var(--text); }
-  .step-detail { color: var(--text-secondary); font-size: 12px; margin-top: 1px; word-break: break-word; }
-  .step-time {
-    flex-shrink: 0; font-size: 11px; color: var(--text-muted);
-    align-self: center; font-variant-numeric: tabular-nums;
-  }
-
-  /* step backgrounds */
-  .step.ok-bg { background: var(--success-bg); }
-  .step.pass-bg { background: var(--success-bg); }
-  .step.error-bg { background: var(--error-bg); }
-  .step.block-bg { background: var(--error-bg); }
-  .step.skip-bg { background: var(--skip-bg); }
-  .step.warn-bg { background: var(--warn-bg); }
-
-  /* ── Reply text (markdown rendered) ── */
-  .reply { font-size: 14px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
-  .reply h1, .reply h2, .reply h3 { margin: 12px 0 6px; }
+  /* ── Reply text ── */
+  .reply { font-size: 14px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; color: #f1f5f9; }
+  .reply h1, .reply h2, .reply h3 { margin: 12px 0 6px; color: #fff; }
   .reply h1 { font-size: 17px; } .reply h2 { font-size: 15px; } .reply h3 { font-size: 14px; }
   .reply p { margin: 4px 0; }
   .reply ul, .reply ol { margin: 4px 0; padding-left: 20px; }
   .reply li { margin: 2px 0; }
-  .reply strong { font-weight: 600; }
+  .reply strong { font-weight: 600; color: #60a5fa; }
   .reply code {
-    background: var(--surface-alt); padding: 1px 6px;
-    border-radius: 4px; font-size: 13px; font-family: 'Cascadia Code', 'JetBrains Mono', monospace;
+    background: #0f172a; padding: 2px 6px; border: 1px solid var(--border);
+    border-radius: 4px; font-size: 13px; font-family: monospace; color: #38bdf8;
   }
   .reply hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
 
   /* ── Confirm button ── */
-  .confirm-area {
-    margin-top: 12px; display: flex; gap: 8px;
-    transition: opacity .3s ease, transform .3s ease;
-  }
-  .confirm-area.done {
-    opacity: 0; pointer-events: none; transform: translateY(-4px);
-    /* keep layout space while fading so chat doesn't jump */
-  }
+  .confirm-area { margin-top: 12px; display: flex; gap: 8px; }
+  .confirm-area.done { opacity: 0; pointer-events: none; }
   .btn-confirm {
-    padding: 8px 20px; font-size: 13px; font-weight: 600;
-    background: var(--primary); color: #fff; border: none;
+    padding: 8px 18px; font-size: 13px; font-weight: 600;
+    background: var(--success); color: #fff; border: none;
     border-radius: var(--radius-sm); cursor: pointer; transition: background .15s;
   }
-  .btn-confirm:hover { background: var(--primary-hover); }
-  .btn-confirm:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-confirm:hover { background: #059669; }
   .btn-cancel {
-    padding: 8px 20px; font-size: 13px; font-weight: 600;
-    background: var(--surface); color: var(--text-secondary); border: 1px solid var(--border);
+    padding: 8px 18px; font-size: 13px; font-weight: 600;
+    background: transparent; color: var(--text-secondary); border: 1px solid var(--border);
     border-radius: var(--radius-sm); cursor: pointer; transition: all .15s;
   }
-  .btn-cancel:disabled { opacity: .5; cursor: not-allowed; }
-  .btn-cancel:hover:not(:disabled) { background: var(--surface-alt); }
+  .btn-cancel:hover { background: var(--border); color: #fff; }
 
   /* ── Loading ── */
   .loading {
     display: flex; align-items: center; gap: 10px;
     align-self: flex-start; background: var(--surface); border: 1px solid var(--border);
-    padding: 12px 20px; border-radius: var(--radius); box-shadow: var(--shadow);
-    font-size: 14px; color: var(--text-secondary);
+    padding: 12px 18px; border-radius: var(--radius); box-shadow: var(--shadow);
+    font-size: 13px; color: var(--text-secondary);
   }
   .spinner { width: 18px; height: 18px; border: 2.5px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin .7s linear infinite; }
 
   /* ── Footer / Input ── */
-  .footer { flex-shrink: 0; padding: 16px 24px; background: var(--surface); border-top: 1px solid var(--border); }
-  .input-row { display: flex; gap: 8px; align-items: flex-end; }
+  .footer { flex-shrink: 0; padding: 16px 20px; background: var(--surface); border-top: 1px solid var(--border); }
+  .input-row { display: flex; gap: 10px; align-items: flex-end; }
   .input-row textarea {
     flex: 1; resize: none; padding: 10px 14px; font-size: 14px; font-family: var(--font);
-    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: #0f172a; color: #fff; border: 1px solid var(--border); border-radius: var(--radius-sm);
     outline: none; transition: border-color .15s; line-height: 1.5; min-height: 44px; max-height: 120px;
   }
-  .input-row textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,.1); }
-  .input-row textarea::placeholder { color: var(--text-muted); }
+  .input-row textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59,130,246,.2); }
   .btn-send {
     padding: 10px 20px; font-size: 14px; font-weight: 600;
     background: var(--primary); color: #fff; border: none;
@@ -194,299 +232,210 @@
     height: 44px; flex-shrink: 0;
   }
   .btn-send:hover { background: var(--primary-hover); }
-  .btn-send:disabled { opacity: .4; cursor: not-allowed; }
 
-  /* ── Animations ── */
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* ── Responsive ── */
-  @media (max-width: 600px) {
-    .header { padding: 12px 16px; }
-    .header h1 { font-size: 16px; }
-    .chat { padding: 12px 16px; }
-    .msg { max-width: 95%; }
-    .msg.bot .bubble { padding: 12px 14px; }
-    .footer { padding: 12px 16px; }
-    .session-id { display: none; }
-  }
-
-  /* ── App Container & Sidebar Layout ── */
-  .app-container {
-    display: flex;
-    max-width: 1200px;
-    height: 100vh;
-    margin: 0 auto;
-    background: var(--surface);
-    overflow: hidden;
-  }
-
-  .app {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    border-right: 1px solid var(--border);
-    min-width: 0;
-  }
-
-  .sidebar {
-    width: 380px;
-    background: var(--surface-alt);
-    display: flex;
-    flex-direction: column;
-    padding: 24px;
-    gap: 20px;
-    overflow-y: auto;
-    border-left: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-
-  @media (max-width: 900px) {
-    .app-container { flex-direction: column; }
-    .sidebar { width: 100%; height: auto; border-left: none; border-top: 1px solid var(--border); }
-  }
-
-  .sidebar-card {
+  /* ── Sidebar Cards ── */
+  .card {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 18px;
+    padding: 16px;
     box-shadow: var(--shadow);
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 12px;
   }
 
-  .sidebar-card h3 {
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+  }
+
+  .card-header h3 {
     font-size: 13px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.8px;
-    color: var(--text-secondary);
-    border-bottom: 1px solid var(--border);
-    padding-bottom: 8px;
-    margin-bottom: 2px;
-  }
-
-  .form-group {
+    color: #cbd5e1;
     display: flex;
-    flex-direction: column;
+    align-items: center;
     gap: 6px;
   }
 
-  .form-group label {
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--text-secondary);
-    text-transform: uppercase;
-  }
-
-  .form-input-row {
+  /* ── Realtime Reasoning Panel (Left) ── */
+  .reasoning-status-bar {
     display: flex;
-    gap: 8px;
-  }
-
-  .form-input {
-    flex: 1;
+    align-items: center;
+    justify-content: space-between;
     padding: 8px 12px;
-    font-size: 13px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    outline: none;
-    font-family: var(--font);
-    background: var(--surface-alt);
-    transition: all 0.15s;
-    font-weight: 500;
-  }
-
-  .form-input:focus {
-    border-color: var(--primary);
-    background: var(--surface);
-    box-shadow: 0 0 0 3px rgba(37,99,235,.1);
-  }
-
-  .btn-action {
-    padding: 8px 14px;
-    font-size: 12px;
-    font-weight: 600;
-    background: var(--primary);
-    color: #fff;
-    border: none;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    transition: background 0.15s;
-  }
-
-  .btn-action:hover {
-    background: var(--primary-hover);
-  }
-
-  .sidebar-info-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 13px;
-  }
-
-  .sidebar-info-label {
-    font-weight: 600;
-    color: var(--text-secondary);
-  }
-
-  .sidebar-info-value {
-    font-family: monospace;
-    background: var(--surface-alt);
-    padding: 2px 6px;
-    border-radius: 4px;
+    background: #0f172a;
+    border-radius: 6px;
     border: 1px solid var(--border);
     font-size: 12px;
   }
 
-  /* Cart List Styles */
-  .cart-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .cart-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: var(--surface-alt);
-    padding: 10px 12px;
-    border-radius: var(--radius-sm);
-    font-size: 13px;
-    border: 1px solid var(--border);
-  }
-
-  .cart-item-details {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-  }
-
-  .cart-item-name {
-    font-weight: 600;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 200px;
-  }
-
-  .cart-item-price {
-    font-size: 12px;
-    color: var(--text-secondary);
-  }
-
-  .cart-item-meta {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .cart-item-qty {
+  .badge-status {
+    padding: 2px 8px;
+    border-radius: 12px;
     font-size: 11px;
-    background: var(--primary-light);
-    color: var(--primary);
-    padding: 2px 8px;
-    border-radius: 99px;
     font-weight: 700;
-  }
-
-  .cart-item-total {
-    font-weight: 700;
-    color: var(--success);
-  }
-
-  .cart-empty {
-    font-size: 13px;
-    color: var(--text-muted);
-    text-align: center;
-    padding: 16px 0;
-    font-style: italic;
-  }
-
-  .cart-total-summary {
-    border-top: 2px dashed var(--border);
-    padding-top: 10px;
-    margin-top: 4px;
-    display: flex;
-    justify-content: space-between;
-    font-weight: 700;
-    font-size: 14px;
-  }
-
-  /* Services list */
-  .services-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .service-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 12px;
-    padding: 4px 0;
-  }
-
-  .service-name {
-    color: var(--text);
-    font-weight: 500;
-  }
-
-  .service-status {
-    font-size: 10px;
-    font-weight: 700;
-    padding: 2px 8px;
-    border-radius: 99px;
     text-transform: uppercase;
   }
+  .badge-status.idle { background: rgba(100, 116, 139, 0.2); color: #94a3b8; }
+  .badge-status.thinking { background: var(--purple-bg); color: var(--purple); border: 1px solid var(--purple); animation: pulse 1.5s infinite; }
+  .badge-status.hit { background: var(--success-bg); color: var(--success); border: 1px solid var(--success); }
+  .badge-status.miss { background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn); }
 
-  .service-status.mock {
-    background: var(--warn-bg);
-    color: var(--warn);
-    border: 1px solid var(--warn);
+  .reasoning-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 420px;
+    overflow-y: auto;
+    padding-right: 4px;
   }
 
-  .service-status.active {
-    background: var(--success-bg);
-    color: var(--success);
-    border: 1px solid var(--success);
+  .reasoning-step-item {
+    background: #0f172a;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    animation: fadeIn .3s ease-out;
   }
 
-  /* ── Debug panel ── */
-  .debug-empty {
-    font-size: 12px; color: var(--text-muted); text-align: center;
-    padding: 12px 0; font-style: italic;
+  .reasoning-step-item.active {
+    border-color: var(--primary);
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.2);
   }
-  .debug-collapsed #debugContent { display: none; }
 
-  /* ── Scrollbar ── */
-  .chat::-webkit-scrollbar { width: 6px; }
-  .chat::-webkit-scrollbar-track { background: transparent; }
-  .chat::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-  .chat::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+  .step-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 600;
+  }
+  .step-action-title { color: #60a5fa; }
+  .step-badge { font-size: 10px; padding: 1px 6px; border-radius: 4px; font-weight: 700; }
+  .step-badge.ok { background: var(--success-bg); color: var(--success); }
+  .step-badge.pass { background: var(--success-bg); color: var(--success); }
+  .step-badge.block { background: var(--error-bg); color: var(--error); }
+  .step-badge.error { background: var(--error-bg); color: var(--error); }
 
-  /* ── Error toast ── */
+  .step-body-detail { color: var(--text-secondary); font-size: 11px; word-break: break-word; line-height: 1.4; }
+  .step-time-ms { font-size: 10px; color: var(--text-muted); text-align: right; }
+
+  .telemetry-box {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    background: #0f172a;
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    font-size: 11px;
+  }
+  .telemetry-item { display: flex; flex-direction: column; }
+  .telemetry-label { color: var(--text-muted); font-size: 10px; text-transform: uppercase; }
+  .telemetry-val { font-weight: 700; color: #f1f5f9; font-family: monospace; }
+
+  /* ── Right Panel Cards ── */
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  .form-group label { font-size: 11px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; }
+  .form-input-row { display: flex; gap: 6px; }
+  .form-input {
+    flex: 1; padding: 6px 10px; font-size: 12px; border: 1px solid var(--border);
+    border-radius: var(--radius-sm); outline: none; background: #0f172a; color: #fff;
+  }
+  .btn-action {
+    padding: 6px 12px; font-size: 12px; font-weight: 600;
+    background: var(--primary); color: #fff; border: none;
+    border-radius: var(--radius-sm); cursor: pointer;
+  }
+
+  .cart-list { display: flex; flex-direction: column; gap: 6px; }
+  .cart-item {
+    display: flex; justify-content: space-between; align-items: center;
+    background: #0f172a; padding: 8px 10px; border-radius: 6px; font-size: 12px; border: 1px solid var(--border);
+  }
+  .cart-item-name { font-weight: 600; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cart-item-price { color: var(--text-secondary); font-size: 11px; }
+  .cart-item-qty { background: var(--primary-light); color: var(--primary); padding: 1px 6px; border-radius: 10px; font-size: 10px; font-weight: 700; }
+  .cart-item-total { font-weight: 700; color: var(--success); }
+  .cart-empty { font-size: 12px; color: var(--text-muted); text-align: center; padding: 10px 0; font-style: italic; }
+
+  /* ── Animations ── */
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+  /* ── Toast ── */
   .toast {
     position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
-    background: var(--error-bg); color: var(--error); border: 1px solid var(--error);
+    background: var(--surface); color: var(--text); border: 1px solid var(--border);
     padding: 10px 20px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500;
-    box-shadow: var(--shadow-lg); z-index: 1000;
-    animation: fadeIn .2s ease-out;
+    box-shadow: var(--shadow); z-index: 1000; animation: fadeIn .2s ease-out;
   }
 </style>
 </head>
 <body>
 
 <div class="app-container">
+
+  <!-- 🧠 LEFT SIDEBAR: Real-time LLM Reasoning & Execution Tracer Panel -->
+  <aside class="sidebar-left">
+    <div class="card">
+      <div class="card-header">
+        <h3><span>🧠</span> Real-time AI Reasoning</h3>
+        <span class="badge-status idle" id="reasoningBadge">IDLE</span>
+      </div>
+
+      <div class="reasoning-status-bar">
+        <span style="color:var(--text-secondary)">Cache Status:</span>
+        <span id="cacheFlagText" style="font-weight:700; font-family:monospace; color:#94a3b8">—</span>
+      </div>
+
+      <!-- Realtime Steps Timeline -->
+      <div class="reasoning-steps" id="reasoningTimeline">
+        <div style="font-size:12px; color:var(--text-muted); text-align:center; padding:20px 0; font-style:italic;">
+          Chưa có luồng thực thi nào.<br>Hãy gửi câu hỏi để xem chi tiết các bước Reasoning & Tool Execution.
+        </div>
+      </div>
+    </div>
+
+    <!-- Telemetry Stats Card -->
+    <div class="card">
+      <div class="card-header">
+        <h3><span>📊</span> LLM Telemetry (Mandate #24)</h3>
+      </div>
+      <div class="telemetry-box">
+        <div class="telemetry-item">
+          <span class="telemetry-label">Request ID</span>
+          <span class="telemetry-val" id="telemetryReqId">—</span>
+        </div>
+        <div class="telemetry-item">
+          <span class="telemetry-label">Latency</span>
+          <span class="telemetry-val" id="telemetryLatency">—</span>
+        </div>
+        <div class="telemetry-item">
+          <span class="telemetry-label">Total Tokens</span>
+          <span class="telemetry-val" id="telemetryTokens">—</span>
+        </div>
+        <div class="telemetry-item">
+          <span class="telemetry-label">Est. Cost</span>
+          <span class="telemetry-val" id="telemetryCost" style="color:var(--success)">$0.00 USD</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 💬 CENTER: Chatbot Conversation -->
   <div class="app">
-    <!-- Header -->
     <header class="header">
       <h1>Shopping <span>Copilot</span></h1>
       <div class="header-actions">
@@ -495,137 +444,91 @@
       </div>
     </header>
 
-    <!-- Chat area -->
     <div class="chat" id="chat" role="log" aria-live="polite"></div>
 
-    <!-- Footer / Input -->
     <footer class="footer">
       <div class="input-row">
-        <textarea id="input" rows="1" placeholder="Nhập câu hỏi để test..." onkeydown="onKeyDown(event)"></textarea>
+        <textarea id="input" rows="1" placeholder="Nhập câu hỏi test (Ví dụ: tìm kính thiên văn dưới 100 đô)..." onkeydown="onKeyDown(event)"></textarea>
         <button class="btn-send" id="sendBtn" onclick="send()">Gửi</button>
       </div>
     </footer>
   </div>
 
-  <!-- Sidebar -->
-  <aside class="sidebar">
-    <!-- Config Card -->
-    <div class="sidebar-card">
-      <h3>Cấu hình phiên Test</h3>
-      
+  <!-- 🛒 RIGHT SIDEBAR: Config & Cart -->
+  <aside class="sidebar-right">
+    <div class="card">
+      <div class="card-header">
+        <h3><span>⚙️</span> Cấu hình Session</h3>
+      </div>
       <div class="form-group">
-        <label for="userIdInput">User ID (Giỏ hàng)</label>
+        <label for="userIdInput">User ID</label>
         <div class="form-input-row">
           <input type="text" id="userIdInput" class="form-input" value="test_user_001" />
           <button class="btn-action" onclick="updateUserId()">Lưu</button>
         </div>
       </div>
-
-      <div class="sidebar-info-row">
-        <span class="sidebar-info-label">Session ID:</span>
-        <span class="sidebar-info-value" id="sidebarSessionId">—</span>
-      </div>
     </div>
 
-    <!-- Cart Card -->
-    <div class="sidebar-card">
-      <h3>Giỏ hàng giả lập (Real-time)</h3>
+    <div class="card">
+      <div class="card-header">
+        <h3><span>🛒</span> Giỏ hàng Real-time</h3>
+      </div>
       <div class="cart-list" id="cartList">
-        <div class="cart-empty">Không có sản phẩm nào</div>
-      </div>
-    </div>
-
-    <!-- Microservices Card -->
-    <div class="sidebar-card">
-      <h3>Microservices (EKS Mocks)</h3>
-      <div class="services-list">
-        <div class="service-row">
-          <span class="service-name">Product Catalog Service</span>
-          <span class="service-status mock">MOCKING</span>
-        </div>
-        <div class="service-row">
-          <span class="service-name">Cart Service</span>
-          <span class="service-status mock">MOCKING</span>
-        </div>
-        <div class="service-row">
-          <span class="service-name">Currency Service</span>
-          <span class="service-status mock">MOCKING</span>
-        </div>
-        <div class="service-row">
-          <span class="service-name">Recommendation Service</span>
-          <span class="service-status mock">MOCKING</span>
-        </div>
-        <div class="service-row">
-          <span class="service-name">Shipping Service</span>
-          <span class="service-status mock">MOCKING</span>
-        </div>
-        <div class="service-row">
-          <span class="service-name">AWS Bedrock Converse API</span>
-          <span class="service-status active">ACTIVE</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Debug Card -->
-    <div class="sidebar-card" id="debugCard">
-      <h3 style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleDebug()">
-        <span>Debug Log</span>
-        <span id="debugToggle" style="font-size:10px;color:var(--text-muted)">[−]</span>
-      </h3>
-      <div id="debugContent">
-        <div class="debug-empty">Chưa có dữ liệu debug.</div>
+        <div class="cart-empty">Giỏ hàng trống</div>
       </div>
     </div>
   </aside>
+
 </div>
 
 <script>
-// ── State ──
 const STATE = {
   sessionId: crypto.randomUUID(),
   userId: 'test_user_001',
   busy: false,
-  pendingToken: null,
 };
 
 const API = '/api/chat';
 const API_CONFIRM = '/api/confirm';
 const API_CART = '/api/cart';
+const API_TRACES_SUMMARY = '/api/traces/summary';
 
-// ── DOM refs ──
 const chat = document.getElementById('chat');
 const input = document.getElementById('input');
 const sendBtn = document.getElementById('sendBtn');
 const sessionDisplay = document.getElementById('sessionDisplay');
-const sidebarSessionId = document.getElementById('sidebarSessionId');
 const userIdInput = document.getElementById('userIdInput');
 const cartList = document.getElementById('cartList');
+
+const reasoningBadge = document.getElementById('reasoningBadge');
+const cacheFlagText = document.getElementById('cacheFlagText');
+const reasoningTimeline = document.getElementById('reasoningTimeline');
+
+const telemetryReqId = document.getElementById('telemetryReqId');
+const telemetryLatency = document.getElementById('telemetryLatency');
+const telemetryTokens = document.getElementById('telemetryTokens');
+const telemetryCost = document.getElementById('telemetryCost');
 
 function updateSessionDisplay() {
   sessionDisplay.textContent = STATE.sessionId.slice(0, 8) + '…';
   sessionDisplay.title = STATE.sessionId;
-  if (sidebarSessionId) {
-    sidebarSessionId.textContent = STATE.sessionId.slice(0, 8) + '…';
-    sidebarSessionId.title = STATE.sessionId;
-  }
 }
 
-// ── Cart Sync ──
 async function loadCart() {
   try {
     const res = await fetch(`${API_CART}?user_id=${encodeURIComponent(STATE.userId)}`);
-    if (!res.ok) throw new Error('Cannot load cart');
+    if (!res.ok) return;
     const data = await res.json();
     renderCart(data.items || []);
   } catch (err) {
-    console.error('Lỗi khi tải giỏ hàng:', err);
+    console.error('Err loading cart:', err);
   }
 }
 
 function renderCart(items) {
   if (!cartList) return;
-  if (items.length === 0) {
-    cartList.innerHTML = '<div class="cart-empty">Giỏ hàng đang trống</div>';
+  if (!items || items.length === 0) {
+    cartList.innerHTML = '<div class="cart-empty">Giỏ hàng trống</div>';
     return;
   }
 
@@ -636,44 +539,28 @@ function renderCart(items) {
     total += itemTotal;
     html += `
       <div class="cart-item">
-        <div class="cart-item-details">
+        <div>
           <div class="cart-item-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</div>
           <div class="cart-item-price">$${parseFloat(item.price).toFixed(2)}</div>
         </div>
-        <div class="cart-item-meta">
+        <div style="text-align:right">
           <span class="cart-item-qty">x${item.quantity}</span>
-          <span class="cart-item-total">$${itemTotal.toFixed(2)}</span>
+          <div class="cart-item-total">$${itemTotal.toFixed(2)}</div>
         </div>
       </div>
     `;
   }
-  
-  html += `
-    <div class="cart-total-summary">
-      <span>Tổng cộng:</span>
-      <span style="color:var(--success)">$${total.toFixed(2)}</span>
-    </div>
-  `;
   cartList.innerHTML = html;
 }
 
 function updateUserId() {
   const val = userIdInput.value.trim();
-  if (!val) {
-    showToast('User ID không được để trống.');
-    return;
-  }
+  if (!val) return;
   STATE.userId = val;
-  showToast(`Đã đổi sang User ID: ${val}`);
+  showToast(`Đã lưu User ID: ${val}`);
   loadCart();
 }
 
-// Gọi load cart lần đầu
-setTimeout(loadCart, 500);
-
-updateSessionDisplay();
-
-// ── API call ──
 async function send() {
   const text = input.value.trim();
   if (!text || STATE.busy) return;
@@ -683,11 +570,14 @@ async function send() {
   STATE.busy = true;
   sendBtn.disabled = true;
 
-  // Render user message
-  appendUserMsg(text);
+  // 1. Reset & Start Reasoning UI on LEFT Panel
+  setReasoningStatus('thinking', 'THINKING...');
+  renderReasoningThinkingState(text);
 
-  // Show loading
+  appendUserMsg(text);
   const loadingEl = appendLoading();
+
+  const startTime = Date.now();
 
   try {
     const res = await fetch(API, {
@@ -701,19 +591,24 @@ async function send() {
     });
 
     if (!res.ok) {
-      const errText = await res.text().catch(() => 'Unknown error');
-      throw new Error(`${res.status} ${res.statusText} — ${errText.slice(0, 200)}`);
+      throw new Error(`HTTP ${res.status}`);
     }
 
     const data = await res.json();
+    const duration = Date.now() - startTime;
 
-    // Remove loading, append bot response with animated steps
     loadingEl.remove();
     appendBotResponse(data);
     loadCart();
+
+    // 2. Render Full Reasoning & Execution Steps on LEFT Sidebar
+    renderRealtimeReasoningPanel(data, duration);
+    fetchTraceTelemetry(data.request_id);
+
   } catch (err) {
     loadingEl.remove();
     showToast('Lỗi: ' + err.message);
+    setReasoningStatus('idle', 'IDLE');
   } finally {
     STATE.busy = false;
     sendBtn.disabled = false;
@@ -721,20 +616,144 @@ async function send() {
   }
 }
 
-// ── Confirmation ──
-function _disableConfirmArea(areaId) {
-  const area = areaId ? document.getElementById(areaId) : null;
-  if (!area) return;
-  // Disable all buttons immediately to prevent double-click
-  area.querySelectorAll('button').forEach(b => b.disabled = true);
-  // Fade out and hide after animation
-  area.classList.add('done');
-  setTimeout(() => { area.style.display = 'none'; }, 350);
+function setReasoningStatus(type, label) {
+  reasoningBadge.className = `badge-status ${type}`;
+  reasoningBadge.textContent = label;
+}
+
+function renderReasoningThinkingState(userMsg) {
+  cacheFlagText.textContent = 'EVALUATING...';
+  cacheFlagText.style.color = 'var(--purple)';
+
+  reasoningTimeline.innerHTML = `
+    <div class="reasoning-step-item active">
+      <div class="step-head">
+        <span class="step-action-title">1. RateLimiter & Safety Check</span>
+        <span class="step-badge pass">RUNNING</span>
+      </div>
+      <div class="step-body-detail">Kiểm tra rate limit & sanitize PII trong câu hỏi...</div>
+    </div>
+    <div class="reasoning-step-item active">
+      <div class="step-head">
+        <span class="step-action-title">2. GenAI Cache Lookup</span>
+        <span class="step-badge warn">LOOKUP</span>
+      </div>
+      <div class="step-body-detail">Tra cứu Tier 1 Exact Match (Valkey) & Tier 2 Titan Semantic Vector Embeddings...</div>
+    </div>
+  `;
+}
+
+function renderRealtimeReasoningPanel(data, durationMs) {
+  const isHit = data.cache === 'hit';
+  
+  if (isHit) {
+    setReasoningStatus('hit', 'CACHE HIT');
+    cacheFlagText.textContent = '⚡ HIT (0ms LLM)';
+    cacheFlagText.style.color = 'var(--success)';
+  } else {
+    setReasoningStatus('miss', 'CACHE MISS');
+    cacheFlagText.textContent = '❄️ COLD CALL';
+    cacheFlagText.style.color = 'var(--warn)';
+  }
+
+  const steps = data.steps || [];
+  let html = '';
+
+  if (isHit) {
+    html += `
+      <div class="reasoning-step-item" style="border-color:var(--success)">
+        <div class="step-head">
+          <span class="step-action-title">⚡ GenAI Cache Hit</span>
+          <span class="step-badge ok">FAST PASS</span>
+        </div>
+        <div class="step-body-detail">Phát hiện cached response hợp lệ. Bỏ qua các tầng LLM để tối ưu chi phí & latency.</div>
+      </div>
+    `;
+  }
+
+  for (let i = 0; i < steps.length; i++) {
+    const s = steps[i];
+    const badgeClass = (s.status || 'ok').toLowerCase();
+    html += `
+      <div class="reasoning-step-item">
+        <div class="step-head">
+          <span class="step-action-title">${i + 1}. ${escapeHtml(s.action)}</span>
+          <span class="step-badge ${badgeClass}">${escapeHtml(s.status)}</span>
+        </div>
+        <div class="step-body-detail">${escapeHtml(s.detail || '')}</div>
+        <div class="step-time-ms">${s.duration_ms}ms</div>
+      </div>
+    `;
+  }
+
+  reasoningTimeline.innerHTML = html || '<div class="cart-empty">Xử lý hoàn tất.</div>';
+
+  if (data.request_id) {
+    telemetryReqId.textContent = data.request_id.slice(0, 8) + '…';
+    telemetryReqId.title = data.request_id;
+  }
+  telemetryLatency.textContent = `${durationMs} ms`;
+}
+
+async function fetchTraceTelemetry(reqId) {
+  try {
+    const res = await fetch('/api/traces/summary?period=24');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data) {
+      telemetryTokens.textContent = data.total_tokens ? data.total_tokens.toLocaleString() : '0';
+      telemetryCost.textContent = `$${(data.total_cost_usd || 0).toFixed(6)} USD`;
+    }
+  } catch (e) {
+    console.error('Err fetch telemetry:', e);
+  }
+}
+
+function appendUserMsg(text) {
+  const div = document.createElement('div');
+  div.className = 'msg user';
+  div.innerHTML = `<div class="bubble">${escapeHtml(text)}</div>`;
+  chat.appendChild(div);
+  scrollToBottom();
+}
+
+function appendLoading() {
+  const div = document.createElement('div');
+  div.className = 'loading';
+  div.innerHTML = '<div class="spinner"></div><span>AI đang suy luận các bước...</span>';
+  chat.appendChild(div);
+  scrollToBottom();
+  return div;
+}
+
+function appendBotResponse(data) {
+  const { status, reply, token } = data;
+  const div = document.createElement('div');
+  div.className = 'msg bot';
+
+  let html = '<div class="bubble">';
+  if (status === 'pending') {
+    html += `<div class="reply">${renderMarkdown(reply)}</div>`;
+    const confirmAreaId = 'confirm-' + Date.now();
+    html += `<div class="confirm-area" id="${confirmAreaId}">
+      <button class="btn-confirm" onclick="confirmAction('${token}', true, '${confirmAreaId}')">Xác nhận</button>
+      <button class="btn-cancel" onclick="cancelConfirm('${token}', '${confirmAreaId}')">Hủy</button>
+    </div>`;
+  } else {
+    html += `<div class="reply">${renderMarkdown(reply)}</div>`;
+  }
+  html += '</div>';
+
+  div.innerHTML = html;
+  chat.appendChild(div);
+  scrollToBottom();
 }
 
 async function confirmAction(token, confirmed = true, areaId = null) {
-  STATE.busy = true;
-  _disableConfirmArea(areaId);
+  if (areaId) {
+    const area = document.getElementById(areaId);
+    if (area) area.style.display = 'none';
+  }
   try {
     const res = await fetch(API_CONFIRM, {
       method: 'POST',
@@ -749,29 +768,12 @@ async function confirmAction(token, confirmed = true, areaId = null) {
     appendBotMsg(data.reply || (confirmed ? 'Đã xác nhận.' : 'Đã hủy.'));
     loadCart();
   } catch (err) {
-    showToast('Lỗi xác nhận: ' + err.message);
-  } finally {
-    STATE.busy = false;
+    showToast('Lỗi: ' + err.message);
   }
 }
 
 function cancelConfirm(token, areaId = null) {
-  if (!token) {
-    _disableConfirmArea(areaId);
-    appendBotMsg('Đã hủy.');
-    return;
-  }
   confirmAction(token, false, areaId);
-}
-
-// ── Render helpers ──
-
-function appendUserMsg(text) {
-  const div = document.createElement('div');
-  div.className = 'msg user';
-  div.innerHTML = `<div class="bubble">${escapeHtml(text)}</div>`;
-  chat.appendChild(div);
-  scrollToBottom();
 }
 
 function appendBotMsg(text) {
@@ -780,98 +782,6 @@ function appendBotMsg(text) {
   div.innerHTML = `<div class="bubble"><div class="reply">${renderMarkdown(text)}</div></div>`;
   chat.appendChild(div);
   scrollToBottom();
-}
-
-function appendLoading() {
-  const div = document.createElement('div');
-  div.className = 'loading';
-  div.id = 'loading-' + Date.now();
-  div.innerHTML = '<div class="spinner"></div><span>Đang xử lý...</span>';
-  chat.appendChild(div);
-  scrollToBottom();
-  return div;
-}
-
-function appendBotResponse(data) {
-  const { status, reply, steps, token } = data;
-  STATE.pendingToken = status === 'pending' ? token : null;
-
-  const div = document.createElement('div');
-  div.className = 'msg bot';
-  div.id = 'bot-' + Date.now();
-
-  // Build bubble — only reply text, no steps
-  let html = '<div class="bubble">';
-
-  if (status === 'pending') {
-    html += `<div class="reply">${renderMarkdown(reply)}</div>`;
-    const confirmAreaId = 'confirm-' + Date.now();
-    html += `<div class="confirm-area" id="${confirmAreaId}">
-      <button class="btn-confirm" onclick="confirmAction('${token}', true, '${confirmAreaId}')">Xác nhận</button>
-      <button class="btn-cancel" onclick="cancelConfirm('${token}', '${confirmAreaId}')">Hủy</button>
-    </div>`;
-  } else if (status === 'ok') {
-    html += `<div class="reply">${renderMarkdown(reply)}</div>`;
-  } else if (status === 'error') {
-    html += `<div class="reply" style="color:var(--error)">${escapeHtml(reply)}</div>`;
-  } else {
-    html += `<div class="reply">${renderMarkdown(reply)}</div>`;
-  }
-
-  html += '</div>';
-  div.innerHTML = html;
-  chat.appendChild(div);
-  scrollToBottom();
-
-  // Render steps in debug panel instead
-  renderDebugSteps(steps);
-}
-
-function renderDebugSteps(steps) {
-  const debugContent = document.getElementById('debugContent');
-  if (!debugContent) return;
-
-  if (!steps || steps.length === 0) {
-    debugContent.innerHTML = '<div class="debug-empty">Chưa có dữ liệu debug.</div>';
-    return;
-  }
-
-  let html = '<div class="steps">';
-  for (let i = 0; i < steps.length; i++) {
-    const s = steps[i];
-    const statusClass = statusColor(s.status || '');
-    const icon = statusIcon(s.status || '');
-    html += `<div class="step ${statusClass}-bg visible" data-step-index="${i}">
-      <div class="step-icon ${statusClass}">${icon}</div>
-      <div class="step-body">
-        <div class="step-action">${escapeHtml(s.action)}</div>
-        <div class="step-detail">${escapeHtml(s.detail || '')}</div>
-      </div>
-      <div class="step-time">${s.duration_ms}ms</div>
-    </div>`;
-  }
-  html += '</div>';
-  debugContent.innerHTML = html;
-}
-
-// ── Utilities ──
-
-function statusColor(status) {
-  const s = (status || '').toLowerCase();
-  if (s === 'ok' || s === 'pass') return 'ok';
-  if (s === 'error' || s === 'block') return 'error';
-  if (s === 'skip') return 'skip';
-  if (s === 'warn' || s === 'warning') return 'warn';
-  return 'skip';
-}
-
-function statusIcon(status) {
-  const s = (status || '').toLowerCase();
-  if (s === 'ok' || s === 'pass') return '✓';
-  if (s === 'error' || s === 'block') return '✗';
-  if (s === 'skip') return '–';
-  if (s === 'warn' || s === 'warning') return '!';
-  return '?';
 }
 
 function escapeHtml(text) {
@@ -884,37 +794,18 @@ function escapeHtml(text) {
 function renderMarkdown(text) {
   if (!text) return '';
   let html = escapeHtml(text);
-  // inline code (must be before other inline patterns)
   html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-  // bold
   html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  // italic
   html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-  // links [text](url)
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
-  // headings ###
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" style="color:var(--primary)">$1</a>');
   html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
   html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
   html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
-  // horizontal rule
   html = html.replace(/^---$/gm, '<hr>');
-  // unordered list items
   html = html.replace(/^[\s]*[-*] (.+)$/gm, '<li>$1</li>');
   html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
-  // ordered list items
-  html = html.replace(/^[\s]*\d+\. (.+)$/gm, '<li>$1</li>');
-  html = html.replace(/(<li>.*<\/li>\n?)+/g, (m) => {
-    if (!m.startsWith('<ul>')) return '<ol>' + m + '</ol>';
-    return m;
-  });
-  // paragraph breaks (double newline)
   html = html.replace(/\n\n/g, '</p><p>');
-  // single newline
   html = html.replace(/\n/g, '<br>');
-  // wrap in <p> if paragraphs present
-  if (html.includes('</p>')) {
-    html = '<p>' + html + '</p>';
-  }
   return html;
 }
 
@@ -936,21 +827,15 @@ function onKeyDown(e) {
 
 function newChat() {
   STATE.sessionId = crypto.randomUUID();
-  STATE.pendingToken = null;
   chat.innerHTML = '';
   updateSessionDisplay();
   input.value = '';
   input.focus();
-  // Clear debug panel
-  const debugContent = document.getElementById('debugContent');
-  if (debugContent) debugContent.innerHTML = '<div class="debug-empty">Chưa có dữ liệu debug.</div>';
-}
-
-function toggleDebug() {
-  const card = document.getElementById('debugCard');
-  const toggle = document.getElementById('debugToggle');
-  card.classList.toggle('debug-collapsed');
-  toggle.textContent = card.classList.contains('debug-collapsed') ? '[+]' : '[−]';
+  reasoningTimeline.innerHTML = '<div style="font-size:12px; color:var(--text-muted); text-align:center; padding:20px 0; font-style:italic;">Chưa có luồng thực thi nào.</div>';
+  setReasoningStatus('idle', 'IDLE');
+  cacheFlagText.textContent = '—';
+  telemetryReqId.textContent = '—';
+  telemetryLatency.textContent = '—';
 }
 
 function showToast(msg) {
@@ -961,10 +846,9 @@ function showToast(msg) {
   setTimeout(() => t.remove(), 4000);
 }
 
-// Auto-resize textarea
 input.addEventListener('input', autoResize);
-
-// Focus on load
+setTimeout(loadCart, 500);
+updateSessionDisplay();
 input.focus();
 </script>
 </body>

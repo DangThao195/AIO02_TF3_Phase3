@@ -1668,6 +1668,7 @@ Respond with exactly one word: PASS or FAIL
             "status": "ok",
             "reply": reply,
             "session_id": session_id,
+            "request_id": request_id,
             "steps": list(self._steps),
             "intent": intent,
             "evidence": exec_result.get("evidence", {}),

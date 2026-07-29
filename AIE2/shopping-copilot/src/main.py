@@ -757,17 +757,6 @@ def debug_ratelimit():
 
 # ── Trace endpoints (MANDATE #24 — LLM Observability) ──
 
-@app.get("/api/traces/{request_id}")
-def get_trace(request_id: str):
-    """Fetch all traces for a given request_id (full call chain)."""
-    from src.telemetry import get_tracer
-    store = get_tracer()._store
-    traces = store.get_by_request_id(request_id)
-    if not traces:
-        raise HTTPException(status_code=404, detail="No traces found for this request_id")
-    return {"request_id": request_id, "traces": traces}
-
-
 @app.get("/api/traces/summary")
 def trace_summary(period: int = 24):
     """Aggregated view of LLM call traces over given period (hours)."""
@@ -781,6 +770,17 @@ def trace_summary(period: int = 24):
         "total_cost_usd": round(sum(s["total_cost_usd"] for s in agg.values()), 6),
         "total_tokens": sum(s["total_tokens"] for s in agg.values()),
     }
+
+
+@app.get("/api/traces/{request_id}")
+def get_trace(request_id: str):
+    """Fetch all traces for a given request_id (full call chain)."""
+    from src.telemetry import get_tracer
+    store = get_tracer()._store
+    traces = store.get_by_request_id(request_id)
+    if not traces:
+        raise HTTPException(status_code=404, detail="No traces found for this request_id")
+    return {"request_id": request_id, "traces": traces}
 
 
 @app.post("/api/traces/trigger-error")
