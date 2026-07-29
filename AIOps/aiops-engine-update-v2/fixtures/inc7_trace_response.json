@@ -1,0 +1,262 @@
+{
+  "data": [
+    {
+      "traceID": "inc7-rich-trace-id",
+      "spans": [
+        {
+          "traceID": "inc7-rich-trace-id",
+          "spanID": "proxy-span",
+          "operationName": "op_frontend-proxy",
+          "processID": "p-frontend-proxy",
+          "duration": 57000,
+          "tags": [],
+          "references": []
+        },
+        {
+          "traceID": "inc7-rich-trace-id",
+          "spanID": "frontend-span",
+          "operationName": "op_frontend",
+          "processID": "p-frontend",
+          "duration": 67000,
+          "tags": [],
+          "references": [
+            {
+              "refType": "CHILD_OF",
+              "spanID": "proxy-span",
+              "traceID": "inc7-rich-trace-id"
+            }
+          ]
+        },
+        {
+          "traceID": "inc7-rich-trace-id",
+          "spanID": "reviews-span",
+          "operationName": "op_product-reviews",
+          "processID": "p-product-reviews",
+          "duration": 5399000,
+          "tags": [
+            {
+              "key": "error",
+              "type": "bool",
+              "value": true
+            },
+            {
+              "key": "error.message",
+              "type": "string",
+              "value": "Circuit breaker stuck in OPEN state"
+            }
+          ],
+          "references": [
+            {
+              "refType": "CHILD_OF",
+              "spanID": "frontend-span",
+              "traceID": "inc7-rich-trace-id"
+            }
+          ]
+        },
+        {
+          "traceID": "inc7-rich-trace-id",
+          "spanID": "llm-span",
+          "operationName": "op_llm",
+          "processID": "p-llm",
+          "duration": 125000,
+          "tags": [],
+          "references": [
+            {
+              "refType": "CHILD_OF",
+              "spanID": "reviews-span",
+              "traceID": "inc7-rich-trace-id"
+            }
+          ]
+        },
+        {
+          "traceID": "inc7-rich-trace-id",
+          "spanID": "catalog-span",
+          "operationName": "op_product-catalog",
+          "processID": "p-product-catalog",
+          "duration": 144000,
+          "tags": [],
+          "references": [
+            {
+              "refType": "CHILD_OF",
+              "spanID": "frontend-span",
+              "traceID": "inc7-rich-trace-id"
+            }
+          ]
+        },
+        {
+          "traceID": "inc7-rich-trace-id",
+          "spanID": "db-span",
+          "operationName": "op_postgresql",
+          "processID": "p-postgresql",
+          "duration": 110000,
+          "tags": [],
+          "references": [
+            {
+              "refType": "CHILD_OF",
+              "spanID": "catalog-span",
+              "traceID": "inc7-rich-trace-id"
+            }
+          ]
+        },
+        {
+          "traceID": "inc7-rich-trace-id",
+          "spanID": "cart-span",
+          "operationName": "op_cart",
+          "processID": "p-cart",
+          "duration": 123000,
+          "tags": [],
+          "references": [
+            {
+              "refType": "CHILD_OF",
+              "spanID": "frontend-span",
+              "traceID": "inc7-rich-trace-id"
+            }
+          ]
+        },
+        {
+          "traceID": "inc7-rich-trace-id",
+          "spanID": "valkey-span",
+          "operationName": "op_valkey-cart",
+          "processID": "p-valkey-cart",
+          "duration": 62000,
+          "tags": [],
+          "references": [
+            {
+              "refType": "CHILD_OF",
+              "spanID": "cart-span",
+              "traceID": "inc7-rich-trace-id"
+            }
+          ]
+        },
+        {
+          "traceID": "inc7-rich-trace-id",
+          "spanID": "checkout-span",
+          "operationName": "op_checkout",
+          "processID": "p-checkout",
+          "duration": 76000,
+          "tags": [],
+          "references": [
+            {
+              "refType": "CHILD_OF",
+              "spanID": "frontend-span",
+              "traceID": "inc7-rich-trace-id"
+            }
+          ]
+        },
+        {
+          "traceID": "inc7-rich-trace-id",
+          "spanID": "payment-span",
+          "operationName": "op_payment",
+          "processID": "p-payment",
+          "duration": 88000,
+          "tags": [],
+          "references": [
+            {
+              "refType": "CHILD_OF",
+              "spanID": "checkout-span",
+              "traceID": "inc7-rich-trace-id"
+            }
+          ]
+        },
+        {
+          "traceID": "inc7-rich-trace-id",
+          "spanID": "shipping-span",
+          "operationName": "op_shipping",
+          "processID": "p-shipping",
+          "duration": 65000,
+          "tags": [],
+          "references": [
+            {
+              "refType": "CHILD_OF",
+              "spanID": "checkout-span",
+              "traceID": "inc7-rich-trace-id"
+            }
+          ]
+        },
+        {
+          "traceID": "inc7-rich-trace-id",
+          "spanID": "currency-span",
+          "operationName": "op_currency",
+          "processID": "p-currency",
+          "duration": 41000,
+          "tags": [],
+          "references": [
+            {
+              "refType": "CHILD_OF",
+              "spanID": "checkout-span",
+              "traceID": "inc7-rich-trace-id"
+            }
+          ]
+        },
+        {
+          "traceID": "inc7-rich-trace-id",
+          "spanID": "fraud-span",
+          "operationName": "op_fraud-detection",
+          "processID": "p-fraud-detection",
+          "duration": 35000,
+          "tags": [],
+          "references": [
+            {
+              "refType": "CHILD_OF",
+              "spanID": "frontend-span",
+              "traceID": "inc7-rich-trace-id"
+            }
+          ]
+        },
+        {
+          "traceID": "inc7-rich-trace-id",
+          "spanID": "accounting-span",
+          "operationName": "op_accounting",
+          "processID": "p-accounting",
+          "duration": 138000,
+          "tags": [],
+          "references": []
+        }
+      ],
+      "processes": {
+        "p-frontend-proxy": {
+          "serviceName": "frontend-proxy"
+        },
+        "p-frontend": {
+          "serviceName": "frontend"
+        },
+        "p-product-reviews": {
+          "serviceName": "product-reviews"
+        },
+        "p-llm": {
+          "serviceName": "llm"
+        },
+        "p-product-catalog": {
+          "serviceName": "product-catalog"
+        },
+        "p-postgresql": {
+          "serviceName": "postgresql"
+        },
+        "p-cart": {
+          "serviceName": "cart"
+        },
+        "p-valkey-cart": {
+          "serviceName": "valkey-cart"
+        },
+        "p-checkout": {
+          "serviceName": "checkout"
+        },
+        "p-payment": {
+          "serviceName": "payment"
+        },
+        "p-shipping": {
+          "serviceName": "shipping"
+        },
+        "p-currency": {
+          "serviceName": "currency"
+        },
+        "p-fraud-detection": {
+          "serviceName": "fraud-detection"
+        },
+        "p-accounting": {
+          "serviceName": "accounting"
+        }
+      }
+    }
+  ]
+}
