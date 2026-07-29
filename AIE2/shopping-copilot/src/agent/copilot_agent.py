@@ -93,16 +93,35 @@ class CopilotAgent:
     def _build_llm(self):
         model = os.getenv("BEDROCK_MODEL_ID")
         region = os.getenv("BEDROCK_REGION")
+        fallback_model = os.getenv("BEDROCK_FALLBACK_MODEL_ID")
+
         try:
-            return ChatBedrockConverse(
+            self.llm = ChatBedrockConverse(
                 model=model,
                 region_name=region,
                 temperature=0.1,
                 max_tokens=2048,
             )
         except Exception as e:
-            logger.error(f"[AGENT] Cannot init Bedrock LLM: {e}")
-            return None
+            logger.error(f"[AGENT] Cannot init Primary Bedrock LLM ({model}): {e}")
+            self.llm = None
+
+        if fallback_model and fallback_model != model:
+            try:
+                self.fallback_llm = ChatBedrockConverse(
+                    model=fallback_model,
+                    region_name=region,
+                    temperature=0.1,
+                    max_tokens=2048,
+                )
+                logger.info(f"[AGENT] Secondary Fallback LLM initialized: {fallback_model}")
+            except Exception as e:
+                logger.warning(f"[AGENT] Cannot init Secondary Fallback LLM ({fallback_model}): {e}")
+                self.fallback_llm = None
+        else:
+            self.fallback_llm = None
+
+        return self.llm
 
     def _time(self, action: str) -> tuple:
         return _now_ms(), action
@@ -120,7 +139,18 @@ class CopilotAgent:
     async def _call_llm(self, messages: list, **kwargs):
         ctx = trace_llm_ctx.get()
         if ctx is None:
-            return await self.llm.ainvoke(messages, **kwargs)
+            if self.llm:
+                try:
+                    return await self.llm.ainvoke(messages, **kwargs)
+                except Exception as e:
+                    if hasattr(self, "fallback_llm") and self.fallback_llm:
+                        return await self.fallback_llm.ainvoke(messages, **kwargs)
+                    raise
+            elif hasattr(self, "fallback_llm") and self.fallback_llm:
+                return await self.fallback_llm.ainvoke(messages, **kwargs)
+            else:
+                raise RuntimeError("No LLM available")
+
         prompt_text = " ".join(m.content for m in messages if hasattr(m, "content"))
         trace_id = str(uuid.uuid4())
         t0 = time.time()
@@ -139,7 +169,32 @@ class CopilotAgent:
                 latency_ms=latency_ms,
             )
             return response
-        except Exception as e:
+        except Exception as primary_err:
+            if hasattr(self, "fallback_llm") and self.fallback_llm is not None:
+                try:
+                    logger.warning(
+                        f"[AGENT] Primary LLM failed ({primary_err}). Attempting Secondary Fallback Model..."
+                    )
+                    response = await self.fallback_llm.ainvoke(messages, **kwargs)
+                    latency_ms = int((time.time() - t0) * 1000)
+                    get_tracer().record_call(
+                        trace_id=trace_id,
+                        request_id=ctx["request_id"],
+                        layer=ctx["layer"],
+                        session_id=ctx.get("session_id", ""),
+                        user_id=ctx.get("user_id", ""),
+                        prompt_text=prompt_text,
+                        response=response,
+                        outcome="fallback",
+                        error=f"Primary model failed ({primary_err}), used secondary model",
+                        latency_ms=latency_ms,
+                    )
+                    return response
+                except Exception as secondary_err:
+                    logger.error(
+                        f"[AGENT] Secondary Fallback LLM also failed: {secondary_err}"
+                    )
+
             latency_ms = int((time.time() - t0) * 1000)
             get_tracer().record_call(
                 trace_id=trace_id,
@@ -149,11 +204,11 @@ class CopilotAgent:
                 user_id=ctx.get("user_id", ""),
                 prompt_text=prompt_text,
                 response=None,
-                error=str(e),
+                error=str(primary_err),
                 outcome="error",
                 latency_ms=latency_ms,
             )
-            raise
+            raise primary_err
 
     def _extract_text(self, response: Any) -> str:
         final = response.content if hasattr(response, "content") else str(response)
