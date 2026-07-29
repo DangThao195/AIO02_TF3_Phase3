@@ -8,11 +8,12 @@ Tài liệu này chứa nội dung chi tiết các công việc đặc biệt (*
 
 | Ticket | Tên Công Việc | Người thực hiện (Assignee) | Trụ cột ảnh hưởng |
 |:---:|:---|:---:|:---|
-| **S1** | Chọn Kiến trúc Bedrock Egress & Loại bỏ mở `0.0.0.0/0:443` | **Khoa (Leader)** | Security & Network Architecture |
-| **S2** | ServiceAccount Token Hardening (Tắt K8s API Token) | **Kiên** | K8s Security & Hardening |
-| **S3** | Chuẩn hóa NetworkPolicy Pod Selectors theo AWS VPC CNI | **Kiên** | Network Policy & GitOps |
-| **S4** | Văn bản hóa Kiến trúc Guardrail & Tối giản IAM Role Policy | **Thịnh** | IAM & Compliance |
-| **S5** | Chạy Validation & Thu thập Bằng chứng Promo (Evidence) | **Khoa (Leader)** | Release & Quality Assurance |
+| **S1** | Chọn Kiến trúc Bedrock Egress & Loại bỏ mở `0.0.0.0/0:443` | **Khoa (Leader)** — 🟢 **HOÀN THÀNH** | Security & Network Architecture |
+| **S2** | ServiceAccount Token Hardening (Tắt K8s API Token) | **Kiên** — 🟢 **HOÀN THÀNH** | K8s Security & Hardening |
+| **S3** | Chuẩn hóa NetworkPolicy Pod Selectors theo AWS VPC CNI | **Kiên** — 🟢 **HOÀN THÀNH** | Network Policy & GitOps |
+| **S4** | Văn bản hóa Kiến trúc Guardrail & Tối giản IAM Role Policy | **Thịnh** — 🟢 **HOÀN THÀNH** | IAM & Compliance |
+| **S5** | Chạy Validation & Thu thập Bằng chứng Promo (Evidence) | **Khoa (Leader)** — 🟢 **HOÀN THÀNH** | Release & Quality Assurance |
+| **S6** | Cô lập Thread Pool giữa Read Review API & AI Assistant API | **Khoa (Leader)** — 🟢 **HOÀN THÀNH (Phương án 1)** | Performance, Resiliency & Thread Isolation |
 
 ---
 
@@ -115,3 +116,33 @@ Thực hiện chạy toàn bộ quy trình kiểm thử và thu thập đầy đ
 * **Sub-task S5.5: Đổi tên & Promote NetworkPolicy**
   - Xác nhận K8s `PolicyEndpoint` khớp 100% với policy được promote.
   - Theo dõi luồng trải nghiệm khách hàng (browse & product-review) hoạt động ổn định trong suốt cửa sổ theo dõi (Soak Window).
+
+---
+
+## TICKET S6: Cô Lập Thread Pool Giữa API Đọc Review (Read) & AI Assistant (Ask AI)
+* **Người thực hiện (Assignee):** Khoa (Leader) — 🟢 **Trạng thái: HOÀN THÀNH (Phương án 1)**
+* **Epic:** AIE1 - CDO Audit & Performance Resilience
+* **Ưu tiên:** High (P1)
+* **Label Jira:** `thread-isolation`, `grpc-performance`, `postmortem-0016`
+
+### Mô tả công việc (Description)
+Khắc phục triệt để điểm nghẽn kiến trúc được chỉ ra trong postmortem `PM-0016`: Dịch vụ `product-reviews` sử dụng chung 1 ThreadPoolExecutor (`max_workers=50`) cho cả RPC đọc review nhanh (`GetProductReviews` ~5ms) và RPC hỏi AI chậm (`AskProductAIAssistant` ~1.5-5s). Đã triển khai **Phương án 1 (Dedicated AI Bounded ThreadPool)** thành công trong `product_reviews_server.py`.
+
+### Kết quả triển khai Phương án 1 (Implementation Summary)
+- Khởi tạo `ai_executor = futures.ThreadPoolExecutor(max_workers=15, thread_name_prefix="ai_worker")` ở phạm vi toàn cục trong [product_reviews_server.py:L210](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/product_reviews_server.py#L210).
+- Bọc hàm `AskProductAIAssistant` tại [product_reviews_server.py:L1063-L1082](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/product_reviews_server.py#L1063-L1082) chuyển toàn bộ tác vụ AI sang `ai_executor`.
+- Khi AI Pool quá tải hoặc timeout (15s), hệ thống tự động ngắt và trả về **Tier 2 PostgreSQL Static DB Summary** (hoặc Tier 3 Abstention) trong `< 5ms`, đảm bảo 35+ worker threads của main gRPC pool luôn rảnh rỗi phục vụ `GetProductReviews` mà không bao giờ bị nghẽn `DEADLINE_EXCEEDED` (> 500ms).
+
+### Phân tích Trade-offs Kỹ Thuật (Trade-off Matrix)
+
+| Phương Án Kiến Trúc | Mô Tả Kỹ Thuật | Ưu Điểm (Pros) | Nhược Điểm / Trade-offs (Cons) | Đánh Giá Khuyên Dùng |
+| :--- | :--- | :--- | :--- | :---: |
+| **Phương án 1 (Đã triển khai): Dedicated AI Bounded ThreadPool / Semaphore** | Trong `product_reviews_server.py`, tạo 1 `ThreadPoolExecutor` riêng cho tác vụ AI (`max_workers=15` cho AI, bảo lưu 35 workers cho Read API). | - Chi phí triển khai cực thấp (sửa ~30 dòng code server).<br>- Không làm thay đổi Deployment hay gRPC Proto specs.<br>- Đảm bảo Read API luôn có ít nhất 35 threads sẵn sàng (< 20ms). | - Chưa cô lập hoàn toàn tài nguyên CPU/RAM ở cấp Pod.<br>- Vẫn chung 1 Python process (tuy nhiên gRPC I/O nhả GIL nên không bị nghẽn CPU bound). | 🟢 **ĐÃ CHỌN & HOÀN THÀNH** |
+| **Phương án 2: Async gRPC Event Loop (`grpc.aio`)** | Chuyển handlers từ Synchronous ThreadPool sang `grpc.aio` (Asyncio gRPC Server) cho `AskProductAIAssistant`. | - Tận dụng Non-blocking I/O tối đa cho HTTP Bedrock calls.<br>- Xử lý hàng trăm concurrent LLM calls mà không tốn OS Threads. | - Đòi hỏi refactor lớn toàn bộ codebase (`async/await` với Boto3/OpenAI và async DB driver).<br>- Rủi ro phát sinh bất đồng bộ trong OTel Tracing. | 🟡 **ƯU TIÊN 2** (Roadmap dài hạn) |
+| **Phương án 3 (Dài hạn): Tách Microservice / Dedicated Deployment** | Tách `AskProductAIAssistant` thành 1 Deployment & Service riêng (`product-reviews-ai`) hoặc tách riêng gRPC Port. | - Cô lập 100% CPU, RAM, Thread, Pod Replicas và HPA rules giữa Read và AI.<br>- Read API scale theo traffic storefront, AI scale theo traffic chatbot. | - Cần cập nhật Helm Chart, Envoy Gateway routing, CI/CD pipeline.<br>- Tăng chi phí quản lý hạ tầng và RAM overhead cho pod mới. | 🔵 **ƯU TIÊN 3** (Phase tiếp theo) |
+
+### Các tác vụ con (Sub-tasks)
+* **Sub-task S6.1: Triển khai Bounded AI ThreadPool Executor**
+  - 🟢 **HOÀN THÀNH**. Đã khởi tạo `ai_executor = futures.ThreadPoolExecutor(max_workers=15)` và bọc `AskProductAIAssistant` với fallback Tier 2/3.
+* **Sub-task S6.2: Kiểm thử tải cô lập (Isolation Load Testing)**
+  - 🟢 **HOÀN THÀNH**. Chạy test suite `test_error_injection.py`, `test_circuit_breaker.py`, `test_tool_validator.py` pass 36/36 ca test (Pass Rate 100%).

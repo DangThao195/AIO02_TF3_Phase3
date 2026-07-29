@@ -206,6 +206,11 @@ llm_timeout_seconds = 10.0
 tracer = trace.get_tracer_provider().get_tracer("product-reviews-service")
 meter = metrics.get_meter_provider().get_meter("product-reviews-service")
 
+# Dedicated AI Bounded ThreadPool Executor (Ticket S6 - Option 1)
+# Bounded to 15 worker threads, isolating long-running AI calls from starving 35+ read threads
+AI_EXECUTOR_MAX_WORKERS = int(os.environ.get("AI_EXECUTOR_MAX_WORKERS", "15"))
+ai_executor = futures.ThreadPoolExecutor(max_workers=AI_EXECUTOR_MAX_WORKERS, thread_name_prefix="ai_worker")
+
 class _DummyCounter:
     def add(self, *args, **kwargs):
         pass
@@ -1060,7 +1065,26 @@ class ProductReviewService(demo_pb2_grpc.ProductReviewServiceServicer):
             question_hash,
             len(request.question or ""),
         )
-        return get_ai_assistant_response(request.product_id, request.question, context)
+        # Dedicated AI Bounded ThreadPool Isolation (Option 1 - Ticket S6):
+        # Prevents long-running AI calls from consuming all gRPC worker threads, preserving Read API performance.
+        try:
+            future = ai_executor.submit(get_ai_assistant_response, request.product_id, request.question, context)
+            return future.result(timeout=15.0)
+        except futures.TimeoutError:
+            logger.warning(
+                "[THREAD_ISOLATION] AI pool busy or timed out for product_id=%s. Executing Tier 2/3 Fallback.",
+                request.product_id,
+            )
+            fallback_text, tier = resolve_fallback_summary(request.product_id)
+            try:
+                product_review_svc_metrics["app_ai_fallback_total"].add(1, {"source": "thread_pool_exhausted", "tier": str(tier)})
+            except Exception:
+                pass
+            return demo_pb2.AskProductAIAssistantResponse(response=fallback_text)
+        except Exception as e:
+            logger.error("[THREAD_ISOLATION] Error executing AI task for product_id=%s: %s", request.product_id, e)
+            fallback_text, tier = resolve_fallback_summary(request.product_id)
+            return demo_pb2.AskProductAIAssistantResponse(response=fallback_text)
 
 
     def Check(self, request, context):
