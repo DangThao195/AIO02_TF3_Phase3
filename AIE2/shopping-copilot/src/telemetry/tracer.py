@@ -106,7 +106,7 @@ class ModelTracer:
         extra_metadata: Optional[dict] = None,
     ) -> None:
         pt, ct, tt = _extract_usage(response) if response else (0, 0, 0)
-        model_name = _extract_model(response) or "apac.amazon.nova-lite-v1:0"
+        model_name = _extract_model(response) or os.getenv("BEDROCK_MODEL_ID")
         cost = _estimate_cost(pt, ct)
         masked_prompt = _sanitize_pii(prompt_text)[:500] if prompt_text else ""
         masked_resp = _sanitize_pii(_extract_text(response))[:500] if response else ""

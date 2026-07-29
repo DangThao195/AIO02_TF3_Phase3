@@ -23,9 +23,11 @@ if str(_project_root) not in sys.path:
 
 from src.evaluation.llm_judge import LLMJudge, HeuristicJudge
 
-logger = logging.getLogger("evaluation.eval_baselines")
+from dotenv import load_dotenv
 
-API_URL = "http://localhost:8001/api/chat"
+load_dotenv()
+
+API_URL = os.getenv("COPILOT_API_URL")
 
 
 def run_evaluation(

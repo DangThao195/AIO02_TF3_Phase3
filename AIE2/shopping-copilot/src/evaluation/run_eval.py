@@ -31,8 +31,12 @@ from src.evaluation.llm_judge import LLMJudge
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("evaluation.run_eval")
 
-DEFAULT_API_URL = os.getenv("COPILOT_API_URL", "http://localhost:8001/api/chat")
-COPILOT_MODEL_ID = os.getenv("BEDROCK_MODEL_ID", "apac.amazon.nova-lite-v1:0")
+from dotenv import load_dotenv
+
+load_dotenv()
+
+DEFAULT_API_URL = os.getenv("COPILOT_API_URL")
+COPILOT_MODEL_ID = os.getenv("BEDROCK_MODEL_ID")
 
 # ── Token Cost Table (USD per 1K tokens — Amazon Bedrock pricing) ──
 TOKEN_COST_TABLE = {

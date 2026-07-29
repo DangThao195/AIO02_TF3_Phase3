@@ -10,7 +10,12 @@ import sys
 import json
 import requests
 
-API_URL = "http://localhost:8001"
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+API_URL = os.getenv("COPILOT_BASE_URL")
 
 def run_test():
     print("=" * 60)

@@ -1121,7 +1121,7 @@ if __name__ == "__main__":
     if ROOT not in sys.path:
         sys.path.insert(0, ROOT)
 
-    port = int(os.getenv("PORT", "8001"))
+    port = int(os.getenv("COPILOT_PORT"))
     mode_str = "MOCK" if (args.mock or os.getenv("MOCK_EKS") == "true") else "LIVE"
     logger.info("Starting Shopping Copilot API [%s] on port %d", mode_str, port)
     uvicorn.run(
