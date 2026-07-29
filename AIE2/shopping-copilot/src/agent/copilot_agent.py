@@ -102,6 +102,7 @@ class CopilotAgent:
                 temperature=0.1,
                 max_tokens=2048,
             )
+            logger.info(f"[AGENT] Primary LLM initialized: {model}")
         except Exception as e:
             logger.error(f"[AGENT] Cannot init Primary Bedrock LLM ({model}): {e}")
             self.llm = None

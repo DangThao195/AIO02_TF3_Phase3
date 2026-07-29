@@ -17,6 +17,10 @@ import sys
 import os
 import uuid
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse, Response
@@ -1121,7 +1125,7 @@ if __name__ == "__main__":
     if ROOT not in sys.path:
         sys.path.insert(0, ROOT)
 
-    port = int(os.getenv("COPILOT_PORT"))
+    port = int(os.getenv("COPILOT_PORT", os.getenv("PORT")))
     mode_str = "MOCK" if (args.mock or os.getenv("MOCK_EKS") == "true") else "LIVE"
     logger.info("Starting Shopping Copilot API [%s] on port %d", mode_str, port)
     uvicorn.run(
