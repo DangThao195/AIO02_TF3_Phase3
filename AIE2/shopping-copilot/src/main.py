@@ -147,12 +147,8 @@ class ChatResponse(BaseModel):
     steps: List[StepInfo] = []
     intent: dict | None = None
     evidence: dict | None = None
-<<<<<<< HEAD
-    request_id: str = ""
-=======
+    request_id: str = ""  # MANDATE #24: LLM Trace request ID
     cache: str = "miss"  # MANDATE #23: Cache hit/miss flag
-
->>>>>>> mandate23
 
 class ConfirmRequest(BaseModel):
     session_id: str = Field(..., description="ID phiên chat")
@@ -675,21 +671,7 @@ async def api_chat(req: ChatRequest):
     steps_data = result.get("steps", [])
     steps = [StepInfo(**s) for s in steps_data] if steps_data else []
 
-<<<<<<< HEAD
-    return JSONResponse(
-        content=ChatResponse(
-            status=result.get("status", "error"),
-            reply=result.get("reply", "Có lỗi xảy ra."),
-            token=result.get("token"),
-            session_id=req.session_id,
-            steps=steps,
-            intent=result.get("intent"),
-            evidence=result.get("evidence"),
-            request_id=request_id,
-        ).model_dump(),
-        headers={"X-Request-ID": request_id} if request_id else {},
-=======
-    return ChatResponse(
+    resp_obj = ChatResponse(
         status=result.get("status", "error"),
         reply=result.get("reply", "Có lỗi xảy ra."),
         token=result.get("token"),
@@ -697,9 +679,11 @@ async def api_chat(req: ChatRequest):
         steps=steps,
         intent=result.get("intent"),
         evidence=result.get("evidence"),
-        cache=result.get("cache", "miss"),  # MANDATE #23: Pass through cache flag
->>>>>>> mandate23
+        request_id=request_id,
+        cache=result.get("cache", "miss"),  # MANDATE #23: Cache flag
     )
+    headers = {"X-Request-ID": request_id} if request_id else {}
+    return JSONResponse(content=resp_obj.model_dump(), headers=headers)
 
 
 @app.post("/api/confirm", response_model=ConfirmResponse)
@@ -771,7 +755,6 @@ def debug_ratelimit():
         }
 
 
-<<<<<<< HEAD
 # ── Trace endpoints (MANDATE #24 — LLM Observability) ──
 
 @app.get("/api/traces/{request_id}")
@@ -837,7 +820,6 @@ async def trigger_error():
     }
 
 
-=======
 # ── MANDATE #23: Cache Invalidation & Memory API ──
 
 

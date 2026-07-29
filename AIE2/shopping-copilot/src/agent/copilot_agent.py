@@ -1357,6 +1357,7 @@ Respond with exactly one word: PASS or FAIL
                 "status": "ok",
                 "reply": cache_hit_result["reply"],
                 "session_id": session_id,
+                "request_id": request_id,
                 "token": None,
                 "steps": cache_hit_result.get("steps", []),
                 "intent": cache_hit_result.get("intent"),

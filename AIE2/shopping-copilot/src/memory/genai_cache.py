@@ -880,16 +880,9 @@ class GenAICacheStore:
         if _get_redis() is not None:
             r = _get_redis()
             try:
-                cursor = 0
-                while True:
-                    # Xóa cả response cache và embedding index
-                    cursor, keys = r.scan(
-                        cursor, match=f"{self._KEY_PREFIX}*", count=100
-                    )
-                    for k in keys:
-                        r.delete(k)
-                    if cursor == 0:
-                        break
+                # Flush db to guarantee clean baseline in Valkey
+                r.flushdb()
+                logger.info("[GENAI_CACHE] Valkey flushdb executed")
             except Exception as e:
                 logger.error("[GENAI_CACHE] Clear redis error: %s", e)
 
