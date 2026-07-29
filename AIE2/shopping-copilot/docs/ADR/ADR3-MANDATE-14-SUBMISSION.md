@@ -18,7 +18,7 @@ Tài liệu này tổng hợp toàn bộ bằng chứng nghiệm thu, kết qu�
 
 **Repository GitHub:** [`https://github.com/DangThao195/AIO02_TF3_Phase3`](https://github.com/DangThao195/AIO02_TF3_Phase3)
 
-**Nhánh chính thức để chấm điểm:** [`feature/copilot`](https://github.com/DangThao195/AIO02_TF3_Phase3/tree/feature/copilot)
+**Nhánh chính thức để chấm điểm:** [`feature/copilot`](https://github.com/DangThao195/AIO02_TF3_Phase3/tree/mandate14)
 
 ### Các commit quan trọng (theo thứ tự thời gian):
 

@@ -1,0 +1,3153 @@
+{
+  "test_run_timestamp": "2026-07-29T06:52:30.432987",
+  "total_tests": 21,
+  "passed": 15,
+  "failed": 6,
+  "test_details": [
+    {
+      "test_id": "STM-001",
+      "group": "short_term_memory",
+      "turns": [
+        {
+          "turn": 1,
+          "request": "tìm kính thiên văn dưới 100 đô",
+          "status": "ok",
+          "latency_ms": 33292,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Dưới đây là các sản phẩm kính thiên văn dưới $100:\n\n1. **Lens Cleaning Kit** - **$21.95**\n2. **Red F"
+        },
+        {
+          "turn": 2,
+          "request": "cái thứ nhất giá bao nhiêu",
+          "status": "ok",
+          "latency_ms": 19491,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "**National Park Foundation Explorascope** có giá **$101.96**.\n\nBạn có muốn biết thêm về sản phẩm này"
+        },
+        {
+          "turn": 3,
+          "request": "thêm nó vào giỏ hàng",
+          "status": "ok",
+          "latency_ms": 6886,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Tôi đã sẵn sàng thực hiện thêm **National Park Foundation Explorascope** vào giỏ hàng.\n\n**Để xác nhậ"
+        },
+        {
+          "turn": 4,
+          "request": "xác nhận",
+          "status": "ok",
+          "latency_ms": 3560,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "✅ Đã thêm vào giỏ hàng thành công!"
+        },
+        {
+          "turn": 5,
+          "request": "giỏ hàng tôi có gì",
+          "status": "ok",
+          "latency_ms": 7380,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "**National Park Foundation Explorascope** - 1 chiếc - **$0.0**\n\nBạn có thể xem thêm các sản phẩm khá"
+        }
+      ],
+      "passed": true,
+      "errors": []
+    },
+    {
+      "test_id": "STM-002",
+      "group": "short_term_memory",
+      "turns": [
+        {
+          "turn": 1,
+          "request": "có những danh mục sản phẩm nào",
+          "status": "ok",
+          "latency_ms": 13815,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Chúng tôi có các danh mục sản phẩm sau:\n\n1. **accessories**\n2. **assembly**\n3. **binoculars**\n4. **b"
+        },
+        {
+          "turn": 2,
+          "request": "tìm sản phẩm astronomy dưới 50 đô",
+          "status": "ok",
+          "latency_ms": 24830,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Dựa trên yêu cầu của bạn, chúng tôi có 2 sản phẩm liên quan đến thiên văn học dưới 50 đô la:\n\n1. **T"
+        },
+        {
+          "turn": 3,
+          "request": "sản phẩm đó có review tốt không",
+          "status": "ok",
+          "latency_ms": 4819,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Bạn đang hỏi về sản phẩm nào ạ? Vui lòng nêu rõ tên sản phẩm hoặc tìm kiếm trước giúp mình nhé."
+        },
+        {
+          "turn": 4,
+          "request": "so sánh với sản phẩm thứ hai",
+          "status": "ok",
+          "latency_ms": 5040,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Mình chưa có danh sách sản phẩm nào trước đó để chọn. Bạn vui lòng tìm kiếm sản phẩm trước nhé."
+        },
+        {
+          "turn": 5,
+          "request": "thêm cả hai vào giỏ",
+          "status": "ok",
+          "latency_ms": 4849,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Bạn muốn thao tác với hai sản phẩm nào? Vui lòng tìm kiếm hoặc nêu rõ tên sản phẩm giúp mình nhé."
+        }
+      ],
+      "passed": true,
+      "errors": []
+    },
+    {
+      "test_id": "STM-003",
+      "group": "short_term_memory",
+      "turns": [
+        {
+          "turn": 1,
+          "request": "tìm ống nhòm binoculars",
+          "status": "ok",
+          "latency_ms": 19377,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Tôi đã tìm thấy **Roof Binoculars** với giá **$209.95**.\n\nBạn có muốn biết thêm chi tiết về sản phẩm"
+        },
+        {
+          "turn": 2,
+          "request": "tìm ống nhòm binoculars",
+          "status": "ok",
+          "latency_ms": 2658,
+          "cache": "hit",
+          "expected_cache": "hit",
+          "reply": "Tôi đã tìm thấy **Roof Binoculars** với giá **$209.95**.\n\nBạn có muốn biết thêm chi tiết về sản phẩm"
+        },
+        {
+          "turn": 3,
+          "request": "cho tôi xem ống nhòm tốt nhất",
+          "status": "ok",
+          "latency_ms": 17344,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Dựa trên đánh giá của khách hàng, đây là những sản phẩm được đánh giá cao nhất:\n\n1. **Solar Filter**"
+        },
+        {
+          "turn": 4,
+          "request": "chiếc đầu tiên nặng bao nhiêu",
+          "status": "ok",
+          "latency_ms": 19173,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Tôi không có thông tin về trọng lượng của sản phẩm. Bạn có thể liên hệ bộ phận hỗ trợ để được giải đ"
+        },
+        {
+          "turn": 5,
+          "request": "phí giao hàng tới Hà Nội bao nhiêu",
+          "status": "ok",
+          "latency_ms": 6771,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Tôi không có thông tin về phí giao hàng đến Hà Nội. Bạn có thể liên hệ bộ phận hỗ trợ để được giải đ"
+        }
+      ],
+      "passed": true,
+      "errors": []
+    },
+    {
+      "test_id": "STM-004",
+      "group": "short_term_memory",
+      "turns": [
+        {
+          "turn": 1,
+          "request": "tìm kính thiên văn dưới 100 đô",
+          "status": "ok",
+          "latency_ms": 4754,
+          "cache": "hit",
+          "expected_cache": "hit",
+          "reply": "Dưới đây là các sản phẩm kính thiên văn dưới $100:\n\n1. **Lens Cleaning Kit** - **$21.95**\n2. **Red F"
+        },
+        {
+          "turn": 2,
+          "request": "tìm kiếm kính thiên văn dưới 100 đô",
+          "status": "ok",
+          "latency_ms": 3133,
+          "cache": "hit",
+          "expected_cache": "hit",
+          "reply": "Dưới đây là các sản phẩm kính thiên văn dưới $100:\n\n1. **Lens Cleaning Kit** - **$21.95**\n2. **Red F"
+        },
+        {
+          "turn": 3,
+          "request": "sản phẩm rẻ nhất là cái nào",
+          "status": "ok",
+          "latency_ms": 5182,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Bạn muốn thao tác với hai sản phẩm nào? Vui lòng tìm kiếm hoặc nêu rõ tên sản phẩm giúp mình nhé."
+        },
+        {
+          "turn": 4,
+          "request": "thêm chiếc đó vào giỏ",
+          "status": "ok",
+          "latency_ms": 4303,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Bạn đang hỏi về sản phẩm nào ạ? Vui lòng nêu rõ tên sản phẩm hoặc tìm kiếm trước giúp mình nhé."
+        },
+        {
+          "turn": 5,
+          "request": "xác nhận",
+          "status": "ok",
+          "latency_ms": 5788,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Xin lỗi, tôi không thể thực hiện xóa giỏ hàng. Tôi chỉ có thể giúp bạn tìm kiếm sản phẩm và thêm vào"
+        }
+      ],
+      "passed": true,
+      "errors": []
+    },
+    {
+      "test_id": "STM-005",
+      "group": "short_term_memory",
+      "turns": [
+        {
+          "turn": 1,
+          "request": "đổi 100 USD sang VND",
+          "status": "ok",
+          "latency_ms": 9478,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Xin lỗi, tôi không có thông tin chi tiết về câu hỏi này dựa trên dữ liệu hiện tại."
+        },
+        {
+          "turn": 2,
+          "request": "đổi 100 USD sang VND",
+          "status": "ok",
+          "latency_ms": 2619,
+          "cache": "hit",
+          "expected_cache": "hit",
+          "reply": "Xin lỗi, tôi không có thông tin chi tiết về câu hỏi này dựa trên dữ liệu hiện tại."
+        },
+        {
+          "turn": 3,
+          "request": "tìm telescope 500 đô sang VND giá bao nhiêu",
+          "status": "ok",
+          "latency_ms": 20477,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Tôi không thể chuyển đổi giá từ USD sang VND vì VND không được hỗ trợ. Tuy nhiên, dưới đây là các kí"
+        },
+        {
+          "turn": 4,
+          "request": "sản phẩm đó có mã gì",
+          "status": "ok",
+          "latency_ms": 18187,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "**National Park Foundation Explorascope** - **$101.96**\n\nBạn có muốn biết thêm về sản phẩm này hay t"
+        },
+        {
+          "turn": 5,
+          "request": "xem đánh giá của nó",
+          "status": "ok",
+          "latency_ms": 12675,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Dựa trên đánh giá từ khách hàng, **National Park Foundation Explorascope** có điểm trung bình là 3.0"
+        }
+      ],
+      "passed": true,
+      "errors": []
+    },
+    {
+      "test_id": "STM-006",
+      "group": "short_term_memory",
+      "turns": [
+        {
+          "turn": 1,
+          "request": "gợi ý phụ kiện thiên văn",
+          "status": "ok",
+          "latency_ms": 24453,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Chúng tôi có **Lens Cleaning Kit** giá **$21.95** — phụ kiện tuyệt vời dưới $21.95!\n\nBạn có muốn tìm"
+        },
+        {
+          "turn": 2,
+          "request": "món nào dưới 30 đô",
+          "status": "ok",
+          "latency_ms": 18816,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Có 2 sản phẩm dưới 30 đô:\n\n1. **The Comet Book** - **$0.99**\n2. **Lens Cleaning Kit** - **$21.95**\n\n"
+        },
+        {
+          "turn": 3,
+          "request": "thêm món đầu tiên vào giỏ",
+          "status": "ok",
+          "latency_ms": 4551,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Mình chưa có danh sách sản phẩm nào trước đó để chọn. Bạn vui lòng tìm kiếm sản phẩm trước nhé."
+        },
+        {
+          "turn": 4,
+          "request": "hủy bỏ",
+          "status": "ok",
+          "latency_ms": 6713,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Xin lỗi, tôi không thể thực hiện xóa giỏ hàng. Tôi chỉ có thể giúp bạn tìm kiếm sản phẩm và thêm vào"
+        },
+        {
+          "turn": 5,
+          "request": "giỏ hàng hiện tại",
+          "status": "ok",
+          "latency_ms": 7786,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Giỏ hàng của bạn hiện đang trống. Bạn có thể thêm sản phẩm vào giỏ hàng bằng cách tìm kiếm tên sản p"
+        }
+      ],
+      "passed": true,
+      "errors": []
+    },
+    {
+      "test_id": "STM-007",
+      "group": "short_term_memory",
+      "turns": [
+        {
+          "turn": 1,
+          "request": "tóm tắt đánh giá kính thiên văn Celestron",
+          "status": "ok",
+          "latency_ms": 10412,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Xin lỗi, không thể xác định sản phẩm bạn đang muốn thực hiện thao tác. Vui lòng tìm kiếm sản phẩm tr"
+        },
+        {
+          "turn": 2,
+          "request": "tóm tắt đánh giá kính thiên văn Celestron",
+          "status": "ok",
+          "latency_ms": 10732,
+          "cache": "miss",
+          "expected_cache": "hit",
+          "reply": "Xin lỗi, không thể xác định sản phẩm bạn đang muốn thực hiện thao tác. Vui lòng tìm kiếm sản phẩm tr"
+        },
+        {
+          "turn": 3,
+          "request": "điểm đánh giá trung bình bao nhiêu",
+          "status": "ok",
+          "latency_ms": 5107,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Bạn đang hỏi về sản phẩm nào ạ? Vui lòng nêu rõ tên sản phẩm hoặc tìm kiếm trước giúp mình nhé."
+        },
+        {
+          "turn": 4,
+          "request": "người mua khen gì nhất",
+          "status": "ok",
+          "latency_ms": 5418,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Bạn đang hỏi về sản phẩm nào ạ? Vui lòng nêu rõ tên sản phẩm hoặc tìm kiếm trước giúp mình nhé."
+        },
+        {
+          "turn": 5,
+          "request": "có nên mua không",
+          "status": "ok",
+          "latency_ms": 6362,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Hiện tại, chúng tôi có **3 kính thiên văn** trong kho:\n\n1. **National Park Explorascope** - **$101.9"
+        }
+      ],
+      "passed": false,
+      "errors": [
+        "Turn 2: Expected cache 'hit', got 'miss'"
+      ]
+    },
+    {
+      "test_id": "STM-008",
+      "group": "short_term_memory",
+      "turns": [
+        {
+          "turn": 1,
+          "request": "tìm chân đế kính thiên văn tripod",
+          "status": "ok",
+          "latency_ms": 20261,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Hiện tại, chúng tôi không có chân đế kính thiên văn tripod nào trong kho. Tuy nhiên, chúng tôi có cá"
+        },
+        {
+          "turn": 2,
+          "request": "loại nào chắc chắn nhất",
+          "status": "ok",
+          "latency_ms": 4994,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Bạn muốn thao tác với hai sản phẩm nào? Vui lòng tìm kiếm hoặc nêu rõ tên sản phẩm giúp mình nhé."
+        },
+        {
+          "turn": 3,
+          "request": "giá bao nhiêu tiền",
+          "status": "ok",
+          "latency_ms": 18988,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Hiện tại, chúng tôi không có sản phẩm nào phù hợp với yêu cầu của bạn. Bạn có thể thử tìm kiếm với t"
+        },
+        {
+          "turn": 4,
+          "request": "thêm vào giỏ hàng giúp tôi",
+          "status": "ok",
+          "latency_ms": 14238,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Xin lỗi, không thể xác định sản phẩm bạn đang muốn thực hiện thao tác. Vui lòng tìm kiếm sản phẩm tr"
+        },
+        {
+          "turn": 5,
+          "request": "xác nhận",
+          "status": "ok",
+          "latency_ms": 6095,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Xin lỗi, tôi không thể thực hiện xóa giỏ hàng. Tôi chỉ có thể giúp bạn tìm kiếm sản phẩm và thêm vào"
+        }
+      ],
+      "passed": true,
+      "errors": []
+    },
+    {
+      "test_id": "STM-009",
+      "group": "short_term_memory",
+      "turns": [
+        {
+          "turn": 1,
+          "request": "tìm ống nhòm du lịch nhỏ gọn",
+          "status": "ok",
+          "latency_ms": 19274,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Hiện tại, chúng tôi không có ống nhòm du lịch nhỏ gọn nào trong kho. Tuy nhiên, chúng tôi có các kín"
+        },
+        {
+          "turn": 2,
+          "request": "tìm kiếm ống nhòm du lịch nhỏ gọn",
+          "status": "ok",
+          "latency_ms": 3184,
+          "cache": "hit",
+          "expected_cache": "hit",
+          "reply": "Hiện tại, chúng tôi không có ống nhòm du lịch nhỏ gọn nào trong kho. Tuy nhiên, chúng tôi có các kín"
+        },
+        {
+          "turn": 3,
+          "request": "sản phẩm này chống nước không",
+          "status": "ok",
+          "latency_ms": 5397,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Bạn đang hỏi về sản phẩm nào ạ? Vui lòng nêu rõ tên sản phẩm hoặc tìm kiếm trước giúp mình nhé."
+        },
+        {
+          "turn": 4,
+          "request": "thêm 2 chiếc vào giỏ hàng",
+          "status": "ok",
+          "latency_ms": 4610,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Bạn đang hỏi về sản phẩm nào ạ? Vui lòng nêu rõ tên sản phẩm hoặc tìm kiếm trước giúp mình nhé."
+        },
+        {
+          "turn": 5,
+          "request": "xác nhận",
+          "status": "ok",
+          "latency_ms": 5722,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Xin lỗi, tôi không thể thực hiện xóa giỏ hàng. Tôi chỉ có thể giúp bạn tìm kiếm sản phẩm và thêm vào"
+        }
+      ],
+      "passed": true,
+      "errors": []
+    },
+    {
+      "test_id": "STM-010",
+      "group": "short_term_memory",
+      "turns": [
+        {
+          "turn": 1,
+          "request": "tìm tất cả sản phẩm đang bán",
+          "status": "ok",
+          "latency_ms": 16371,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Dưới đây là danh sách tất cả sản phẩm đang bán:\n\n1. **Eclipsmart Travel Refractor Telescope** - **$1"
+        },
+        {
+          "turn": 2,
+          "request": "tìm tất cả sản phẩm đang bán",
+          "status": "ok",
+          "latency_ms": 2635,
+          "cache": "hit",
+          "expected_cache": "hit",
+          "reply": "Dưới đây là danh sách tất cả sản phẩm đang bán:\n\n1. **Eclipsmart Travel Refractor Telescope** - **$1"
+        },
+        {
+          "turn": 3,
+          "request": "món nào đắt nhất",
+          "status": "ok",
+          "latency_ms": 11272,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Sản phẩm đắt nhất trong danh sách là **Optical Tube Assembly** với giá **$3599.0**.\n\nBạn có muốn biế"
+        },
+        {
+          "turn": 4,
+          "request": "món nào rẻ nhất",
+          "status": "ok",
+          "latency_ms": 12018,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Dựa trên dữ liệu, sản phẩm rẻ nhất là **The Comet Book** với giá **$0.99**.\n\nBạn có muốn xem thêm cá"
+        },
+        {
+          "turn": 5,
+          "request": "tổng cộng có bao nhiêu sản phẩm",
+          "status": "ok",
+          "latency_ms": 10883,
+          "cache": "miss",
+          "expected_cache": "miss",
+          "reply": "Tổng cộng có **10** sản phẩm trong danh mục của chúng tôi.\n\nDưới đây là danh sách các sản phẩm:\n\n1. "
+        }
+      ],
+      "passed": true,
+      "errors": []
+    },
+    {
+      "test_id": "LTM-001",
+      "group": "long_term_memory",
+      "users": [
+        {
+          "user_id": "user_ltm_101",
+          "sessions": [
+            {
+              "session_id": "session_ltm_101_a",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "tôi bị dị ứng hải sản và thích chụp ảnh thiên văn",
+                  "status": "ok",
+                  "latency_ms": 5522,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Chào bạn! Tôi hiểu rằng bạn thích chụp ảnh thiên văn. Hãy để tôi giới thiệu cho bạn các **kính thiên"
+                },
+                {
+                  "turn": 2,
+                  "request": "tìm telescope dưới 200 đô",
+                  "status": "ok",
+                  "latency_ms": 26409,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Dưới đây là các kính thiên văn dưới 200 đô:\n\n1. **National Park Foundation Explorascope** - **$101.9"
+                },
+                {
+                  "turn": 3,
+                  "request": "thêm sản phẩm đầu tiên vào giỏ",
+                  "status": "ok",
+                  "latency_ms": 5514,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Tôi đã sẵn sàng thực hiện thêm **National Park Foundation Explorascope** vào giỏ hàng.\n\n**Để xác nhậ"
+                },
+                {
+                  "turn": 4,
+                  "request": "xác nhận",
+                  "status": "ok",
+                  "latency_ms": 3606,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "✅ Đã thêm vào giỏ hàng thành công!"
+                },
+                {
+                  "turn": 5,
+                  "request": "cảm ơn bạn",
+                  "status": "ok",
+                  "latency_ms": 6647,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Cảm ơn bạn! Nếu bạn cần giúp đỡ tìm kiếm hoặc so sánh kính thiên văn, hãy cho tôi biết. Tôi luôn sẵn"
+                }
+              ]
+            },
+            {
+              "session_id": "session_ltm_101_b",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "gợi ý quà tặng cho tôi",
+                  "status": "ok",
+                  "latency_ms": 21368,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Dựa trên yêu cầu của bạn, đây là một số sản phẩm có thể là quà tặng tốt:\n\n1. **The Comet Book** - **"
+                },
+                {
+                  "turn": 2,
+                  "request": "ngân sách của tôi là bao nhiêu",
+                  "status": "ok",
+                  "latency_ms": 7150,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Hiện tại tôi không có thông tin về ngân sách của bạn. Bạn có thể thử lại sau hoặc liên hệ bộ phận hỗ"
+                },
+                {
+                  "turn": 3,
+                  "request": "tôi bị dị ứng gì bạn nhớ không",
+                  "status": "ok",
+                  "latency_ms": 6208,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, nhưng tôi không thể giúp bạn với thông tin về dị ứng. Tôi chuyên về việc giúp bạn tìm kiếm "
+                },
+                {
+                  "turn": 4,
+                  "request": "thêm gợi ý đó vào giỏ",
+                  "status": "ok",
+                  "latency_ms": 4551,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Bạn đang hỏi về sản phẩm nào ạ? Vui lòng nêu rõ tên sản phẩm hoặc tìm kiếm trước giúp mình nhé."
+                },
+                {
+                  "turn": 5,
+                  "request": "xác nhận",
+                  "status": "ok",
+                  "latency_ms": 5419,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, tôi không thể thực hiện xóa giỏ hàng. Tôi chỉ có thể giúp bạn tìm kiếm sản phẩm và thêm vào"
+                }
+              ]
+            },
+            {
+              "session_id": "session_ltm_101_c",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "tôi đã mua gì trước đây",
+                  "status": "ok",
+                  "latency_ms": 6254,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Bạn đang hỏi về sản phẩm nào ạ? Vui lòng nêu rõ tên sản phẩm hoặc tìm kiếm trước giúp mình nhé."
+                },
+                {
+                  "turn": 2,
+                  "request": "sở thích của tôi là gì",
+                  "status": "ok",
+                  "latency_ms": 5827,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Tôi là trợ lý mua sắm chuyên nghiệp của TechX Corp. Hãy để tôi giúp bạn tìm kiếm kính thiên văn. Bạn"
+                },
+                {
+                  "turn": 3,
+                  "request": "gợi ý phụ kiện phù hợp",
+                  "status": "ok",
+                  "latency_ms": 21328,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Dựa trên yêu cầu của bạn về phụ kiện phù hợp, đây là một số lựa chọn từ danh mục của chúng tôi:\n\n1. "
+                },
+                {
+                  "turn": 4,
+                  "request": "giá bao nhiêu tiền",
+                  "status": "ok",
+                  "latency_ms": 4127,
+                  "cache": "hit",
+                  "expected_cache": "miss",
+                  "reply": "Hiện tại, chúng tôi không có sản phẩm nào phù hợp với yêu cầu của bạn. Bạn có thể thử tìm kiếm với t"
+                },
+                {
+                  "turn": 5,
+                  "request": "lưu thông tin giúp tôi",
+                  "status": "ok",
+                  "latency_ms": 6772,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, nhưng tôi không thể lưu thông tin cá nhân. Tuy nhiên, tôi có thể giúp bạn tìm kiếm và so sá"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "user_id": "user_ltm_102",
+          "sessions": [
+            {
+              "session_id": "session_ltm_102_a",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "tôi thích đồ gia dụng hãng LocknLock",
+                  "status": "ok",
+                  "latency_ms": 11153,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Tôi không có thông tin về đồ gia dụng hãng LocknLock. Tuy nhiên, chúng tôi có các sản phẩm kính thiê"
+                },
+                {
+                  "turn": 2,
+                  "request": "ngân sách mua sắm của tôi là 500 nghìn",
+                  "status": "ok",
+                  "latency_ms": 8629,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Với ngân sách mua sắm là 500 nghìn đồng, bạn có thể xem xét các sản phẩm sau:\n\n1. **Lens Cleaning Ki"
+                },
+                {
+                  "turn": 3,
+                  "request": "tìm sản phẩm gia dụng phù hợp",
+                  "status": "ok",
+                  "latency_ms": 11509,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Dưới đây là danh sách các sản phẩm gia dụng phù hợp:\n\n1. **Eclipsmart Travel Refractor Telescope** -"
+                },
+                {
+                  "turn": 4,
+                  "request": "thêm vào giỏ",
+                  "status": "ok",
+                  "latency_ms": 4711,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Tôi đã sẵn sàng thực hiện thêm **Eclipsmart Travel Refractor Telescope** và **Lens Cleaning Kit** và"
+                },
+                {
+                  "turn": 5,
+                  "request": "xác nhận",
+                  "status": "ok",
+                  "latency_ms": 3375,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "✅ Đã thêm vào giỏ hàng thành công!"
+                }
+              ]
+            },
+            {
+              "session_id": "session_ltm_102_b",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "thương hiệu yêu thích của tôi là gì",
+                  "status": "ok",
+                  "latency_ms": 6517,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Tôi không có thông tin về thương hiệu yêu thích của bạn. Tuy nhiên, tôi có thể giúp bạn tìm kiếm kín"
+                },
+                {
+                  "turn": 2,
+                  "request": "tôi muốn tìm quà tân gia",
+                  "status": "ok",
+                  "latency_ms": 19075,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Hiện tại, chúng tôi không có sản phẩm nào phù hợp với yêu cầu tìm kiếm của bạn. Tuy nhiên, chúng tôi"
+                },
+                {
+                  "turn": 3,
+                  "request": "chiếc đó giá bao nhiêu",
+                  "status": "ok",
+                  "latency_ms": 5765,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Bạn đang hỏi về sản phẩm nào ạ? Vui lòng nêu rõ tên sản phẩm hoặc tìm kiếm trước giúp mình nhé."
+                },
+                {
+                  "turn": 4,
+                  "request": "thêm vào giỏ",
+                  "status": "ok",
+                  "latency_ms": 7144,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, nhưng hiện tại tôi không thể thực hiện việc thêm sản phẩm vào giỏ hàng. Tôi chỉ có thể giúp"
+                },
+                {
+                  "turn": 5,
+                  "request": "xác nhận",
+                  "status": "ok",
+                  "latency_ms": 5507,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, tôi không thể thực hiện xóa giỏ hàng. Tôi chỉ có thể giúp bạn tìm kiếm sản phẩm và thêm vào"
+                }
+              ]
+            },
+            {
+              "session_id": "session_ltm_102_c",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "tổng cộng tôi đã chi bao nhiêu",
+                  "status": "ok",
+                  "latency_ms": 9632,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Hiện tại, giỏ hàng của bạn chỉ có 1 sản phẩm miễn phí:\n\n**Eclipsmart Travel Refractor Telescope** - "
+                },
+                {
+                  "turn": 2,
+                  "request": "nhắc lại ngân sách của tôi",
+                  "status": "ok",
+                  "latency_ms": 8505,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, tôi không có thông tin chi tiết về câu hỏi này dựa trên dữ liệu hiện tại."
+                },
+                {
+                  "turn": 3,
+                  "request": "tôi có lịch sử mua LocknLock không",
+                  "status": "ok",
+                  "latency_ms": 17979,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, tôi không thể thực hiện xóa giỏ hàng. Tôi chỉ có thể giúp bạn tìm kiếm sản phẩm và thêm vào"
+                },
+                {
+                  "turn": 4,
+                  "request": "xem giỏ hàng",
+                  "status": "ok",
+                  "latency_ms": 7156,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "**Eclipsmart Travel Refractor Telescope** - 1 chiếc - **$0.00**\n\nHiện tại giỏ hàng của bạn chỉ có 1 "
+                },
+                {
+                  "turn": 5,
+                  "request": "cảm ơn",
+                  "status": "ok",
+                  "latency_ms": 6956,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Cảm ơn bạn! Nếu bạn cần giúp đỡ tìm kiếm hoặc so sánh kính thiên văn, hãy cho tôi biết. Tôi luôn sẵn"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "user_id": "user_ltm_103",
+          "sessions": [
+            {
+              "session_id": "session_ltm_103_a",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "tôi đang nuôi 2 con mèo",
+                  "status": "ok",
+                  "latency_ms": 7457,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Tôi hiểu rằng bạn đang nuôi 2 con mèo, nhưng hiện tại tôi đang ở đây để giúp bạn tìm kiếm kính thiên"
+                },
+                {
+                  "turn": 2,
+                  "request": "tìm thức ăn cho thú cưng",
+                  "status": "ok",
+                  "latency_ms": 18604,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "I specialize in helping you find the perfect telescope. Here are the options available:\n\n1. **Nation"
+                },
+                {
+                  "turn": 3,
+                  "request": "thêm hạt cho mèo vào giỏ",
+                  "status": "ok",
+                  "latency_ms": 9803,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, không thể xác định sản phẩm bạn đang muốn thực hiện thao tác. Vui lòng tìm kiếm sản phẩm tr"
+                },
+                {
+                  "turn": 4,
+                  "request": "xác nhận",
+                  "status": "ok",
+                  "latency_ms": 5843,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, tôi không thể thực hiện xóa giỏ hàng. Tôi chỉ có thể giúp bạn tìm kiếm sản phẩm và thêm vào"
+                },
+                {
+                  "turn": 5,
+                  "request": "xong rồi",
+                  "status": "ok",
+                  "latency_ms": 5005,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "I'm here to help you shop for telescopes. Let me know what you're looking for today."
+                }
+              ]
+            },
+            {
+              "session_id": "session_ltm_103_b",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "nhà tôi nuôi con gì bạn nhớ không",
+                  "status": "ok",
+                  "latency_ms": 7615,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, nhưng tôi không thể giúp bạn với yêu cầu này. Tôi chuyên về việc giúp bạn tìm kiếm và mua c"
+                },
+                {
+                  "turn": 2,
+                  "request": "gợi ý đồ chơi phù hợp",
+                  "status": "ok",
+                  "latency_ms": 20162,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Hiện tại, tôi không tìm thấy đồ chơi nào phù hợp trong danh mục sản phẩm của chúng tôi. Tuy nhiên, t"
+                },
+                {
+                  "turn": 3,
+                  "request": "món nào dưới 20 đô",
+                  "status": "ok",
+                  "latency_ms": 24227,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Dựa trên yêu cầu của bạn, chúng tôi có **The Comet Book** giá **$0.99**.\n\nBạn có muốn biết thêm về s"
+                },
+                {
+                  "turn": 4,
+                  "request": "thêm vào giỏ",
+                  "status": "ok",
+                  "latency_ms": 4480,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Bạn đang hỏi về sản phẩm nào ạ? Vui lòng nêu rõ tên sản phẩm hoặc tìm kiếm trước giúp mình nhé."
+                },
+                {
+                  "turn": 5,
+                  "request": "xác nhận",
+                  "status": "ok",
+                  "latency_ms": 5664,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, tôi không thể thực hiện xóa giỏ hàng. Tôi chỉ có thể giúp bạn tìm kiếm sản phẩm và thêm vào"
+                }
+              ]
+            },
+            {
+              "session_id": "session_ltm_103_c",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "liệt kê đồ thú cưng tôi đã mua",
+                  "status": "ok",
+                  "latency_ms": 8843,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Hiện tại, giỏ hàng của bạn đang trống. Bạn có thể thêm các sản phẩm vào giỏ hàng bằng cách tìm kiếm "
+                },
+                {
+                  "turn": 2,
+                  "request": "tôi có nuôi chó không",
+                  "status": "ok",
+                  "latency_ms": 7366,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Tôi chuyên về việc giúp bạn tìm kiếm kính thiên văn. Hãy cho tôi biết bạn đang tìm kiếm loại kính th"
+                },
+                {
+                  "turn": 3,
+                  "request": "gợi ý sản phẩm chăm sóc mèo",
+                  "status": "ok",
+                  "latency_ms": 18862,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Hiện tại, tôi không có sản phẩm chăm sóc mèo để đề xuất. Tuy nhiên, tôi có thể giúp bạn tìm kiếm các"
+                },
+                {
+                  "turn": 4,
+                  "request": "xem giỏ hàng",
+                  "status": "ok",
+                  "latency_ms": 6481,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Giỏ hàng của bạn hiện đang trống.\n\nBạn có thể muốn xem các sản phẩm kính thiên văn mới nhất của chún"
+                },
+                {
+                  "turn": 5,
+                  "request": "tạm biệt",
+                  "status": "ok",
+                  "latency_ms": 6951,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Chúc bạn một ngày tốt lành! Nếu bạn cần giúp đỡ về kính thiên văn, hãy thông báo. Tôi luôn sẵn sàng "
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "passed": false,
+      "errors": [
+        "user_ltm_101/session_ltm_101_c Turn 4: Expected 'miss', got 'hit'"
+      ]
+    },
+    {
+      "test_id": "LTM-002",
+      "group": "long_term_memory",
+      "users": [
+        {
+          "user_id": "user_ltm_201",
+          "sessions": [
+            {
+              "session_id": "session_ltm_201_a",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "tôi mua sắm cho câu lạc bộ thiên văn",
+                  "status": "ok",
+                  "latency_ms": 17760,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Chúng tôi có **3 kính thiên văn** trong kho:\n\n1. **National Park Foundation Explorascope** - **$101."
+                },
+                {
+                  "turn": 2,
+                  "request": "ngân sách câu lạc bộ là 1000 đô",
+                  "status": "ok",
+                  "latency_ms": 7916,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Với ngân sách $1000, bạn có thể chọn từ các kính thiên văn sau:\n\n1. **National Park Foundation Explo"
+                },
+                {
+                  "turn": 3,
+                  "request": "tìm kính thiên văn chuyên nghiệp",
+                  "status": "ok",
+                  "latency_ms": 27237,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Dưới đây là danh sách các kính thiên văn chuyên nghiệp mà chúng tôi có:\n\n1. **National Park Foundati"
+                },
+                {
+                  "turn": 4,
+                  "request": "thêm vào giỏ",
+                  "status": "ok",
+                  "latency_ms": 7421,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, nhưng hiện tại tôi không thể thực hiện việc thêm sản phẩm vào giỏ hàng. Tôi chỉ có thể giúp"
+                },
+                {
+                  "turn": 5,
+                  "request": "xác nhận",
+                  "status": "ok",
+                  "latency_ms": 5990,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, tôi không thể thực hiện xóa giỏ hàng. Tôi chỉ có thể giúp bạn tìm kiếm sản phẩm và thêm vào"
+                }
+              ]
+            },
+            {
+              "session_id": "session_ltm_201_b",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "tôi mua hàng cho tổ chức nào",
+                  "status": "ok",
+                  "latency_ms": 6366,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Tôi không có thông tin về tổ chức bạn mua hàng cho. Tuy nhiên, tôi có thể giúp bạn tìm kiếm kính thi"
+                },
+                {
+                  "turn": 2,
+                  "request": "hạn mức ngân sách là bao nhiêu",
+                  "status": "ok",
+                  "latency_ms": 5381,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Bạn muốn biết hạn mức ngân sách của tổ chức hay của riêng bạn?"
+                },
+                {
+                  "turn": 3,
+                  "request": "gợi ý phụ kiện cho CLB",
+                  "status": "ok",
+                  "latency_ms": 21849,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Dưới đây là các phụ kiện phù hợp cho CLB:\n\n1. **Lens Cleaning Kit** - **$21.95**\n2. **Red Flashlight"
+                },
+                {
+                  "turn": 4,
+                  "request": "thêm món đắt nhất vào giỏ",
+                  "status": "ok",
+                  "latency_ms": 4442,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Bạn đang hỏi về sản phẩm nào ạ? Vui lòng nêu rõ tên sản phẩm hoặc tìm kiếm trước giúp mình nhé."
+                },
+                {
+                  "turn": 5,
+                  "request": "xác nhận",
+                  "status": "ok",
+                  "latency_ms": 5433,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, tôi không thể thực hiện xóa giỏ hàng. Tôi chỉ có thể giúp bạn tìm kiếm sản phẩm và thêm vào"
+                }
+              ]
+            },
+            {
+              "session_id": "session_ltm_201_c",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "xem lịch sử giao dịch CLB",
+                  "status": "ok",
+                  "latency_ms": 6247,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, nhưng tôi không thể xem lịch sử giao dịch của CLB. Tôi có thể giúp bạn tìm kiếm kính thiên "
+                },
+                {
+                  "turn": 2,
+                  "request": "tổng tiền đã tiêu",
+                  "status": "ok",
+                  "latency_ms": 7021,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, tôi không thể tính tổng tiền đã tiêu. Tôi chỉ có thể giúp bạn tìm kiếm sản phẩm và thêm vào"
+                },
+                {
+                  "turn": 3,
+                  "request": "còn dư bao nhiêu ngân sách",
+                  "status": "ok",
+                  "latency_ms": 6257,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, tôi không thể cung cấp thông tin về ngân sách còn lại. Tuy nhiên, tôi có thể giúp bạn tìm k"
+                },
+                {
+                  "turn": 4,
+                  "request": "kiểm tra giỏ hàng",
+                  "status": "ok",
+                  "latency_ms": 6906,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Giỏ hàng của bạn hiện đang trống. Bạn có thể thêm sản phẩm bằng cách tìm kiếm tên sản phẩm hoặc duyệ"
+                },
+                {
+                  "turn": 5,
+                  "request": "kết thúc",
+                  "status": "ok",
+                  "latency_ms": 7396,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Tôi không thể thực hiện yêu cầu này. Tôi chỉ có thể giúp bạn tìm kiếm sản phẩm và thêm vào giỏ hàng."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "user_id": "user_ltm_202",
+          "sessions": [
+            {
+              "session_id": "session_ltm_202_a",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "tôi là hướng dẫn viên du lịch dã ngoại",
+                  "status": "ok",
+                  "latency_ms": 7077,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Chào bạn! Tôi là trợ lý mua sắm của TechX Corp, luôn sẵn sàng giúp bạn tìm kiếm và lựa chọn kính thi"
+                },
+                {
+                  "turn": 2,
+                  "request": "tôi cần ống nhòm binoculars dã ngoại",
+                  "status": "ok",
+                  "latency_ms": 18854,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Hiện tại, chúng tôi không có ống nhòm binoculars dã ngoại trong kho. Tuy nhiên, chúng tôi có các **k"
+                },
+                {
+                  "turn": 3,
+                  "request": "loại nào chống nước tốt nhất",
+                  "status": "ok",
+                  "latency_ms": 18936,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Tôi không có thông tin về tính năng chống nước của các sản phẩm. Bạn có thể liên hệ bộ phận hỗ trợ đ"
+                },
+                {
+                  "turn": 4,
+                  "request": "thêm vào giỏ",
+                  "status": "ok",
+                  "latency_ms": 7009,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, nhưng hiện tại tôi không thể thực hiện việc thêm sản phẩm vào giỏ hàng. Tôi chỉ có thể giúp"
+                },
+                {
+                  "turn": 5,
+                  "request": "xác nhận",
+                  "status": "ok",
+                  "latency_ms": 5336,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, tôi không thể thực hiện xóa giỏ hàng. Tôi chỉ có thể giúp bạn tìm kiếm sản phẩm và thêm vào"
+                }
+              ]
+            },
+            {
+              "session_id": "session_ltm_202_b",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "nghề nghiệp của tôi là gì",
+                  "status": "ok",
+                  "latency_ms": 6786,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "I'm here to help you shop for telescopes. What kind of telescope are you interested in today? We hav"
+                },
+                {
+                  "turn": 2,
+                  "request": "gợi ý thiết bị đi rừng cho tôi",
+                  "status": "ok",
+                  "latency_ms": 19427,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Hiện tại, tôi không tìm thấy thiết bị nào phù hợp với yêu cầu của bạn. Tuy nhiên, hãy thử xem các **"
+                },
+                {
+                  "turn": 3,
+                  "request": "sản phẩm nào có sẵn",
+                  "status": "ok",
+                  "latency_ms": 11964,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Dưới đây là danh sách các sản phẩm có sẵn:\n\n1. **Eclipsmart Travel Refractor Telescope** - **$129.95"
+                },
+                {
+                  "turn": 4,
+                  "request": "thêm vào giỏ",
+                  "status": "ok",
+                  "latency_ms": 2634,
+                  "cache": "hit",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, nhưng hiện tại tôi không thể thực hiện việc thêm sản phẩm vào giỏ hàng. Tôi chỉ có thể giúp"
+                },
+                {
+                  "turn": 5,
+                  "request": "xác nhận",
+                  "status": "ok",
+                  "latency_ms": 6941,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, tôi không thể thực hiện xóa giỏ hàng. Tôi chỉ có thể giúp bạn tìm kiếm sản phẩm và thêm vào"
+                }
+              ]
+            },
+            {
+              "session_id": "session_ltm_202_c",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "tôi đã mua thiết bị dã ngoại nào",
+                  "status": "ok",
+                  "latency_ms": 9464,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Hiện tại, giỏ hàng của bạn đang trống. Bạn có thể thêm các sản phẩm vào giỏ hàng bằng cách tìm kiếm "
+                },
+                {
+                  "turn": 2,
+                  "request": "sản phẩm đó có chống nước không",
+                  "status": "ok",
+                  "latency_ms": 11673,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Tôi không có thông tin về tính năng chống nước của sản phẩm đó. Bạn có thể liên hệ bộ phận hỗ trợ để"
+                },
+                {
+                  "turn": 3,
+                  "request": "gợi ý túi đựng ống nhòm",
+                  "status": "ok",
+                  "latency_ms": 19320,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Hiện tại, chúng tôi không có túi đựng ống nhòm nào trong kho. Tuy nhiên, chúng tôi có các kính thiên"
+                },
+                {
+                  "turn": 4,
+                  "request": "xem giỏ hàng",
+                  "status": "ok",
+                  "latency_ms": 6758,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Giỏ hàng của bạn hiện đang trống. Bạn có thể thêm sản phẩm vào giỏ hàng bằng cách tìm kiếm tên sản p"
+                },
+                {
+                  "turn": 5,
+                  "request": "xong",
+                  "status": "ok",
+                  "latency_ms": 5381,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "I'm here to help you find the perfect telescope. Here are the telescopes we currently have in stock:"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "user_id": "user_ltm_203",
+          "sessions": [
+            {
+              "session_id": "session_ltm_203_a",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "tôi đang học đại học ngành vật lý",
+                  "status": "ok",
+                  "latency_ms": 7994,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Chào bạn! Tôi hiểu rằng bạn đang học vật lý tại đại học. Nếu bạn đang tìm kiếm kính thiên văn cho mụ"
+                },
+                {
+                  "turn": 2,
+                  "request": "tìm sách hoặc thiết bị thực hành thiên văn",
+                  "status": "ok",
+                  "latency_ms": 25834,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Dựa trên yêu cầu của bạn, chúng tôi đã tìm thấy các sản phẩm sau:\n\n1. **The Comet Book** - giá **$0."
+                },
+                {
+                  "turn": 3,
+                  "request": "loại nào dưới 100 đô",
+                  "status": "ok",
+                  "latency_ms": 22565,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Dưới đây là các sản phẩm dưới 100 đô la:\n\n1. **The Comet Book** - **$0.99**\n2. **Lens Cleaning Kit**"
+                },
+                {
+                  "turn": 4,
+                  "request": "thêm vào giỏ",
+                  "status": "ok",
+                  "latency_ms": 4304,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Bạn muốn thao tác với hai sản phẩm nào? Vui lòng tìm kiếm hoặc nêu rõ tên sản phẩm giúp mình nhé."
+                },
+                {
+                  "turn": 5,
+                  "request": "xác nhận",
+                  "status": "ok",
+                  "latency_ms": 5442,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, tôi không thể thực hiện xác nhận. Tôi chỉ có thể giúp bạn tìm kiếm sản phẩm và thêm vào giỏ"
+                }
+              ]
+            },
+            {
+              "session_id": "session_ltm_203_b",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "tôi học ngành gì bạn nhớ không",
+                  "status": "ok",
+                  "latency_ms": 6997,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, nhưng tôi không thể giúp bạn với thông tin này. Tôi có thể giúp bạn tìm kiếm kính thiên văn"
+                },
+                {
+                  "turn": 2,
+                  "request": "gợi ý thiết bị phù hợp sinh viên",
+                  "status": "ok",
+                  "latency_ms": 21896,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Dựa trên yêu cầu của bạn về thiết bị thiên văn học phù hợp cho sinh viên, chúng tôi có một số phụ ki"
+                },
+                {
+                  "turn": 3,
+                  "request": "món nào có giảm giá",
+                  "status": "ok",
+                  "latency_ms": 22180,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Dựa trên dữ liệu cung cấp, có 4 sản phẩm có giá dưới $100:\n\n1. **The Comet Book** - **$0.99**\n2. **L"
+                },
+                {
+                  "turn": 4,
+                  "request": "thêm vào giỏ",
+                  "status": "ok",
+                  "latency_ms": 7393,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, nhưng hiện tại tôi không thể thực hiện việc thêm sản phẩm vào giỏ hàng. Tôi chỉ có thể giúp"
+                },
+                {
+                  "turn": 5,
+                  "request": "xác nhận",
+                  "status": "ok",
+                  "latency_ms": 5685,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, tôi không thể thực hiện xóa giỏ hàng. Tôi chỉ có thể giúp bạn tìm kiếm sản phẩm và thêm vào"
+                }
+              ]
+            },
+            {
+              "session_id": "session_ltm_203_c",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "lịch sử mua sắm của sinh viên",
+                  "status": "ok",
+                  "latency_ms": 5779,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Tôi không thể xem lịch sử mua sắm của sinh viên. Tuy nhiên, tôi có thể giúp bạn tìm kiếm kính thiên "
+                },
+                {
+                  "turn": 2,
+                  "request": "tổng số tiền đã mua",
+                  "status": "ok",
+                  "latency_ms": 8120,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, tôi không thể thực hiện xóa giỏ hàng. Tôi chỉ có thể giúp bạn tìm kiếm sản phẩm và thêm vào"
+                },
+                {
+                  "turn": 3,
+                  "request": "tôi có ưu đãi sinh viên không",
+                  "status": "ok",
+                  "latency_ms": 7576,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Tôi không có thông tin về ưu đãi sinh viên. Bạn có thể liên hệ bộ phận hỗ trợ để được giải đáp.\n\nBạn"
+                },
+                {
+                  "turn": 4,
+                  "request": "xem giỏ hàng",
+                  "status": "ok",
+                  "latency_ms": 7738,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Giỏ hàng của bạn hiện đang trống. Bạn có thể thêm sản phẩm vào giỏ hàng bằng cách tìm kiếm tên sản p"
+                },
+                {
+                  "turn": 5,
+                  "request": "tạm biệt",
+                  "status": "ok",
+                  "latency_ms": 7269,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Chúc bạn một ngày tốt lành! Nếu bạn cần giúp đỡ về kính thiên văn, hãy quay lại bất cứ lúc nào."
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "passed": false,
+      "errors": [
+        "user_ltm_202/session_ltm_202_b Turn 4: Expected 'miss', got 'hit'"
+      ]
+    },
+    {
+      "test_id": "LTM-003",
+      "group": "long_term_memory",
+      "users": [
+        {
+          "user_id": "user_ltm_301",
+          "sessions": [
+            {
+              "session_id": "session_ltm_301_a",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "tôi sống tại Đà Nẵng",
+                  "status": "ok",
+                  "latency_ms": 7744,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Chào bạn! Tôi là trợ lý mua sắm của TechX Corp., luôn sẵn sàng giúp bạn tìm kiếm kính thiên văn phù "
+                },
+                {
+                  "turn": 2,
+                  "request": "địa chỉ nhận hàng là 123 Nguyễn Văn Linh Đà Nẵng",
+                  "status": "ok",
+                  "latency_ms": 5750,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin chào! Tôi là trợ lý mua sắm của TechX Corp. Hãy cho tôi biết loại kính thiên văn bạn đang tìm ki"
+                },
+                {
+                  "turn": 3,
+                  "request": "tìm telescope giao nhanh",
+                  "status": "ok",
+                  "latency_ms": 19716,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Hiện tại, chúng tôi không có kính thiên văn nào có sẵn để giao nhanh. Tuy nhiên, bạn có thể xem các "
+                },
+                {
+                  "turn": 4,
+                  "request": "thêm vào giỏ",
+                  "status": "ok",
+                  "latency_ms": 6504,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, nhưng hiện tại tôi không thể thực hiện việc thêm sản phẩm vào giỏ hàng trực tiếp. Bạn có th"
+                },
+                {
+                  "turn": 5,
+                  "request": "xác nhận",
+                  "status": "ok",
+                  "latency_ms": 5940,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, tôi không thể thực hiện xóa giỏ hàng. Tôi chỉ có thể giúp bạn tìm kiếm sản phẩm và thêm vào"
+                }
+              ]
+            },
+            {
+              "session_id": "session_ltm_301_b",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "địa chỉ giao hàng của tôi ở đâu",
+                  "status": "ok",
+                  "latency_ms": 7750,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, tôi không có thông tin chi tiết về câu hỏi này dựa trên dữ liệu hiện tại."
+                },
+                {
+                  "turn": 2,
+                  "request": "tính phí giao hàng tới địa chỉ của tôi",
+                  "status": "ok",
+                  "latency_ms": 7071,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Tôi không thể tính phí giao hàng vì thiếu thông tin chi tiết về địa chỉ. Vui lòng cung cấp địa chỉ đ"
+                },
+                {
+                  "turn": 3,
+                  "request": "mất bao lâu thì nhận được hàng",
+                  "status": "ok",
+                  "latency_ms": 7430,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Tôi không có thông tin về thời gian giao hàng. Bạn có thể liên hệ bộ phận hỗ trợ để được giải đáp.\n\n"
+                },
+                {
+                  "turn": 4,
+                  "request": "thêm phí giao hàng",
+                  "status": "ok",
+                  "latency_ms": 7174,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, tôi không có thông tin chi tiết về câu hỏi này dựa trên dữ liệu hiện tại."
+                },
+                {
+                  "turn": 5,
+                  "request": "xong",
+                  "status": "ok",
+                  "latency_ms": 5497,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "I'm here to help you find the perfect telescope. Here are the telescopes we currently have in stock:"
+                }
+              ]
+            },
+            {
+              "session_id": "session_ltm_301_c",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "tôi ở thành phố nào",
+                  "status": "ok",
+                  "latency_ms": 7408,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Tôi không có thông tin về vị trí của bạn. Tuy nhiên, tôi có thể giúp bạn tìm kiếm kính thiên văn. Bạ"
+                },
+                {
+                  "turn": 2,
+                  "request": "xem lại đơn hàng đã giao tới Đà Nẵng",
+                  "status": "ok",
+                  "latency_ms": 7350,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Hiện tại giỏ hàng của bạn đang trống. Bạn có thể tìm kiếm kính thiên văn mới để thêm vào giỏ hàng.\n\n"
+                },
+                {
+                  "turn": 3,
+                  "request": "thay đổi địa chỉ được không",
+                  "status": "ok",
+                  "latency_ms": 5959,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, tôi không thể thay đổi địa chỉ giao hàng. Tôi chỉ có thể giúp bạn tìm kiếm sản phẩm và thêm"
+                },
+                {
+                  "turn": 4,
+                  "request": "xem giỏ hàng",
+                  "status": "ok",
+                  "latency_ms": 6612,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Giỏ hàng của bạn hiện đang trống.\n\nBạn có thể muốn xem các sản phẩm kính thiên văn mới nhất của chún"
+                },
+                {
+                  "turn": 5,
+                  "request": "cảm ơn",
+                  "status": "ok",
+                  "latency_ms": 7310,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Cảm ơn bạn! Nếu bạn cần giúp đỡ trong việc tìm kiếm hoặc so sánh kính thiên văn, xin vui lòng cho tô"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "user_id": "user_ltm_302",
+          "sessions": [
+            {
+              "session_id": "session_ltm_302_a",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "tôi ưu tiên thanh toán qua thẻ VISA",
+                  "status": "ok",
+                  "latency_ms": 5311,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, tôi không thể thực hiện thanh toán. Tôi chỉ có thể giúp bạn tìm kiếm sản phẩm và thêm vào g"
+                },
+                {
+                  "turn": 2,
+                  "request": "tìm phụ kiện ống nhòm dưới 50 đô",
+                  "status": "ok",
+                  "latency_ms": 24257,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Chúng tôi có **Lens Cleaning Kit** giá **$21.95** — phụ kiện tuyệt vời dưới $21.95!\n\nBạn có muốn tìm"
+                },
+                {
+                  "turn": 3,
+                  "request": "thêm vào giỏ",
+                  "status": "ok",
+                  "latency_ms": 4530,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Bạn đang hỏi về sản phẩm nào ạ? Vui lòng nêu rõ tên sản phẩm hoặc tìm kiếm trước giúp mình nhé."
+                },
+                {
+                  "turn": 4,
+                  "request": "xác nhận",
+                  "status": "ok",
+                  "latency_ms": 5531,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, tôi không thể thực hiện xóa giỏ hàng. Tôi chỉ có thể giúp bạn tìm kiếm sản phẩm và thêm vào"
+                },
+                {
+                  "turn": 5,
+                  "request": "xong",
+                  "status": "ok",
+                  "latency_ms": 5020,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "I'm here to help you shop for telescopes. Here are the telescopes we currently have in stock:\n\n1. **"
+                }
+              ]
+            },
+            {
+              "session_id": "session_ltm_302_b",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "phương thức thanh toán ưu tiên của tôi là gì",
+                  "status": "ok",
+                  "latency_ms": 5492,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, tôi không thể thực hiện thanh toán. Tôi chỉ có thể giúp bạn tìm kiếm sản phẩm và thêm vào g"
+                },
+                {
+                  "turn": 2,
+                  "request": "thanh toán VISA có được giảm giá không",
+                  "status": "ok",
+                  "latency_ms": 6329,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, tôi không thể thực hiện thanh toán. Tôi chỉ có thể giúp bạn tìm kiếm sản phẩm và thêm vào g"
+                },
+                {
+                  "turn": 3,
+                  "request": "gợi ý món hàng 20 đô",
+                  "status": "ok",
+                  "latency_ms": 26109,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Chúng tôi có **The Comet Book** giá **$0.99** — một lựa chọn tuyệt vời dưới $0.99!\n\nBạn có muốn tìm "
+                },
+                {
+                  "turn": 4,
+                  "request": "thêm vào giỏ",
+                  "status": "ok",
+                  "latency_ms": 4246,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Bạn đang hỏi về sản phẩm nào ạ? Vui lòng nêu rõ tên sản phẩm hoặc tìm kiếm trước giúp mình nhé."
+                },
+                {
+                  "turn": 5,
+                  "request": "xác nhận",
+                  "status": "ok",
+                  "latency_ms": 5386,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, tôi không thể thực hiện xóa giỏ hàng. Tôi chỉ có thể giúp bạn tìm kiếm sản phẩm và thêm vào"
+                }
+              ]
+            },
+            {
+              "session_id": "session_ltm_302_c",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "xem giỏ hàng và phương thức thanh toán",
+                  "status": "ok",
+                  "latency_ms": 6489,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Giỏ hàng của bạn hiện đang trống. Hiện tại, tôi không thể xử lý thanh toán trực tiếp. Bạn có thể thê"
+                },
+                {
+                  "turn": 2,
+                  "request": "tổng tiền thanh toán",
+                  "status": "ok",
+                  "latency_ms": 6537,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Hiện tại, giỏ hàng của bạn đang trống. Bạn có thể thêm sản phẩm vào giỏ hàng bằng cách tìm kiếm tên "
+                },
+                {
+                  "turn": 3,
+                  "request": "đặt hàng",
+                  "status": "ok",
+                  "latency_ms": 5459,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, tôi không thể thực hiện đặt hàng. Tôi chỉ có thể giúp bạn tìm kiếm sản phẩm và thêm vào giỏ"
+                },
+                {
+                  "turn": 4,
+                  "request": "xác nhận",
+                  "status": "ok",
+                  "latency_ms": 5366,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, tôi không thể thực hiện xóa giỏ hàng. Tôi chỉ có thể giúp bạn tìm kiếm sản phẩm và thêm vào"
+                },
+                {
+                  "turn": 5,
+                  "request": "tạm biệt",
+                  "status": "ok",
+                  "latency_ms": 7978,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Tạm biệt! Nếu bạn cần trợ giúp về kính thiên văn, hãy quay lại bất kỳ lúc nào. Chúc bạn một ngày tốt"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "user_id": "user_ltm_303",
+          "sessions": [
+            {
+              "session_id": "session_ltm_303_a",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "tôi chỉ mua hàng vào dịp giảm giá Black Friday",
+                  "status": "ok",
+                  "latency_ms": 5502,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Hiện tại, tôi không có thông tin về các sản phẩm giảm giá trong dịp Black Friday. Tuy nhiên, tôi có "
+                },
+                {
+                  "turn": 2,
+                  "request": "tìm sản phẩm đang giảm giá sâu nhất",
+                  "status": "ok",
+                  "latency_ms": 19756,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Hiện tại, không có sản phẩm nào đang được giảm giá sâu nhất. Hãy thử lại sau!\n\nNếu bạn cần tìm kính "
+                },
+                {
+                  "turn": 3,
+                  "request": "thêm vào giỏ",
+                  "status": "ok",
+                  "latency_ms": 6263,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, nhưng hiện tại tôi không thể thực hiện việc thêm sản phẩm vào giỏ hàng trực tiếp. Tuy nhiên"
+                },
+                {
+                  "turn": 4,
+                  "request": "xác nhận",
+                  "status": "ok",
+                  "latency_ms": 5783,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, tôi không thể thực hiện xóa giỏ hàng. Tôi chỉ có thể giúp bạn tìm kiếm sản phẩm và thêm vào"
+                },
+                {
+                  "turn": 5,
+                  "request": "xong",
+                  "status": "ok",
+                  "latency_ms": 5432,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "I'm here to help you find the perfect telescope. Here are the telescopes we have available:\n\n1. **Na"
+                }
+              ]
+            },
+            {
+              "session_id": "session_ltm_303_b",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "dịp mua sắm yêu thích của tôi là gì",
+                  "status": "ok",
+                  "latency_ms": 6982,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "I'm here to help you shop for telescopes. Let me know what you're looking for today.\n\nHere are the t"
+                },
+                {
+                  "turn": 2,
+                  "request": "hiện tại có chương trình khuyến mãi nào không",
+                  "status": "ok",
+                  "latency_ms": 7682,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Hiện tại, tôi không có thông tin về các chương trình khuyến mãi. Tuy nhiên, tôi có thể giúp bạn tìm "
+                },
+                {
+                  "turn": 3,
+                  "request": "gợi ý món đồ dưới 30 đô sale",
+                  "status": "ok",
+                  "latency_ms": 26166,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Dựa trên yêu cầu của bạn, chúng tôi có 2 sản phẩm dưới 30 đô la:\n\n1. **The Comet Book** - giá **$0.9"
+                },
+                {
+                  "turn": 4,
+                  "request": "thêm vào giỏ",
+                  "status": "ok",
+                  "latency_ms": 2575,
+                  "cache": "hit",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, nhưng hiện tại tôi không thể thực hiện việc thêm sản phẩm vào giỏ hàng trực tiếp. Tuy nhiên"
+                },
+                {
+                  "turn": 5,
+                  "request": "xác nhận",
+                  "status": "ok",
+                  "latency_ms": 5293,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, tôi không thể thực hiện xóa giỏ hàng. Tôi chỉ có thể giúp bạn tìm kiếm sản phẩm và thêm vào"
+                }
+              ]
+            },
+            {
+              "session_id": "session_ltm_303_c",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "lịch sử săn sale của tôi",
+                  "status": "ok",
+                  "latency_ms": 5587,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Xin lỗi, tôi không thể xem lịch sử săn sale của bạn. Tuy nhiên, tôi có thể giúp bạn tìm kiếm kính th"
+                },
+                {
+                  "turn": 2,
+                  "request": "tổng tiết kiệm được bao nhiêu tiền",
+                  "status": "ok",
+                  "latency_ms": 7363,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Tôi không có thông tin về tổng số tiền tiết kiệm được. Tuy nhiên, tôi có thể giúp bạn tìm kiếm kính "
+                },
+                {
+                  "turn": 3,
+                  "request": "khi nào có sale tiếp theo",
+                  "status": "ok",
+                  "latency_ms": 8220,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Hiện tại, tôi không có thông tin về lịch tổ chức sale tiếp theo. Tuy nhiên, chúng tôi luôn cập nhật "
+                },
+                {
+                  "turn": 4,
+                  "request": "xem giỏ hàng",
+                  "status": "ok",
+                  "latency_ms": 6607,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Giỏ hàng của bạn hiện đang trống. Bạn có thể thêm sản phẩm vào giỏ hàng bằng cách tìm kiếm tên sản p"
+                },
+                {
+                  "turn": 5,
+                  "request": "cảm ơn",
+                  "status": "ok",
+                  "latency_ms": 8705,
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "reply": "Cảm ơn bạn! Nếu bạn cần giúp đỡ với bất kỳ sản phẩm kính thiên văn nào, hãy cho tôi biết. Tôi có thể"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "passed": false,
+      "errors": [
+        "user_ltm_303/session_ltm_303_b Turn 4: Expected 'miss', got 'hit'"
+      ]
+    },
+    {
+      "test_id": "LEAK-001",
+      "group": "isolation",
+      "users": [
+        {
+          "user_id": "user_leak_101",
+          "sessions": [
+            {
+              "session_id": "sess_leak_101_a",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "tìm kính thiên văn dưới 50 đô",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 20782,
+                  "reply": "Dưới đây là các sản phẩm kính thiên văn dưới 50 đô:\n\n1. **Lens Cleaning Kit** - **$21.95**\n2. **The "
+                },
+                {
+                  "turn": 2,
+                  "request": "tìm kính thiên văn dưới 50 đô",
+                  "status": "ok",
+                  "cache": "hit",
+                  "expected_cache": "hit",
+                  "latency_ms": 2623,
+                  "reply": "Dưới đây là các sản phẩm kính thiên văn dưới 50 đô:\n\n1. **Lens Cleaning Kit** - **$21.95**\n2. **The "
+                }
+              ]
+            },
+            {
+              "session_id": "sess_leak_101_b",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "tìm kính thiên văn dưới 50 đô",
+                  "status": "ok",
+                  "cache": "hit",
+                  "expected_cache": "hit",
+                  "latency_ms": 2639,
+                  "reply": "Dưới đây là các sản phẩm kính thiên văn dưới 50 đô:\n\n1. **Lens Cleaning Kit** - **$21.95**\n2. **The "
+                },
+                {
+                  "turn": 2,
+                  "request": "kính thiên văn nào rẻ nhất",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 20580,
+                  "reply": "**National Park Foundation Explorascope** là kính thiên văn rẻ nhất trong danh sách, với giá **$101."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "user_id": "user_leak_102",
+          "sessions": [
+            {
+              "session_id": "sess_leak_102_a",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "tìm kính thiên văn dưới 50 đô",
+                  "status": "ok",
+                  "cache": "hit",
+                  "expected_cache": "hit",
+                  "latency_ms": 4718,
+                  "reply": "Dưới đây là các sản phẩm kính thiên văn dưới 50 đô:\n\n1. **Lens Cleaning Kit** - **$21.95**\n2. **The "
+                },
+                {
+                  "turn": 2,
+                  "request": "tìm kính thiên văn dưới 50 đô",
+                  "status": "ok",
+                  "cache": "hit",
+                  "expected_cache": "hit",
+                  "latency_ms": 2570,
+                  "reply": "Dưới đây là các sản phẩm kính thiên văn dưới 50 đô:\n\n1. **Lens Cleaning Kit** - **$21.95**\n2. **The "
+                }
+              ]
+            },
+            {
+              "session_id": "sess_leak_102_b",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "tìm kính thiên văn dưới 50 đô",
+                  "status": "ok",
+                  "cache": "hit",
+                  "expected_cache": "hit",
+                  "latency_ms": 2651,
+                  "reply": "Dưới đây là các sản phẩm kính thiên văn dưới 50 đô:\n\n1. **Lens Cleaning Kit** - **$21.95**\n2. **The "
+                },
+                {
+                  "turn": 2,
+                  "request": "giá bao nhiêu",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 6335,
+                  "reply": "Bạn đang hỏi về sản phẩm nào ạ? Vui lòng nêu rõ tên sản phẩm hoặc tìm kiếm trước giúp mình nhé."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "user_id": "user_leak_103",
+          "sessions": [
+            {
+              "session_id": "sess_leak_103_a",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "tìm kính thiên văn dưới 50 đô",
+                  "status": "ok",
+                  "cache": "hit",
+                  "expected_cache": "hit",
+                  "latency_ms": 4446,
+                  "reply": "Dưới đây là các sản phẩm kính thiên văn dưới 50 đô:\n\n1. **Lens Cleaning Kit** - **$21.95**\n2. **The "
+                },
+                {
+                  "turn": 2,
+                  "request": "tìm kính thiên văn dưới 50 đô",
+                  "status": "ok",
+                  "cache": "hit",
+                  "expected_cache": "hit",
+                  "latency_ms": 2678,
+                  "reply": "Dưới đây là các sản phẩm kính thiên văn dưới 50 đô:\n\n1. **Lens Cleaning Kit** - **$21.95**\n2. **The "
+                }
+              ]
+            },
+            {
+              "session_id": "sess_leak_103_b",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "kính thiên văn dưới 50 đô",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "hit",
+                  "latency_ms": 25903,
+                  "reply": "Chúng tôi có **Lens Cleaning Kit** giá **$21.95** — phụ kiện tuyệt vời dưới $21.95!\n\nBạn có muốn tìm"
+                },
+                {
+                  "turn": 2,
+                  "request": "chi tiết sản phẩm",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 20472,
+                  "reply": "**National Park Foundation Explorascope** - **$101.96**\n\nMô tả: The National Park Foundation's (NPF)"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "passed": false,
+      "errors": [
+        "user_leak_103/sess_leak_103_b Turn 1: Expected 'hit', got 'miss'"
+      ]
+    },
+    {
+      "test_id": "LEAK-002",
+      "group": "isolation",
+      "users": [
+        {
+          "user_id": "user_leak_201",
+          "sessions": [
+            {
+              "session_id": "sess_leak_201_a",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "ngân sách của tôi là dưới 100 đô",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 13554,
+                  "reply": "Dưới đây là các sản phẩm phù hợp với ngân sách của bạn:\n\n1. **Lens Cleaning Kit** - **$21.95**\n2. **"
+                },
+                {
+                  "turn": 2,
+                  "request": "sở thích của tôi là tìm ống nhòm ngắm cảnh",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 23093,
+                  "reply": "Dựa trên yêu cầu của bạn, tôi đã tìm kiếm các sản phẩm liên quan đến ống nhòm ngắm cảnh. Dưới đây là"
+                }
+              ]
+            },
+            {
+              "session_id": "sess_leak_201_b",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "ngân sách mua sắm của tôi là bao nhiêu",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 10133,
+                  "reply": "Dựa trên danh mục sản phẩm hiện có, đây là các kính thiên văn bạn có thể xem xét:\n\n1. **National Par"
+                },
+                {
+                  "turn": 2,
+                  "request": "sở thích mua sắm của tôi là gì",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 6180,
+                  "reply": "Tôi không thể xác định sở thích mua sắm của bạn. Tuy nhiên, tôi có thể giúp bạn tìm kiếm các sản phẩ"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "user_id": "user_leak_202",
+          "sessions": [
+            {
+              "session_id": "sess_leak_202_a",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "ngân sách mua sắm của tôi là bao nhiêu",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 5949,
+                  "reply": "Tôi không có thông tin về ngân sách mua sắm của bạn. Tuy nhiên, tôi có thể giúp bạn tìm kiếm kính th"
+                },
+                {
+                  "turn": 2,
+                  "request": "sở thích mua sắm của tôi là gì",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 5396,
+                  "reply": "Tôi không thể xác định sở thích mua sắm của bạn. Tuy nhiên, tôi có thể giúp bạn tìm kiếm kính thiên "
+                }
+              ]
+            },
+            {
+              "session_id": "sess_leak_202_b",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "gợi ý sản phẩm phù hợp ngân sách của tôi",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 6133,
+                  "reply": "Hiện tại, tôi không tìm thấy sản phẩm nào phù hợp với ngân sách của bạn. Hãy thử lại với một ngân sá"
+                },
+                {
+                  "turn": 2,
+                  "request": "gợi ý quà tặng cho tôi",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 20900,
+                  "reply": "Hiện tại, tôi không có thông tin về quà tặng. Tuy nhiên, tôi có thể giúp bạn tìm kiếm các sản phẩm k"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "user_id": "user_leak_203",
+          "sessions": [
+            {
+              "session_id": "sess_leak_203_a",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "sở thích mua sắm của tôi là gì",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 5650,
+                  "reply": "Xin lỗi, nhưng tôi không thể giúp bạn xác định sở thích mua sắm cá nhân. Tuy nhiên, tôi có thể giúp "
+                },
+                {
+                  "turn": 2,
+                  "request": "tôi có ngân sách cố định không",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 6155,
+                  "reply": "Tôi không có thông tin về ngân sách cố định. Tuy nhiên, tôi có thể giúp bạn tìm kiếm kính thiên văn "
+                }
+              ]
+            },
+            {
+              "session_id": "sess_leak_203_b",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "gợi ý quà sinh nhật",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 20988,
+                  "reply": "Hiện tại, tôi không có sản phẩm nào để gợi ý. Tuy nhiên, nếu bạn đang tìm kiếm kính thiên văn, chúng"
+                },
+                {
+                  "turn": 2,
+                  "request": "cảm ơn",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 9156,
+                  "reply": "Cảm ơn bạn! Nếu bạn cần giúp đỡ trong việc tìm kiếm hoặc so sánh kính thiên văn, xin vui lòng cho tô"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "passed": true,
+      "errors": []
+    },
+    {
+      "test_id": "LEAK-003",
+      "group": "isolation",
+      "users": [
+        {
+          "user_id": "user_leak_301",
+          "sessions": [
+            {
+              "session_id": "sess_leak_301_a",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "thêm kính thiên văn Celestron vào giỏ",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 9113,
+                  "reply": "Xin lỗi, không thể xác định sản phẩm bạn đang muốn thực hiện thao tác. Vui lòng tìm kiếm sản phẩm tr"
+                },
+                {
+                  "turn": 2,
+                  "request": "xác nhận",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 5333,
+                  "reply": "Xin lỗi, tôi không thể thực hiện xóa giỏ hàng. Tôi chỉ có thể giúp bạn tìm kiếm sản phẩm và thêm vào"
+                }
+              ]
+            },
+            {
+              "session_id": "sess_leak_301_b",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "xem giỏ hàng của tôi",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 6350,
+                  "reply": "Giỏ hàng của bạn hiện đang trống. Bạn có thể thêm sản phẩm vào giỏ hàng bằng cách tìm kiếm tên sản p"
+                },
+                {
+                  "turn": 2,
+                  "request": "lịch sử đơn hàng của tôi",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 6442,
+                  "reply": "Xin lỗi, tôi không thể truy cập lịch sử đơn hàng của bạn. Tôi chỉ có thể giúp bạn tìm kiếm sản phẩm "
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "user_id": "user_leak_302",
+          "sessions": [
+            {
+              "session_id": "sess_leak_302_a",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "xem giỏ hàng của tôi",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 6117,
+                  "reply": "Hiện tại, giỏ hàng của bạn đang trống. Bạn có thể tìm kiếm và thêm các kính thiên văn yêu thích vào "
+                },
+                {
+                  "turn": 2,
+                  "request": "lịch sử đơn hàng của tôi",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 7572,
+                  "reply": "Xin lỗi, tôi không có thông tin chi tiết về câu hỏi này dựa trên dữ liệu hiện tại."
+                }
+              ]
+            },
+            {
+              "session_id": "sess_leak_302_b",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "giỏ hàng hiện tại có gì",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 6680,
+                  "reply": "Hiện tại, giỏ hàng của bạn đang trống. Bạn có thể tìm kiếm và thêm các sản phẩm vào giỏ hàng bất kỳ "
+                },
+                {
+                  "turn": 2,
+                  "request": "xem đơn hàng cũ",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 6529,
+                  "reply": "Xin lỗi, tôi không thể xem đơn hàng cũ. Tôi chỉ có thể giúp bạn tìm kiếm sản phẩm và thêm vào giỏ hà"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "user_id": "user_leak_303",
+          "sessions": [
+            {
+              "session_id": "sess_leak_303_a",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "xem giỏ hàng của tôi",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 5359,
+                  "reply": "Giỏ hàng của bạn hiện đang trống. Bạn có thể thêm các sản phẩm yêu thích vào giỏ hàng bất kỳ lúc nào"
+                },
+                {
+                  "turn": 2,
+                  "request": "lịch sử mua hàng",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 4053,
+                  "reply": "Bạn đang hỏi về sản phẩm nào ạ? Vui lòng nêu rõ tên sản phẩm hoặc tìm kiếm trước giúp mình nhé."
+                }
+              ]
+            },
+            {
+              "session_id": "sess_leak_303_b",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "kiểm tra đơn hàng",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 6769,
+                  "reply": "Hiện tại, giỏ hàng của bạn đang trống. Bạn có thể tìm kiếm và thêm các sản phẩm vào giỏ hàng bất kỳ "
+                },
+                {
+                  "turn": 2,
+                  "request": "kết thúc",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 8295,
+                  "reply": "Xin lỗi, nhưng tôi không thể giúp bạn kết thúc phiên hỗ trợ. Tôi ở đây để giúp bạn tìm kiếm và tìm h"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "passed": true,
+      "errors": []
+    },
+    {
+      "test_id": "LEAK-004",
+      "group": "isolation",
+      "users": [
+        {
+          "user_id": "user_leak_401",
+          "sessions": [
+            {
+              "session_id": "sess_leak_401_a",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "địa chỉ nhà tôi là 99 Đường Lê Duẩn Quận 1 TPHCM",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 5109,
+                  "reply": "I'm here to help you shop for telescopes. Here are the telescopes we currently have in stock:\n\n1. **"
+                },
+                {
+                  "turn": 2,
+                  "request": "tính phí giao hàng đến nhà tôi",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 7896,
+                  "reply": "Xin lỗi, tôi không có thông tin chi tiết về câu hỏi này dựa trên dữ liệu hiện tại."
+                }
+              ]
+            },
+            {
+              "session_id": "sess_leak_401_b",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "địa chỉ giao hàng của tôi ở đâu",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 7382,
+                  "reply": "Tôi không có thông tin về địa chỉ giao hàng của bạn. Vui lòng cung cấp địa chỉ đầy đủ để tôi có thể "
+                },
+                {
+                  "turn": 2,
+                  "request": "phí shipping bao nhiêu",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 6417,
+                  "reply": "Tôi không có thông tin về phí shipping. Bạn có thể liên hệ bộ phận hỗ trợ để được giải đáp.\n\nNếu bạn"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "user_id": "user_leak_402",
+          "sessions": [
+            {
+              "session_id": "sess_leak_402_a",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "địa chỉ giao hàng của tôi ở đâu",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 6572,
+                  "reply": "Xin lỗi, tôi không có thông tin chi tiết về câu hỏi này dựa trên dữ liệu hiện tại."
+                },
+                {
+                  "turn": 2,
+                  "request": "tính phí giao hàng đến nhà tôi",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 7426,
+                  "reply": "Xin lỗi, tôi không có thông tin chi tiết về câu hỏi này dựa trên dữ liệu hiện tại."
+                }
+              ]
+            },
+            {
+              "session_id": "sess_leak_402_b",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "nhà tôi ở thành phố nào",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 8153,
+                  "reply": "Xin lỗi, nhưng tôi không thể trả lời câu hỏi đó. Tôi có thể giúp bạn tìm kiếm kính thiên văn. Bạn có"
+                },
+                {
+                  "turn": 2,
+                  "request": "tính phí giao hàng",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 7295,
+                  "reply": "Xin lỗi, tôi không có thông tin chi tiết về câu hỏi này dựa trên dữ liệu hiện tại."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "user_id": "user_leak_403",
+          "sessions": [
+            {
+              "session_id": "sess_leak_403_a",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "địa chỉ giao hàng của tôi",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 6195,
+                  "reply": "Tôi không có thông tin về địa chỉ giao hàng của bạn. Vui lòng cung cấp địa chỉ đầy đủ để tôi có thể "
+                },
+                {
+                  "turn": 2,
+                  "request": "tính phí ship",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 9652,
+                  "reply": "Tôi không thể tính phí ship do thiếu thông tin địa chỉ. Vui lòng cung cấp địa chỉ đầy đủ để tôi có t"
+                }
+              ]
+            },
+            {
+              "session_id": "sess_leak_403_b",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "tôi ở đâu",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 7118,
+                  "reply": "Tôi chuyên về việc giúp bạn tìm kiếm kính thiên văn. Bạn đang tìm kiếm loại kính thiên văn nào?"
+                },
+                {
+                  "turn": 2,
+                  "request": "kết thúc",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 7801,
+                  "reply": "Xin lỗi, nhưng tôi không thể giúp bạn với yêu cầu này. Tôi có thể giúp bạn tìm kiếm kính thiên văn h"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "passed": true,
+      "errors": []
+    },
+    {
+      "test_id": "LEAK-005",
+      "group": "isolation",
+      "users": [
+        {
+          "user_id": "user_leak_501",
+          "sessions": [
+            {
+              "session_id": "sess_leak_501_a",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "cho xem các loại kính thiên văn tốt nhất",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 16841,
+                  "reply": "Dựa trên đánh giá của khách hàng, đây là các loại kính thiên văn được đánh giá cao nhất:\n\n1. **Solar"
+                },
+                {
+                  "turn": 2,
+                  "request": "cho xem các loại kính thiên văn tốt nhất",
+                  "status": "ok",
+                  "cache": "hit",
+                  "expected_cache": "hit",
+                  "latency_ms": 2624,
+                  "reply": "Dựa trên đánh giá của khách hàng, đây là các loại kính thiên văn được đánh giá cao nhất:\n\n1. **Solar"
+                }
+              ]
+            },
+            {
+              "session_id": "sess_leak_501_b",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "cho xem các loại kính thiên văn tốt nhất",
+                  "status": "ok",
+                  "cache": "hit",
+                  "expected_cache": "hit",
+                  "latency_ms": 2626,
+                  "reply": "Dựa trên đánh giá của khách hàng, đây là các loại kính thiên văn được đánh giá cao nhất:\n\n1. **Solar"
+                },
+                {
+                  "turn": 2,
+                  "request": "giá sản phẩm top 1",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 6410,
+                  "reply": "Mình chưa có danh sách sản phẩm nào trước đó để chọn. Bạn vui lòng tìm kiếm sản phẩm trước nhé."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "user_id": "user_leak_502",
+          "sessions": [
+            {
+              "session_id": "sess_leak_502_a",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "kính thiên văn nào tốt nhất hiện nay",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "hit",
+                  "latency_ms": 11662,
+                  "reply": "Hiện nay, các kính thiên văn được đánh giá cao nhất là:\n\n1. **Eclipsmart Travel Refractor Telescope*"
+                },
+                {
+                  "turn": 2,
+                  "request": "kính thiên văn nào tốt nhất hiện nay",
+                  "status": "ok",
+                  "cache": "hit",
+                  "expected_cache": "hit",
+                  "latency_ms": 2721,
+                  "reply": "Hiện nay, các kính thiên văn được đánh giá cao nhất là:\n\n1. **Eclipsmart Travel Refractor Telescope*"
+                }
+              ]
+            },
+            {
+              "session_id": "sess_leak_502_b",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "cho xem các loại kính thiên văn tốt nhất",
+                  "status": "ok",
+                  "cache": "hit",
+                  "expected_cache": "hit",
+                  "latency_ms": 4519,
+                  "reply": "Dựa trên đánh giá của khách hàng, đây là các loại kính thiên văn được đánh giá cao nhất:\n\n1. **Solar"
+                },
+                {
+                  "turn": 2,
+                  "request": "xem đánh giá",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 6294,
+                  "reply": "Bạn đang hỏi về sản phẩm nào ạ? Vui lòng nêu rõ tên sản phẩm hoặc tìm kiếm trước giúp mình nhé."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "user_id": "user_leak_503",
+          "sessions": [
+            {
+              "session_id": "sess_leak_503_a",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "cho xem các loại kính thiên văn tốt nhất",
+                  "status": "ok",
+                  "cache": "hit",
+                  "expected_cache": "hit",
+                  "latency_ms": 4201,
+                  "reply": "Dựa trên đánh giá của khách hàng, đây là các loại kính thiên văn được đánh giá cao nhất:\n\n1. **Solar"
+                },
+                {
+                  "turn": 2,
+                  "request": "cho xem các loại kính thiên văn tốt nhất",
+                  "status": "ok",
+                  "cache": "hit",
+                  "expected_cache": "hit",
+                  "latency_ms": 2649,
+                  "reply": "Dựa trên đánh giá của khách hàng, đây là các loại kính thiên văn được đánh giá cao nhất:\n\n1. **Solar"
+                }
+              ]
+            },
+            {
+              "session_id": "sess_leak_503_b",
+              "turns": [
+                {
+                  "turn": 1,
+                  "request": "kính thiên văn nào tốt nhất hiện nay",
+                  "status": "ok",
+                  "cache": "hit",
+                  "expected_cache": "hit",
+                  "latency_ms": 4320,
+                  "reply": "Hiện nay, các kính thiên văn được đánh giá cao nhất là:\n\n1. **Eclipsmart Travel Refractor Telescope*"
+                },
+                {
+                  "turn": 2,
+                  "request": "tạm biệt",
+                  "status": "ok",
+                  "cache": "miss",
+                  "expected_cache": "miss",
+                  "latency_ms": 7246,
+                  "reply": "Tạm biệt! Nếu bạn cần trợ giúp nào khác về kính thiên văn, hãy liên hệ lại. Chúc bạn một ngày tốt là"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "passed": false,
+      "errors": [
+        "user_leak_502/sess_leak_502_a Turn 1: Expected 'hit', got 'miss'"
+      ]
+    },
+    {
+      "test_id": "CACHE-001",
+      "group": "cache",
+      "steps": [
+        {
+          "turn": 1,
+          "request": "tìm binoculars giá tốt",
+          "status": "ok",
+          "cache": "miss",
+          "expected_cache": "miss",
+          "latency_ms": 19641
+        },
+        {
+          "turn": 2,
+          "request": "tìm binoculars giá tốt",
+          "status": "ok",
+          "cache": "hit",
+          "expected_cache": "hit",
+          "latency_ms": 2614
+        }
+      ],
+      "passed": true,
+      "errors": []
+    },
+    {
+      "test_id": "CACHE-002",
+      "group": "cache",
+      "steps": [
+        {
+          "turn": 1,
+          "request": "tìm kính thiên văn dưới 100 đô",
+          "status": "ok",
+          "cache": "miss",
+          "expected_cache": "miss",
+          "latency_ms": 26655
+        },
+        {
+          "turn": 2,
+          "request": "tìm kiếm kính thiên văn dưới 100 đô",
+          "status": "ok",
+          "cache": "hit",
+          "expected_cache": "hit",
+          "latency_ms": 3168
+        }
+      ],
+      "passed": true,
+      "errors": []
+    },
+    {
+      "test_id": "CACHE-003",
+      "group": "cache",
+      "steps": [
+        {
+          "step": 1,
+          "action": "query",
+          "request": "tìm product OLJCESPC7Z",
+          "status": "ok",
+          "cache": "miss",
+          "expected_cache": "miss",
+          "latency_ms": 20108
+        },
+        {
+          "step": 2,
+          "action": "query",
+          "request": "tìm product OLJCESPC7Z",
+          "status": "ok",
+          "cache": "hit",
+          "expected_cache": "hit",
+          "latency_ms": 2582
+        },
+        {
+          "step": 3,
+          "action": "invalidate",
+          "entity": "product:OLJCESPC7Z",
+          "status": "ok"
+        },
+        {
+          "step": 4,
+          "action": "query",
+          "request": "tìm product OLJCESPC7Z",
+          "status": "ok",
+          "cache": "miss",
+          "expected_cache": "miss",
+          "latency_ms": 19807
+        }
+      ],
+      "passed": true,
+      "errors": []
+    }
+  ],
+  "metrics": {
+    "total_requests": 252,
+    "cache_hits": 26,
+    "cache_misses": 226,
+    "hit_rate_percent": 10.32,
+    "latencies_hit_ms": [
+      2658,
+      4754,
+      3133,
+      2619,
+      3184,
+      2635,
+      4127,
+      2634,
+      2575,
+      2623,
+      2639,
+      4718,
+      2570,
+      2651,
+      4446,
+      2678,
+      2624,
+      2626,
+      2721,
+      4519,
+      4201,
+      2649,
+      4320,
+      2614,
+      3168,
+      2582
+    ],
+    "latencies_miss_ms": [
+      33292,
+      19491,
+      6886,
+      3560,
+      7380,
+      13815,
+      24830,
+      4819,
+      5040,
+      4849,
+      19377,
+      17344,
+      19173,
+      6771,
+      5182,
+      4303,
+      5788,
+      9478,
+      20477,
+      18187,
+      12675,
+      24453,
+      18816,
+      4551,
+      6713,
+      7786,
+      10412,
+      10732,
+      5107,
+      5418,
+      6362,
+      20261,
+      4994,
+      18988,
+      14238,
+      6095,
+      19274,
+      5397,
+      4610,
+      5722,
+      16371,
+      11272,
+      12018,
+      10883,
+      5522,
+      26409,
+      5514,
+      3606,
+      6647,
+      21368,
+      7150,
+      6208,
+      4551,
+      5419,
+      6254,
+      5827,
+      21328,
+      6772,
+      11153,
+      8629,
+      11509,
+      4711,
+      3375,
+      6517,
+      19075,
+      5765,
+      7144,
+      5507,
+      9632,
+      8505,
+      17979,
+      7156,
+      6956,
+      7457,
+      18604,
+      9803,
+      5843,
+      5005,
+      7615,
+      20162,
+      24227,
+      4480,
+      5664,
+      8843,
+      7366,
+      18862,
+      6481,
+      6951,
+      17760,
+      7916,
+      27237,
+      7421,
+      5990,
+      6366,
+      5381,
+      21849,
+      4442,
+      5433,
+      6247,
+      7021,
+      6257,
+      6906,
+      7396,
+      7077,
+      18854,
+      18936,
+      7009,
+      5336,
+      6786,
+      19427,
+      11964,
+      6941,
+      9464,
+      11673,
+      19320,
+      6758,
+      5381,
+      7994,
+      25834,
+      22565,
+      4304,
+      5442,
+      6997,
+      21896,
+      22180,
+      7393,
+      5685,
+      5779,
+      8120,
+      7576,
+      7738,
+      7269,
+      7744,
+      5750,
+      19716,
+      6504,
+      5940,
+      7750,
+      7071,
+      7430,
+      7174,
+      5497,
+      7408,
+      7350,
+      5959,
+      6612,
+      7310,
+      5311,
+      24257,
+      4530,
+      5531,
+      5020,
+      5492,
+      6329,
+      26109,
+      4246,
+      5386,
+      6489,
+      6537,
+      5459,
+      5366,
+      7978,
+      5502,
+      19756,
+      6263,
+      5783,
+      5432,
+      6982,
+      7682,
+      26166,
+      5293,
+      5587,
+      7363,
+      8220,
+      6607,
+      8705,
+      20782,
+      20580,
+      6335,
+      25903,
+      20472,
+      13554,
+      23093,
+      10133,
+      6180,
+      5949,
+      5396,
+      6133,
+      20900,
+      5650,
+      6155,
+      20988,
+      9156,
+      9113,
+      5333,
+      6350,
+      6442,
+      6117,
+      7572,
+      6680,
+      6529,
+      5359,
+      4053,
+      6769,
+      8295,
+      5109,
+      7896,
+      7382,
+      6417,
+      6572,
+      7426,
+      8153,
+      7295,
+      6195,
+      9652,
+      7118,
+      7801,
+      16841,
+      6410,
+      11662,
+      6294,
+      7246,
+      19641,
+      26655,
+      20108,
+      19807
+    ],
+    "avg_latency_hit_ms": 3179.5,
+    "avg_latency_miss_ms": 10151.8,
+    "latency_improvement_percent": 68.7,
+    "estimated_tokens_consumed": 47919,
+    "estimated_tokens_saved": 6100,
+    "estimated_cost_savings_usd": 0.0061,
+    "p50_latency_hit_ms": 2654.5,
+    "p95_latency_hit_ms": 4718,
+    "p50_latency_miss_ms": 7147.0,
+    "p95_latency_miss_ms": 24227
+  },
+  "server_cache_metrics": {
+    "summary": {
+      "genai_hits_exact": 23,
+      "genai_hits_semantic": 3,
+      "genai_hits_global": 7,
+      "genai_misses": 226,
+      "genai_hit_rate_pct": 12.74,
+      "backend": "valkey",
+      "cache_ttl_seconds": 600,
+      "titan_embeds": 530,
+      "invalidations": 61
+    },
+    "tool_cache": {
+      "hits": 19,
+      "misses": 26,
+      "hit_rate_pct": 42.22
+    }
+  }
+}

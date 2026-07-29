@@ -1,0 +1,17 @@
+2026-07-14 21:54:44,433 - botocore.credentials - INFO - Found credentials in environment variables.
+E0714 14:54:44.882907   19656 add_port.cc:83] Failed to add port to server: No address added out of total 1 resolved for '[::]:8085' (Failed to prepare server socket (bind: WSA Error (Only one usage of each socket address (protocol/network address/port) is normally permitted.
+ -- 10048)))
+Traceback (most recent call last):
+  File "C:\Users\Admin\AIO02_TF3_Phase3\AIE1\techx-corp-platform\src\product-reviews\product_reviews_server.py", line 623, in <module>
+    server.add_insecure_port(f'[::]:{port}')
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "C:\Users\Admin\AIO02_TF3_Phase3\AIE1\techx-corp-platform\src\product-reviews\venv\Lib\site-packages\grpc\_server.py", line 1460, in add_insecure_port
+    return _common.validate_port_binding_result(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        address, _add_insecure_port(self._state, _common.encode(address))
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\Admin\AIO02_TF3_Phase3\AIE1\techx-corp-platform\src\product-reviews\venv\Lib\site-packages\grpc\_common.py", line 179, in validate_port_binding_result
+    raise RuntimeError(_ERROR_MESSAGE_PORT_BINDING_FAILED % address)
+RuntimeError: Failed to bind to address [::]:8085; set GRPC_VERBOSITY=debug environment variable to see detailed error message.

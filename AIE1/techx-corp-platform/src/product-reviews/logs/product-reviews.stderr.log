@@ -1,0 +1,19 @@
+2026-07-14 21:36:22,577 - botocore.credentials - INFO - Found credentials in environment variables.
+2026-07-14 21:36:22,730 - main - INFO - Product reviews service started, listening on port 8085
+2026-07-14 21:36:24,422 - main - INFO - Receive AskProductAIAssistant for product id:L9ECAV7KIM, question: Can you summarize the product reviews?
+2026-07-14 21:36:24,510 - main - INFO - product_catalog_stub.GetProduct returned: 'id: "L9ECAV7KIM"
+name: "Lens Cleaning Kit"
+description: "Wipe away dust, dirt, fingerprints and other particles on your lenses to see clearly with the Lens Cleaning Kit. This cleaning kit works on all glass and optical surfaces, including telescopes, binoculars, spotting scopes, monoculars, microscopes, and even your camera lenses, computer screens, and mobile devices.  The kit comes complete with a retractable lens brush to remove dust particles and dirt and two options to clean smudges and fingerprints off of your optics, pre-moistened lens wipes and a bottled lens cleaning fluid with soft cloth."
+picture: "LensCleaningKit.jpg"
+price_usd {
+  currency_code: "USD"
+  units: 21
+  nanos: 950000000
+}
+categories: "accessories"
+'
+2026-07-14 21:36:24,511 - main - INFO - Using env override for feature flag llmInaccurateResponse: True
+2026-07-14 21:36:24,512 - main - INFO - llmInaccurateResponse feature flag: True
+2026-07-14 21:36:24,512 - main - INFO - Returning an inaccurate response for product_id: L9ECAV7KIM
+2026-07-14 21:36:24,513 - main - INFO - Using inaccurate summary fixture for product_id: L9ECAV7KIM
+2026-07-14 21:36:26,437 - main - WARNING - Summary rejected by evaluator for product_id:L9ECAV7KIM judge_provider=bedrock judge_model=amazon.nova-micro-v1:0 unsupported=4 contradicted=0 reason=The summary states that customers are largely disappointed and the kit is ineffective, leaves a sticky residue, and causes scratches, which is not supported by any of the reviews. All reviews are positive and highlight the kit's effectiveness and value.
