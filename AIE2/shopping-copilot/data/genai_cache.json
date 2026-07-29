@@ -1,0 +1,12 @@
+{
+  "entries": {},
+  "stats": {
+    "hits_exact": 0,
+    "hits_semantic": 0,
+    "hits_global": 0,
+    "misses": 0,
+    "invalidations": 0,
+    "titan_embeds": 0
+  },
+  "emb_index": {}
+}

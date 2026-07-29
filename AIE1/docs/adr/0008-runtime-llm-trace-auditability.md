@@ -1,87 +1,94 @@
-# ADR 0008: Khả năng quan sát LLM (Runtime LLM Trace & Auditability) cho Product Reviews
+# ADR 0008: Runtime LLM Trace & Auditability for Product Reviews
 
-> [!NOTE]
-> * Trạng thái: Đã phê duyệt (Approved)
-> * Tác giả: Thịnh (AIE1) và Khoa (Leader AIE1)
-> * Ngày tạo: 2026-07-27
-> * Ngày cập nhật: 2026-07-27
-> * Dự án: AIE1 - Tối ưu & Vận hành Tầng AI (Task Force 1 - Mandate #24)
+## Status
 
----
+Accepted for implementation.
 
-## 1. Bối cảnh
-Tính năng Đánh giá Sản phẩm (Product Reviews) có ba bề mặt kiểm chứng độc lập:
-- Luồng người dùng thực tế tại `product_reviews_server.py`;
-- Đánh giá guardrail ngoại tuyến (offline) tại `repro/run_eval_guardrail.py`;
-- Đánh giá mức độ trung thực/judge ngoại tuyến tại `repro/eval_fidelity.py`.
+## Context
 
-Các file kiểm chứng ngoại tuyến chứng minh được hoạt động của hệ thống (harness) và benchmark, nhưng tự chúng không thể chứng minh chính xác câu trả lời thực tế (runtime answer) nào đã được trả về cho người dùng. Để lấp đầy khoảng trống khả năng quan sát đó, hệ thống thực tế cần một ID theo dõi (trace id) có thể trả về cho client và sau đó dùng để truy xuất bản ghi trace dưới dạng hộp đen.
+Product Reviews has three independent evidence surfaces:
 
-## 2. Giải pháp đề xuất & Quyết định kiến trúc
+- runtime user flow in `product_reviews_server.py`;
+- offline guardrail evaluation in `repro/run_eval_guardrail.py`;
+- offline fidelity/judge evaluation in `repro/eval_fidelity.py`.
 
-Bổ sung một lớp theo dõi (trace layer) thực tế cho `AskProductAIAssistant`:
+The offline eval files prove the harness and benchmark behavior, but they do
+not by themselves prove which exact runtime answer was returned to a user. To
+close that observability gap, the runtime needs a trace id that can be returned
+to the client and later used to fetch a black-box trace record.
 
-1. Trích xuất trace ID hiện tại của OpenTelemetry bên trong `get_ai_assistant_response()` và trả về cho caller dưới dạng gRPC trailing metadata `x-trace-id`.
-2. Lưu trữ bản ghi trace hộp đen (black-box trace record) vào Redis dưới cả 2 keys:
+## Decision
+
+Add a runtime trace layer for `AskProductAIAssistant`:
+
+1. Extract the current OpenTelemetry trace id inside
+   `get_ai_assistant_response()` and return it to the caller as gRPC trailing
+   metadata `x-trace-id`.
+2. Persist a black-box trace record to Redis under both keys:
+
    ```text
    product_reviews:llm_trace:{trace_id}
    trace:{trace_id}
    ```
-   `product_reviews:llm_trace:{trace_id}` là khóa nội bộ phân vùng (namespaced internal key).
-   `trace:{trace_id}` là khóa truy xuất/phát lại (replay/fetch key) được yêu cầu bởi HTTP trace task.
 
-3. Chỉ lưu trữ các metadata an toàn cho kiểm toán:
-   - ID sản phẩm (product id);
-   - Mã băm SHA-256 của câu hỏi người dùng;
-   - Mã băm SHA-256 / phân loại của câu trả lời cuối cùng;
-   - Model/provider của candidate và token/độ trễ/chi phí ước tính khi provider cung cấp thông tin sử dụng;
-   - Model/provider của judge và token/độ trễ/chi phí ước tính khi judge được gọi;
-   - Trạng thái cache hit;
-   - Kết quả runtime guardrail/fidelity;
-   - Lý do dự phòng (fallback) khi fallback được sử dụng.
+   `product_reviews:llm_trace:{trace_id}` is the namespaced internal key.
+   `trace:{trace_id}` is the replay/fetch key required by the HTTP trace task.
 
-4. **Không** lưu trữ raw prompts (lệnh gốc), raw reviews (đánh giá gốc), câu hỏi người dùng gốc, câu trả lời gốc của model, thông tin đăng nhập, hoặc payload danh mục sản phẩm vào bản ghi trace.
+3. Store only audit-safe metadata:
 
-5. Cung cấp một HTTP handler tùy chọn dựa trên thư viện tiêu chuẩn `http.server.BaseHTTPRequestHandler`, được phục vụ bởi `ThreadingHTTPServer` trên một luồng daemon `threading.Thread`. Cổng HTTP trace mặc định là `8086`.
+   - product id;
+   - SHA-256 hash of the user question;
+   - SHA-256 hash/class of the final response;
+   - candidate model/provider and token/latency/cost estimate when provider
+     usage is available;
+   - judge model/provider and token/latency/cost estimate when judge was called;
+   - cache hit status;
+   - runtime guardrail/fidelity outcome;
+   - fallback reason when fallback was used.
 
-6. Cung cấp các HTTP endpoint cần thiết cho việc phát lại/kiểm toán luồng chạy nội bộ:
+4. Do not store raw prompts, raw reviews, raw user question, raw model answer,
+   credentials, or product catalog payloads in the trace record.
+5. Provide an optional HTTP handler based on the standard library
+   `http.server.BaseHTTPRequestHandler`, served by `ThreadingHTTPServer` on a
+   daemon `threading.Thread`. The default trace HTTP port is `8086`.
+
+6. Provide the HTTP endpoints required for internal runtime replay/audit:
+
    ```text
    POST /replay
    GET /trace/{trace_id}
    ```
-   `POST /replay` nhận `{question, product_id, user_id, session_id}`, gọi cùng đường dẫn thực tế `get_ai_assistant_response()` bên trong được dùng bởi gRPC, và trả về `{"response": "...", "cache": "hit|miss", "trace_id": "..."}`.
-   
-   `GET /trace/{trace_id}` đọc JSON nguyên bản từ Redis với khóa `trace:{trace_id}` và trả về 404 khi không tìm thấy trace.
-   
-   Endpoint tương thích/gỡ lỗi hiện tại vẫn được giữ lại:
+
+   `POST /replay` accepts `{question, product_id, user_id, session_id}`, calls
+   the same internal `get_ai_assistant_response()` runtime path used by gRPC,
+   and returns `{"response": "...", "cache": "hit|miss", "trace_id": "..."}`.
+
+   `GET /trace/{trace_id}` reads raw JSON from Redis with key
+   `trace:{trace_id}` and returns 404 when the trace is missing.
+
+   The existing compatibility/debug endpoint remains available:
+
    ```text
    GET /debug/llm-traces/{trace_id}
    ```
-   Dịch vụ HTTP chỉ được bật khi biến `PRODUCT_REVIEWS_TRACE_HTTP_TOKEN` được thiết lập, trừ khi việc gỡ lỗi không xác thực tại local được bật tường minh qua `PRODUCT_REVIEWS_TRACE_HTTP_ALLOW_UNAUTHENTICATED=true`.
 
-### 2.1 Hệ quả (Consequences)
-**Lợi ích:**
-- Một câu trả lời thực tế có thể được gắn kết với một trace id cụ thể.
-- Bằng chứng có thể cho thấy liệu câu trả lời đến từ cache, fallback, logic xác định, luồng chỉ candidate, hay luồng candidate + runtime judge.
-- Token, độ trễ, và chi phí sơ bộ được ghi nhận khi nhà cung cấp model trả về siêu dữ liệu sử dụng. Đa luồng gọi candidate/judge được giữ trong `calls` và tổng hợp trong `total_usage`.
-- Cache-hit traces có thể trỏ ngược về `source_trace_id` ban đầu đã tạo ra câu trả lời được lưu cache.
-- Không có câu hỏi/review/câu trả lời nguyên bản nào của người dùng được lưu trữ trong Redis traces.
+   The HTTP service is enabled only when `PRODUCT_REVIEWS_TRACE_HTTP_TOKEN` is
+   set, unless local unauthenticated debugging is explicitly enabled via
+   `PRODUCT_REVIEWS_TRACE_HTTP_ALLOW_UNAUTHENTICATED=true`.
 
-**Đánh đổi và các giới hạn chấp nhận được:**
-- Endpoint HTTP phụ thuộc vào tính khả dụng của Redis; việc ghi trace ở dạng fail-open (nếu lỗi ghi log thì bỏ qua, không chết ứng dụng) và không được chặn phản hồi đến người dùng.
-- Endpoint HTTP chỉ dành cho việc gỡ lỗi local/nội bộ. Mặc định nó bị tắt và bảo vệ bằng token; không nên đưa trực tiếp ra ngoài public.
-- Chi phí chỉ là ước tính dựa trên bảng giá công khai của Nova Lite/Micro, không phải nguồn tính cước chính xác. Đủ để đưa ra số liệu chứng minh tối ưu hóa trước/sau, nhưng không dùng để đối chiếu hóa đơn AWS.
-- Traces dạng cache-hit không có thông tin sử dụng token candidate/judge mới vì không có LLM call nào thực hiện. Việc chấm lại (re-judge) mọi cache hit sẽ phá vỡ mục đích tối ưu chi phí/độ trễ.
-- Câu hỏi, review, và câu trả lời raw cố ý không được lưu để bảo mật. Debug cần đối chiếu mã hash.
+## Implementation evidence
 
-### 2.2 Tóm tắt Lược đồ Trace (Trace schema summary)
+| Work item | Runtime evidence |
+|---|---|
+| AI-121: Extract OTel Trace ID and return via gRPC metadata | `product_reviews_server.py` calls `current_trace_id()` and `attach_trace_metadata(context, trace_id)` inside `get_ai_assistant_response()`; metadata key is `x-trace-id`. |
+| AI-122: Write black-box trace to Redis | `guardrails/llm_trace.py` writes the same audit-safe JSON record to `product_reviews:llm_trace:{trace_id}` and `trace:{trace_id}` via `write_llm_trace()`. |
+| AI-123: HTTP replay and fetch trace endpoint | `product_reviews_server.py` defines `LLMTraceHTTPHandler`, `_ReplayContext`, and `start_llm_trace_http_server()`; routes are `POST /replay`, `GET /trace/{trace_id}`, plus compatibility route `/debug/llm-traces/{trace_id}`. |
+| AI-124: ADR and view summary | This ADR documents the schema, access path, and limitations. |
 
-File minh chứng trace thực tế (smoke-test capture, hai trace: grounded answer + cache-hit cùng câu hỏi):
-```
-AIE1/repro/artifacts/llm_trace_smoketest_20260727T000000Z.json
-```
+## Trace schema summary
 
-Ví dụ các trường (fields):
+Example fields:
+
 ```json
 {
   "schema_version": 1,
@@ -150,7 +157,8 @@ Ví dụ các trường (fields):
   "cache": {
     "hit": false,
     "key_sha256": "...",
-    "source_trace_id": null
+    "source_trace_id": null,
+    "source_response_sha256": null
   },
   "outcome": "grounded_answer",
   "fallback_reason": null,
@@ -160,66 +168,172 @@ Ví dụ các trường (fields):
 }
 ```
 
-### 2.3 Ghi chú vận hành (Operational notes)
-Để bật endpoint HTTP trace nội bộ tại local:
+## Operational notes
+
+To enable the HTTP trace endpoint locally:
+
 ```powershell
 $env:PRODUCT_REVIEWS_TRACE_HTTP_PORT="8086"
 $env:PRODUCT_REVIEWS_TRACE_HTTP_TOKEN="<internal-token>"
 ```
-Lấy thông tin Trace từ Redis (theo id):
+
+Replay one runtime request through the same internal AI path:
+
+```powershell
+curl.exe -X POST `
+  -H "x-trace-token: <internal-token>" `
+  -H "Content-Type: application/json" `
+  -d "{\"question\":\"Do reviewers say it removes dust?\",\"product_id\":\"L9ECAV7KIM\",\"user_id\":\"jira-smoke\",\"session_id\":\"ai-123\"}" `
+  http://localhost:8086/replay
+```
+
+Then fetch the raw Redis trace by id:
+
 ```powershell
 curl.exe -H "x-trace-token: <internal-token>" http://localhost:8086/trace/<trace-id>
 ```
-Ghi đè TTL của Redis (mặc định 86400 giây):
+
+Compatibility/debug fetch remains available:
+
+```powershell
+curl.exe -H "x-trace-token: <internal-token>" http://localhost:8086/debug/llm-traces/<trace-id>
+```
+
+Redis TTL defaults to `86400` seconds and can be overridden with:
+
 ```powershell
 $env:PRODUCT_REVIEWS_TRACE_TTL_SECONDS="86400"
 ```
 
-## 3. Thống kê Chi phí Lũy kế & Token Usage theo Model
+## Consequences
 
-Bảng tổng hợp dựa trên báo cáo kiểm thử và đơn giá dự kiến của Amazon Nova:
+Benefits:
 
-| Vai trò (Role) | Mô hình (Model) | Số lượt gọi (Calls) | Input Tokens | Output Tokens | Tổng Token (Total) | Chi phí ước tính (USD) |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| Candidate | `amazon.nova-lite-v1:0` | 70 | 118,259 | 1,749 | 120,008 | $0.0075153 |
-| Judge | `amazon.nova-micro-v1:0` | 37 | 63,711 | 6,715 | 70,426 | $0.0031700 |
-| **Tổng cộng** | | **107** | **181,970** | **8,464** | **190,434** | **$0.0106853** |
+- A runtime answer can be tied to a concrete trace id.
+- Evidence can show whether the answer came from cache, fallback,
+  deterministic logic, candidate-only path, or candidate + runtime judge path.
+- Token, latency, and rough cost are captured when the model provider returns
+  usage metadata. Multiple candidate/judge calls are kept as `calls` and
+  aggregated in `total_usage`.
+- Cache-hit traces can point back to the original `source_trace_id` that
+  produced the cached answer.
+- No raw user prompt/review/answer text is stored in Redis traces.
 
-## 4. Bằng chứng kiểm chứng thực tế
+Trade-offs and accepted limitations:
 
-| Công việc | Bằng chứng runtime |
-|---|---|
-| AI-121: Trích xuất OTel Trace ID và trả về qua gRPC metadata | `product_reviews_server.py` gọi `current_trace_id()` và `attach_trace_metadata(context, trace_id)` bên trong `get_ai_assistant_response()`; metadata key là `x-trace-id`. |
-| AI-122: Ghi black-box trace vào Redis | `guardrails/llm_trace.py` ghi bản ghi JSON an toàn cho kiểm toán vào `product_reviews:llm_trace:{trace_id}` và `trace:{trace_id}` qua `write_llm_trace()`. |
-| AI-123: HTTP replay và fetch trace endpoint | `product_reviews_server.py` định nghĩa `LLMTraceHTTPHandler`, `_ReplayContext`, và `start_llm_trace_http_server()`; các route là `POST /replay`, `GET /trace/{trace_id}`, và route tương thích `/debug/llm-traces/{trace_id}`. |
-| AI-124: Đánh giá ADR | Chính tài liệu ADR này mô tả lược đồ, đường dẫn truy cập và các hạn chế. |
+- The HTTP endpoints depend on Redis availability; trace writes are fail-open
+  and must not block user responses. This preserves the user-facing AI feature
+  during a Redis outage, at the cost of possibly missing a trace for that
+  request.
+- The HTTP endpoints are intended for local/internal debugging only. They are
+  disabled by default and token-protected when enabled; it should not be exposed
+  directly to public traffic.
+- Cost is an estimate based on known Nova Lite/Micro public pricing constants,
+  not a billing-system source of truth. This is sufficient for runtime
+  before/after engineering evidence, but not for AWS invoice reconciliation.
+- Cache-hit traces do not have fresh candidate/judge token usage because no
+  model call happens on a cache hit. Instead, they point back to the original
+  approved `source_trace_id`; re-judging every cache hit would defeat the
+  cache's latency/cost purpose and can introduce unnecessary judge variance.
+- Raw question, review and answer text are intentionally not stored in the
+  persisted trace. `POST /replay` necessarily receives the replay question and
+  returns the AI response to the HTTP client, but the stored trace remains
+  metadata/hash-only. Debugging
+  exact wording requires matching hashes against a controlled test artifact or
+  UI evidence, which is safer than persisting raw PII/security-sensitive text in
+  Redis.
+- Full runtime smoke tests should run in the service/container environment that
+  includes gRPC, OpenTelemetry, OpenFeature, Redis and AWS/Bedrock
+  configuration. Local unit tests should not fake these core service
+  dependencies because that can hide runtime deployment issues.
+- This ADR does not implement multi-turn memory/history. Multi-turn was
+  explicitly removed from the current scope.
 
-### 4.1 Quy trình Smoke-test
-Bài kiểm tra smoke-test yêu cầu:
-1. Dịch vụ Product Reviews đang chạy với cấu hình Bedrock candidate/judge.
-2. Có thể kết nối Redis từ Product Reviews.
-3. Bật endpoint Trace bằng biến môi trường.
-4. Gửi một request UI/gRPC tới `AskProductAIAssistant`.
-5. Gọi `curl` tới cổng 8086 để fetch metadata tương ứng với mã trace trả về.
+## Smoke-test evidence
 
-### 4.2 Bảng phân tích log kiểm thử hệ thống (Smoke-test Timeline)
+Runtime smoke test executed against a rebuilt Product Reviews container:
 
-Bài kiểm tra smoke-test thực tế đã chạy trên container Product Reviews bản rebuild (`aie1-product-reviews:trace-current`) cho câu hỏi: *"Do reviewers say the kit removes dust and fingerprints without leaving residue?"* (product_id=`L9ECAV7KIM`).
+- image: `aie1-product-reviews:trace-current`
+- container: `product-reviews-trace-test-20260724`
+- gRPC: `localhost:8085`
+- trace HTTP: `localhost:8086`
+- Redis-compatible storage: `valkey-cart`
 
-Toàn bộ vòng đời sinh log quan sát được ghi nhận chi tiết như sau:
+Happy-path request:
 
-| Trace ID | Bước (Phase) | Trạng thái | Chi tiết kỹ thuật | Kết quả (Verdict) |
-| :--- | :---: | :---: | :--- | :---: |
-| `6430920b...` | `init` | `OK` | Nhận gRPC Request. OTel sinh trace ID (x-trace-id) | Bắt đầu xử lý |
-| `6430920b...` | `candidate` | `OK` | Gọi `amazon.nova-lite-v1:0` qua Bedrock | Tiêu thụ **1290 tokens** |
-| `6430920b...` | `judge` | `OK` | Gọi `amazon.nova-micro-v1:0` qua Bedrock | Tiêu thụ **1970 tokens** |
-| `6430920b...` | `guardrails` | `OK` | Gate: `runtime_fidelity_gate = approved` | **Grounded Answer** |
-| `6430920b...` | `persist` | `OK` | Ghi siêu dữ liệu hộp đen vào Redis | Lưu vết thành công |
+```text
+product_id=L9ECAV7KIM
+question=Do reviewers say the kit removes dust and fingerprints without leaving residue?
+x-trace-id=6430920be99810c6d6255d620292a695
+```
 
-**Smoke-test cho kịch bản Cache-hit (Hỏi lại cùng câu hỏi trên):**
+Persisted trace showed:
 
-| Trace ID | Bước (Phase) | Trạng thái | Chi tiết kỹ thuật | Kết quả (Verdict) |
-| :--- | :---: | :---: | :--- | :---: |
-| `4e4cd351...` | `init` | `OK` | Nhận gRPC Request. OTel sinh trace ID mới | Bắt đầu xử lý |
-| `4e4cd351...` | `cache` | `HIT` | Phát hiện câu hỏi trùng khớp trong Redis Cache | Bypass LLM |
-| `4e4cd351...` | `persist` | `OK` | Lưu vết trace trỏ ngược về `source_trace_id=6430920b...` | Lưu vết thành công |
+- `trace_id_source=otel`
+- `candidate.provider=bedrock`
+- `candidate.model=amazon.nova-lite-v1:0`
+- `candidate.total_usage.total_tokens=1290`
+- `judge.provider=bedrock`
+- `judge.model=amazon.nova-micro-v1:0`
+- `judge.status=approved`
+- `judge.total_usage.total_tokens=1970`
+- `guardrails.runtime_fidelity_gate=approved`
+- `response_class=grounded_answer`
+
+Cache-hit smoke used a repeated request and produced:
+
+- `trace_id=4e4cd351aac5c72c99844d70dc711f5b`
+- `cache.hit=true`
+- `cache.source_trace_id=6430920be99810c6d6255d620292a695`
+
+Trace endpoint auth smoke:
+
+- Fetch with `x-trace-token` returned HTTP 200 and trace JSON.
+- Fetch without token returned HTTP 401.
+
+HTTP replay/fetch smoke for AI-123 was executed against the rebuilt container
+on July 27, 2026 with Redis fallback override enabled to avoid requiring local
+AWS credentials:
+
+- `POST /replay` accepted `{question, product_id, user_id, session_id}`.
+- Response shape matched the contract:
+
+  ```json
+  {
+    "response": "The AI is busy right now. Please try again later.",
+    "cache": "miss",
+    "trace_id": "2c13c783181b2e766ecd6c74b584a0bd"
+  }
+  ```
+
+- `GET /trace/2c13c783181b2e766ecd6c74b584a0bd` returned HTTP 200 and raw JSON
+  trace metadata from Redis.
+- Redis contained both keys for the same trace:
+  `trace:2c13c783181b2e766ecd6c74b584a0bd` and
+  `product_reviews:llm_trace:2c13c783181b2e766ecd6c74b584a0bd`.
+- `GET /trace/not-found-123456` returned HTTP 404.
+- Fetch without `x-trace-token` returned HTTP 401.
+
+## Smoke-test procedure
+
+A complete runtime smoke test requires:
+
+1. Product Reviews service running with Bedrock candidate/judge config.
+2. Redis reachable from Product Reviews.
+3. Trace endpoint enabled:
+
+   ```powershell
+   $env:PRODUCT_REVIEWS_TRACE_HTTP_PORT="8086"
+   $env:PRODUCT_REVIEWS_TRACE_HTTP_TOKEN="<internal-token>"
+   ```
+
+4. One UI/gRPC request to `AskProductAIAssistant`.
+5. Fetch by returned `x-trace-id`:
+
+   ```powershell
+   curl.exe -H "x-trace-token: <internal-token>" http://localhost:8086/trace/<trace-id>
+   ```
+
+The expected trace should show final `response_class`, `outcome`,
+candidate/judge model metadata, optional token usage, cache status and
+`runtime_fidelity_gate`.

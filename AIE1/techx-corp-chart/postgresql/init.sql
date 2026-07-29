@@ -53,20 +53,11 @@ CREATE TABLE reviews.productreviews (
     score NUMERIC(2,1) NOT NULL
 );
 
-CREATE TABLE reviews.product_summaries (
-    product_id VARCHAR(50) PRIMARY KEY,
-    summary_text TEXT NOT NULL,
-    rating_distribution TEXT,
-    review_version VARCHAR(100),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
 -- Product Review Service: create index for product_id lookups
 CREATE INDEX product_id_index ON reviews.productreviews (product_id);
 
 -- Product Review Service: grant permission to schema
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA reviews TO otelu;
-
+GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA reviews TO otelu;
 
 -- Product Review Service:  add product review data
 INSERT INTO reviews.productreviews (product_id, username, description, score)

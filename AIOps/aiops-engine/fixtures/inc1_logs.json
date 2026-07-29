@@ -1,0 +1,402 @@
+[
+  {
+    "body": "INFO: [RequestID: req-666891] HTTP GET /products/details success. Processed in 34ms.",
+    "timestamp": 1783930656827
+  },
+  {
+    "body": "INFO: [RequestID: req-370679] HTTP GET /products/details success. Processed in 41ms.",
+    "timestamp": 1783930647827
+  },
+  {
+    "body": "ERROR: [DB_Error_ID: err-556890] Failed to acquire database connection slot. Connection pool exhausted (active slots: 103/100).",
+    "timestamp": 1783930764827
+  },
+  {
+    "body": "ERROR: [DB_Error_ID: err-243910] Failed to acquire database connection slot. Connection pool exhausted (active slots: 99/100).",
+    "timestamp": 1783930731827
+  },
+  {
+    "body": "ERROR: [DB_Error_ID: err-527487] Failed to acquire database connection slot. Connection pool exhausted (active slots: 103/100).",
+    "timestamp": 1783930722827
+  },
+  {
+    "body": "INFO: [RequestID: req-680461] HTTP GET /products/details success. Processed in 17ms.",
+    "timestamp": 1783930551827
+  },
+  {
+    "body": "INFO: [RequestID: req-610828] HTTP GET /products/details success. Processed in 21ms.",
+    "timestamp": 1783930620827
+  },
+  {
+    "body": "INFO: [RequestID: req-947630] HTTP GET /products/details success. Processed in 44ms.",
+    "timestamp": 1783930527827
+  },
+  {
+    "body": "INFO: [RequestID: req-937972] HTTP GET /products/details success. Processed in 42ms.",
+    "timestamp": 1783930611827
+  },
+  {
+    "body": "INFO: [RequestID: req-591613] HTTP GET /products/details success. Processed in 6ms.",
+    "timestamp": 1783930605827
+  },
+  {
+    "body": "INFO: [RequestID: req-854147] HTTP GET /products/details success. Processed in 39ms.",
+    "timestamp": 1783930554827
+  },
+  {
+    "body": "INFO: [RequestID: req-569438] HTTP GET /products/details success. Processed in 29ms.",
+    "timestamp": 1783930566827
+  },
+  {
+    "body": "INFO: [RequestID: req-886350] HTTP GET /products/details success. Processed in 34ms.",
+    "timestamp": 1783930587827
+  },
+  {
+    "body": "INFO: [RequestID: req-830478] HTTP GET /products/details success. Processed in 39ms.",
+    "timestamp": 1783930536827
+  },
+  {
+    "body": "INFO: [RequestID: req-567387] HTTP GET /products/details success. Processed in 14ms.",
+    "timestamp": 1783930617827
+  },
+  {
+    "body": "ERROR: [DB_Error_ID: err-446829] Failed to acquire database connection slot. Connection pool exhausted (active slots: 105/100).",
+    "timestamp": 1783930749827
+  },
+  {
+    "body": "ERROR: [DB_Error_ID: err-313693] Failed to acquire database connection slot. Connection pool exhausted (active slots: 92/100).",
+    "timestamp": 1783930725827
+  },
+  {
+    "body": "INFO: [RequestID: req-695538] HTTP GET /products/details success. Processed in 22ms.",
+    "timestamp": 1783930509827
+  },
+  {
+    "body": "INFO: [RequestID: req-184444] HTTP GET /products/details success. Processed in 22ms.",
+    "timestamp": 1783930578827
+  },
+  {
+    "body": "INFO: [RequestID: req-448944] HTTP GET /products/details success. Processed in 27ms.",
+    "timestamp": 1783930572827
+  },
+  {
+    "body": "INFO: [RequestID: req-248953] HTTP GET /products/details success. Processed in 8ms.",
+    "timestamp": 1783930680827
+  },
+  {
+    "body": "ERROR: [DB_Error_ID: err-620541] Failed to acquire database connection slot. Connection pool exhausted (active slots: 92/100).",
+    "timestamp": 1783930746827
+  },
+  {
+    "body": "INFO: [RequestID: req-612597] HTTP GET /products/details success. Processed in 12ms.",
+    "timestamp": 1783930692827
+  },
+  {
+    "body": "INFO: [RequestID: req-731884] HTTP GET /products/details success. Processed in 41ms.",
+    "timestamp": 1783930623827
+  },
+  {
+    "body": "INFO: [RequestID: req-751451] HTTP GET /products/details success. Processed in 29ms.",
+    "timestamp": 1783930629827
+  },
+  {
+    "body": "ERROR: [DB_Error_ID: err-245391] Failed to acquire database connection slot. Connection pool exhausted (active slots: 94/100).",
+    "timestamp": 1783930755827
+  },
+  {
+    "body": "INFO: [RequestID: req-714209] HTTP GET /products/details success. Processed in 24ms.",
+    "timestamp": 1783930671827
+  },
+  {
+    "body": "INFO: [RequestID: req-450433] HTTP GET /products/details success. Processed in 31ms.",
+    "timestamp": 1783930560827
+  },
+  {
+    "body": "INFO: [RequestID: req-663559] HTTP GET /products/details success. Processed in 40ms.",
+    "timestamp": 1783930650827
+  },
+  {
+    "body": "INFO: [RequestID: req-829339] HTTP GET /products/details success. Processed in 39ms.",
+    "timestamp": 1783930674827
+  },
+  {
+    "body": "INFO: [RequestID: req-936695] HTTP GET /products/details success. Processed in 16ms.",
+    "timestamp": 1783930500827
+  },
+  {
+    "body": "INFO: [RequestID: req-106933] HTTP GET /products/details success. Processed in 35ms.",
+    "timestamp": 1783930548827
+  },
+  {
+    "body": "INFO: [RequestID: req-502507] HTTP GET /products/details success. Processed in 34ms.",
+    "timestamp": 1783930683827
+  },
+  {
+    "body": "INFO: [RequestID: req-612651] HTTP GET /products/details success. Processed in 13ms.",
+    "timestamp": 1783930701827
+  },
+  {
+    "body": "INFO: [RequestID: req-876545] HTTP GET /products/details success. Processed in 27ms.",
+    "timestamp": 1783930539827
+  },
+  {
+    "body": "ERROR: [DB_Error_ID: err-435816] Failed to acquire database connection slot. Connection pool exhausted (active slots: 99/100).",
+    "timestamp": 1783930773827
+  },
+  {
+    "body": "INFO: [RequestID: req-623441] HTTP GET /products/details success. Processed in 6ms.",
+    "timestamp": 1783930518827
+  },
+  {
+    "body": "ERROR: [DB_Error_ID: err-677375] Failed to acquire database connection slot. Connection pool exhausted (active slots: 92/100).",
+    "timestamp": 1783930761827
+  },
+  {
+    "body": "INFO: [RequestID: req-232355] HTTP GET /products/details success. Processed in 38ms.",
+    "timestamp": 1783930710827
+  },
+  {
+    "body": "INFO: [RequestID: req-750473] HTTP GET /products/details success. Processed in 30ms.",
+    "timestamp": 1783930491827
+  },
+  {
+    "body": "INFO: [RequestID: req-681818] HTTP GET /products/details success. Processed in 43ms.",
+    "timestamp": 1783930515827
+  },
+  {
+    "body": "ERROR: [DB_Error_ID: err-482491] Failed to acquire database connection slot. Connection pool exhausted (active slots: 97/100).",
+    "timestamp": 1783930758827
+  },
+  {
+    "body": "INFO: [RequestID: req-320282] HTTP GET /products/details success. Processed in 34ms.",
+    "timestamp": 1783930602827
+  },
+  {
+    "body": "ERROR: [DB_Error_ID: err-373956] Failed to acquire database connection slot. Connection pool exhausted (active slots: 103/100).",
+    "timestamp": 1783930719827
+  },
+  {
+    "body": "INFO: [RequestID: req-466884] HTTP GET /products/details success. Processed in 29ms.",
+    "timestamp": 1783930599827
+  },
+  {
+    "body": "INFO: [RequestID: req-488051] HTTP GET /products/details success. Processed in 37ms.",
+    "timestamp": 1783930653827
+  },
+  {
+    "body": "INFO: [RequestID: req-484910] HTTP GET /products/details success. Processed in 5ms.",
+    "timestamp": 1783930659827
+  },
+  {
+    "body": "INFO: [RequestID: req-767178] HTTP GET /products/details success. Processed in 37ms.",
+    "timestamp": 1783930689827
+  },
+  {
+    "body": "INFO: [RequestID: req-767050] HTTP GET /products/details success. Processed in 38ms.",
+    "timestamp": 1783930557827
+  },
+  {
+    "body": "ERROR: [DB_Error_ID: err-600772] Failed to acquire database connection slot. Connection pool exhausted (active slots: 90/100).",
+    "timestamp": 1783930716827
+  },
+  {
+    "body": "INFO: [RequestID: req-149473] HTTP GET /products/details success. Processed in 39ms.",
+    "timestamp": 1783930677827
+  },
+  {
+    "body": "INFO: [RequestID: req-312144] HTTP GET /products/details success. Processed in 29ms.",
+    "timestamp": 1783930569827
+  },
+  {
+    "body": "INFO: [RequestID: req-681620] HTTP GET /products/details success. Processed in 35ms.",
+    "timestamp": 1783930632827
+  },
+  {
+    "body": "INFO: [RequestID: req-408701] HTTP GET /products/details success. Processed in 25ms.",
+    "timestamp": 1783930512827
+  },
+  {
+    "body": "INFO: [RequestID: req-388985] HTTP GET /products/details success. Processed in 23ms.",
+    "timestamp": 1783930641827
+  },
+  {
+    "body": "INFO: [RequestID: req-744863] HTTP GET /products/details success. Processed in 40ms.",
+    "timestamp": 1783930638827
+  },
+  {
+    "body": "INFO: [RequestID: req-556329] HTTP GET /products/details success. Processed in 23ms.",
+    "timestamp": 1783930704827
+  },
+  {
+    "body": "INFO: [RequestID: req-559282] HTTP GET /products/details success. Processed in 38ms.",
+    "timestamp": 1783930530827
+  },
+  {
+    "body": "INFO: [RequestID: req-319007] HTTP GET /products/details success. Processed in 39ms.",
+    "timestamp": 1783930707827
+  },
+  {
+    "body": "INFO: [RequestID: req-367583] HTTP GET /products/details success. Processed in 34ms.",
+    "timestamp": 1783930575827
+  },
+  {
+    "body": "INFO: [RequestID: req-837135] HTTP GET /products/details success. Processed in 39ms.",
+    "timestamp": 1783930614827
+  },
+  {
+    "body": "INFO: [RequestID: req-202293] HTTP GET /products/details success. Processed in 30ms.",
+    "timestamp": 1783930608827
+  },
+  {
+    "body": "INFO: [RequestID: req-176807] HTTP GET /products/details success. Processed in 45ms.",
+    "timestamp": 1783930590827
+  },
+  {
+    "body": "INFO: [RequestID: req-630658] HTTP GET /products/details success. Processed in 27ms.",
+    "timestamp": 1783930563827
+  },
+  {
+    "body": "INFO: [RequestID: req-814982] HTTP GET /products/details success. Processed in 8ms.",
+    "timestamp": 1783930686827
+  },
+  {
+    "body": "ERROR: [DB_Error_ID: err-577650] Failed to acquire database connection slot. Connection pool exhausted (active slots: 99/100).",
+    "timestamp": 1783930752827
+  },
+  {
+    "body": "ERROR: [DB_Error_ID: err-787022] Failed to acquire database connection slot. Connection pool exhausted (active slots: 103/100).",
+    "timestamp": 1783930740827
+  },
+  {
+    "body": "INFO: [RequestID: req-149700] HTTP GET /products/details success. Processed in 32ms.",
+    "timestamp": 1783930533827
+  },
+  {
+    "body": "INFO: [RequestID: req-251584] HTTP GET /products/details success. Processed in 24ms.",
+    "timestamp": 1783930542827
+  },
+  {
+    "body": "INFO: [RequestID: req-723863] HTTP GET /products/details success. Processed in 38ms.",
+    "timestamp": 1783930482827
+  },
+  {
+    "body": "ERROR: [DB_Error_ID: err-635076] Failed to acquire database connection slot. Connection pool exhausted (active slots: 101/100).",
+    "timestamp": 1783930734827
+  },
+  {
+    "body": "INFO: [RequestID: req-691471] HTTP GET /products/details success. Processed in 17ms.",
+    "timestamp": 1783930521827
+  },
+  {
+    "body": "INFO: [RequestID: req-895715] HTTP GET /products/details success. Processed in 40ms.",
+    "timestamp": 1783930593827
+  },
+  {
+    "body": "INFO: [RequestID: req-276804] HTTP GET /products/details success. Processed in 10ms.",
+    "timestamp": 1783930584827
+  },
+  {
+    "body": "ERROR: [DB_Error_ID: err-407570] Failed to acquire database connection slot. Connection pool exhausted (active slots: 90/100).",
+    "timestamp": 1783930767827
+  },
+  {
+    "body": "INFO: [RequestID: req-790381] HTTP GET /products/details success. Processed in 12ms.",
+    "timestamp": 1783930524827
+  },
+  {
+    "body": "INFO: [RequestID: req-770876] HTTP GET /products/details success. Processed in 16ms.",
+    "timestamp": 1783930668827
+  },
+  {
+    "body": "INFO: [RequestID: req-698129] HTTP GET /products/details success. Processed in 41ms.",
+    "timestamp": 1783930503827
+  },
+  {
+    "body": "INFO: [RequestID: req-774963] HTTP GET /products/details success. Processed in 15ms.",
+    "timestamp": 1783930665827
+  },
+  {
+    "body": "INFO: [RequestID: req-894319] HTTP GET /products/details success. Processed in 17ms.",
+    "timestamp": 1783930488827
+  },
+  {
+    "body": "INFO: [RequestID: req-888321] HTTP GET /products/details success. Processed in 31ms.",
+    "timestamp": 1783930713827
+  },
+  {
+    "body": "INFO: [RequestID: req-207801] HTTP GET /products/details success. Processed in 26ms.",
+    "timestamp": 1783930494827
+  },
+  {
+    "body": "ERROR: [DB_Error_ID: err-704812] Failed to acquire database connection slot. Connection pool exhausted (active slots: 97/100).",
+    "timestamp": 1783930743827
+  },
+  {
+    "body": "INFO: [RequestID: req-613905] HTTP GET /products/details success. Processed in 5ms.",
+    "timestamp": 1783930695827
+  },
+  {
+    "body": "INFO: [RequestID: req-794028] HTTP GET /products/details success. Processed in 9ms.",
+    "timestamp": 1783930698827
+  },
+  {
+    "body": "INFO: [RequestID: req-228054] HTTP GET /products/details success. Processed in 44ms.",
+    "timestamp": 1783930662827
+  },
+  {
+    "body": "INFO: [RequestID: req-822051] HTTP GET /products/details success. Processed in 11ms.",
+    "timestamp": 1783930479827
+  },
+  {
+    "body": "INFO: [RequestID: req-691039] HTTP GET /products/details success. Processed in 21ms.",
+    "timestamp": 1783930497827
+  },
+  {
+    "body": "INFO: [RequestID: req-280368] HTTP GET /products/details success. Processed in 18ms.",
+    "timestamp": 1783930635827
+  },
+  {
+    "body": "ERROR: [DB_Error_ID: err-237644] Failed to acquire database connection slot. Connection pool exhausted (active slots: 95/100).",
+    "timestamp": 1783930770827
+  },
+  {
+    "body": "INFO: [RequestID: req-820871] HTTP GET /products/details success. Processed in 7ms.",
+    "timestamp": 1783930581827
+  },
+  {
+    "body": "INFO: [RequestID: req-760118] HTTP GET /products/details success. Processed in 44ms.",
+    "timestamp": 1783930485827
+  },
+  {
+    "body": "ERROR: [DB_Error_ID: err-881705] Failed to acquire database connection slot. Connection pool exhausted (active slots: 104/100).",
+    "timestamp": 1783930737827
+  },
+  {
+    "body": "INFO: [RequestID: req-783351] HTTP GET /products/details success. Processed in 23ms.",
+    "timestamp": 1783930626827
+  },
+  {
+    "body": "INFO: [RequestID: req-287825] HTTP GET /products/details success. Processed in 16ms.",
+    "timestamp": 1783930506827
+  },
+  {
+    "body": "ERROR: [DB_Error_ID: err-235997] Failed to acquire database connection slot. Connection pool exhausted (active slots: 103/100).",
+    "timestamp": 1783930728827
+  },
+  {
+    "body": "INFO: [RequestID: req-130690] HTTP GET /products/details success. Processed in 7ms.",
+    "timestamp": 1783930545827
+  },
+  {
+    "body": "INFO: [RequestID: req-675868] HTTP GET /products/details success. Processed in 42ms.",
+    "timestamp": 1783930596827
+  },
+  {
+    "body": "INFO: [RequestID: req-810428] HTTP GET /products/details success. Processed in 21ms.",
+    "timestamp": 1783930476827
+  },
+  {
+    "body": "INFO: [RequestID: req-923289] HTTP GET /products/details success. Processed in 21ms.",
+    "timestamp": 1783930644827
+  }
+]

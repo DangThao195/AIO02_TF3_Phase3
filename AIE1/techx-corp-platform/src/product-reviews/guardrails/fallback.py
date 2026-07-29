@@ -149,23 +149,13 @@ _retry_decorator = _build_retry_decorator()
 
 # ─── Công khai ────────────────────────────────────────────────────────────────
 
-def handle_exception(e: Exception, product_id: str = None) -> str:
+def handle_exception(e: Exception) -> str:
     """
-    Fallback cuối: Ghi log và trả bản tóm tắt tĩnh (Tầng 2) hoặc thông báo tĩnh (Tầng 3).
+    Fallback cuối: ghi log và trả thông báo tĩnh thân thiện.
     Được gọi sau khi toàn bộ retry đều thất bại.
     """
     logger.error("[FALLBACK] Triggered after retries exhausted: %s", e, exc_info=True)
-    if product_id:
-        try:
-            from database import fetch_product_summary_from_db
-            summary_data = fetch_product_summary_from_db(product_id)
-            if summary_data and summary_data.get("summary_text"):
-                logger.info("[FALLBACK] Tier 2 triggered: Returning PostgreSQL static summary for product_id: %s", product_id)
-                return summary_data["summary_text"]
-        except Exception as db_err:
-            logger.warning("[FALLBACK] Tier 2 DB fetch failed for %s: %s", product_id, db_err)
     return "The AI is busy right now. Please try again later."
-
 
 
 def with_fallback(fn):

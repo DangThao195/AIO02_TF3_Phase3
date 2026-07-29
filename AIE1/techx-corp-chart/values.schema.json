@@ -26,9 +26,6 @@
         },
         "name": {
           "type": "string"
-        },
-        "automountServiceAccountToken": {
-          "type": "boolean"
         }
       },
       "required": [
@@ -228,9 +225,6 @@
         "podSecurityContext": {
           "type": "object"
         },
-        "automountServiceAccountToken": {
-          "type": "boolean"
-        },
         "ingress": {
           "$ref": "#/definitions/Ingress"
         },
@@ -320,9 +314,6 @@
         },
         "podSecurityContext": {
           "type": "object"
-        },
-        "automountServiceAccountToken": {
-          "type": "boolean"
         }
       },
       "required": [
