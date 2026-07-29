@@ -12,7 +12,7 @@ Tài liệu này tổng hợp toàn bộ bằng chứng nghiệm thu, kết qu�
 
 ## 🔗 2. Các Commit & PR Liên Quan
 * **Nhánh làm việc chính thức:** `mandate23`
-* **Commit Tích Hợp GenAI Caching, Memory & User Isolation:** [`src/memory/genai_cache.py`](../../src/memory/genai_cache.py), [`src/memory/longterm_memory.py`](../../src/memory/longterm_memory.py), [`src/memory/store.py`](../../src/memory/store.py)
+* **Commit Tích Hợp GenAI Caching, Memory & User Isolation:** [62ae795](https://github.com/DangThao195/AIO02_TF3_Phase3/commit/62ae795ec5c1f8ca8794665bc6d8741f8438b375)
 * **ADR Ký Tên Duyệt:** [ADR 5: GenAI Response Cache & Long-term Memory Architecture](../reports/sub-ADR5-MANDATE-23-GENAI-CACHE-MEMORY.md) (Tác giả: Bùi Lê Tuấn)
 
 ---
