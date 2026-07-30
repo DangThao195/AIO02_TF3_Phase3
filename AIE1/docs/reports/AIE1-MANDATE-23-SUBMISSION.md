@@ -27,19 +27,16 @@ make eval-mandate23
 ```
 hoặc chạy trực tiếp script benchmark:
 ```bash
-python repro/benchmark.py
+python repro/eval_support/benchmark.py
 ```
 
-### B. Harness Kiểm Tra Trailing Metadata & User Boundary Isolation
+### B. Test Suite Kiểm Tra Trailing Metadata & User Boundary Isolation
 Để kiểm chứng các tính năng cờ cache metadata và cách ly theo người dùng:
 
-1.  **Harness kiểm tra gRPC Trailing Metadata (`cache: hit` / `cache: miss`):**
+1. **Test suite kiểm tra gRPC Trailing Metadata (`cache: hit` / `cache: miss`) & User Boundary Isolation:**
     ```bash
-    python repro/test_grpc_cache_metadata.py
-    ```
-2.  **Harness kiểm tra cách ly Cache theo `user_id` (`x-user-id` header):**
-    ```bash
-    python repro/test_user_isolation.py
+    python -m unittest techx-corp-platform/src/product-reviews/test_runtime_guardrails.py
+    python -m unittest techx-corp-platform/src/product-reviews/test_fallback_tier2.py
     ```
 
 ---
@@ -55,9 +52,9 @@ python repro/benchmark.py
 *   **Logic gRPC Server, Trailing Metadata (`cache: hit|miss`) & User Boundary:** [product_reviews_server.py](../../techx-corp-platform/src/product-reviews/product_reviews_server.py)
 
 ### C. Kịch bản Thử nghiệm, Benchmark & Dataset Repro
-*   **Script Benchmark Tự Động Đo Latency, Token & Cost:** [repro/benchmark.py](../../repro/benchmark.py)
-*   **Harness Kiểm Tra gRPC Trailing Metadata (`cache: hit` / `cache: miss`):** [repro/test_grpc_cache_metadata.py](../../repro/test_grpc_cache_metadata.py)
-*   **Harness Kiểm Tra Cách Ly Cache Theo User ID (`x-user-id`):** [repro/test_user_isolation.py](../../repro/test_user_isolation.py)
+*   **Script Benchmark Tự Động Đo Latency, Token & Cost:** [repro/eval_support/benchmark.py](../../repro/eval_support/benchmark.py)
+*   **Test Suite Kiểm Tra Guardrails & Trailing Metadata:** [test_runtime_guardrails.py](../../techx-corp-platform/src/product-reviews/test_runtime_guardrails.py)
+*   **Test Suite Kiểm Tra Fallback Tier 2 & Invalidation:** [test_fallback_tier2.py](../../techx-corp-platform/src/product-reviews/test_fallback_tier2.py)
 *   **Bộ dữ liệu kiểm thử có yêu cầu lặp:** [repro/datasets/dataset.jsonl](../../repro/datasets/dataset.jsonl)
 
 ### D. Tệp Data Artifacts & Báo Cáo Đo Lường Chi Tiết Đã Commit
