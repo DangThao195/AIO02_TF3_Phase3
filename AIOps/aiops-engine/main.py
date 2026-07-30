@@ -23,18 +23,7 @@ logger = logging.getLogger("AIOpsEngine.Main")
 
 app = FastAPI(title="TF3 AIOps CMDR Engine", version="1.0")
 
-# Cấu hình CORS để web control panel có thể fetch API
-from fastapi.middleware.cors import CORSMiddleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 # Khởi tạo các module
-from drift_detector import DriftDetector
 detector = AnomalyDetector()
 rca_engine = RCAEngine()
 evidence_collector = EvidenceCollector()
@@ -42,7 +31,6 @@ diagnostician = LLMDiagnostician()
 handler = RemediationHandler()
 notifier = SlackNotifier()
 correlator = AlertCorrelator(window_seconds=600)  # 10 phút — đủ bao phủ cascade failure chậm
-drift_detector = DriftDetector()
 
 # Bộ đếm số lần chạy hành động chống chạy lặp vô hạn (C6 Invariant 4)
 action_counters = {}  # {incident_id: count}
@@ -1394,45 +1382,13 @@ async def get_remediation_mode():
 from fastapi import HTTPException
 
 @app.post("/simulate/inject")
-async def simulate_inject(scenario: str, background_tasks: BackgroundTasks):
+async def simulate_inject(scenario: str):
     if scenario not in ["stable", "inc1", "inc2", "inc3", "inc4", "inc5", "inc6", "inc7", "inc8", "incnew", "ml_proactive"]:
         raise HTTPException(status_code=400, detail="Invalid scenario")
-    
-    # Reset active incidents when injecting new scenario to avoid throttling or skipped runs
-    active_incidents.clear()
-    
     simulation_state["scenario"] = scenario
     simulation_state["start_time"] = time.time()
     simulation_state["remediated"] = False
     logger.info(f"[SIMULATION] Injected scenario: {scenario}")
-    
-    if scenario != "stable":
-        # Map scenario to culprit service
-        culprit_map = {
-            "inc1": "product-catalog",
-            "inc2": "cart",
-            "inc3": "payment",
-            "inc4": "product-reviews",
-            "inc5": "shipping",
-            "inc6": "recommendation",
-            "inc7": "fraud-detection",
-            "inc8": "frontend",
-            "incnew": "product-catalog",
-            "ml_proactive": "product-reviews"
-        }
-        culprit = culprit_map.get(scenario, "frontend")
-        incident_id = f"INC-SIM-{int(time.time())}"
-        trace_id = f"mock-{scenario}"
-        
-        logger.info(f"[SIMULATION] Automatically triggering background detection/remediation for {incident_id} (culprit: {culprit})")
-        background_tasks.add_task(
-            process_incident_background,
-            incident_id,
-            culprit,
-            trace_id,
-            time.time()
-        )
-        
     return {"status": "injected", "scenario": scenario}
 
 @app.post("/remediation/approve")
@@ -1463,7 +1419,7 @@ async def simulate_state_endpoint():
     return simulation_state
 
 
-from typing import List, Dict
+from typing import List
 
 class MetricPoint(BaseModel):
     timestamp: str
@@ -2312,29 +2268,6 @@ async def get_audit_logs(limit: int = 50):
         "total": len(logs),
         "audit_logs": logs
     }
-
-class DriftPayload(BaseModel):
-    intents: Dict[str, int] = {}
-    embeddings: List[List[float]] = []
-    abstention_rate: float = 0.0
-    fallback_rate: float = 0.0
-    judge_score: float = 4.2
-
-@app.post("/simulate/drift")
-async def simulate_drift(payload: DriftPayload):
-    """
-    [Mandate #27] Nhận dữ liệu kiểm thử về mô hình và phân phối để đánh giá Drift.
-    """
-    try:
-        current_data = payload.model_dump()
-        result = drift_detector.detect_drift(current_data)
-        return {
-            "status": "success",
-            "evaluated_at": time.time(),
-            "drift_result": result
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error evaluating drift: {str(e)}")
 
 
 

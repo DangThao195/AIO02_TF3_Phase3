@@ -1,15 +1,13 @@
 import requests
 import json
 import logging
-from config import SLACK_WEBHOOK_URL, SLACK_BOT_TOKEN, SLACK_CHANNEL_ID
+from config import SLACK_WEBHOOK_URL
 
 logger = logging.getLogger("AIOpsEngine.SlackNotifier")
 
 class SlackNotifier:
     def __init__(self):
         self.webhook_url = SLACK_WEBHOOK_URL
-        self.bot_token = SLACK_BOT_TOKEN
-        self.channel_id = SLACK_CHANNEL_ID
 
     def send_incident_notification(self, incident_id: str, diagnosis: dict) -> bool:
         analysis_val = diagnosis.get('analysis')
@@ -170,38 +168,16 @@ class SlackNotifier:
             }
 
         try:
-            if self.bot_token and self.channel_id:
-                post_data = {
-                    "channel": self.channel_id,
-                    "blocks": payload["blocks"],
-                    "text": f"🚨 AIOps Incident Alert: {incident_id}"
-                }
-                response = requests.post(
-                    "https://slack.com/api/chat.postMessage",
-                    headers={
-                        "Authorization": f"Bearer {self.bot_token}",
-                        "Content-Type": "application/json"
-                    },
-                    json=post_data,
-                    timeout=10
-                )
-                res_json = response.json()
-                if res_json.get("ok"):
-                    logger.info("Sent interactive Slack card via Bot Token successfully.")
-                    return True
-                logger.error(f"Failed to send Slack card via Bot Token: {res_json}")
-
-            if self.webhook_url and "T00000000" not in self.webhook_url:
-                response = requests.post(
-                    self.webhook_url,
-                    headers={"Content-Type": "application/json"},
-                    data=json.dumps(payload),
-                    timeout=10
-                )
-                if response.status_code == 200:
-                    logger.info("Sent interactive Slack card via Webhook successfully.")
-                    return True
-                logger.error(f"Failed to send Slack card: {response.status_code} - {response.text}")
+            response = requests.post(
+                self.webhook_url,
+                headers={"Content-Type": "application/json"},
+                data=json.dumps(payload),
+                timeout=10
+            )
+            if response.status_code == 200:
+                logger.info("Sent interactive Slack card successfully.")
+                return True
+            logger.error(f"Failed to send Slack card: {response.status_code} - {response.text}")
         except Exception as e:
             logger.error(f"Error sending Slack notification: {str(e)}")
         return False
