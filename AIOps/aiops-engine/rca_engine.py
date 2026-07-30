@@ -105,7 +105,12 @@ class RCAEngine:
                 curr = span_to_parent[curr]
             return depth
 
+        EXCLUDED_CLIENT_SERVICES = {"load-generator", "locust", "jaeger", "prometheus", "grafana"}
         for span in error_spans:
+            pid = span["processID"]
+            svc = processes.get(pid, {}).get("serviceName", "unknown")
+            if svc in EXCLUDED_CLIENT_SERVICES:
+                continue
             sid = span["spanID"]
             depth = get_span_depth(sid)
             if depth > max_depth:
@@ -118,7 +123,8 @@ class RCAEngine:
             logger.info(f"RCA localized culprit service: {culprit_service} (Span ID: {deepest_error_span['spanID']}, Depth: {max_depth})")
             return culprit_service
 
-        return "unknown-service"
+        # Fallback nếu tất cả error spans thuộc load-generator, trả về frontend
+        return "frontend"
 
     def correlate_change_log(self, culprit_service: str, alert_time: float, change_logs: list) -> dict:
         """
