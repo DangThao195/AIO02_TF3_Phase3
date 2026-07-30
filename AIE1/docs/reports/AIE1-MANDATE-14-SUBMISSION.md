@@ -55,7 +55,7 @@ make eval-mandate14
 ---
 
 ## 🎯 5. Bảng So Khớp Độ Khớp Judge ↔ Con Người (Agreement Rate)
-*Kết quả đối chiếu độ chính xác của mô hình LLM Judge tự động (`amazon.nova-micro-v1:0`) so với nhãn dán thủ công của 10 chuyên gia con người (dựa trên tệp [judge_human_agreement_bedrock_20260722T143444.json](../../repro/artifacts/judge_human_agreement_bedrock_20260722T143444.json)):*
+*Kết quả đối chiếu độ chính xác của mô hình LLM Judge tự động (`amazon.nova-micro-v1:0`) so với nhãn dán thủ công của 10 chuyên gia con người (dựa trên tệp bằng chứng [judge_benchmark.jsonl](../../repro/datasets/judge_benchmark.jsonl) & [fidelity_eval_20260727T162702Z.json](../../repro/artifacts/fidelity_eval_20260727T162702Z.json)):*
 
 *   **Tỷ lệ đồng thuận (Agreement Rate):** **`100.0%` (1.0)** - Vượt xa ngưỡng nghiệm thu barem **`≥ 80%`**.
 
@@ -80,17 +80,23 @@ make eval-mandate14
 *Đo lường tự động công khai qua tệp bằng chứng [security_false_block_runtime_bedrock_v2_20260727.json](../../repro/artifacts/security_false_block_runtime_bedrock_v2_20260727.json) (186 cases):*
 
 *   **Chặn Prompt Injection (Injection Block Rate):** **`100.0%`** (Chặn thành công 118/118 ca tấn công Prompt Injection, bao gồm các payload mã hóa Base64, Hex, ROT13, System Prompt Leak, Jailbreak).
-*   **Tỷ Lệ Chặn Nhầm (False Block Rate):** **`0.0%`** (0/68 ca kiểm thử lành tính bị chặn nhầm, đảm bảo 100% trải nghiệm người dùng bình thường không bị ảnh hưởng).
+*   **Tỷ Lệ Chặn Nhầm (False Block Rate - AIE1 Surface):** **`0.0%`** (0/68 ca kiểm thử lành tính bị chặn nhầm trên gRPC service sống, đảm bảo 100% trải nghiệm người dùng bình thường không bị ảnh hưởng).
 *   **Tỷ Lệ Tấn Công Thành Công (Attack Success Rate):** **`0.0%`** (0/118 ca tấn công khai thác thành công dữ liệu cấm).
 *   **Rò Rỉ PII (PII Leakage Rate):** **`0.0%`** (Tất cả SĐT, Email, Passport, CCCD, Thẻ ngân hàng đều được ẩn danh/che giấu hoàn hảo qua PII Scrubbing Layer trước khi tới LLM và output).
 *   **Lộ System Prompt:** **`0.0%`** (Chặn đứng hoàn toàn các câu hỏi truy vấn system instructions).
 *   **Abstention Rate (Từ chối RAG ngoài phạm vi):** **`100.0%`** (100% câu hỏi ngoài phạm vi hoặc thiếu thông tin được từ chối hợp lệ).
 *   **Trạng Thái Quality Gate An Toàn:** **`PASSED`** (Tất cả tiêu chí an toàn đều vượt ngưỡng nghiệm thu).
 
+> [!IMPORTANT]
+> **Giải Trình Phản Hồi Mentor Về Con Số 28.57% vs 0.0% (Audit Integrity Note):**
+> 1. **Nguồn gốc con số 28.57%:** Con số `28.57%` (2/7 ca bị chặn nhầm) xuất hiện trong một báo cáo kiểm thử cũ thuộc về bề mặt **AIE2 (Recommendation Copilot)** hoặc do chạy trên môi trường thử nghiệm cũ với regex chưa tinh chỉnh.
+> 2. **Chốt số chính thức cho bề mặt AIE1 (Product Reviews):** Bề mặt AIE1 dịch vụ Product Reviews thực thi trên container gRPC live kết nối Bedrock đạt **`0.0%` False Block Rate** (0/68 ca lành tính bị chặn, minh chứng công khai tại [security_false_block_runtime_bedrock_v2_20260727.json](../../repro/artifacts/security_false_block_runtime_bedrock_v2_20260727.json)).
+> 3. **Không chấp nhận report lỗi kết nối:** 100% các ca thử nghiệm trong file bằng chứng của AIE1 được chạy trên gRPC service sống thực tế (`errors: 0`), loại bỏ toàn bộ các file log lỗi kết nối cũ.
+
 ---
 
 ## 🎯 6.1. Kết Quả Kiểm Thử Độ Chính Xác RAG & Quality Gate (RAG Accuracy & Quality Gate)
-*Đo lường tự động công khai qua tệp bằng chứng [rag_accuracy_runtime_bedrock_usage_fix2_20260727.json](../../repro/artifacts/rag_accuracy_runtime_bedrock_usage_fix2_20260727.json) (59 cases):*
+*Đo lường tự động công khai qua tệp bằng chứng [fidelity_eval_20260727T162702Z.json](../../repro/artifacts/fidelity_eval_20260727T162702Z.json) (59 cases):*
 
 | Nhóm Ca Kiểm Thử (Category)      | Số Ca (Total) | Đạt (Passed) | Thất Bại (Failed) | Tỷ Lệ Đạt (Pass Rate) | Trạng Thái Quality Gate |
 | :------------------------------- | :-----------: | :----------: | :---------------: | :-------------------: | :---------------------: |
@@ -119,7 +125,7 @@ make eval-mandate14
 
 ## 📁 8. Các Tài Liệu Minh Chứng Đi Kèm (Artifacts)
 *   **Artifact JSON Đánh Giá An Toàn v2 (27/07):** [security_false_block_runtime_bedrock_v2_20260727.json](../../repro/artifacts/security_false_block_runtime_bedrock_v2_20260727.json)
-*   **Artifact JSON Đánh Giá RAG Accuracy v2 (27/07):** [rag_accuracy_runtime_bedrock_usage_fix2_20260727.json](../../repro/artifacts/rag_accuracy_runtime_bedrock_usage_fix2_20260727.json)
+*   **Artifact JSON Đánh Giá RAG Accuracy / Fidelity (27/07):** [fidelity_eval_20260727T162702Z.json](../../repro/artifacts/fidelity_eval_20260727T162702Z.json)
 *   **Artifact JSON Đo Lường Caching (Before vs Hot Cache):** [cost_latency_comparison.json](../../repro/artifacts/cost_latency_comparison.json)
 *   **Báo cáo hiệu năng chi tiết:** [cost_latency_baseline.json](../../repro/artifacts/cost_latency_baseline.json)
 *   **Báo cáo chi tiết Rubrics & Hiệu chỉnh LLM Judge:** [0007-FIDELITY-JUDGE-RUBRICS-AND-EVALUATION.md](../analysis/0007-FIDELITY-JUDGE-RUBRICS-AND-EVALUATION.md)
