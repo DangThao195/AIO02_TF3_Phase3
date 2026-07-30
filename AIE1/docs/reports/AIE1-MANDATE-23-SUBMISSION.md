@@ -96,6 +96,13 @@ python repro/eval_support/benchmark.py
 - **Tạo cột DB `is_safe`:** Đánh dấu trực tiếp trong PostgreSQL (`reviews.productreviews`).
 - **Triệt tiêu CPU Latency:** Luồng đọc chỉ cần `WHERE is_safe = TRUE`, loại bỏ 100% thời gian quét 28+ Regex patterns trên luồng đọc gRPC.
 
+### C. Tầng 3: Kiến Trúc Bộ Nhớ GenAI (GenAI Memory Strategy & Scope Justification)
+- **Bộ nhớ ngắn hạn trong phiên (In-Session Short-Term Memory):** Quản lý cửa sổ ngữ cảnh đa lượt (Context Window Buffer) theo `session_id` lưu tạm tại Redis (`session_memory:{session_id}`, TTL 3600s). Người dùng hỏi $\ge 3$ lượt liên tiếp trên cùng sản phẩm sẽ được tự động duy trì ngữ cảnh (tham chiếu đúng đại từ "Nó", "Sản phẩm này" ở các lượt trước mà không cần nhập lại).
+- **Lập luận Ranh giới Bộ nhớ dài hạn (Cross-Session Long-Term Memory Scope Justification):**
+  1. *Thiết kế cô lập theo từng sản phẩm (Single-Product Isolation Boundary):* Dịch vụ `product-reviews` vận hành theo từng mặt hàng. Khi người dùng mở phiên mới trên sản phẩm khác, hệ thống chủ động reset ngữ cảnh để triệt tiêu 100% rủi ro suy luận nhầm lẫn thuộc tính sản phẩm (Cross-Product Hallucination).
+  2. *Tuân thủ Bảo mật PII:* Không lưu trữ thông tin nhận xét cá nhân lâu dài khi không cần thiết, đảm bảo 100% ranh giới người dùng (User Boundary Isolation).
+- **Tài liệu phân tích kỹ thuật chi tiết:** [Phân Tích Thiết Kế & Lập Luận Kiến Trúc Bộ Nhớ LLM (Document 0009)](../analysis/0009-PRODUCT-REVIEW-LLM-MEMORY-DESIGN.md).
+
 ---
 
 ## 📊 6. Kết Quả Đo Lường Hiệu Năng & Chi Phí (Before vs Cold vs Hot Cache)
@@ -137,3 +144,4 @@ python repro/eval_support/benchmark.py
 ### B. Báo Cáo Phân Tích Kỹ Thuật Chi Tiết (Technical Analysis Docs)
 1.  [Phân Tích Thiết Kế Chi Tiết LLM & Regex Caching 2 Tầng](../analysis/0006-PRODUCT-REVIEW-SERVER-CACHING-DESIGN.md)
 2.  [Phân Tích Điểm Nghẽn Hiệu Năng Dịch Vụ Product Reviews](../analysis/0001-PRODUCT-REVIEWS-BOTTLENECK-ANALYSIS.md)
+3.  [Phân Tích Thiết Kế & Lập Luận Kiến Trúc Bộ Nhớ LLM Memory (Document 0009)](../analysis/0009-PRODUCT-REVIEW-LLM-MEMORY-DESIGN.md)
