@@ -6,7 +6,7 @@ from src.tools.review_tool import get_product_reviews_tool, get_best_reviewed_pr
 from src.tools.recommendation_tool import get_recommendations_tool
 from src.tools.currency_tool import convert_currency_tool
 from src.tools.shipping_tool import get_shipping_quote_tool
-from src.tools.catalog_tool import get_categories, get_all_products, get_top_rated_products, get_products_by_price_range
+from src.tools.catalog_tool import get_categories, get_all_products, get_top_rated_products, get_products_by_price_range, get_product_by_price_rank
 from src.tools.product_id_tool import get_product_id
 
 # Danh sách đầy đủ tất cả các công cụ bàn giao cho AI Agent
@@ -20,6 +20,7 @@ all_shopping_tools = [
     get_all_products,            # lấy toàn bộ sản phẩm (chỉ khi thực sự cần)
     get_top_rated_products,      # lấy sản phẩm đánh giá cao nhất
     get_products_by_price_range, # lấy sản phẩm theo khoảng giá
+    get_product_by_price_rank,   # lấy sản phẩm đắt/rẻ thứ N chính xác
     
     # Nhóm ID Lookup
     get_product_id,              # tra product_id từ tên sản phẩm

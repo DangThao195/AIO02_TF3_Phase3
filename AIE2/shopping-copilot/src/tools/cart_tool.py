@@ -180,43 +180,61 @@ def get_cart_tool(user_id: str) -> str:
                     try:
                         p_req = demo_pb2.GetProductRequest(id=item.product_id)
                         p_res = cat_stub.GetProduct(p_req)
+                        price_u = 0
+                        price_n = 0
+                        if hasattr(p_res, "price_usd") and p_res.price_usd:
+                            price_u = getattr(p_res.price_usd, "units", 0) or 0
+                            price_n = getattr(p_res.price_usd, "nanos", 0) or 0
+                        elif hasattr(p_res, "price_units"):
+                            price_u = getattr(p_res, "price_units", 0) or 0
+                            price_n = getattr(p_res, "price_nanos", 0) or 0
+
                         product_metadata[item.product_id] = {
                             "name": p_res.name,
-                            "price_units": getattr(p_res, "price_units", 0) or 0,
-                            "price_nanos": getattr(p_res, "price_nanos", 0) or 0,
+                            "price_units": price_u,
+                            "price_nanos": price_n,
                         }
                     except Exception as e:
                         pass
             finally:
                 cat_channel.close()
 
-        # Fallback to database if gRPC failed
-        if not product_metadata or not all(product_metadata.get(item.product_id) for item in response.items):
+        # Fallback to database if gRPC failed or returned 0 price
+        missing_ids = [
+            item.product_id for item in response.items
+            if not product_metadata.get(item.product_id)
+            or (product_metadata[item.product_id].get("price_units") == 0 and product_metadata[item.product_id].get("price_nanos") == 0)
+        ]
+        if missing_ids:
             try:
                 from src.tools.search_product.flow1.sql_executor import SQLQueryExecutor
                 executor = SQLQueryExecutor()
-                product_ids = [item.product_id for item in response.items]
-                if product_ids:
-                    ids_str = ",".join([f"'{pid}'" for pid in product_ids])
-                    rows = executor.execute(
-                        f"SELECT id, name, price_units, price_nanos FROM products WHERE id IN ({ids_str})"
-                    )
-                    for row in rows:
-                        product_metadata[row["id"]] = {
-                            "name": row["name"],
-                            "price_units": row.get("price_units", 0) or 0,
-                            "price_nanos": row.get("price_nanos", 0) or 0,
-                        }
+                ids_str = ",".join([f"'{pid}'" for pid in missing_ids])
+                rows = executor.execute(
+                    f"SELECT id, name, price_units, price_nanos FROM products WHERE id IN ({ids_str})"
+                )
+                for row in rows:
+                    existing = product_metadata.setdefault(row["id"], {})
+                    if not existing.get("name"):
+                        existing["name"] = row["name"]
+                    existing["price_units"] = row.get("price_units", 0) or 0
+                    existing["price_nanos"] = row.get("price_nanos", 0) or 0
             except Exception:
                 pass
 
+        total_price = 0.0
         for item in response.items:
             metadata = product_metadata.get(item.product_id, {})
+            price_val = _price(metadata.get("price_units", 0), metadata.get("price_nanos", 0))
+            qty = int(item.quantity or 1)
+            subtotal = round(price_val * qty, 2)
+            total_price += subtotal
             items.append({
                 "product_id": item.product_id,
                 "product_name": metadata.get("name", "Unknown Product"),
-                "quantity": item.quantity,
-                "price": _price(metadata.get("price_units", 0), metadata.get("price_nanos", 0)),
+                "quantity": qty,
+                "price": price_val,
+                "subtotal": subtotal,
             })
 
         return json.dumps({
@@ -224,6 +242,7 @@ def get_cart_tool(user_id: str) -> str:
             "user_id": user_id,
             "items": items,
             "total_items": len(items),
+            "total_price": round(total_price, 2),
         })
 
     except grpc.RpcError as e:

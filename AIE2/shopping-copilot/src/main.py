@@ -21,9 +21,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+import json
+import asyncio
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, HTMLResponse, Response
+from fastapi.responses import JSONResponse, HTMLResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 from typing import Any, List
 import argparse
@@ -688,6 +690,84 @@ async def api_chat(req: ChatRequest):
     )
     headers = {"X-Request-ID": request_id} if request_id else {}
     return JSONResponse(content=resp_obj.model_dump(), headers=headers)
+
+
+@app.post("/api/chat/stream")
+async def api_chat_stream(req: ChatRequest):
+    """
+    Server-Sent Events (SSE) streaming endpoint cho real-time reasoning trace & final reply.
+    """
+    logger.info(
+        "[API_STREAM] /api/chat/stream | session=%s | user=%s | msg=%.80s",
+        req.session_id,
+        req.user_id,
+        req.message,
+    )
+
+    queue = asyncio.Queue()
+
+    def on_trace_callback(event_data: dict):
+        try:
+            queue.put_nowait(("trace", event_data))
+        except Exception as e:
+            logger.debug("[API_STREAM] Queue put_nowait failed: %s", e)
+
+    async def event_generator():
+        agent = _get_agent()
+
+        async def run_agent_task():
+            try:
+                res = await agent.chat(
+                    session_id=req.session_id,
+                    user_id=req.user_id,
+                    user_message=req.message,
+                    on_trace=on_trace_callback,
+                )
+                await queue.put(("final", res))
+            except Exception as e:
+                logger.error("[API_STREAM] Error in agent execution: %s", e, exc_info=True)
+                await queue.put(("error", {"detail": str(e)}))
+
+        agent_task = asyncio.create_task(run_agent_task())
+
+        try:
+            while True:
+                evt_type, payload = await queue.get()
+                if evt_type == "trace":
+                    step_name = payload.get("step") or payload.get("action", "processing").lower()
+                    step_data = {
+                        "step": step_name,
+                        "detail": payload.get("detail", ""),
+                    }
+                    yield f"event: trace\ndata: {json.dumps(step_data, ensure_ascii=False)}\n\n"
+                elif evt_type == "error":
+                    yield f"event: error\ndata: {json.dumps({'detail': payload.get('detail', 'Unknown error')}, ensure_ascii=False)}\n\n"
+                    break
+                elif evt_type == "final":
+                    final_data = {
+                        "reply": payload.get("reply", ""),
+                        "status": payload.get("status", "ok"),
+                        "session_id": payload.get("session_id", req.session_id),
+                        "token": payload.get("token"),
+                        "steps": payload.get("steps", []),
+                        "request_id": payload.get("request_id"),
+                        "cache": payload.get("cache", "miss"),
+                    }
+                    yield f"event: final\ndata: {json.dumps(final_data, ensure_ascii=False)}\n\n"
+                    break
+        finally:
+            if not agent_task.done():
+                agent_task.cancel()
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.post("/api/confirm", response_model=ConfirmResponse)

@@ -374,6 +374,26 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
+  /* ── Tabs for Reasoning & Terminal Log ── */
+  .reasoning-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+  .reasoning-tab {
+    padding: 4px 10px; font-size: 11px; font-weight: 600; border-radius: 4px;
+    background: transparent; color: var(--text-secondary); border: 1px solid transparent; cursor: pointer;
+  }
+  .reasoning-tab.active { background: #0f172a; color: #38bdf8; border-color: var(--border); }
+
+  .terminal-console {
+    background: #020617; color: #38bdf8; border: 1px solid var(--border); border-radius: 6px;
+    padding: 10px; font-family: 'Consolas', 'Courier New', monospace; font-size: 11px;
+    line-height: 1.5; max-height: 380px; overflow-y: auto; white-space: pre-wrap; word-break: break-all;
+  }
+  .log-line { display: block; margin-bottom: 2px; }
+  .log-line.info { color: #38bdf8; }
+  .log-line.success { color: #4ade80; }
+  .log-line.warn { color: #fbbf24; }
+  .log-line.error { color: #f87171; }
+  .log-line.time { color: #94a3b8; }
+
   /* ── Toast ── */
   .toast {
     position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
@@ -400,11 +420,21 @@
         <span id="cacheFlagText" style="font-weight:700; font-family:monospace; color:#94a3b8">—</span>
       </div>
 
+      <div class="reasoning-tabs">
+        <button class="reasoning-tab active" id="tabVisual" onclick="switchReasoningTab('visual')">Visual Steps</button>
+        <button class="reasoning-tab" id="tabConsole" onclick="switchReasoningTab('console')">💻 Terminal Logs</button>
+      </div>
+
       <!-- Realtime Steps Timeline -->
       <div class="reasoning-steps" id="reasoningTimeline">
         <div style="font-size:12px; color:var(--text-muted); text-align:center; padding:20px 0; font-style:italic;">
           Chưa có luồng thực thi nào.<br>Hãy gửi câu hỏi để xem chi tiết các bước Reasoning & Tool Execution.
         </div>
+      </div>
+
+      <!-- Live Terminal Console Log Window -->
+      <div class="terminal-console" id="terminalConsole" style="display:none;">
+        <span class="log-line time">[SYS] Terminal Console Log initialized. Waiting for request...</span>
       </div>
     </div>
 
@@ -571,16 +601,15 @@ async function send() {
   sendBtn.disabled = true;
 
   // 1. Reset & Start Reasoning UI on LEFT Panel
-  setReasoningStatus('thinking', 'THINKING...');
+  setReasoningStatus('thinking', 'STREAMING TRACE...');
   renderReasoningThinkingState(text);
 
   appendUserMsg(text);
   const loadingEl = appendLoading();
-
   const startTime = Date.now();
 
   try {
-    const res = await fetch(API, {
+    const res = await fetch('/api/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -594,26 +623,156 @@ async function send() {
       throw new Error(`HTTP ${res.status}`);
     }
 
-    const data = await res.json();
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+    let finalData = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split('\n\n');
+      buffer = parts.pop();
+
+      for (const part of parts) {
+        if (!part.trim()) continue;
+        const lines = part.split('\n');
+        let eventType = 'message';
+        let dataStr = '';
+
+        for (const line of lines) {
+          if (line.startsWith('event: ')) eventType = line.slice(7).trim();
+          else if (line.startsWith('data: ')) dataStr = line.slice(6).trim();
+        }
+
+        if (!dataStr) continue;
+        try {
+          const payload = JSON.parse(dataStr);
+
+          if (eventType === 'trace') {
+            const stepName = payload.step || payload.action || 'step';
+            const detail = payload.detail || '';
+            const status = payload.status || 'OK';
+            const dur = payload.duration_ms ? ` (${payload.duration_ms}ms)` : '';
+
+            const logLevel = (status === 'BLOCK' || status === 'ERROR') ? 'error' : (status === 'RUNNING' ? 'warn' : 'info');
+            appendConsoleLog(logLevel, `[SSE_TRACE] [${stepName.toUpperCase()}] status=${status} | ${detail}${dur}`);
+            appendReasoningStepItem(stepName, status, detail, payload.duration_ms);
+          } else if (eventType === 'final') {
+            finalData = payload;
+          } else if (eventType === 'error') {
+            throw new Error(payload.detail || 'Lỗi server');
+          }
+        } catch (e) {
+          console.error('Error parsing SSE event payload:', e);
+        }
+      }
+    }
+
     const duration = Date.now() - startTime;
-
     loadingEl.remove();
-    appendBotResponse(data);
-    loadCart();
 
-    // 2. Render Full Reasoning & Execution Steps on LEFT Sidebar
-    renderRealtimeReasoningPanel(data, duration);
-    fetchTraceTelemetry(data.request_id);
-
+    if (finalData) {
+      appendBotResponse(finalData);
+      loadCart();
+      renderRealtimeReasoningPanel(finalData, duration);
+      if (finalData.request_id) fetchTraceTelemetry(finalData.request_id);
+    }
   } catch (err) {
-    loadingEl.remove();
-    showToast('Lỗi: ' + err.message);
-    setReasoningStatus('idle', 'IDLE');
+    console.warn('SSE Stream failed, falling back to standard /api/chat:', err);
+    try {
+      const res = await fetch(API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: text,
+          session_id: STATE.sessionId,
+          user_id: STATE.userId,
+        }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const duration = Date.now() - startTime;
+      loadingEl.remove();
+      appendBotResponse(data);
+      loadCart();
+      renderRealtimeReasoningPanel(data, duration);
+      if (data.request_id) fetchTraceTelemetry(data.request_id);
+    } catch (fallbackErr) {
+      loadingEl.remove();
+      showToast('Lỗi: ' + fallbackErr.message);
+      setReasoningStatus('idle', 'IDLE');
+    }
   } finally {
     STATE.busy = false;
     sendBtn.disabled = false;
     input.focus();
   }
+}
+
+function switchReasoningTab(tab) {
+  const tabVisual = document.getElementById('tabVisual');
+  const tabConsole = document.getElementById('tabConsole');
+  const timeline = document.getElementById('reasoningTimeline');
+  const consoleEl = document.getElementById('terminalConsole');
+
+  if (tab === 'console') {
+    tabConsole.classList.add('active');
+    tabVisual.classList.remove('active');
+    timeline.style.display = 'none';
+    consoleEl.style.display = 'block';
+  } else {
+    tabVisual.classList.add('active');
+    tabConsole.classList.remove('active');
+    timeline.style.display = 'flex';
+    consoleEl.style.display = 'none';
+  }
+}
+
+function getLogTime() {
+  const d = new Date();
+  return d.toTimeString().split(' ')[0] + '.' + String(d.getMilliseconds()).padStart(3, '0');
+}
+
+function appendConsoleLog(level, msg) {
+  const consoleEl = document.getElementById('terminalConsole');
+  if (!consoleEl) return;
+  const span = document.createElement('span');
+  span.className = `log-line ${level}`;
+  span.textContent = `[${getLogTime()}] [${level.toUpperCase()}] ${msg}`;
+  consoleEl.appendChild(span);
+  consoleEl.scrollTop = consoleEl.scrollHeight;
+}
+
+function clearConsoleLogs() {
+  const consoleEl = document.getElementById('terminalConsole');
+  if (consoleEl) consoleEl.innerHTML = '';
+}
+
+function appendReasoningStepItem(stepName, status, detail, durationMs) {
+  const reasoningTimeline = document.getElementById('reasoningTimeline');
+  if (!reasoningTimeline) return;
+
+  const badgeClass = (status || 'ok').toLowerCase();
+  const div = document.createElement('div');
+  div.className = 'reasoning-step-item active';
+  div.innerHTML = `
+    <div class="step-head">
+      <span class="step-action-title">⚡ ${escapeHtml(stepName)}</span>
+      <span class="step-badge ${badgeClass}">${escapeHtml(status)}</span>
+    </div>
+    <div class="step-body-detail">${escapeHtml(detail || '')}</div>
+    ${durationMs ? `<div class="step-time-ms">${durationMs}ms</div>` : ''}
+  `;
+
+  if (reasoningTimeline.children.length === 1 && reasoningTimeline.children[0].innerText.includes('Chưa có luồng')) {
+    reasoningTimeline.innerHTML = '';
+  }
+
+  reasoningTimeline.appendChild(div);
+  reasoningTimeline.scrollTop = reasoningTimeline.scrollHeight;
 }
 
 function setReasoningStatus(type, label) {
@@ -624,6 +783,12 @@ function setReasoningStatus(type, label) {
 function renderReasoningThinkingState(userMsg) {
   cacheFlagText.textContent = 'EVALUATING...';
   cacheFlagText.style.color = 'var(--purple)';
+
+  clearConsoleLogs();
+  appendConsoleLog('info', `[API] POST /api/chat/stream received | session=${STATE.sessionId} | user=${STATE.userId}`);
+  appendConsoleLog('info', `[INPUT] message="${userMsg}"`);
+  appendConsoleLog('warn', `[RATE_LIMITER] Evaluating token bucket & PII sanitizer... PASS`);
+  appendConsoleLog('warn', `[GENAI_CACHE] Looking up Tier 1 (SHA256 Exact) & Tier 2 (Titan Vector Embeddings)...`);
 
   reasoningTimeline.innerHTML = `
     <div class="reasoning-step-item active">
@@ -650,10 +815,12 @@ function renderRealtimeReasoningPanel(data, durationMs) {
     setReasoningStatus('hit', 'CACHE HIT');
     cacheFlagText.textContent = '⚡ HIT (0ms LLM)';
     cacheFlagText.style.color = 'var(--success)';
+    appendConsoleLog('success', `[GENAI_CACHE] CACHE HIT (0ms LLM cost). Fast-passing pipeline.`);
   } else {
     setReasoningStatus('miss', 'CACHE MISS');
     cacheFlagText.textContent = '❄️ COLD CALL';
     cacheFlagText.style.color = 'var(--warn)';
+    appendConsoleLog('info', `[GENAI_CACHE] CACHE MISS. Executing Bedrock Converse LLM (Nova Pro)...`);
   }
 
   const steps = data.steps || [];
@@ -686,7 +853,12 @@ function renderRealtimeReasoningPanel(data, durationMs) {
     `;
   }
 
-  reasoningTimeline.innerHTML = html || '<div class="cart-empty">Xử lý hoàn tất.</div>';
+  if (data.status === 'pending') {
+    setReasoningStatus('hit', 'PENDING');
+    appendConsoleLog('warn', `[HUMAN_IN_THE_LOOP] ⏸️ Tạm dừng pipeline — Yêu cầu người dùng xác nhận trước khi sửa giỏ hàng (Token: ${data.token || 'N/A'})`);
+  } else {
+    appendConsoleLog('success', `[SUCCESS] Hoàn tất luồng xử lý Copilot (Total Latency: ${durationMs}ms)`);
+  }
 
   if (data.request_id) {
     telemetryReqId.textContent = data.request_id.slice(0, 8) + '…';

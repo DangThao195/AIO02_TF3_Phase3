@@ -23,6 +23,7 @@ ALLOWED_TOOLS = frozenset([
     "get_all_products",              # lấy toàn bộ sản phẩm
     "get_top_rated_products",        # sản phẩm đánh giá cao theo catalog (không cần reviews)
     "get_products_by_price_range",   # lọc sản phẩm theo khoảng giá (Phase 1 fix)
+    "get_product_by_price_rank",     # lấy sản phẩm đắt/rẻ thứ N chính xác qua SQL OFFSET
     "get_product_id",                # tra product_id từ tên sản phẩm
     "add_to_cart_tool",              # thêm vào giỏ hàng (write — cần L4 confirm)
     "get_cart_tool",                 # xem giỏ hàng

@@ -38,10 +38,10 @@ logger = logging.getLogger("memory.genai_cache")
 _GENAI_CACHE_TTL = 600  # 10 phút mặc định
 _GENAI_CACHE_MAX_ENTRIES = 1000  # LRU limit cho file backend
 _SEMANTIC_SIMILARITY_THRESHOLD = float(
-    os.environ.get("SEMANTIC_CACHE_THRESHOLD", "0.88")
+    os.environ.get("SEMANTIC_CACHE_THRESHOLD", "0.93")
 )
 # Schema version: bump khi product catalog thay đổi → auto-invalidate stale semantic hits
-_CACHE_SCHEMA_VERSION: int = int(os.environ.get("CACHE_SCHEMA_VERSION", "1"))
+_CACHE_SCHEMA_VERSION: int = int(os.environ.get("CACHE_SCHEMA_VERSION", "2"))
 # Enable/disable Titan semantic cache (default enabled)
 _TITAN_SEMANTIC_ENABLED = os.environ.get("TITAN_SEMANTIC_CACHE", "true").lower() in (
     "true",
@@ -100,26 +100,8 @@ def _get_redis():
             _redis_client.ping()
             logger.info("[GENAI_CACHE] Valkey connected: %s", valkey_url)
         except Exception as e:
-            strict = os.environ.get("STRICT_VALKEY", "true").lower() in (
-                "true",
-                "1",
-                "yes",
-            )
-            if strict:
-                logger.error(
-                    "[GENAI_CACHE] CRITICAL: Valkey connection failed: %s | "
-                    "Strict Production Mode: No local file fallback!",
-                    e,
-                )
-                raise RuntimeError(
-                    f"[GENAI_CACHE] Strict Valkey connection failed ({valkey_url}): {e}"
-                )
-            else:
-                logger.warning(
-                    "[GENAI_CACHE] Valkey connection failed: %s — falling back to file JSON",
-                    e,
-                )
-                _redis_client = None
+            logger.error("[GENAI_CACHE] CRITICAL: Valkey connection failed: %s | Strict Mode: Valkey required!", e)
+            raise RuntimeError(f"[GENAI_CACHE] Valkey connection failed ({valkey_url}): {e}")
 
     return _redis_client
 
@@ -536,6 +518,22 @@ class GenAICacheStore:
         "dat hang",
         "mua hàng",
         "mua hang",
+        "buy",
+        "bought",
+        "my",
+        "mine",
+        "user",
+        "account",
+        "profile",
+        "history",
+        "spent",
+        "pay",
+        "payment",
+        "card",
+        "discount",
+        "coupon",
+        "tôi",
+        "của tôi",
     ]
 
     def _is_private_query(self, text: str) -> bool:
@@ -556,7 +554,7 @@ class GenAICacheStore:
                 self._stats["hits_exact"] += 1
                 entry["hit_count"] = entry.get("hit_count", 0) + 1
                 entry["cache_tier"] = "exact"
-                self._vset(exact_key, entry, _GENAI_CACHE_TTL)
+                # KHÔNG reset TTL về 600s để tránh băng giá dữ liệu cũ vĩnh viễn (Absolute Expiration)
                 return entry
         else:
             entry = self._store.get(exact_key)
@@ -596,11 +594,7 @@ class GenAICacheStore:
                             self._stats["hits_semantic"] += 1
                             entry["hit_count"] = entry.get("hit_count", 0) + 1
                             entry["cache_tier"] = "semantic"
-                            if _get_redis() is not None:
-                                self._vset(sem_key, entry, _GENAI_CACHE_TTL)
-                            else:
-                                self._store.move_to_end(sem_key)
-                                self._save()
+                            # KHÔNG reset TTL về 600s khi HIT
                             return entry
         return None
 

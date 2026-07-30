@@ -10,7 +10,7 @@ Tài liệu này tổng hợp toàn bộ các biến môi trường (`Environmen
 
 | Tên Biến | Mặc định Production | Mô tả / Mục đích | Loại K8s |
 | :--- | :--- | :--- | :--- |
-| `CACHE_SCHEMA_VERSION` | `"2"` | **BẮT BUỘC BUMP UP**: Tự động invalidation toàn bộ cache v1 cũ khi rollout pod. | ConfigMap |
+| `CACHE_SCHEMA_VERSION` | `"7"` | **BẮT BUỘC BUMP UP** khi data thay đổi: Tự động invalidation toàn bộ cache cũ khi rollout pod — không cần FLUSHDB. | ConfigMap |
 | `SEMANTIC_CACHE_THRESHOLD` | `"0.93"` | Ngưỡng Cosine Similarity an toàn mới cho Titan Vector Embeddings (chống HIT sai câu). | ConfigMap |
 | `VALKEY_URL` | `rediss://:5dZhhRiPLXDDLuQFv4OaZs2z5IPUIx4T@master.techx-tf3-valkey.pkeslh.apse1.cache.amazonaws.com:6379/1?ssl_cert_reqs=none` | Connection URI kết nối ElastiCache Valkey DB 1. | Secret / ConfigMap |
 | `VALKEY_HOST` | `master.techx-tf3-valkey.pkeslh.apse1.cache.amazonaws.com` | Hostname của ElastiCache Valkey Cluster. | ConfigMap |
@@ -88,8 +88,11 @@ Tài liệu này tổng hợp toàn bộ các biến môi trường (`Environmen
 | `COPILOT_PORT` | `8001` | Port ứng dụng FastAPI uvicorn lắng nghe. | ConfigMap |
 | `AWS_REGION` | `ap-southeast-1` | Region mặc định cho AWS SDK boto3. | Container Env |
 
+
 ---
 
 ### ⚠️ LƯU Ý QUAN TRỌNG KHI CDO DEPLOY:
-1. **ConfigMap Revision Bump:** Khi cập nhật `CACHE_SCHEMA_VERSION="2"` và `SEMANTIC_CACHE_THRESHOLD="0.93"`, bắt buộc phải bump tag `techx.io/configmap-revision` trong deployment manifest để Kubernetes trigger rolling update Pod mới.
-2. **Container Env Override:** Biến `AWS_REGION` nên được khai báo trực tiếp ở `spec.containers[].env` để tránh bị Webhook mặc định đè giá trị.
+1. **Cache Invalidation (Không FLUSHDB):** Khi cần invalidate cache (thay đổi schema sản phẩm, pricing logic, v.v.), chỉ cần **tăng `CACHE_SCHEMA_VERSION`** lên bất kỳ số nào cao hơn hiện tại (hiện tại: `"7"`). Cache cũ sẽ bị bỏ qua tự động (MISS) và rebuild dần — **không cần FLUSHDB hay restart Valkey**.
+2. **ConfigMap Revision Bump:** Sau khi cập nhật `CACHE_SCHEMA_VERSION` hoặc `SEMANTIC_CACHE_THRESHOLD`, bắt buộc phải bump tag `techx.io/configmap-revision` trong deployment manifest để Kubernetes trigger rolling update Pod mới nhận env mới.
+3. **Container Env Override:** Biến `AWS_REGION` nên được khai báo trực tiếp ở `spec.containers[].env` để tránh bị Webhook mặc định đè giá trị.
+4. **VALKEY_URL là Secret:** URL chứa password — phải đặt trong K8s `Secret`, không đặt plain text trong `ConfigMap`.
