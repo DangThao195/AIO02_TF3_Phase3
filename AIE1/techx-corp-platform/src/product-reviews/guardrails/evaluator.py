@@ -213,6 +213,7 @@ Rules:
 - Apply numeric comparisons literally: a score of 4.0 satisfies "4.0 or higher".
 - For sparse evidence, be conservative: if review text is empty or absent, only rating/count claims can be supported from trusted_derived_review_facts; descriptive feature/performance claims are unsupported unless trusted_product_info supports them.
 - Do not penalize useful 2-4 sentence answers for not listing every review; judge only whether each stated factual claim is grounded.
+- If the candidate answer invents, rewrites, or substitutes a different question, or wraps the final answer in a Question/Answer template, mark that behavior unsupported even if the factual claims are grounded.
 - Ignore style and answer only with the requested JSON schema.
 - Split the answer into the smallest meaningful factual claims. Do not judge the question itself as a claim.
 

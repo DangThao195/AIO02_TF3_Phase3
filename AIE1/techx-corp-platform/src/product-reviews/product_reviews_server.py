@@ -165,6 +165,7 @@ from guardrails.fallback import with_fallback, handle_exception
 from guardrails.evaluator import evaluate_summary_fidelity
 from guardrails.circuit_breaker import circuit_breaker
 from guardrails.tool_validator import validate_tool_arguments
+from guardrails.output_contract import has_question_answer_wrapper, strip_leading_question_echo
 from guardrails.error_injection import (
     clear_error_injection,
     get_injected_error_type,
@@ -203,6 +204,7 @@ judge_provider = None
 judge_region = "us-east-1"
 judge_timeout_seconds = 10.0
 llm_timeout_seconds = 10.0
+judge_all_grounded_answers = True
 tracer = trace.get_tracer_provider().get_tracer("product-reviews-service")
 meter = metrics.get_meter_provider().get_meter("product-reviews-service")
 
@@ -569,6 +571,48 @@ def answer_deterministic_rating_question(question, reviews):
     return None
 
 
+def answer_deterministic_price_question(question, product_info):
+    """Answer product price questions from trusted product catalog data."""
+    normalized = _normalized_search_text(question)
+    asks_price = any(
+        term in normalized
+        for term in (
+            "price",
+            "cost",
+            "how much",
+            "gia",
+            "bao nhieu tien",
+            "muc gia",
+        )
+    )
+    if not asks_price:
+        return None
+
+    try:
+        product = json.loads(product_info) if isinstance(product_info, str) else product_info
+    except (TypeError, json.JSONDecodeError):
+        return NO_INFO_MESSAGE
+    if not isinstance(product, dict) or product.get("error"):
+        return NO_INFO_MESSAGE
+
+    price = product.get("priceUsd") or product.get("price_usd") or {}
+    if not isinstance(price, dict):
+        return NO_INFO_MESSAGE
+    currency = price.get("currencyCode") or price.get("currency_code") or "USD"
+    try:
+        units = int(price.get("units", 0))
+        nanos = int(price.get("nanos", 0))
+    except (TypeError, ValueError):
+        return NO_INFO_MESSAGE
+
+    amount = units + nanos / 1_000_000_000
+    if amount <= 0:
+        return NO_INFO_MESSAGE
+    amount_text = f"{amount:.2f}".rstrip("0").rstrip(".")
+    product_name = product.get("name") or "this product"
+    return f"The price of {product_name} is {amount_text} {currency}."
+
+
 def answer_deterministic_absence_question(question, reviews):
     """Answer drawback/improvement absence questions from review text and scores."""
     normalized = _normalized_search_text(question)
@@ -768,6 +812,26 @@ def answer_deterministic_quality_question(question, reviews):
     )
 
 
+def answer_deterministic_planned_question(question, reviews, product_info=None):
+    """Route high-confidence product-review intents to deterministic fact extractors.
+
+    This planner keeps broad/natural questions on the LLM path, but handles
+    facts that are safer and cheaper to compute from trusted data directly.
+    """
+    planners = (
+        lambda: answer_deterministic_price_question(question, product_info),
+        lambda: answer_deterministic_rating_question(question, reviews),
+        lambda: answer_deterministic_exact_attribute_question(question, reviews),
+        lambda: answer_deterministic_absence_question(question, reviews),
+        lambda: answer_deterministic_quality_question(question, reviews),
+    )
+    for planner in planners:
+        answer = planner()
+        if answer is not None:
+            return answer
+    return None
+
+
 def post_process_output(result, question=""):
     if not result:
         return ""
@@ -778,6 +842,13 @@ def post_process_output(result, question=""):
     if "NO_INFO" in result:
         return NO_INFO_MESSAGE
     filtered_result = filter_output(result).filtered_response
+    if has_question_answer_wrapper(filtered_result):
+        logger.warning("Candidate output rejected because it used a Question/Answer wrapper.")
+        return UNVERIFIED_SUMMARY_MESSAGE
+    filtered_result = strip_leading_question_echo(filtered_result, question)
+    if not filtered_result:
+        logger.warning("Candidate output rejected because it only echoed the user question.")
+        return UNVERIFIED_SUMMARY_MESSAGE
     # Candidate output can echo a stored review injection.  Do not expose or
     # pass such content onward; the judge will only ever see a safe sentinel.
     try:
@@ -1190,12 +1261,12 @@ def get_ai_assistant_response(request_product_id, question, context=None):
         if not input_check.is_safe:
             return finalize_response(input_check.blocked_reason, outcome="input_blocked")
 
-        safe_question = filter_output(question).filtered_response
-
-        if is_clearly_off_topic_question(safe_question):
+        if is_clearly_off_topic_question(question):
             product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
             logger.info("Returning deterministic OUT_OF_SCOPE response for product_id:%s", request_product_id)
             return finalize_response(OUT_OF_SCOPE_MESSAGE, outcome="out_of_scope")
+
+        safe_question = filter_output(question).filtered_response
 
         user_id = "anonymous"
         if context and hasattr(context, "invocation_metadata"):
@@ -1225,7 +1296,8 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                 trace_record["cache"]["source_response_sha256"] = cached_data.get("source_response_sha256")
                 span.set_attribute("app.cache.hit", True)
                 product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
-                return finalize_response(cached_data["answer"], outcome="cache_hit", cache_hit=True)
+                cached_answer = post_process_output(cached_data["answer"], safe_question)
+                return finalize_response(cached_answer, outcome="cache_hit", cache_hit=True)
             span.set_attribute("app.cache.hit", False)
         except Exception as cache_err:
             logger.warning(f"[CACHE] Error checking cache: {cache_err}")
@@ -1244,7 +1316,8 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                         trace_record["cache"]["source_trace_id"] = cached_data.get("source_trace_id")
                         trace_record["cache"]["source_response_sha256"] = cached_data.get("source_response_sha256")
                         product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
-                        return finalize_response(cached_data["answer"], outcome="cache_hit_after_lock", cache_hit=True)
+                        cached_answer = post_process_output(cached_data["answer"], safe_question)
+                        return finalize_response(cached_answer, outcome="cache_hit_after_lock", cache_hit=True)
                 logger.warning(f"[CACHE] Lock timeout for key {cache_key}, proceeding to call LLM directly.")
 
         result = None
@@ -1357,25 +1430,12 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                         fallback_reason="review_sanitization_failed",
                     )
 
-                deterministic_answer = answer_deterministic_rating_question(
+                product_info_json = fetch_product_info(request_product_id)
+                deterministic_answer = answer_deterministic_planned_question(
                     safe_question,
                     raw_reviews_for_judge,
+                    product_info_json,
                 )
-                if deterministic_answer is None:
-                    deterministic_answer = answer_deterministic_exact_attribute_question(
-                        safe_question,
-                        raw_reviews_for_judge,
-                    )
-                if deterministic_answer is None:
-                    deterministic_answer = answer_deterministic_absence_question(
-                        safe_question,
-                        raw_reviews_for_judge,
-                    )
-                if deterministic_answer is None:
-                    deterministic_answer = answer_deterministic_quality_question(
-                        safe_question,
-                        raw_reviews_for_judge,
-                    )
                 if deterministic_answer is not None:
                     result = deterministic_answer
                     judge_status = "deterministic"
@@ -1384,12 +1444,11 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                         {'product.id': request_product_id},
                     )
                     logger.info(
-                        "AI_OUTCOME product_id=%s stage=deterministic_rating outcome=answered",
+                        "AI_OUTCOME product_id=%s stage=deterministic_planner outcome=answered",
                         request_product_id,
                     )
                     return finalize_response(result, outcome="deterministic_answer", judge_status_override=judge_status)
 
-                product_info_json = fetch_product_info(request_product_id)
                 llm_inaccurate_response = check_feature_flag("llmInaccurateResponse")
                 logger.info(f"llmInaccurateResponse feature flag: {llm_inaccurate_response}")
                 make_inaccurate = llm_inaccurate_response and request_product_id == "L9ECAV7KIM"
