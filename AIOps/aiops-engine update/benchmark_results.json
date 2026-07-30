@@ -1,0 +1,20 @@
+{
+  "timestamp": "2026-07-29T00:32:50.367608",
+  "baseline_samples": 14106,
+  "old_engine": {
+    "precision": 0.2237,
+    "recall": 1.0,
+    "f1_score": 0.3656,
+    "fpr": 0.7763,
+    "spike_false_alarms": 50
+  },
+  "enhanced_engine": {
+    "precision": 0.087,
+    "recall": 1.0,
+    "f1_score": 0.16,
+    "fpr": 0.913,
+    "spike_false_alarms": 5,
+    "spike_suppression_rate_percent": 90.0,
+    "downstream_suppression_rate_percent": 100.0
+  }
+}

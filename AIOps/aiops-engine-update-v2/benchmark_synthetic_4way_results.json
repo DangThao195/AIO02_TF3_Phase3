@@ -1,0 +1,404 @@
+{
+  "timestamp": "2026-07-29T04:09:38.219887",
+  "methodology": "\u0110\u00e1nh gi\u00e1 4 engine tr\u00ean t\u1eadp synthetic c\u0169 (generate_synthetic_data, quy m\u00f4 traffic l\u1ec7ch ~200x so v\u1edbi th\u1eadt, \u0111\u00e3 bi\u1ebft t\u1eeb tr\u01b0\u1edbc) \u2014 d\u00f9ng \u0111\u1ec3 \u0111\u1ed1i chi\u1ebfu xu h\u01b0\u1edbng t\u01b0\u01a1ng \u0111\u1ed1i, kh\u00f4ng d\u00f9ng s\u1ed1 tuy\u1ec7t \u0111\u1ed1i l\u00e0m benchmark ch\u00ednh th\u1ee9c.",
+  "per_scenario": {
+    "frontend::SCN-A": {
+      "n_total": 864,
+      "is_fp_resistance": true,
+      "old_perservice": {
+        "precision": 0.9502314814814815,
+        "recall": 1.0,
+        "f1_score": 0.9502314814814815,
+        "fpr": 0.04976851851851852,
+        "tp": 0,
+        "fp": 43,
+        "fn": 0
+      },
+      "eif_perservice": {
+        "precision": 0.0,
+        "recall": 1.0,
+        "f1_score": 0.0,
+        "fpr": 1.0,
+        "tp": 0,
+        "fp": 864,
+        "fn": 0
+      },
+      "if_merged": {
+        "precision": 0.05902777777777779,
+        "recall": 1.0,
+        "f1_score": 0.05902777777777779,
+        "fpr": 0.9409722222222222,
+        "tp": 0,
+        "fp": 813,
+        "fn": 0
+      },
+      "eif_merged": {
+        "precision": 0.0,
+        "recall": 1.0,
+        "f1_score": 0.0,
+        "fpr": 1.0,
+        "tp": 0,
+        "fp": 864,
+        "fn": 0
+      }
+    },
+    "frontend::SCN-G": {
+      "n_total": 864,
+      "is_fp_resistance": true,
+      "old_perservice": {
+        "precision": 0.9409722222222222,
+        "recall": 1.0,
+        "f1_score": 0.9409722222222222,
+        "fpr": 0.059027777777777776,
+        "tp": 0,
+        "fp": 51,
+        "fn": 0
+      },
+      "eif_perservice": {
+        "precision": 0.0,
+        "recall": 1.0,
+        "f1_score": 0.0,
+        "fpr": 1.0,
+        "tp": 0,
+        "fp": 864,
+        "fn": 0
+      },
+      "if_merged": {
+        "precision": 0.05439814814814814,
+        "recall": 1.0,
+        "f1_score": 0.05439814814814814,
+        "fpr": 0.9456018518518519,
+        "tp": 0,
+        "fp": 817,
+        "fn": 0
+      },
+      "eif_merged": {
+        "precision": 0.0,
+        "recall": 1.0,
+        "f1_score": 0.0,
+        "fpr": 1.0,
+        "tp": 0,
+        "fp": 864,
+        "fn": 0
+      }
+    },
+    "checkout::SCN-F": {
+      "n_total": 864,
+      "is_fp_resistance": false,
+      "old_perservice": {
+        "precision": 0.09836065573770492,
+        "recall": 1.0,
+        "f1_score": 0.1791044776119403,
+        "fpr": 0.3819444444444444,
+        "tp": 36,
+        "fp": 330,
+        "fn": 0
+      },
+      "eif_perservice": {
+        "precision": 0.041666666666666664,
+        "recall": 1.0,
+        "f1_score": 0.07999999999999999,
+        "fpr": 0.9583333333333334,
+        "tp": 36,
+        "fp": 828,
+        "fn": 0
+      },
+      "if_merged": {
+        "precision": 0.042704626334519574,
+        "recall": 1.0,
+        "f1_score": 0.08191126279863481,
+        "fpr": 0.9340277777777778,
+        "tp": 36,
+        "fp": 807,
+        "fn": 0
+      },
+      "eif_merged": {
+        "precision": 0.041666666666666664,
+        "recall": 1.0,
+        "f1_score": 0.07999999999999999,
+        "fpr": 0.9583333333333334,
+        "tp": 36,
+        "fp": 828,
+        "fn": 0
+      }
+    },
+    "payment::SCN-C": {
+      "n_total": 864,
+      "is_fp_resistance": false,
+      "old_perservice": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1_score": 0.0,
+        "fpr": 0.1412037037037037,
+        "tp": 0,
+        "fp": 122,
+        "fn": 36
+      },
+      "eif_perservice": {
+        "precision": 0.041666666666666664,
+        "recall": 1.0,
+        "f1_score": 0.07999999999999999,
+        "fpr": 0.9583333333333334,
+        "tp": 36,
+        "fp": 828,
+        "fn": 0
+      },
+      "if_merged": {
+        "precision": 0.04079254079254079,
+        "recall": 0.9722222222222222,
+        "f1_score": 0.07829977628635347,
+        "fpr": 0.9525462962962963,
+        "tp": 35,
+        "fp": 823,
+        "fn": 1
+      },
+      "eif_merged": {
+        "precision": 0.041666666666666664,
+        "recall": 1.0,
+        "f1_score": 0.07999999999999999,
+        "fpr": 0.9583333333333334,
+        "tp": 36,
+        "fp": 828,
+        "fn": 0
+      }
+    },
+    "product-catalog::SCN-E": {
+      "n_total": 864,
+      "is_fp_resistance": false,
+      "old_perservice": {
+        "precision": 0.36363636363636365,
+        "recall": 1.0,
+        "f1_score": 0.5333333333333333,
+        "fpr": 0.07291666666666667,
+        "tp": 36,
+        "fp": 63,
+        "fn": 0
+      },
+      "eif_perservice": {
+        "precision": 0.041666666666666664,
+        "recall": 1.0,
+        "f1_score": 0.07999999999999999,
+        "fpr": 0.9583333333333334,
+        "tp": 36,
+        "fp": 828,
+        "fn": 0
+      },
+      "if_merged": {
+        "precision": 0.042704626334519574,
+        "recall": 1.0,
+        "f1_score": 0.08191126279863481,
+        "fpr": 0.9340277777777778,
+        "tp": 36,
+        "fp": 807,
+        "fn": 0
+      },
+      "eif_merged": {
+        "precision": 0.041666666666666664,
+        "recall": 1.0,
+        "f1_score": 0.07999999999999999,
+        "fpr": 0.9583333333333334,
+        "tp": 36,
+        "fp": 828,
+        "fn": 0
+      }
+    },
+    "product-reviews::SCN-B": {
+      "n_total": 864,
+      "is_fp_resistance": false,
+      "old_perservice": {
+        "precision": 0.11464968152866242,
+        "recall": 1.0,
+        "f1_score": 0.2057142857142857,
+        "fpr": 0.32175925925925924,
+        "tp": 36,
+        "fp": 278,
+        "fn": 0
+      },
+      "eif_perservice": {
+        "precision": 0.041666666666666664,
+        "recall": 1.0,
+        "f1_score": 0.07999999999999999,
+        "fpr": 0.9583333333333334,
+        "tp": 36,
+        "fp": 828,
+        "fn": 0
+      },
+      "if_merged": {
+        "precision": 0.04374240583232078,
+        "recall": 1.0,
+        "f1_score": 0.08381839348079162,
+        "fpr": 0.9108796296296297,
+        "tp": 36,
+        "fp": 787,
+        "fn": 0
+      },
+      "eif_merged": {
+        "precision": 0.041666666666666664,
+        "recall": 1.0,
+        "f1_score": 0.07999999999999999,
+        "fpr": 0.9583333333333334,
+        "tp": 36,
+        "fp": 828,
+        "fn": 0
+      }
+    },
+    "shipping::SCN-H": {
+      "n_total": 864,
+      "is_fp_resistance": false,
+      "old_perservice": {
+        "precision": 0.08306709265175719,
+        "recall": 0.7222222222222222,
+        "f1_score": 0.1489971346704871,
+        "fpr": 0.33217592592592593,
+        "tp": 26,
+        "fp": 287,
+        "fn": 10
+      },
+      "eif_perservice": {
+        "precision": 0.041666666666666664,
+        "recall": 1.0,
+        "f1_score": 0.07999999999999999,
+        "fpr": 0.9583333333333334,
+        "tp": 36,
+        "fp": 828,
+        "fn": 0
+      },
+      "if_merged": {
+        "precision": 0.04225352112676056,
+        "recall": 1.0,
+        "f1_score": 0.08108108108108109,
+        "fpr": 0.9444444444444444,
+        "tp": 36,
+        "fp": 816,
+        "fn": 0
+      },
+      "eif_merged": {
+        "precision": 0.041666666666666664,
+        "recall": 1.0,
+        "f1_score": 0.07999999999999999,
+        "fpr": 0.9583333333333334,
+        "tp": 36,
+        "fp": 828,
+        "fn": 0
+      }
+    },
+    "recommendation::SCN-D": {
+      "n_total": 864,
+      "is_fp_resistance": false,
+      "old_perservice": {
+        "precision": 0.045859872611464965,
+        "recall": 1.0,
+        "f1_score": 0.08769792935444579,
+        "fpr": 0.8668981481481481,
+        "tp": 36,
+        "fp": 749,
+        "fn": 0
+      },
+      "eif_perservice": {
+        "precision": 0.041666666666666664,
+        "recall": 1.0,
+        "f1_score": 0.07999999999999999,
+        "fpr": 0.9583333333333334,
+        "tp": 36,
+        "fp": 828,
+        "fn": 0
+      },
+      "if_merged": {
+        "precision": 0.041666666666666664,
+        "recall": 1.0,
+        "f1_score": 0.07999999999999999,
+        "fpr": 0.9583333333333334,
+        "tp": 36,
+        "fp": 828,
+        "fn": 0
+      },
+      "eif_merged": {
+        "precision": 0.041666666666666664,
+        "recall": 1.0,
+        "f1_score": 0.07999999999999999,
+        "fpr": 0.9583333333333334,
+        "tp": 36,
+        "fp": 828,
+        "fn": 0
+      }
+    },
+    "recommendation::SCN-I": {
+      "n_total": 864,
+      "is_fp_resistance": false,
+      "old_perservice": {
+        "precision": 0.03766233766233766,
+        "recall": 0.8055555555555556,
+        "f1_score": 0.07196029776674938,
+        "fpr": 0.8576388888888888,
+        "tp": 29,
+        "fp": 741,
+        "fn": 7
+      },
+      "eif_perservice": {
+        "precision": 0.041666666666666664,
+        "recall": 1.0,
+        "f1_score": 0.07999999999999999,
+        "fpr": 0.9583333333333334,
+        "tp": 36,
+        "fp": 828,
+        "fn": 0
+      },
+      "if_merged": {
+        "precision": 0.04176334106728538,
+        "recall": 1.0,
+        "f1_score": 0.0801781737193764,
+        "fpr": 0.9560185185185185,
+        "tp": 36,
+        "fp": 826,
+        "fn": 0
+      },
+      "eif_merged": {
+        "precision": 0.041666666666666664,
+        "recall": 1.0,
+        "f1_score": 0.07999999999999999,
+        "fpr": 0.9583333333333334,
+        "tp": 36,
+        "fp": 828,
+        "fn": 0
+      }
+    }
+  },
+  "aggregate": {
+    "old_perservice": {
+      "precision": 0.06950750960530912,
+      "recall": 0.7896825396825397,
+      "f1_score": 0.12776886035313,
+      "fpr": 0.3425925925925926,
+      "tp": 199,
+      "fp": 2664,
+      "fn": 53
+    },
+    "eif_perservice": {
+      "precision": 0.032407407407407406,
+      "recall": 1.0,
+      "f1_score": 0.06278026905829596,
+      "fpr": 0.9675925925925926,
+      "tp": 252,
+      "fp": 7524,
+      "fn": 0
+    },
+    "if_merged": {
+      "precision": 0.033135313531353135,
+      "recall": 0.996031746031746,
+      "f1_score": 0.06413696179890123,
+      "fpr": 0.9418724279835391,
+      "tp": 251,
+      "fp": 7324,
+      "fn": 1
+    },
+    "eif_merged": {
+      "precision": 0.032407407407407406,
+      "recall": 1.0,
+      "f1_score": 0.06278026905829596,
+      "fpr": 0.9675925925925926,
+      "tp": 252,
+      "fp": 7524,
+      "fn": 0
+    }
+  }
+}
