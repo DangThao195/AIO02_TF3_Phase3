@@ -142,8 +142,13 @@ class CopilotAgent:
         if ctx is None:
             if self.llm:
                 try:
-                    return await self.llm.ainvoke(messages, **kwargs)
+                    result = await self.llm.ainvoke(messages, **kwargs)
+                    # Record success so circuit breaker can recover HALF_OPEN → CLOSED
+                    self._bedrock_breaker._on_success()
+                    return result
                 except Exception as e:
+                    # Record failure so circuit breaker can CLOSED → OPEN
+                    self._bedrock_breaker._on_failure()
                     if hasattr(self, "fallback_llm") and self.fallback_llm:
                         return await self.fallback_llm.ainvoke(messages, **kwargs)
                     raise
@@ -158,6 +163,8 @@ class CopilotAgent:
         try:
             response = await self.llm.ainvoke(messages, **kwargs)
             latency_ms = int((time.time() - t0) * 1000)
+            # Record success for circuit breaker
+            self._bedrock_breaker._on_success()
             get_tracer().record_call(
                 trace_id=trace_id,
                 request_id=ctx["request_id"],
@@ -171,6 +178,8 @@ class CopilotAgent:
             )
             return response
         except Exception as primary_err:
+            # Record failure for circuit breaker
+            self._bedrock_breaker._on_failure()
             if hasattr(self, "fallback_llm") and self.fallback_llm is not None:
                 try:
                     logger.warning(
@@ -210,6 +219,7 @@ class CopilotAgent:
                 latency_ms=latency_ms,
             )
             raise primary_err
+
 
     def _extract_text(self, response: Any) -> str:
         final = response.content if hasattr(response, "content") else str(response)
@@ -949,6 +959,7 @@ class CopilotAgent:
                     )
 
                 # ── Kiểm tra Cache Tool ──
+                _tool_t0 = _now_ms()
                 cached_str = self._cache.get(tc_name, tc_args)
                 if cached_str is not None:
                     res_str = cached_str
@@ -957,6 +968,7 @@ class CopilotAgent:
                     res_str = await tool_fn.ainvoke(tc_args)
                     self._cache.set(tc_name, tc_args, res_str)
                     logger.debug(f"Cache MISS for tool {tc_name}")
+                _tool_latency_ms = _now_ms() - _tool_t0
 
                 try:
                     res_json = json.loads(res_str)
@@ -1058,7 +1070,41 @@ class CopilotAgent:
                         )
                     return res_json  # Return immediately for pending actions
 
+                # ── MANDATE #24: Record tool trace span ──────────────────────────
+                ctx = trace_llm_ctx.get()
+                if ctx:
+                    import time as _time_mod
+                    get_tracer().record_call(
+                        trace_id=str(uuid.uuid4()),
+                        request_id=ctx.get("request_id", ""),
+                        layer=f"tool:{tc_name}",
+                        session_id=ctx.get("session_id", ""),
+                        user_id=ctx.get("user_id", ""),
+                        surface="copilot",
+                        prompt_text="",
+                        response=None,
+                        outcome="ok",
+                        latency_ms=_tool_latency_ms,
+                        tool_calls=[{"name": tc_name, "args": {k: str(v)[:80] for k, v in tc_args.items()}}],
+                    )
             except Exception as e:
+                # ── MANDATE #24: Record tool error trace span ─────────────────────
+                ctx = trace_llm_ctx.get()
+                if ctx:
+                    get_tracer().record_call(
+                        trace_id=str(uuid.uuid4()),
+                        request_id=ctx.get("request_id", ""),
+                        layer=f"tool:{tc_name}",
+                        session_id=ctx.get("session_id", ""),
+                        user_id=ctx.get("user_id", ""),
+                        surface="copilot",
+                        prompt_text="",
+                        response=None,
+                        error=str(e),
+                        outcome="error",
+                        latency_ms=0,
+                        tool_calls=[{"name": tc_name, "args": {k: str(v)[:80] for k, v in tc_args.items()}}],
+                    )
                 evidence[tc_name] = {"status": "error", "error": str(e)}
 
         # Persist the updated context to SessionStore
