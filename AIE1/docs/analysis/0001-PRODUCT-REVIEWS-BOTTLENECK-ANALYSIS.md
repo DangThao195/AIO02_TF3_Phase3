@@ -1,278 +1,36 @@
-# Báo cáo Phân tích Điểm nghẽn Dịch vụ Product Reviews
+# ⚡ Báo Cáo Phân Tích & Tối Ưu Điểm Nghẽn Dịch Vụ Product Reviews
+*(Product Review Server Bottleneck Analysis & Optimization Specifications)*
 
-Tài liệu này tổng hợp chi tiết các điểm nghẽn hiệu năng, độ trễ, và rủi ro vận hành trong luồng xử lý của dịch vụ Product Reviews. Các điểm nghẽn được phân loại theo mức độ ảnh hưởng, độ phức tạp thuật toán (Big O), số lượng vòng lặp, và độ khó thực hiện để hỗ trợ việc đưa ra quyết định đánh đổi (tradeoff).
-
----
-
-## 1. Bảng So sánh & Đánh giá Mức độ Ưu tiên (Priority Matrix)
-
-| # | Điểm nghẽn (Bottleneck) | Vòng lặp & Độ phức tạp hiện tại | Sau khi tối ưu | Mức độ ảnh hưởng | Mức độ ưu tiên | Trạng thái |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| 1 | **Không sử dụng DB Connection Pool** | $O(Q \times C_{\text{connect}})$ lần bắt tay TCP/SSL | $O(1)$ tái sử dụng kết nối | Nghiêm trọng | **P0 (Khẩn cấp)** | **Đã triển khai** |
-| 2 | **gRPC Thread Pool quá nhỏ (`max_workers=10`)** | $O(1)$ nghẽn hàng đợi (Queue Block) | $O(1)$ xử lý đồng thời thực thụ | Nghiêm trọng | **P0 (Khẩn cấp)** | **Đã triển khai** |
-| 3 | **Thiếu Timeout gRPC gọi Product Catalog** | $O(\infty)$ nếu Catalog Service bị treo | $O(\text{timeout})$ ngắt sớm | Cao | **P0 (Khẩn cấp)** | **Đã triển khai** |
-| 4 | **Thiếu Timeout cho AWS Bedrock Client** | $O(\text{default } 60\text{s})$ chờ phản hồi | $O(\text{timeout } 3\text{s}\text{-}10\text{s})$ | Cao | **P1 (Cao)** | **Đã triển khai** |
-| 5 | **Ghi Log đồng bộ trong vòng lặp đọc Reviews** | **1 vòng lặp:** $O(N)$ log I/O tuần tự | $O(1)$ log tổng thể (không lặp) | Trung bình | **P1 (Cao)** | **Đã triển khai** |
-| 6 | **Quét Regex Guardrail tuần tự mọi Review** | **1 vòng lặp:** $O(N \times R \times L)$ với $R$ regex, độ dài $L$ | $O(1)$ amortized (dùng Cache) | Trung bình | **P2 (Trung bình)**| **Đã triển khai** |
-| 7 | **Xử lý tuần tự các Tool Calls (OpenAI)** | **1 vòng lặp:** $O(\sum D_i)$ (tổng độ trễ các tools) | $O(\max D_i)$ (chạy song song) | Thấp | **P2 (Trung bình)**| **Đã triển khai** |
-
-*Chú thích:* 
-* $N$: Số lượng reviews của một sản phẩm.
-* $R$: Số lượng mẫu Regex cần quét (28+ patterns).
-* $L$: Chiều dài trung bình của nội dung văn bản review.
-* $D_i$: Độ trễ mạng của tool call thứ $i$.
-* $Q$: Số lượng truy vấn tới cơ sở dữ liệu.
-* $C_{\text{connect}}$: Chi phí thiết lập kết nối (bắt tay TCP, TLS/SSL, xác thực).
+Tài liệu này tổng hợp chi tiết phân tích điểm nghẽn hiệu năng, độ trễ và rủi ro vận hành trong dịch vụ **Product Reviews**. Tất cả các điểm nghẽn được đánh giá theo độ phức tạp toán học (Big-O), tác động hệ thống, phương án tối ưu và mã nguồn triển khai thực tế.
 
 ---
 
-## 2. Phân tích Chi tiết & Giải pháp cho Điểm nghẽn Thuật toán (Sắp xếp theo mức độ nghiêm trọng giảm dần)
+## 1. Ma Trận Đánh Giá Mức Độ Ưu Tiên & Độ Phức Tạp (Priority Matrix)
 
-### 2.1. Kết nối Database không có Connection Pool (P0 - Nghiêm trọng)
-* **Ngữ cảnh hệ thống & Khái niệm (Database Connection Starvation / Overhead):** 
-  Dịch vụ Product Reviews nhận hàng trăm yêu cầu gRPC đồng thời từ người dùng. Khi không dùng pool, mỗi truy vấn SQL buộc phải thiết lập một kết nối vật lý mới tới Postgres. Việc này tạo ra một "cơn bão kết nối" (connection storm) làm tiêu hao CPU của cơ sở dữ liệu cho quá trình bắt tay (handshake) và nhanh chóng chạm ngưỡng giới hạn kết nối tối đa (`max_connections`) của hệ quản trị cơ sở dữ liệu, khiến toàn bộ các yêu cầu đọc ghi tiếp theo bị từ chối thẳng thừng (starvation).
-* **Mã nguồn liên quan:** Khởi tạo kết nối trong [database.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/database.py).
-* **Số lượng vòng lặp:** Không có vòng lặp nội bộ, thực thi tuần tự cho mỗi câu query $Q$.
-* **Độ phức tạp hiện tại:** 
-  $$O(Q \times C_{\text{connect}})$$
-  Với mỗi truy vấn $Q$ tới DB, hệ thống tốn chi phí thiết lập kết nối $C_{\text{connect}}$ (bắt tay TCP, TLS, xác thực).
-* **Sau khi tối ưu:** Độ phức tạp giảm về $O(1)$ (tận dụng kết nối sẵn có trong pool bộ nhớ).
-* **Hệ quả khi tải cao:** Gây nghẽn cổ chai latency tại bước kết nối DB và nhanh chóng làm cạn kiệt tài nguyên DB connection limit.
-* **Giải pháp cụ thể:** Sử dụng connection pool luồng an toàn bằng `psycopg2.pool.ThreadedConnectionPool`.
-  > [!WARNING]
-  > **Bẫy triển khai #1 — Thiếu commit/rollback khi chuyển sang Pool:**
-  > Code hiện tại dùng `with psycopg2.connect() as conn:` — cú pháp `with` này tự động commit khi thành công và rollback khi exception. Khi chuyển sang `db_pool.getconn()`, cơ chế auto-commit **không còn hoạt động nữa**. Nếu không thêm `connection.commit()` và `connection.rollback()` thủ công, kết nối trả về pool sẽ nằm trong trạng thái transaction lỗi, khiến các request sau mượn lại kết nối đó gặp lỗi `InFailedSqlTransaction`.
+| #   | Điểm nghẽn (Bottleneck)                         | Phức tạp ban đầu                 | Sau khi tối ưu                   |    Tác động     | Ưu tiên |     Trạng thái      |
+| :-- | :---------------------------------------------- | :------------------------------- | :------------------------------- | :-------------: | :-----: | :-----------------: |
+| 1   | **Thiếu DB Connection Pool**                    | $O(Q \times C_{\text{connect}})$ | $O(1)$                           | 🔴 Nghiêm trọng | **P0**  | ✅ **Đã triển khai** |
+| 2   | **gRPC Thread Pool quá nhỏ (`max_workers=10`)** | $O(1)$ nghẽn hàng đợi            | $O(1)$ song song thực thụ        | 🔴 Nghiêm trọng | **P0**  | ✅ **Đã triển khai** |
+| 3   | **Thiếu Timeout gRPC gọi Product Catalog**      | $O(\infty)$ treo vô hạn          | $O(\text{timeout } 3.0\text{s})$ | 🔴 Nghiêm trọng | **P0**  | ✅ **Đã triển khai** |
+| 4   | **Thiếu Timeout cho AWS Bedrock Client**        | $O(\text{default } 60\text{s})$  | $O(\text{read } 10\text{s})$     |     🟡 Cao      | **P1**  | ✅ **Đã triển khai** |
+| 5   | **Ghi Log đồng bộ trong vòng lặp đọc Reviews**  | $O(N \times I/O_{\text{sync}})$  | $O(1)$ tổng thể                  |  🟡 Trung bình  | **P1**  | ✅ **Đã triển khai** |
+| 6   | **Quét Regex Guardrail tuần tự mọi Review**     | $O(N \times R \times L)$         | $O(1)$ (dùng DB Column)          |  🟡 Trung bình  | **P2**  | ✅ **Đã triển khai** |
+| 7   | **Xử lý tuần tự các Tool Calls (OpenAI)**       | $O(\sum D_i)$                    | $O(\max D_i)$                    |     🟢 Thấp     | **P2**  | ✅ **Đã triển khai** |
 
-  > [!WARNING]
-  > **Bẫy triển khai #2 — Xung đột giữa `maxconn` và `max_workers`:**
-  > Nếu gRPC Thread Pool được tăng lên `max_workers=50` (Mục 3.1) nhưng DB Connection Pool chỉ có `maxconn=20`, khi hơn 20 request đồng thời cần truy vấn DB, các thread còn lại sẽ bị block chờ mượn kết nối. Cần điều chỉnh `maxconn` tối thiểu bằng `30` để tránh nghẽn cổ chai mới.
-
-  * *Mã nguồn đề xuất (đã bổ sung commit/rollback):*
-    ```python
-    from psycopg2.pool import ThreadedConnectionPool
-    
-    # Khởi tạo một pool toàn cục duy nhất
-    # LƯU Ý: maxconn cần phối hợp với max_workers của gRPC server
-    db_pool = ThreadedConnectionPool(minconn=5, maxconn=30, dsn=db_connection_str)
-    
-    def fetch_product_reviews_from_db(request_product_id):
-        connection = None
-        try:
-            # Mượn kết nối từ pool thay vì tạo mới
-            connection = db_pool.getconn()
-            with connection.cursor() as cursor:
-                query = "SELECT username, description, score FROM reviews.productreviews WHERE product_id = %s"
-                cursor.execute(query, (request_product_id, ))
-                records = cursor.fetchall()
-            connection.commit()  # BẮT BUỘC: commit thủ công khi dùng pool
-            return records
-        except Exception as e:
-            if connection is not None:
-                connection.rollback()  # BẮT BUỘC: rollback khi có lỗi
-            raise e
-        finally:
-            if connection is not None:
-                # Đảm bảo trả kết nối về pool trong khối finally
-                db_pool.putconn(connection)
-    ```
+*Chú thích:* $N$: Số lượng reviews sản phẩm | $R$: Số mẫu Regex (28+ patterns) | $L$: Chiều dài chuỗi review | $D_i$: Độ trễ tool call $i$ | $Q$: Số câu SQL query | $C_{\text{connect}}$: Chi phí bắt tay TCP/TLS/Authen DB.
 
 ---
 
-### 2.2. Ghi Log đồng bộ trong vòng lặp đọc Reviews (P1 - Trung bình)
-* **Ngữ cảnh hệ thống & Khái niệm (Synchronous Log Blocking / Disk I/O Bottleneck):**
-  Trong Python, thư viện logging mặc định ghi log đồng bộ (ghi trực tiếp xuống ổ đĩa cứng hoặc bộ đệm console stdout). Khi luồng thực thi ghi log chi tiết cho từng đánh giá của một sản phẩm có hàng trăm review, luồng CPU xử lý request sẽ phải dừng lại đợi đĩa cứng ghi xong dữ liệu mới chạy tiếp. Điều này vô tình chuyển đổi một tác vụ đọc bộ nhớ/mạng rất nhanh thành một tác vụ bị nghẽn bởi tốc độ đọc ghi đĩa cứng vật lý (Disk I/O Bottleneck).
-* **Mã nguồn liên quan:** Vòng lặp `for row in records` ở dòng 286-292 trong [product_reviews_server.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/product_reviews_server.py#L286-L292).
-* **Số lượng vòng lặp:** 1 vòng lặp tuần tự duyệt qua $N$ bản ghi reviews lấy từ DB.
-* **Độ phức tạp hiện tại:** 
-  $$O(N \times I/O_{\text{sync}})$$
-  Với mỗi dòng review, hệ thống gọi `logger.info` để format chuỗi và ghi ra console/standard output một cách đồng bộ. Khi $N$ lớn, chi phí I/O đồng bộ này sẽ khóa chặt thread xử lý.
-* **Sau khi tối ưu:** Độ phức tạp giảm về $O(1)$ thao tác I/O cho cả request bằng cách chỉ ghi log 1 dòng tổng hợp bên ngoài vòng lặp.
-* **Hệ quả khi tải cao:** Gây tắc nghẽn I/O hệ thống file/console, tăng thời gian phản hồi của API đọc review.
-* **Giải pháp cụ thể:** Hạ cấp độ log trong vòng lặp thành `DEBUG` (hoặc loại bỏ hoàn toàn) để tránh ghi đĩa ở môi trường Production.
-  * *Mã nguồn đề xuất:*
-    ```python
-    def get_product_reviews(request_product_id):
-        # ...
-        for row in records:
-            # Thay đổi INFO -> DEBUG
-            logger.debug(f"  username: {row[0]}, description: {row[1]}, score: {str(row[2])}")
-            product_reviews.product_reviews.add(...)
-        
-        # Thêm log tổng hợp bên ngoài vòng lặp
-        logger.info(f"Retrieved {len(records)} reviews for product_id: {request_product_id}")
-        return product_reviews
-    ```
+## 2. Phân Tích Chi Tiết Điểm Nghẽn Thuật Toán (Algorithmic Bottlenecks)
 
----
-
-### 2.3. Quét Regex Guardrail tuần tự cho mọi Review (P2 - Thấp)
-* **Ngữ cảnh hệ thống & Khái niệm (O(N) CPU Bound / Inline Security Scan Overhead):**
-  Để ngăn chặn tấn công Prompt Injection lưu trữ trong cơ sở dữ liệu (Stored Prompt Injection - kẻ xấu cố tình viết câu đánh giá chứa mã lệnh hệ thống hòng chiếm quyền kiểm soát LLM khi LLM đọc review), hệ thống phải quét nội dung review trước khi truyền vào LLM. Tuy nhiên, việc quét trực tiếp (inline) tuần tự toàn bộ danh sách review bằng các mẫu regex phức tạp ngay trên luồng sinh câu trả lời của client biến dịch vụ từ I/O-bound thành CPU-bound rất nặng, gây tăng trễ không đáng có.
-* **Mã nguồn liên quan:** Hàm [normalize_reviews_for_context](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/product_reviews_server.py#L136) gọi [check_input](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/guardrails/input_filter.py#L200).
-* **Số lượng vòng lặp:** 1 vòng lặp tuần tự duyệt qua toàn bộ $N$ reviews được lấy lên từ database.
-* **Độ phức tạp hiện tại:** 
-  $$O(N \times R \times L)$$
-  Với mỗi review trong số $N$ reviews, mã nguồn thực hiện quét toàn bộ $R$ regex patterns (28+ mẫu). Với mỗi pattern, thuật toán thực hiện tìm kiếm trên chuỗi độ dài $L$. Đây là tác vụ ngốn CPU (CPU-bound) cực kỳ lớn khi một sản phẩm hot có hàng trăm hoặc hàng nghìn review ($N \gg 100$).
-* **Sau khi tối ưu:** Độ phức tạp giảm xuống còn $O(N)$ (nếu dùng Cache chỉ tốn $O(1)$ lookup trong bộ nhớ cho mỗi review đã quét qua), hoặc giảm về $O(1)$ trên luồng đọc nếu quét khi ghi.
-* **Hệ quả khi tải cao:** CPU tăng cao đột biến, kéo dài thời gian phản hồi của dịch vụ AI RAG.
-* **Trạng thái (Đã triển khai):** 
-  > [!NOTE]
-  > **Quyết định thiết kế theo [0006-PRODUCT-REVIEW-SERVER-CACHING-DESIGN.md](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/docs/analysis/0006-PRODUCT-REVIEW-SERVER-CACHING-DESIGN.md):**
-  * Đã áp dụng **Phương án B (DB Column)**: Thêm cột `is_safe` vào database và thực hiện quét Regex khi ghi review. Ở luồng đọc, SQL query được cập nhật thành `WHERE is_safe = TRUE` để đưa trễ luồng đọc về hẳn $O(1)$ mà không tốn RAM/CPU của server gRPC khi request.
-
----
-
-### 2.4. Xử lý tuần tự các Tool Calls trong luồng OpenAI (P2 - Thấp)
-* **Ngữ cảnh hệ thống & Khái niệm (Sequential Network Blocking / Latency Accumulation):**
-  Trong kiến trúc RAG, LLM có thể yêu cầu lấy nhiều thông tin độc lập từ các hệ thống khác nhau (ví dụ: vừa lấy thông tin catalog vừa lấy review). Do các cuộc gọi này độc lập về dữ liệu, việc gọi tuần tự (chờ xong tool này mới gọi tool kia) làm tích lũy độ trễ mạng (latency accumulation). Việc chạy tuần tự biến tổng thời gian phản hồi thành tổng độ trễ của tất cả các dịch vụ liên kết, làm chậm phản hồi cuối cùng tới khách hàng.
-* **Mã nguồn liên quan:** Vòng lặp `for tool_call in tool_calls:` ở dòng 450-476 trong [product_reviews_server.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/product_reviews_server.py#L450-L476).
-* **Số lượng vòng lặp:** 1 vòng lặp tuần tự duyệt qua các yêu cầu gọi công cụ (`tool_calls`) từ LLM.
-* **Độ phức tạp hiện tại:** 
-  $$O\left(\sum_{i=1}^{T} D_i\right)$$
-  Trong đó $T$ là số lượng tool gọi (thường $T \le 2$ gồm `fetch_product_reviews` và `fetch_product_info`), $D_i$ là độ trễ thực thi (mạng/DB) của tool thứ $i$. Do xử lý tuần tự, tổng thời gian xử lý là tổng độ trễ của tất cả các tools.
-* **Sau khi tối ưu:** Độ phức tạp giảm về $O(\max(D_1, D_2, \dots, D_T))$ (chỉ phụ thuộc vào công cụ phản hồi lâu nhất nhờ cơ chế chạy song song).
-* **Hệ quả khi tải cao:** Làm tăng thời gian phản hồi một cách không cần thiết nếu mô hình quyết định gọi đồng thời cả hai công cụ.
-* **Giải pháp cụ thể:** Sử dụng thư viện `concurrent.futures.ThreadPoolExecutor` để song song hóa việc thực thi các tool call độc lập và tập hợp kết quả đồng thời.
-  > [!WARNING]
-  > **Bẫy triển khai #3 — Xử lý biến `raw_reviews_for_judge` và thứ tự `messages` khi song song hóa:**
-  > 1. Kết quả của `fetch_product_reviews` sau khi lấy về cần được truyền tiếp qua `normalize_reviews_for_context()` để tạo biến `raw_reviews_for_judge` (dùng cho bước Judge đánh giá). Khi song song hóa, cần đảm bảo biến này được gán đúng từ kết quả của tool `fetch_product_reviews`, không bị ghi đè hoặc bỏ sót bởi kết quả của `fetch_product_info`.
-  > 2. Thứ tự các phần tử trong danh sách `messages` ảnh hưởng đến ngữ cảnh mà LLM nhận được. Cần append kết quả tool vào `messages` theo đúng thứ tự `tool_call_id` ban đầu, không phải theo thứ tự hoàn thành ngẫu nhiên của `as_completed`.
-
-  * *Mã nguồn đề xuất:*
-    ```python
-    from concurrent import futures
-    
-    # Khi xử lý tool_calls:
-    with futures.ThreadPoolExecutor(max_workers=len(tool_calls)) as executor:
-        future_to_tool = {}
-        for tool_call in tool_calls:
-            function_args = json.loads(tool_call.function.arguments)
-            # Gửi song song các task
-            if tool_call.function.name == "fetch_product_reviews":
-                future = executor.submit(fetch_product_reviews, product_id=function_args.get("product_id"))
-            elif tool_call.function.name == "fetch_product_info":
-                future = executor.submit(fetch_product_info, product_id=function_args.get("product_id"))
-            future_to_tool[future] = tool_call
-            
-        # Thu thập kết quả theo thứ tự tool_calls ban đầu (KHÔNG dùng as_completed)
-        for future in future_to_tool:
-            tool_call = future_to_tool[future]
-            result = future.result()
-            # Xử lý normalize và gán raw_reviews_for_judge nếu là fetch_product_reviews
-            # Append vào messages theo đúng thứ tự...
-    ```
-
----
-
-## 3. Các lỗi nghẽn và Rủi ro Cấu trúc Hạ tầng (Sắp xếp theo mức độ nghiêm trọng giảm dần)
-
-### 3.1. gRPC Thread Pool quá nhỏ (`max_workers=10`) (P0 - Nghiêm trọng)
-* **Ngữ cảnh hệ thống & Khái niệm (Thread Pool Starvation / Thread Exhaustion):**
-  gRPC Server trong môi trường Python sử dụng một pool gồm các luồng (thread) xử lý để đồng thời tiếp nhận các cuộc gọi API từ client. Vì Python gRPC chạy đồng bộ, mỗi thread sẽ bị giữ chân hoàn toàn trong suốt quá trình chờ LLM phản hồi (I/O Blocked). Khi số thread chỉ giới hạn ở `10`, chỉ cần có 10 người dùng hỏi trợ lý AI đồng thời là toàn bộ thread pool sẽ bị cạn kiệt (starvation), khiến hệ thống không thể phản hồi bất cứ request nào khác, bao gồm cả những tác vụ đọc database thông thường chỉ mất vài mili-giây.
-* **Mã nguồn liên quan:** Dòng 598 trong [product_reviews_server.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/product_reviews_server.py#L598).
-* **Mô tả:** Khởi tạo gRPC server sử dụng thread pool chỉ có tối đa 10 workers để gánh toàn bộ tác vụ.
-* **Hệ quả:** Thường xuyên gây lỗi nghẽn hàng đợi (Queue block) và timeout.
-* **Giải pháp cụ thể:** Tăng quy mô Thread Pool bằng cách điều chỉnh tham số `max_workers` khi khởi động gRPC server trong file [product_reviews_server.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/product_reviews_server.py).
-  * *Mã nguồn đề xuất:*
-    ```python
-    # Thay thế:
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    # Thành:
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=50))
-    ```
-
-### 3.2. Thiếu Timeout gRPC gọi Product Catalog Service (P0 - Nghiêm trọng)
-* **Ngữ cảnh hệ thống & Khái niệm (Unbounded Blocking Call / Cascade Failure):**
-  Trong hệ thống phân tán (Microservices), lỗi lan truyền (cascade failure) là rủi ro nguy hiểm nhất. Dịch vụ Product Reviews phụ thuộc trực tiếp vào Product Catalog Service để lấy thông tin sản phẩm. Nếu Catalog Service bị treo mạng hoặc quá tải phản hồi cực chậm, cuộc gọi gRPC không có timeout sẽ khóa chặt thread xử lý của dịch vụ ta vô thời hạn. Lỗi từ Catalog Service sẽ trực tiếp lây lan và làm treo đứng hoàn toàn dịch vụ Product Reviews.
-* **Mã nguồn liên quan:** Hàm [fetch_product_info](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/product_reviews_server.py#L549).
-* **Mô tả:** Cuộc gọi `product_catalog_stub.GetProduct` không cấu hình tham số `timeout`.
-* **Hệ quả:** Dễ dàng làm treo đứng toàn bộ server nếu Catalog Service bị chậm.
-* **Giải pháp cụ thể:** Thiết lập tham số `timeout` rõ ràng vào cuộc gọi gRPC client trong [product_reviews_server.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/product_reviews_server.py).
-  * *Mã nguồn đề xuất:*
-    ```python
-    def fetch_product_info(product_id):
-        try:
-            # Thêm timeout=3.0 giây
-            product = product_catalog_stub.GetProduct(
-                demo_pb2.GetProductRequest(id=product_id), 
-                timeout=3.0
-            )
-            return MessageToJson(product)
-        except Exception as e:
-            return json.dumps({"error": str(e)})
-    ```
-
-### 3.3. Thiếu Timeout cho AWS Bedrock Client (P1 - Cao)
-* **Ngữ cảnh hệ thống & Khái niệm (Unbounded Cloud I/O / Long-tail Latency):**
-  Khi tích hợp dịch vụ bên thứ ba (AWS Cloud), đường truyền mạng và độ tải của API Cloud nằm ngoài tầm kiểm soát của hệ thống nội bộ. Thời gian phản hồi có thể chịu hiện tượng trễ đuôi dài (long-tail latency). Việc để timeout mặc định của thư viện boto3 là 60 giây có nghĩa ta chấp nhận cho phép worker thread của gRPC bị giữ chân trong vòng 1 phút nếu AWS gặp trục trặc. Đây là một con số quá lớn đối với trải nghiệm người dùng cuối và nhanh chóng vắt kiệt tài nguyên thread pool cục bộ.
-* **Mã nguồn liên quan:** Khởi tạo `bedrock_client` ở dòng 610 trong [product_reviews_server.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/product_reviews_server.py#L610).
-* **Mô tả:** Boto3 client gọi API Bedrock không có cấu hình read/connect timeout tùy chỉnh.
-* **Hệ quả:** Treo thread xử lý gRPC tới 60s khi AWS Bedrock phản hồi chậm.
-* **Giải pháp cụ thể:** Khởi tạo `bedrock_client` đi kèm với cấu hình `botocore.config.Config` có giới hạn connect và read timeout cụ thể trong [product_reviews_server.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/product_reviews_server.py).
-  * *Mã nguồn đề xuất:*
-    ```python
-    from botocore.config import Config
-    
-    # Connect timeout 3s, Read timeout 10s cho các mô hình AI sinh text
-    bedrock_config = Config(connect_timeout=3.0, read_timeout=10.0)
-    bedrock_client = boto3.client('bedrock-runtime', region_name=aws_region, config=bedrock_config)
-    ```
-
----
-
-## 4. Kế hoạch & Lộ trình Hành động Chi tiết (Implementation Roadmap)
-
-Khuyên dùng thực hiện sửa đổi mã nguồn tuần tự theo 3 giai đoạn dưới đây nhằm tối ưu hóa sự ổn định trước, sau đó mới đến hiệu năng.
-
-### Giai đoạn 1: Khắc phục khẩn cấp rủi ro sập và treo dịch vụ (Ưu tiên P0)
-*Mục tiêu: Ngăn ngừa cạn kiệt thread pool và giải phóng tài nguyên hệ thống nhanh chóng khi các dịch vụ liên kết gặp sự cố.*
-
-#### 1. Cấu hình lại Thread Pool của gRPC Server
-* **File cần sửa:** [product_reviews_server.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/product_reviews_server.py#L598)
-* **Chi tiết thay đổi:**
-  ```python
-  # Thay thế:
-  server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-  # Thành:
-  server = grpc.server(futures.ThreadPoolExecutor(max_workers=50))
-  ```
-
-#### 2. Cấu hình Timeout cho cuộc gọi Product Catalog
-* **File cần sửa:** [product_reviews_server.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/product_reviews_server.py#L551)
-* **Chi tiết thay đổi:**
-  ```python
-  # Thay thế:
-  product = product_catalog_stub.GetProduct(demo_pb2.GetProductRequest(id=product_id))
-  # Thành:
-  product = product_catalog_stub.GetProduct(demo_pb2.GetProductRequest(id=product_id), timeout=3.0)
-  ```
-
-#### 3. Cấu hình Timeout cho AWS Bedrock Client
-* **File cần sửa:** [product_reviews_server.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/product_reviews_server.py#L610)
-* **Chi tiết thay đổi:**
-  ```python
-  # Thay thế:
-  bedrock_client = boto3.client('bedrock-runtime', region_name=aws_region)
-  # Thành:
-  from botocore.config import Config
-  bedrock_config = Config(connect_timeout=3.0, read_timeout=10.0)
-  bedrock_client = boto3.client('bedrock-runtime', region_name=aws_region, config=bedrock_config)
-  ```
-
----
-
-### Giai đoạn 2: Tối ưu hóa tài nguyên DB và I/O hệ thống (Ưu tiên P1)
-*Mục tiêu: Đưa chi phí kết nối DB về hằng số $O(1)$ và triệt tiêu log I/O dư thừa.*
-
-#### 1. Tích hợp Connection Pooling cho Postgres
-* **File cần sửa:** [database.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/database.py)
-* **Chi tiết thay đổi:**
-  1. Khởi tạo một đối tượng ThreadedConnectionPool toàn cục với `maxconn=30` (phối hợp với `max_workers=50` của gRPC).
-  2. Cập nhật hàm `fetch_product_reviews_from_db` và `fetch_avg_product_review_score_from_db` để mượn và trả kết nối.
-  3. **BẮT BUỘC** thêm `connection.commit()` khi thành công và `connection.rollback()` khi lỗi (xem Bẫy triển khai #1 tại Mục 2.1).
+### 2.1. Kết Nối Database Không Có Connection Pool (P0 - Nghiêm trọng)
+* **Nguyên nhân:** Mỗi câu SQL query tạo mới 1 kết nối vật lý Postgres ([database.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/database.py)), gây ra "connection storm", tiêu tốn CPU DB cho bắt tay TCP/TLS và vượt ngưỡng `max_connections`.
+* **Độ phức tạp:** Ban đầu $O(Q \times C_{\text{connect}}) \longrightarrow$ Sau tối ưu **$O(1)$** (mượn kết nối từ Pool).
+* **Giải pháp mã nguồn (`psycopg2.pool.ThreadedConnectionPool`):**
   ```python
   from psycopg2.pool import ThreadedConnectionPool
   
+  # Khởi tạo pool toàn cục với maxconn=30 (tương thích max_workers gRPC)
   db_pool = ThreadedConnectionPool(minconn=5, maxconn=30, dsn=db_connection_str)
   
   def fetch_product_reviews_from_db(request_product_id):
@@ -280,35 +38,239 @@ Khuyên dùng thực hiện sửa đổi mã nguồn tuần tự theo 3 giai đo
       try:
           connection = db_pool.getconn()
           with connection.cursor() as cursor:
-              # thực thi truy vấn SQL bình thường...
-          connection.commit()   # BẮT BUỘC
+              query = "SELECT username, description, score FROM reviews.productreviews WHERE product_id = %s AND is_safe = TRUE"
+              cursor.execute(query, (request_product_id,))
+              records = cursor.fetchall()
+          connection.commit()  # BẮT BUỘC: commit thủ công khi dùng Pool
+          return records
       except Exception as e:
           if connection is not None:
-              connection.rollback()  # BẮT BUỘC
+              connection.rollback()  # BẮT BUỘC: rollback khi exception
           raise e
       finally:
           if connection is not None:
               db_pool.putconn(connection)
   ```
 
-#### 2. Giảm tải Log đồng bộ trong vòng lặp review
-* **File cần sửa:** [product_reviews_server.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/product_reviews_server.py#L287)
-* **Chi tiết thay đổi:** Đổi mức logging của log trong vòng lặp từ `INFO` về `DEBUG` để tắt log tại môi trường Production.
+---
+
+### 2.2. Ghi Log Đồng Bộ Trong Vòng Lặp Đọc Reviews (P1 - Trung bình)
+* **Nguyên nhân:** Đọc từng review trong vòng lặp `for row in records` đều gọi `logger.info` đồng bộ xuống đĩa cứng console ([product_reviews_server.py:L286-292](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/product_reviews_server.py#L286-L292)), biến tác vụ bộ nhớ thành nghẽn đĩa Disk I/O.
+* **Độ phức tạp:** Ban đầu $O(N \times I/O_{\text{sync}}) \longrightarrow$ Sau tối ưu **$O(1)$** (chỉ log 1 dòng tổng hợp).
+* **Giải pháp:** Hạ log trong vòng lặp thành `DEBUG`, thêm log tổng hợp bên ngoài:
   ```python
-  # Thay thế:
-  logger.info(f"  username: {row[0]}, description: {row[1]}, score: {str(row[2])}")
-  # Thành:
-  logger.debug(f"  username: {row[0]}, description: {row[1]}, score: {str(row[2])}")
+  for row in records:
+      logger.debug(f"username: {row[0]}, description: {row[1]}, score: {row[2]}")
+  logger.info(f"Retrieved {len(records)} reviews for product_id: {request_product_id}")
   ```
 
 ---
 
-### Giai đoạn 3: Tối ưu hóa thuật toán nâng cao (Ưu tiên P2)
-*Mục tiêu: Đưa độ trễ các bước xử lý RAG về hằng số, chạy song song hóa I/O.*
+### 2.3. Quét Regex Guardrail Tuần Tự Cho Mọi Review (P2 - Thấp)
+* **Nguyên nhân:** Quét 28+ mẫu Regex Prompt Injection trực tiếp trên luồng đọc gRPC làm ngốn CPU nặng ($O(N \times R \times L)$).
+* **Độ phức tạp:** Ban đầu $O(N \times R \times L) \longrightarrow$ Sau tối ưu **$O(1)$** trên luồng đọc.
+* **Giải pháp triển khai (Phương án B - Document 0006):**
+  Thêm cột `is_safe BOOLEAN DEFAULT TRUE` vào database và quét Regex ở luồng **Ghi review**. Luồng đọc chỉ thực thi query `WHERE is_safe = TRUE`, đưa CPU overhead luồng đọc về $0\text{ms}$.
 
-#### 1. Chạy song song các Tool Calls (OpenAI Path)
-* **File cần sửa:** [product_reviews_server.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/product_reviews_server.py#L450)
-* **Chi tiết thay đổi:** Sử dụng `concurrent.futures.ThreadPoolExecutor` để kích hoạt đồng thời các tool call như `fetch_product_reviews` và `fetch_product_info`.
+---
 
-#### 2. Lưu Cache kết quả quét Regex Guardrail (TẠM HOÃN TRÀO ĐỔI VỚI LLM CACHING)
-* **Trạng thái:** Tạm hoãn để phối hợp thiết kế cùng lớp **LLM Caching Layer** nhằm phân tích tradeoff tối ưu hơn (ví dụ: giải pháp ghi thẳng kết quả quét `is_safe` thành cột dữ liệu trong PostgreSQL để giảm tải bộ nhớ RAM lưu cache, so sánh với cache Redis).
+### 2.4. Xử Lý Tuần Tự Các Tool Calls trong RAG (P2 - Thấp)
+* **Nguyên nhân:** Gọi tuần tự từng Tool Call (`fetch_product_reviews` rồi đến `fetch_product_info`) làm dồn tích độ trễ mạng ([product_reviews_server.py:L450-476](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/product_reviews_server.py#L450-L476)).
+* **Độ phức tạp:** Ban đầu $O(\sum_{i=1}^{T} D_i) \longrightarrow$ Sau tối ưu **$O(\max D_i)$** nhờ thực thi song song.
+* **Giải pháp mã nguồn (`ThreadPoolExecutor`):**
+  ```python
+  from concurrent import futures
+
+  with futures.ThreadPoolExecutor(max_workers=len(tool_calls)) as executor:
+      future_to_tool = {}
+      for tool_call in tool_calls:
+          args = json.loads(tool_call.function.arguments)
+          if tool_call.function.name == "fetch_product_reviews":
+              f = executor.submit(fetch_product_reviews, product_id=args.get("product_id"))
+          elif tool_call.function.name == "fetch_product_info":
+              f = executor.submit(fetch_product_info, product_id=args.get("product_id"))
+          future_to_tool[f] = tool_call
+          
+      for f in future_to_tool:
+          res = f.result()
+          # Append kết quả vào messages theo đúng thứ tự tool_calls ban đầu
+  ```
+
+---
+
+## 3. Phân Tích Rủi Ro Hạ Tầng & Ngắt Mạch Protection (Infrastructure Resilience)
+
+### 3.1. Cạn Kiệt gRPC Thread Pool (`max_workers=10`) (P0 - Nghiêm trọng)
+* **Rủi ro:** gRPC Python giữ thread đồng bộ trong suốt thời gian chờ LLM. Với `max_workers=10`, chỉ cần 10 request AI đồng thời là cạn kiệt thread pool (Thread Starvation).
+* **Giải pháp:** Tách biệt `ai_executor = ThreadPoolExecutor(max_workers=15)` chuyên biệt cho AI và nâng gRPC Server thread pool lên $\ge 50$ workers ([product_reviews_server.py:L211-212](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/product_reviews_server.py#L211-L212)).
+
+### 3.2. Thiếu Timeout gRPC Gọi Catalog Service (P0 - Nghiêm trọng)
+* **Rủi ro:** Khi Product Catalog Service quá tải hoặc rớt mạng, cuộc gọi gRPC không timeout sẽ treo thread vô hạn (Cascade Failure).
+* **Giải pháp:** Thêm `timeout=3.0s` vào tất cả các gRPC stub calls:
+  ```python
+  product = product_catalog_stub.GetProduct(demo_pb2.GetProductRequest(id=product_id), timeout=3.0)
+  ```
+
+### 3.3. Thiếu Timeout Cho AWS Bedrock Client (P1 - Cao)
+* **Rủi ro:** Default timeout của boto3 là 60s, giữ chân worker thread gRPC 1 phút khi AWS sập.
+* **Giải pháp:** Cấu hình `botocore.config.Config`:
+  ```python
+  from botocore.config import Config
+  bedrock_config = Config(connect_timeout=3.0, read_timeout=10.0)
+  bedrock_client = boto3.client('bedrock-runtime', region_name=aws_region, config=bedrock_config)
+  ```
+
+---
+
+## 4. Các Bẫy Triển Khai Kỹ Thuật (Critical Implementation Traps)
+
+> [!CAUTION]
+> **Bẫy #1 — Quên `commit()` / `rollback()` khi dùng DB Pool:**
+> Cú pháp `with psycopg2.connect()` tự commit/rollback. Nhưng khi mượn kết nối qua `db_pool.getconn()`, cơ chế này không còn tự động. Nếu không gọi `commit()` khi thành công và `rollback()` khi có ngoại lệ, kết nối trả về pool sẽ ở trạng thái hỏng, gây ra lỗi dây chuyền `InFailedSqlTransaction`.
+
+> [!WARNING]
+> **Bẫy #2 — Mâu thuẫn giữa DB `maxconn` và gRPC `max_workers`:**
+> Nếu gRPC Thread Pool tăng lên 50 workers nhưng DB Pool chỉ để `maxconn=20`, 30 thread còn lại sẽ bị block chờ mượn DB connection. Cần cấu hình `maxconn` tương xứng ($\ge 30$).
+
+> [!IMPORTANT]
+> **Bẫy #3 — Thứ tự `messages` và Scoping khi song song hóa Tool Calls:**
+> Khi gọi song song các tool, kết quả phải được append vào danh sách `messages` của LLM theo đúng thứ tự `tool_calls` ban đầu, và biến `raw_reviews_for_judge` phải được gán chính xác từ tool `fetch_product_reviews` để chuyển sang bước kiểm định Fidelity Judge.
+
+---
+
+## 5. Điểm Nghẽn Mới Phát Hiện Qua Audit Mã Nguồn Lần 2 (2026-07-30)
+
+> [!NOTE]
+> Các điểm nghẽn dưới đây được phát hiện qua quá trình audit toàn bộ mã nguồn `product_reviews_server.py` (~104KB), `database.py`, và 10 module `guardrails/` vào ngày 30/07/2026. Đây là các vấn đề **chưa có trong phân tích ban đầu**.
+
+### Ma Trận Ưu Tiên Bottleneck Mới
+
+| # | Điểm nghẽn mới | Tác động | Ưu tiên | Trạng thái |
+| :---: | :--- | :---: | :---: | :---: |
+| N1 | **Context string gửi LLM không giới hạn kích thước** | 🔴 Chi phí + Latency | **P1** | ⏳ Chưa triển khai |
+| N2 | **SQL Query thiếu `LIMIT` cho reviews** | 🔴 Memory + Latency | **P1** | ⏳ Chưa triển khai |
+| N3 | **`get_review_version()` chạy aggregate query mỗi request** | 🔴 DB Load | **P1** | ⏳ Chưa triển khai |
+| N4 | **`normalize_reviews_for_context()` vẫn gọi `check_input()` trên read path** | 🔴 CPU Bottleneck | **P1** | ⏳ Chưa triển khai |
+| N5 | **Redis client thiếu `socket_timeout`** | 🟡 Treo thread | **P2** | ⏳ Chưa triển khai |
+| N6 | **Fidelity Judge gọi LLM lần 2 đồng bộ block client** | 🟡 Gấp đôi latency | **P2** | ⏳ Chưa triển khai |
+| N7 | **Circuit Breaker `record_failure()` race condition** | 🟡 Thread-safety | **P2** | ⏳ Chưa triển khai |
+| N8 | **Tạo `ThreadPoolExecutor` mới mỗi request cho Tool Calls** | 🟢 Overhead nhẹ | **P3** | ⏳ Chưa triển khai |
+
+---
+
+### 5.1. Context String Gửi LLM Không Giới Hạn Kích Thước (P1 - Nghiêm trọng)
+* **Nguyên nhân:** Hàm `normalize_reviews_for_context()` ([product_reviews_server.py:L136-170](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/product_reviews_server.py#L136-L170)) ghép nối **toàn bộ** reviews thành 1 chuỗi context khổng lồ gửi sang LLM, không giới hạn số lượng review hay chiều dài tổng.
+* **Tác động:** Với sản phẩm hot 500+ reviews (mỗi review ~200 ký tự) = **100KB+ context string** → Vượt ngưỡng context window LLM, lãng phí token API, thời gian sinh text tăng tuyến tính $O(N)$.
+* **Giải pháp đề xuất:**
+  ```python
+  MAX_REVIEWS_FOR_CONTEXT = 50
+  MAX_CONTEXT_CHARS = 15000
+
+  def normalize_reviews_for_context(reviews, max_reviews=MAX_REVIEWS_FOR_CONTEXT):
+      selected = reviews[:max_reviews]
+      context = build_context_string(selected)
+      if len(context) > MAX_CONTEXT_CHARS:
+          context = context[:MAX_CONTEXT_CHARS] + "\n...[Truncated]"
+      return context
+  ```
+
+---
+
+### 5.2. SQL Query Thiếu `LIMIT` Cho Reviews (P1 - Nghiêm trọng)
+* **Nguyên nhân:** Câu SQL `SELECT ... FROM reviews.productreviews WHERE product_id = %s AND is_safe = TRUE` ([database.py:L86](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/database.py#L86)) **không có `LIMIT`**. Sản phẩm 10,000+ reviews sẽ tải toàn bộ vào bộ nhớ server.
+* **Tác động:** Memory spike, serialization chậm, và context string vô hạn (kết hợp với N1).
+* **Giải pháp đề xuất:**
+  ```sql
+  SELECT username, description, score 
+  FROM reviews.productreviews 
+  WHERE product_id = %s AND is_safe = TRUE 
+  ORDER BY id DESC LIMIT 100
+  ```
+
+---
+
+### 5.3. `get_review_version()` Chạy Aggregate Query Mỗi Request (P1 - Nghiêm trọng)
+* **Nguyên nhân:** Mỗi request gRPC đều thực thi ([database.py:L86-90](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/database.py#L86-L90)):
+  ```sql
+  SELECT COUNT(*), COALESCE(MAX(id), 0) FROM reviews.productreviews WHERE product_id = %s AND is_safe = TRUE
+  ```
+  Đây là phép **full aggregate scan** chạy trên mọi request, kể cả khi data không thay đổi.
+* **Tác động:** 1000 RPS = 1000 aggregate queries/giây vào PostgreSQL, gây áp lực I/O không cần thiết.
+* **Giải pháp đề xuất:** Cache `review_version` trong Redis với TTL 30-60 giây, giảm ~97% aggregate queries:
+  ```python
+  def get_review_version_cached(product_id, redis_client, ttl=30):
+      cache_key = f"review_version:{product_id}"
+      cached = redis_client.get(cache_key)
+      if cached:
+          return cached.decode()
+      version = get_review_version(product_id)
+      redis_client.setex(cache_key, ttl, version)
+      return version
+  ```
+
+---
+
+### 5.4. `normalize_reviews_for_context()` Vẫn Gọi `check_input()` Trên Read Path (P1 - Nghiêm trọng)
+* **Nguyên nhân:** Dù database đã lọc `is_safe = TRUE`, code Python vẫn gọi `check_input()` (quét 28+ Regex) cho **mỗi review** trong `normalize_reviews_for_context()` ([product_reviews_server.py:L492-494](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/product_reviews_server.py#L492-L494)).
+* **Tác động:** Bottleneck #6 gốc **chưa được triệt tiêu hoàn toàn**. CPU vẫn bị ngốn $O(N \times R \times L)$ trên mỗi request read path.
+* **Giải pháp đề xuất:** Xóa lời gọi `check_input()` khỏi `normalize_reviews_for_context()`, vì các review đã qua kiểm duyệt `is_safe = TRUE` ở tầng SQL:
+  ```python
+  def normalize_reviews_for_context(reviews):
+      # Không cần gọi check_input() nữa — đã lọc is_safe=TRUE ở DB
+      context_parts = []
+      for review in reviews:
+          context_parts.append(f"- {review.username}: {review.description} (Score: {review.score})")
+      return "\n".join(context_parts)
+  ```
+
+---
+
+### 5.5. Redis Client Thiếu `socket_timeout` (P2 - Trung bình)
+* **Nguyên nhân:** `redis.from_url()` trong [guardrails/cache.py:L15-18](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/guardrails/cache.py#L15-L18) không có `socket_timeout`. Nếu Redis bị chậm (không sập hẳn), mỗi lệnh GET/SET treo thread gRPC tới ~30 giây (default OS TCP timeout).
+* **Giải pháp đề xuất:**
+  ```python
+  redis_client = redis.from_url(
+      redis_url,
+      socket_timeout=1,
+      socket_connect_timeout=1,
+      retry_on_timeout=False
+  )
+  ```
+
+---
+
+### 5.6. Fidelity Judge Gọi LLM Lần 2 Đồng Bộ Block Client (P2 - Trung bình)
+* **Nguyên nhân:** Sau khi nhận response từ LLM chính, hệ thống gọi **lần thứ 2 đồng bộ** sang Bedrock LLM để chạy Fidelity Judge ([guardrails/evaluator.py:L120-180](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/guardrails/evaluator.py#L120-L180)), khiến client chờ thêm ~1-3 giây.
+* **Tác động:** Tăng gấp đôi latency cho mọi cache-miss request (~3s LLM chính + ~3s Judge = ~6s tổng). Tăng gấp đôi chi phí API token.
+* **Giải pháp đề xuất:** Chuyển Judge thành **fire-and-forget async** — trả response cho client ngay, đẩy đánh giá xuống background:
+  ```python
+  response = primary_llm_response
+  ai_executor.submit(evaluate_and_audit, response, context, product_id)  # Background
+  return response  # Trả ngay cho client
+  ```
+
+---
+
+### 5.7. Circuit Breaker `record_failure()` Race Condition (P2 - Trung bình)
+* **Nguyên nhân:** Hàm `record_failure()` trong [guardrails/circuit_breaker.py:L146-148](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/guardrails/circuit_breaker.py#L146-L148) thực hiện đọc → tăng → ghi failure count qua 3 lệnh Redis riêng biệt (GET → increment in Python → SET). Dưới tải cao, nhiều thread đồng thời đọc cùng giá trị, dẫn đến đếm thiếu.
+* **Giải pháp đề xuất:** Dùng Redis `INCR` atomic thay vì GET/SET:
+  ```python
+  def record_failure(self):
+      new_count = self.redis_client.incr(self.failures_key)  # Atomic
+      if new_count >= self.failure_threshold:
+          self._trip_open()
+  ```
+
+---
+
+### 5.8. Tạo `ThreadPoolExecutor` Mới Mỗi Request Cho Tool Calls (P3 - Thấp)
+* **Nguyên nhân:** Mỗi request AI có tool calls đều tạo mới `ThreadPoolExecutor(max_workers=len(tool_calls))` ([product_reviews_server.py:L1542](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/product_reviews_server.py#L1542)), gây tốn chi phí khởi tạo/hủy thread pool lặp đi lặp lại.
+* **Giải pháp đề xuất:** Dùng global `tool_executor` khởi tạo 1 lần:
+  ```python
+  tool_executor = futures.ThreadPoolExecutor(max_workers=4)  # Global, khởi tạo 1 lần
+  
+  # Trong hàm xử lý:
+  futures_list = [tool_executor.submit(fn, *args) for fn, args in tool_tasks]
+  results = [f.result(timeout=5) for f in futures_list]
+  ```
+

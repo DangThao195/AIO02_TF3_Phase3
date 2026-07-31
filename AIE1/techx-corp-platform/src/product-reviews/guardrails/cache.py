@@ -5,6 +5,8 @@ import logging
 from typing import Dict, Any, Optional
 import redis
 
+from guardrails.output_contract import has_question_answer_wrapper
+
 logger = logging.getLogger("guardrails.cache")
 
 # Env configuration
@@ -112,7 +114,11 @@ def should_cache(response_text: str, approved: bool) -> bool:
     }
     if response_text in ignored_responses:
         return False
-        
+
+    if has_question_answer_wrapper(response_text):
+        logger.warning("[CACHE] Skipping malformed Q/A wrapper response.")
+        return False
+         
     return True
 
 
