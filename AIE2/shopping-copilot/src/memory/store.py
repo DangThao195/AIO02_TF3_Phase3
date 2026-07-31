@@ -77,8 +77,8 @@ def _get_redis():
             _redis_client.ping()
             logger.info("[STORE] Valkey connected: %s", valkey_url)
         except Exception as e:
-            logger.error("[STORE] Valkey connection failed: %s — falling back to file JSON", e)
-            _redis_client = None
+            logger.error("[STORE] CRITICAL: Valkey connection failed: %s | Strict Mode: Valkey required!", e)
+            raise RuntimeError(f"[STORE] Valkey connection failed ({valkey_url}): {e}")
 
     return _redis_client
 
@@ -243,9 +243,6 @@ class SessionStore:
         self._vset(session_id, session)
         logger.info("[SESSION] Pending set | id=%s | action=%s", session_id, action)
 
-    def clear_pending(self, session_id: str) -> None:
-        """Xóa trạng thái pending sau khi user xác nhận hoặc huỷ."""
-        session = self._vget(session_id)
     def clear_pending(self, session_id: str) -> None:
         """Xóa trạng thái pending sau khi user xác nhận hoặc huỷ."""
         session = self._vget(session_id)

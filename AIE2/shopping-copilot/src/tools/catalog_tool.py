@@ -225,3 +225,48 @@ def get_products_by_price_range(max_price: float = None, min_price: float = None
         logger.error(f"get_products_by_price_range error: {e}")
         return json.dumps({"status": "error", "error": str(e)[:200], "total": 0, "products": []})
 
+
+@tool
+def get_product_by_price_rank(rank: int = 1, order: str = "desc") -> str:
+    """
+    Lấy sản phẩm theo thứ hạng giá chính xác từ database.
+    Dùng khi người dùng hỏi:
+      - "sản phẩm rẻ nhất" / "rẻ thứ 2" / "cheapest" / "2nd cheapest"
+      - "sản phẩm đắt nhất" / "đắt thứ 3" / "most expensive" / "3rd most expensive"
+    Tham số:
+      - rank: Thứ hạng muốn lấy (1 = rẻ/đắt nhất, 2 = rẻ/đắt thứ 2, ...). Mặc định 1.
+      - order: "asc" = rẻ nhất trước, "desc" = đắt nhất trước. Mặc định "desc".
+    Returns JSON: {"status", "rank", "order", "product": {id, name, price, categories}}
+    """
+    try:
+        safe_order = "ASC" if str(order).lower() == "asc" else "DESC"
+        offset = max(0, int(rank) - 1)
+        executor = SQLQueryExecutor()
+        rows = executor.execute(
+            f"""
+            SELECT id, name, categories, price_units, price_nanos
+            FROM products
+            ORDER BY (price_units * 100 + price_nanos / 10000000) {safe_order}
+            LIMIT 1 OFFSET {offset}
+            """,
+            limit=1,
+        )
+        if not rows:
+            return json.dumps({"status": "empty", "rank": rank, "order": order, "product": None})
+
+        r = rows[0]
+        product = {
+            "id": str(r.get("id", "")),
+            "name": r.get("name", ""),
+            "price": _price(r.get("price_units", 0), r.get("price_nanos", 0)),
+            "categories": r.get("categories", ""),
+        }
+        return json.dumps({
+            "status": "success",
+            "rank": rank,
+            "order": order,
+            "product": product,
+        })
+    except Exception as e:
+        logger.error(f"get_product_by_price_rank error: {e}")
+        return json.dumps({"status": "error", "error": str(e)[:200], "product": None})

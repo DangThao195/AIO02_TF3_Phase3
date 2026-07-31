@@ -1,6 +1,6 @@
 {
   "suite_name": "MANDATE #25 - AI Resilience with Controlled Degradation",
-  "date": "2026-07-28T15:57:02.046648",
+  "date": "2026-07-30T21:09:02.793382",
   "tests": [
     {
       "test_id": 1,
@@ -37,13 +37,13 @@
         "2b": {
           "status": "FAIL",
           "backoff_sequence": [
-            1886,
-            3864,
-            7947,
-            7619
+            1885,
+            4133,
+            8740,
+            7401
           ],
-          "total_backoff_ms": 13697,
-          "max_backoff_ms": 7947
+          "total_backoff_ms": 14758,
+          "max_backoff_ms": 8740
         }
       },
       "overall": "PASS"

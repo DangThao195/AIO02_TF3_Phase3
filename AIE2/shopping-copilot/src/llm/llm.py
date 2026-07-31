@@ -16,8 +16,8 @@ class LLMClient:
         Initialize AWS Bedrock client.
         Reads credentials via AWS profile or environment variables.
         """
-        self.model = os.getenv("BEDROCK_MODEL_ID", "apac.amazon.nova-lite-v1:0")
-        self.region = os.getenv("BEDROCK_REGION", "ap-southeast-1")
+        self.model = os.getenv("BEDROCK_MODEL_ID")
+        self.region = os.getenv("BEDROCK_REGION")
         self.profile = os.getenv("AWS_PROFILE")
 
         # Initialize boto3 session
