@@ -182,6 +182,7 @@ from guardrails.llm_trace import (
     read_llm_trace,
     set_last_usage,
     write_llm_trace,
+    write_llm_trace_async,
 )
 from guardrails.routing import is_clearly_off_topic_question
 
@@ -1211,6 +1212,21 @@ def get_ai_assistant_response(request_product_id, question, context=None):
             "app.product.question_sha256",
             hashlib.sha256((question or "").encode("utf-8")).hexdigest(),
         )
+        user_id = "anonymous"
+        session_id = ""
+        if context and hasattr(context, "invocation_metadata"):
+            try:
+                metadata = context.invocation_metadata()
+                if metadata:
+                    for key, val in metadata:
+                        key_lower = str(key or "").lower()
+                        if key_lower in ("x-user-id", "user-id", "x-replay-user-id"):
+                            user_id = str(val or "")
+                        elif key_lower in ("x-session-id", "session-id", "x-replay-session-id"):
+                            session_id = str(val or "")
+            except Exception as e:
+                logger.warning(f"Failed to read invocation metadata: {e}")
+
         trace_record = build_runtime_trace_record(
             trace_id=trace_id,
             trace_id_source=trace_id_source,
@@ -1220,6 +1236,8 @@ def get_ai_assistant_response(request_product_id, question, context=None):
             candidate_model=llm_model,
             judge_provider=judge_provider,
             judge_model=judge_model,
+            user_id=user_id,
+            session_id=session_id,
         )
 
         def finalize_response(
@@ -1253,7 +1271,7 @@ def get_ai_assistant_response(request_product_id, question, context=None):
                 out_of_scope_message=OUT_OF_SCOPE_MESSAGE,
                 no_info_message=NO_INFO_MESSAGE,
             )
-            write_llm_trace(finalized_trace)
+            write_llm_trace_async(finalized_trace)
             return ai_assistant_response
 
         input_check = check_input(question)

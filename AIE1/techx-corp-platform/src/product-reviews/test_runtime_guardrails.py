@@ -615,6 +615,41 @@ class RuntimeTraceTests(unittest.TestCase):
         self.assertEqual(total_usage["cost_source"], "static_price_table")
         self.assertGreater(total_usage["estimated_cost_usd"], 0)
 
+    def test_trace_record_contains_user_session_tool_and_version_fields(self):
+        record = llm_trace.build_runtime_trace_record(
+            trace_id="trace_test_9999",
+            trace_id_source="otel",
+            product_id="P100",
+            question="What is the material?",
+            candidate_provider="bedrock",
+            candidate_model="anthropic.claude-3-5-sonnet",
+            judge_provider="bedrock",
+            judge_model="amazon.nova-micro-v1:0",
+            user_id="usr_alice_123",
+            session_id="sess_abc_999",
+            tool_calls=[{"tool": "fetch_reviews"}],
+            model_version="v3.5",
+        )
+        self.assertIn("user_id_hash", record)
+        self.assertIn("session_id", record)
+        self.assertIn("tool_calls", record)
+        self.assertIn("model_version", record)
+
+        self.assertEqual(record["user_id_hash"], llm_trace.user_id_sha256("usr_alice_123"))
+        self.assertEqual(record["session_id"], "sess_abc_999")
+        self.assertEqual(record["tool_calls"], [{"tool": "fetch_reviews"}])
+        self.assertEqual(record["model_version"], "v3.5")
+        self.assertEqual(record["candidate"]["model_version"], "v3.5")
+
+    def test_dynamic_multi_model_pricing(self):
+        cost_nova = llm_trace.estimate_cost_usd("amazon.nova-pro-v1:0", 1_000_000, 1_000_000)
+        cost_claude = llm_trace.estimate_cost_usd("anthropic.claude-3-5-sonnet", 1_000_000, 1_000_000)
+        cost_llama = llm_trace.estimate_cost_usd("meta.llama3", 1_000_000, 1_000_000)
+
+        self.assertEqual(cost_nova, 4.0)  # 0.80 + 3.20
+        self.assertEqual(cost_claude, 18.0)  # 3.00 + 15.00
+        self.assertEqual(cost_llama, 0.9)  # 0.30 + 0.60
+
 
 if __name__ == "__main__":
     unittest.main()

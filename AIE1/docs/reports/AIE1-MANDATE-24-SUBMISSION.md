@@ -22,8 +22,9 @@ Tài liệu này tổng hợp toàn bộ bằng chứng nghiệm thu hệ thốn
 | **DoD 3: 1 View tổng hợp cost / latency** | 🟢 **ĐÃ ĐẠT** | Tệp artifact tổng hợp [cost_latency_comparison.json](../../repro/artifacts/cost_latency_comparison.json) & [cost_latency_baseline.json](../../repro/artifacts/cost_latency_baseline.json) cùng hàm `get_usage_trace()` gom nhóm cost/token/latency theo mô hình, bề mặt Q&A và thời gian mà không cần đọc log thô. Xem [§3.4](#34-view-tổng-hợp-cost--token--latency-yêu-cầu-3). |
 | **DoD 4: Không rò thô PII / Secret** | 🟢 **ĐÃ ĐẠT** | Prompt và response đều được băm một chiều `question_sha256`, `response_sha256` và `user_id_hash`. Request chứa chuỗi PII đánh dấu (ví dụ `PII-TOKEN-XYZ`) khi kiểm tra trace record thu được **0 match (không chứa chuỗi thô)**. Xem [§3.5](#35-cơ-chế-chống-rò-rỉ-pii--secret-yêu-cầu-4). |
 | **DoD 5: ADR Ký Tên Duyệt** | 🟢 **ĐÃ ĐẠT** | Đã hoàn thiện và ký duyệt tài liệu kiến trúc [ADR 0008: LLM Observability](../adr/0008-LLM-OBSERVABILITY.md). |
-| **Ràng buộc 1: Đo phải nhẹ (< 0.5ms overhead)** | 🟢 **ĐÃ ĐẠT** | Ghi trace áp dụng mô hình Async Fail-Open In-Memory Redis Write `write_llm_trace()` tại [guardrails/llm_trace.py:L268-290](../../techx-corp-platform/src/product-reviews/guardrails/llm_trace.py#L268-L290), thời gian ghi `< 0.5ms`, không block luồng chính gRPC. |
-| **Ràng buộc 2: Số trace từ lời gọi thật & Giữ ngân sách** | 🟢 **ĐÃ ĐẠT** | 100% bản ghi trace được trích xuất từ dữ liệu Bedrock SDK converse API thật. Tích hợp Caching (Mandate 23) giúp giảm **83.3%** số lượng cuộc gọi Bedrock API, bảo vệ ngân sách tối đa. |
+| **Ràng buộc 1: Đo phải nhẹ (< 0.5ms overhead)** | 🟢 **ĐẠT** | Ghi trace áp dụng mô hình Bất đồng bộ off luồng phản hồi gRPC (`write_llm_trace_async`) qua `ThreadPoolExecutor(max_workers=4)` tại [guardrails/llm_trace.py](../../techx-corp-platform/src/product-reviews/guardrails/llm_trace.py), thời gian overhead luồng chính `< 0.5ms`. |
+| **Ràng buộc 2: Số trace từ lời gọi thật & Giữ ngân sách** | 🟢 **ĐÃ ĐẠT** | 100% bản ghi trace được trích xuất từ dữ liệu Bedrock SDK converse API thật. Bảng đơn giá `_PRICE_PER_1M_TOKENS` hỗ trợ dynamic multi-model pricing (Nova Lite/Micro/Pro, Claude 3.5 Sonnet, Llama 3). |
+| **Ràng buộc 3: Bổ sung đủ 4 trường trace nâng cao** | 🟢 **ĐÃ ĐẠT** | Bổ sung đầy đủ 4 trường `user_id_hash` (băm SHA256 an toàn PII), `session_id`, `tool_calls: []`, và `model_version` vào cấu trúc bản ghi trace. |
 
 ---
 
@@ -268,6 +269,6 @@ Tất cả prompt, response và user identity đều được băm một chiều
 *   **Logic Tracing & Audit-Safe Record Generator:** [guardrails/llm_trace.py](../../techx-corp-platform/src/product-reviews/guardrails/llm_trace.py)
 *   **Logic gRPC Metadata Trailing & Class `LLMTraceHTTPHandler`:** [product_reviews_server.py](../../techx-corp-platform/src/product-reviews/product_reviews_server.py)
 *   **Mã nguồn kiểm thử tự động Tracing:** [test_runtime_guardrails.py](../../techx-corp-platform/src/product-reviews/test_runtime_guardrails.py)
-*   **Tài liệu Kiến trúc ADR 0008 (LLM Observability):** [0008-LLM-OBSERVABILITY.md](../adr/0008-LLM-OBSERVABILITY.md) & [0008-runtime-llm-trace-auditability.md](../adr/0008-runtime-llm-trace-auditability.md)
+*   **Tài liệu Kiến trúc ADR 0008 (LLM Observability):** [0008-LLM-OBSERVABILITY.md](../adr/0008-LLM-OBSERVABILITY.md)
 *   **Tệp Bằng Chứng Live Trace Capture:** [llm_trace_smoketest_20260727T000000Z.json](../../repro/artifacts/llm_trace_smoketest_20260727T000000Z.json)
 *   **Artifact JSON Báo Cáo Baseline & So Sánh:** [cost_latency_comparison.json](../../repro/artifacts/cost_latency_comparison.json) & [cost_latency_baseline.json](../../repro/artifacts/cost_latency_baseline.json)

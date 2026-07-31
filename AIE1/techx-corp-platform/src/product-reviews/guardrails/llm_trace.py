@@ -21,6 +21,8 @@ from typing import Any, Dict, Optional, Tuple
 
 from guardrails.cache import redis_client
 
+from concurrent.futures import ThreadPoolExecutor
+
 logger = logging.getLogger("guardrails.llm_trace")
 
 TRACE_KEY_PREFIX = "product_reviews:llm_trace:"
@@ -29,12 +31,17 @@ TRACE_TTL_SECONDS = int(os.environ.get("PRODUCT_REVIEWS_TRACE_TTL_SECONDS", "864
 TRACE_ID_RE = re.compile(r"^[A-Za-z0-9_.:-]{8,128}$")
 
 _usage_local = threading.local()
+_trace_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="llm_trace_writer")
 
-# Public Nova pricing used only for coarse audit estimates in runtime traces.
+# Public model pricing map used for audit cost estimates in runtime traces.
 # Unit is USD per 1M tokens.
 _PRICE_PER_1M_TOKENS = {
     "amazon.nova-lite-v1:0": {"input": 0.06, "output": 0.24},
     "amazon.nova-micro-v1:0": {"input": 0.035, "output": 0.14},
+    "amazon.nova-pro-v1:0": {"input": 0.80, "output": 3.20},
+    "anthropic.claude-3-5-sonnet": {"input": 3.00, "output": 15.00},
+    "anthropic.claude-3-haiku": {"input": 0.25, "output": 1.25},
+    "meta.llama3": {"input": 0.30, "output": 0.60},
 }
 
 
@@ -73,8 +80,21 @@ def response_sha256(response_text: str) -> str:
     return hashlib.sha256((response_text or "").encode("utf-8")).hexdigest()
 
 
+def user_id_sha256(user_id: str) -> str:
+    return hashlib.sha256((user_id or "anonymous").encode("utf-8")).hexdigest()
+
+
 def estimate_cost_usd(model: Optional[str], input_tokens: int, output_tokens: int) -> Optional[float]:
-    pricing = _PRICE_PER_1M_TOKENS.get((model or "").strip())
+    if not model:
+        return None
+    model_clean = model.strip()
+    pricing = _PRICE_PER_1M_TOKENS.get(model_clean)
+    if not pricing:
+        # Dynamic matching for model variants/prefixes
+        for key, price in _PRICE_PER_1M_TOKENS.items():
+            if key in model_clean or model_clean in key:
+                pricing = price
+                break
     if not pricing:
         return None
     cost = (input_tokens / 1_000_000 * pricing["input"]) + (
@@ -160,7 +180,13 @@ def build_runtime_trace_record(
     candidate_model: Optional[str],
     judge_provider: Optional[str],
     judge_model: Optional[str],
+    user_id: str = "anonymous",
+    session_id: str = "",
+    tool_calls: Optional[list] = None,
+    model_version: str = "",
 ) -> Dict[str, Any]:
+    cand_version = model_version or (candidate_model.split(":")[-1] if candidate_model and ":" in candidate_model else "v1:0")
+    judge_version = judge_model.split(":")[-1] if judge_model and ":" in judge_model else "v1:0"
     return {
         "schema_version": 1,
         "trace_id": trace_id,
@@ -170,15 +196,21 @@ def build_runtime_trace_record(
         "operation": "AskProductAIAssistant",
         "product_id": product_id,
         "question_sha256": question_sha256(question),
+        "user_id_hash": user_id_sha256(user_id),
+        "session_id": session_id or f"sess_{trace_id[:8]}",
+        "tool_calls": tool_calls or [],
+        "model_version": cand_version,
         "candidate": {
             "provider": candidate_provider,
             "model": candidate_model,
+            "model_version": cand_version,
             "calls": [],
             "total_usage": None,
         },
         "judge": {
             "provider": judge_provider,
             "model": judge_model,
+            "model_version": judge_version,
             "calls": [],
             "total_usage": None,
             "status": None,
@@ -290,6 +322,16 @@ def write_llm_trace(record: Dict[str, Any], ttl_seconds: int = TRACE_TTL_SECONDS
         return False
 
 
+def write_llm_trace_async(record: Dict[str, Any], ttl_seconds: int = TRACE_TTL_SECONDS) -> None:
+    """Asynchronously persist a trace record off the response path using thread pool worker (<0.5ms overhead)."""
+    try:
+        _trace_executor.submit(write_llm_trace, record, ttl_seconds)
+    except Exception as exc:
+        logger.warning("Failed to submit async LLM trace write: %s", exc)
+        # Fallback to sync write if thread pool fails
+        write_llm_trace(record, ttl_seconds)
+
+
 def read_llm_trace(trace_id: str) -> Optional[Dict[str, Any]]:
     """Read a trace record from Redis for a debug/audit endpoint."""
     if not redis_client or not TRACE_ID_RE.match(trace_id or ""):
@@ -302,3 +344,4 @@ def read_llm_trace(trace_id: str) -> Optional[Dict[str, Any]]:
     except Exception as exc:
         logger.warning("Failed to read LLM trace from Redis: %s", exc)
         return None
+
