@@ -1,0 +1,3 @@
+timestamp,rps,error_rate,client_error_rate,latency_p90,kafka_lag,cpu_usage,memory_usage,service,label
+2026-07-28 16:02:33,82.76691774096327,0.4710844076299364,0.0,1.9245276890597087,0.0,0.0,0.0,product-catalog,-1
+2026-07-28 19:57:33,34.666666666666664,0.2041666666666667,0.0,1.8541537699640955,0.0,0.0,0.0,product-catalog,-1

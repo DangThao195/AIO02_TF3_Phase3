@@ -38,10 +38,8 @@ S3_BUCKET_NAME = os.getenv("AIOPS_S3_BUCKET", "tf3-aiops-models-197826770971")
 SIMULATION_SERVER_URL = os.getenv("SIMULATION_SERVER_URL", "http://localhost:8000")
 
 
-# Slack/Discord webhook & Bot Token for notifications & Human Approval
+# Slack/Discord webhook for notifications & Human Approval
 SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL", "")
-SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN", "")
-SLACK_CHANNEL_ID = os.getenv("SLACK_CHANNEL_ID", "C0BG2EVQS13")
 
 
 

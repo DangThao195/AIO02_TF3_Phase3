@@ -87,15 +87,30 @@ class RCAEngine:
         deepest_error_span = None
         max_depth = -1
 
-        def get_span_depth(sid, current_depth=0):
-            # Hàm đệ quy tìm độ sâu của span trong cây
-            depths = [current_depth]
-            for pid, children in parent_child_map.items():
-                if sid in children:
-                    depths.append(get_span_depth(pid, current_depth + 1))
-            return max(depths)
+        # Map spanID to parent spanID
+        span_to_parent = {}
+        for span in spans:
+            sid = span["spanID"]
+            for ref in span.get("references", []):
+                if ref.get("refType") == "CHILD_OF":
+                    span_to_parent[sid] = ref["spanID"]
 
+        def get_span_depth(sid):
+            depth = 0
+            curr = sid
+            visited = set()
+            while curr in span_to_parent and curr not in visited:
+                visited.add(curr)
+                depth += 1
+                curr = span_to_parent[curr]
+            return depth
+
+        EXCLUDED_CLIENT_SERVICES = {"load-generator", "locust", "jaeger", "prometheus", "grafana"}
         for span in error_spans:
+            pid = span["processID"]
+            svc = processes.get(pid, {}).get("serviceName", "unknown")
+            if svc in EXCLUDED_CLIENT_SERVICES:
+                continue
             sid = span["spanID"]
             depth = get_span_depth(sid)
             if depth > max_depth:
@@ -108,7 +123,8 @@ class RCAEngine:
             logger.info(f"RCA localized culprit service: {culprit_service} (Span ID: {deepest_error_span['spanID']}, Depth: {max_depth})")
             return culprit_service
 
-        return "unknown-service"
+        # Fallback nếu tất cả error spans thuộc load-generator, trả về frontend
+        return "frontend"
 
     def correlate_change_log(self, culprit_service: str, alert_time: float, change_logs: list) -> dict:
         """
@@ -202,12 +218,15 @@ class RCAEngine:
                 parent_child_map[parent_id] = []
             parent_child_map[parent_id].append(sid)
 
-        def get_span_depth(sid, current_depth=0):
-            depths = [current_depth]
-            for pid, children in parent_child_map.items():
-                if sid in children:
-                    depths.append(get_span_depth(pid, current_depth + 1))
-            return max(depths)
+        def get_span_depth(sid):
+            depth = 0
+            curr = sid
+            visited = set()
+            while curr in span_to_parent and curr not in visited:
+                visited.add(curr)
+                depth += 1
+                curr = span_to_parent[curr]
+            return depth
 
         deepest_error_span = None
         max_depth = -1
@@ -239,5 +258,105 @@ class RCAEngine:
                 clean_path.append(svc)
 
         return " -> ".join(clean_path)
+
+    def detect_first_drift_timestamp(self, service_name: str, detector=None) -> float:
+        """
+        [DIRECTIVE #26 - Causal Inference]
+        Xác định mốc thời gian bắt đầu chệch khỏi baseline 3-Sigma sớm nhất (t_drift).
+        """
+        import time
+        if not detector:
+            return time.time()
+            
+        try:
+            end_time = time.time()
+            start_time = end_time - 900  # 15 phút trước
+            
+            # Truy vấn Prometheus latency p90 time-series (step=15s)
+            q = f'histogram_quantile(0.90, sum(rate(traces_span_metrics_duration_milliseconds_bucket{{service_name="{service_name}"}}[1m])) by (le)) or vector(0)'
+            raw_res = detector.query_prometheus_range(q, start_time, end_time, step="15s")
+            series = detector.parse_range_result(raw_res)
+            
+            if series.empty or len(series) < 4:
+                return end_time
+                
+            # Tính baseline (mu, sigma) từ 10 phút đầu (idle/normal baseline)
+            baseline_data = series.iloc[:-4] if len(series) > 8 else series.iloc[:4]
+            mu = baseline_data.mean()
+            sigma = baseline_data.std()
+            
+            # Ngưỡng 3-Sigma (3σ)
+            threshold = mu + max(3.0 * (sigma if sigma > 0 else 0.01), 0.1)  # Tối thiểu 100ms drift
+            
+            # Tìm mốc thời gian bắt đầu chệch 3σ sớm nhất
+            for ts, val in series.items():
+                if val > threshold:
+                    drift_epoch = ts.timestamp()
+                    logger.info(f"[CausalInference] Service {service_name} first-drift 3σ detected at {ts} (val={val:.3f}s > 3σ={threshold:.3f}s)")
+                    return drift_epoch
+        except Exception as e:
+            logger.error(f"Error computing first-drift timestamp for {service_name}: {e}")
+            
+        return time.time()
+
+    def rank_causal_candidates(self, candidates_data: list) -> list:
+        """
+        [DIRECTIVE #26 - Multi-Signal Causal Scoring Matrix]
+        Xếp hạng danh sách nghi phạm theo 5 tín hiệu nhân quả (Time-series First Drift, Trace Depth, Downstream Target, Telemetry Impact, Local CPU Stress).
+        """
+        import time
+        if not candidates_data:
+            return []
+
+        min_drift_ts = min((c.get("first_drift_ts", float("inf")) for c in candidates_data), default=time.time())
+
+        ranked = []
+        for c in candidates_data:
+            svc = c.get("service", "unknown")
+            lat = c.get("lat", 0.0)
+            err = c.get("err", 0.0)
+            cpu = c.get("cpu", 0.0)
+            depth = c.get("depth", 0)
+            is_downstream = c.get("is_downstream", False)
+            first_drift_ts = c.get("first_drift_ts", float("inf"))
+
+            # 1. Điểm ưu tiên thời gian chệch nhịp (Time-Series Priority Score)
+            if first_drift_ts < float("inf"):
+                time_diff_sec = max(0, first_drift_ts - min_drift_ts)
+                time_bonus = max(0.0, 50.0 - time_diff_sec * 2.0)
+            else:
+                time_bonus = 0.0
+
+            # 2. Điểm ưu tiên vị trí hạ nguồn (Downstream Priority)
+            downstream_multiplier = 2.5 if is_downstream else 1.0
+
+            # 3. Điểm tài nguyên cục bộ (CPU Stress Guard)
+            cpu_bonus = 50.0 if cpu >= 0.30 else 0.0
+
+            # 4. Điểm suy hao độ trễ & lỗi
+            metric_score = (lat * 3.0 + err * 100.0)
+
+            # Tổng điểm nhân quả (Causal Composite Score)
+            total_score = (metric_score + time_bonus + depth * 0.5 + cpu_bonus) * downstream_multiplier
+
+            reason = (
+                f"First-drift bonus: {time_bonus:.1f}pts, Latency: {lat:.2f}s, Error: {err:.2f}, "
+                f"Trace Depth: {depth}, Downstream Target: {is_downstream}"
+            )
+
+            ranked.append({
+                "service": svc,
+                "score": round(total_score, 2),
+                "first_drift_ts": first_drift_ts,
+                "reason": reason,
+                "lat": lat,
+                "err": err,
+                "is_downstream": is_downstream
+            })
+
+        # Sắp xếp giảm dần theo điểm Nhân Quả tổng hợp
+        ranked.sort(key=lambda x: x["score"], reverse=True)
+        return ranked
+
 
 

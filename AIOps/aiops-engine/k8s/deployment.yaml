@@ -5,6 +5,8 @@ metadata:
   namespace: techx-tf3
   labels:
     app: aiops-engine
+    app.kubernetes.io/name: aiops-engine
+    app.kubernetes.io/managed-by: argocd
 spec:
   replicas: 1
   selector:
@@ -14,7 +16,9 @@ spec:
     metadata:
       labels:
         app: aiops-engine
+        app.kubernetes.io/name: aiops-engine
     spec:
+      serviceAccountName: aiops-engine
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
@@ -27,10 +31,11 @@ spec:
           capabilities:
             drop:
             - ALL
-        image: 197826770971.dkr.ecr.ap-southeast-1.amazonaws.com/tf-2-ai-engine:IF-v60
+        image: 197826770971.dkr.ecr.ap-southeast-1.amazonaws.com/tf-2-ai-engine:IF-v64
         imagePullPolicy: Always
         ports:
         - containerPort: 8000
+          name: http-metrics
         env:
         # Chế độ Live chạy trên cụm EKS thật
         - name: AIOPS_SIMULATION_MODE
@@ -44,24 +49,29 @@ spec:
         - name: OPENSEARCH_URL
           value: "http://opensearch.techx-tf3.svc.cluster.local:9200"
         
-        # Trích xuất thông tin AWS & Slack nhạy cảm từ K8s Secret (Không ghi trực tiếp vào git)
+        # Trích xuất thông tin AWS & Slack nhạy cảm từ K8s Secret (Cho phép fallback về IRSA khi optional: true)
         - name: SLACK_WEBHOOK_URL
           valueFrom:
             secretKeyRef:
               name: aiops-engine-secrets
               key: slack-webhook-url
+              optional: true
         - name: AWS_ACCESS_KEY_ID
           valueFrom:
             secretKeyRef:
               name: aiops-engine-secrets
               key: aws-access-key-id
+              optional: true
         - name: AWS_SECRET_ACCESS_KEY
           valueFrom:
             secretKeyRef:
               name: aiops-engine-secrets
               key: aws-secret-access-key
+              optional: true
         - name: AWS_DEFAULT_REGION
           value: "ap-southeast-1"
+        - name: BEDROCK_AWS_REGION
+          value: "us-east-1"
         - name: BEDROCK_MODEL_ID
           value: "amazon.nova-lite-v1:0"
         - name: BEDROCK_KB_ID
@@ -94,6 +104,9 @@ kind: Service
 metadata:
   name: aiops-engine
   namespace: techx-tf3
+  labels:
+    app.kubernetes.io/name: aiops-engine
+    app.kubernetes.io/managed-by: argocd
 spec:
   selector:
     app: aiops-engine
@@ -101,4 +114,5 @@ spec:
   - protocol: TCP
     port: 80
     targetPort: 8000
+    name: http
   type: ClusterIP
