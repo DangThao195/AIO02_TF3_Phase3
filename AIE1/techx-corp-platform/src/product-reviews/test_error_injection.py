@@ -489,6 +489,7 @@ class TestErrorInjectionIntegration(unittest.TestCase):
             stack.enter_context(patch.object(srv, "llm_provider", "openai"))
             stack.enter_context(patch.object(srv, "build_runtime_prompts", return_value=("u", "a", "i")))
             stack.enter_context(patch.object(srv, "build_system_prompt", return_value="sys"))
+            stack.enter_context(patch.object(srv, "fetch_reviews_by_product_id", return_value=["Great review 1"]))
             stack.enter_context(patch.object(srv, "call_candidate_chat", return_value="Great product!"))
             stack.enter_context(patch.object(srv, "post_process_output", return_value="Great product!"))
             stack.enter_context(patch.object(srv, "apply_runtime_fidelity_gate", return_value=("Great product!", "approved")))

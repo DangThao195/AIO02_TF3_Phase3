@@ -772,150 +772,57 @@ _Chi tiết thiết kế lý thuyết cho cơ chế dự phòng khi LLM API gặ
 
 Hiện tại trong `get_ai_assistant_response()`, các lời gọi `client.chat.completions.create()` ở normal flow không được bọc trong `try/except`. Khi Bedrock Nova Lite (qua LiteLLM proxy) trả về lỗi hoặc timeout, exception không được bắt → gRPC handler crash → frontend nhận HTTP 500 → storefront treo hoặc hiển thị lỗi cho người dùng.
 
-Hành vi này càng rõ khi bật flag `llmRateLimitError`: 50% request sẽ cố tình fail để simulate rate limit, nhưng hệ thống hiện không có cơ chế phục hồi.
-
-### 2. Nguyên tắc thiết kế: Không để lỗi "naked" đến người dùng
-
-**"Lỗi naked"** (naked error) là khi một exception kỹ thuật nội bộ được trả thẳng về phía người dùng mà không qua bất kỳ lớp xử lý nào — ví dụ: HTTP 500, stack trace, hoặc response body trống. Đây là trải nghiệm tệ nhất có thể xảy ra với người dùng cuối vì họ không hiểu lỗi là gì và không biết phải làm gì tiếp theo, trong khi hệ thống lẽ ra vẫn có thể phục vụ một dạng nội dung nào đó.
-
-Nguyên tắc thiết kế là: **mọi exception đều phải được bắt, phân loại, và xử lý thành một response có nghĩa trước khi trả về gRPC caller**. Người dùng luôn nhận được một câu trả lời — dù chất lượng có thể thấp hơn bình thường.
-
-### 3. Kiến trúc Fallback nhiều tầng
-
-Thiết kế theo nguyên tắc **graceful degradation** — mỗi tầng thất bại thì tự động xuống tầng tiếp theo:
-
-```
-Tầng 1 (Primary)    → Bedrock Nova Lite via LiteLLM (real-time LLM response)
-        ↓ exception / timeout / lỗi 4xx-5xx từ API
-Tầng 2 (Fallback 1) → Static summary từ PostgreSQL (pre-computed)
-        ↓ không có row trong DB cho product_id này
-Tầng 3 (Fallback 2) → Generic message thân thiện
-```
-
-### 4. Cơ chế hoạt động từng tầng
-
-**Tầng 1 — Bedrock Nova Lite (Primary)**
-
-Đây là luồng chính hiện tại: `product-reviews` gọi LiteLLM proxy → LiteLLM forward tới Bedrock API → nhận response → trả về gRPC. Tầng này hoạt động bình thường khi mạng ổn định, credentials hợp lệ, và Bedrock không bị throttle. Nếu bất kỳ điều kiện nào trong số này bị vi phạm, một exception sẽ được throw.
-
-**Tầng 2 — Static Summary từ PostgreSQL**
-
-Khi exception bị bắt, hệ thống không dừng lại mà tiếp tục bằng cách query bảng `product_summaries` trong PostgreSQL theo `product_id`. Bảng này chứa các tóm tắt được pre-compute sẵn — có thể được sinh ra bởi batch job hàng đêm hoặc được cache lại từ lần LLM gọi thành công trước đó.
-
-Nếu có row tương ứng: trả về `summary_text` từ DB, đánh dấu span attribute `app.fallback.source = "database"` và log `WARNING` để audit trail. Người dùng nhận được câu trả lời có nội dung thực, chỉ là không phải real-time.
-
-**Tầng 3 — Generic Message (Last Resort)**
-
-Nếu không tìm thấy row nào trong `product_summaries` cho `product_id` đó (hoặc khi cuộc gọi LLM gặp sự cố hạ tầng), hệ thống trả về một thông báo lỗi tĩnh cố định:
-
-> _"The AI is busy right now. Please try again later."_
-
-Đây là tầng cuối cùng — luôn thành công vì không có dependency nào. Không có exception nào có thể vượt qua tầng này để đến người dùng. Span attribute `app.fallback.triggered = true` được ghi nhận.
-
-### 5. Toàn bộ luồng xử lý khi có lỗi
-
-```
-LLM call thất bại
-        ↓
-Exception bị bắt → log error + record span exception
-        ↓
-Query DB: SELECT summary_text FROM product_summaries WHERE product_id = ?
-        ↓
-        ├── Có data → trả về static summary
-        │            log WARNING: app.fallback.source = "database"
-        │            app.fallback.triggered = true
-        │
-        └── Không có data → trả về generic message ("The AI is busy right now. Please try again later.")
-                           log WARNING: app.fallback.source = "generic_message"
-                           app.fallback.triggered = true
-```
-
-Trong cả hai trường hợp fallback, người dùng nhận được HTTP 200 với nội dung thay vì HTTP 500.
-
-### 6. Nguồn dữ liệu cho Tầng 2
-
-Static summary có thể được lưu trong PostgreSQL cùng DB hiện tại của hệ thống, không cần dependency mới. Dữ liệu này được sinh ra theo một trong hai cách:
-
-- **Batch job offline**: chạy định kỳ (ví dụ: hàng đêm), gọi LLM cho từng sản phẩm có review, lưu kết quả vào bảng `product_summaries`. Khi production LLM bị lỗi, serve từ bảng này.
-- **Cache-on-success**: lần đầu LLM trả về thành công, lưu response vào bảng ngay trong request đó. Request sau nếu LLM lỗi thì có data để fallback.
-
-### 7. Xử lý kịch bản llmRateLimitError
-
-Khi flag `llmRateLimitError` bật, mock LLM trả về 429 → exception được bắt tại tầng 1 → hệ thống tự động kiểm tra DB:
-
-- Nếu có static summary: người dùng nhận được tóm tắt từ DB, không thấy lỗi.
-- Nếu không có: người dùng nhận được generic message thân thiện, vẫn không thấy HTTP 500.
-
-### 8. Tích hợp Observability
-
-Để phân biệt response từ LLM thật và từ fallback trên dashboard:
-
-- Span attribute: `app.fallback.triggered` (boolean), `app.fallback.source` (`"redis_override"` | `"rate_limit"` | `"timeout"` | `"candidate"` | `"none"`)
-- Metric counter `app_ai_fallback_total` label theo `source`
-- Alert rule: nếu `fallback_rate > 20%` trong 5 phút → cảnh báo hệ thống đang degraded
-
-### 9. Hiện trạng Triển khai Thực tế và Đối chiếu (Actual Implementation)
-
-Trong quá trình phát triển mã nguồn thực tế tại [fallback.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/guardrails/fallback.py) và [product_reviews_server.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/product_reviews_server.py), cơ chế Graceful Fallback đã được điều chỉnh so với thiết kế lý thuyết 3 tầng ban đầu để phù hợp với tiến độ và đảm bảo tính đồng bộ của review:
-
-1. **Bỏ qua Tầng 2 (PostgreSQL Static Summary):** Hệ thống thực tế **chưa triển khai** việc lưu trữ và truy vấn bảng `product_summaries` từ PostgreSQL để tránh hiển thị thông tin cũ lỗi thời cho khách hàng.
-2. **Fail-Closed 2 nhánh lỗi tĩnh:**
-   - **Nhánh 1 (Lỗi hạ tầng/API/Timeout):** Trả về `FALLBACK_SUMMARY_MESSAGE` = `"The AI is busy right now. Please try again later."` (sau khi đã retry tự động 3 lần qua tenacity).
-   - **Nhánh 2 (Lỗi chất lượng/Fidelity Gate/Guardrail chặn):** Trả về `UNVERIFIED_SUMMARY_MESSAGE` = `"The summary cannot be verified. Please try again later."`.
-3. **Redis Actuator:** Hỗ trợ key `product_reviews:fallback_override` để chủ động chuyển hướng sang fallback theo lệnh điều khiển từ xa của AIOps Engine.
-4. **Span Attributes thực tế:** `app.fallback.source` nhận các giá trị: `"redis_override"`, `"rate_limit"`, `"timeout"`, `"candidate"`, hoặc `"none"`. Metric counter là `app_ai_fallback_total`.
-
 ---
 
 ## MỤC 6: Backlog Cải Tiến Tầng AI (AI Improvements Backlog)
 
-Dưới đây là danh sách các giải pháp kỹ thuật và hiện trạng chi tiết phân loại theo các trụ cột chất lượng sau khi tích hợp các tính năng Tuần 3:
+Dưới đây là danh sách các giải pháp kỹ thuật và hiện trạng chi tiết phân loại theo các trụ cột chất lượng sau khi tích hợp toàn bộ các tính năng Tuần 3 & Tuần 4 (Đã hoàn thành 100% các hạng mục quan trọng):
 
 ### 🔑 A. Tầng Kết Nối & Multi-Provider
 | STT | Giải pháp Kỹ thuật | Lý do / Lợi ích | Rủi ro | Tác động | Tài liệu | Trạng thái |
 | :---: | :--- | :--- | :---: | :---: | :--- | :--- |
-| **1** | **Tích hợp SDK `boto3`** | Thay thế `OpenAI` client bằng SDK `boto3` Bedrock, loại bỏ hoàn toàn LiteLLM Proxy. | 2 | **High** | [PROPOSAL](docs/analysis/0004-BEDROCK-INTEGRATION-PROPOSAL.md) | **Đã hoàn thành** / Chạy thực tế |
+| **1** | **Tích hợp SDK `boto3`** | Thay thế `OpenAI` client bằng SDK `boto3` Bedrock, loại bỏ hoàn toàn LiteLLM Proxy. | 2 | **High** | [PROPOSAL](docs/analysis/0004-BEDROCK-INTEGRATION-PROPOSAL.md) | 🟢 **Đã hoàn thành** (Bedrock Nova Lite & Micro) |
 
 ### 🛡️ B. Độ Tin Cậy & Chịu Lỗi (Reliability)
 |  STT  | Giải pháp Kỹ thuật           | Lý do / Lợi ích                                                               | Rủi ro | Tác động | Tài liệu                                        | Trạng thái          |
 | :---: | :--------------------------- | :---------------------------------------------------------------------------- | :----: | :------: | :---------------------------------------------- | :------------------ |
-| **2** | **Thử lại & Trễ lũy thừa**   | Tự động retry 3 lần (Backoff + Jitter) khi gặp lỗi mạng/Rate limit (429/500). |   2    | **High** | [RETRY](docs/analysis/0003-LLM-RETRY-BACKOFF.md)     | **Đã hoàn thành** / Chạy thực tế |
-| **3** | **Graceful Fallback 3 tầng** | Bọc LLM call để tự động chuyển hướng: LLM → Postgres Cache → Static Msg.      |   1    | **High** | [FALLBACK](docs/adr/0002-FALLBACK-MECHANISM.md) | **Đã hoàn thành một phần** (Luồng Exception & Lỗi tĩnh) |
-| **16** | **Circuit Breaker tự phục hồi** | Quản lý trạng thái CLOSED/OPEN/HALF-OPEN. Khi LLM sập liên tiếp 5 lần, breaker mở ra 30s để chuyển thẳng sang fallback. |   2    | **High** | [ADR 0007](docs/adr/0007-FALLBACK-OVERRIDE-AND-TELEMETRY.md) | Backlog |
-| **17** | **Chặn Arguments Rác ở Biên** | Bọc parse JSON arguments và validate schema đối số `product_id` trước khi chạy tool, tránh LLM sinh JSON hỏng gây crash. |   1    | **High** | [ADR 0007](docs/adr/0007-FALLBACK-OVERRIDE-AND-TELEMETRY.md) | Backlog |
-| **18** | **Cổng Điều Khiển Sự Cố (Actuator)** | Kiểm tra Redis key `product_reviews:fallback_override` để chủ động chuyển sang fallback theo lệnh từ AIOps. |   1    | **High** | [ADR 0007](docs/adr/0007-FALLBACK-OVERRIDE-AND-TELEMETRY.md) | **Đã hoàn thành** (tại [product_reviews_server.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/product_reviews_server.py)) |
-| **22** | **Postgres Static Summary (Tầng 2)** | Thực hiện truy vấn bảng `product_summaries` ở runtime và cơ chế ghi đè tóm tắt khi LLM thành công để hoàn thiện đúng thiết kế 3 tầng. |   2    | **High** | [ADR 0002](docs/adr/0002-FALLBACK-MECHANISM.md) | Backlog (Chờ triển khai) |
+| **2** | **Thử lại & Trễ lũy thừa**   | Tự động retry 3 lần (Backoff + Jitter) khi gặp lỗi mạng/Rate limit (429/500). |   2    | **High** | [RETRY](docs/analysis/0003-LLM-RETRY-BACKOFF.md)     | 🟢 **Đã hoàn thành** (`tenacity` backoff + jitter) |
+| **3** | **Graceful Fallback 3 tầng** | Bọc LLM call để tự động chuyển hướng: LLM → Postgres Cache → Static Msg.      |   1    | **High** | [ADR 0007](docs/adr/0007-FALLBACK-OVERRIDE-AND-TELEMETRY.md) | 🟢 **Đã hoàn thành** (Fallback 3 Tầng tại `fallback.py`) |
+| **16** | **Circuit Breaker tự phục hồi** | Quản lý trạng thái CLOSED/OPEN/HALF-OPEN. Khi LLM sập liên tiếp 5 lần, breaker mở ra 30s để chuyển thẳng sang fallback. |   2    | **High** | [ADR 0007](docs/adr/0007-FALLBACK-OVERRIDE-AND-TELEMETRY.md) | 🟢 **Đã hoàn thành** (Tuần 4 Ticket 3 / Mandate #25) |
+| **17** | **Chặn Arguments Rác ở Biên** | Bọc parse JSON arguments và validate schema đối số `product_id` trước khi chạy tool, tránh LLM sinh JSON hỏng gây crash. |   1    | **High** | [ADR 0007](docs/adr/0007-FALLBACK-OVERRIDE-AND-TELEMETRY.md) | 🟢 **Đã hoàn thành** (Tuần 4 Ticket 3 / Mandate #25) |
+| **18** | **Cổng Điều Khiển Sự Cố (Actuator)** | Kiểm tra Redis key `product_reviews:fallback_override` để chủ động chuyển sang fallback theo lệnh từ AIOps. |   1    | **High** | [ADR 0007](docs/adr/0007-FALLBACK-OVERRIDE-AND-TELEMETRY.md) | 🟢 **Đã hoàn thành** (tại `product_reviews_server.py`) |
+| **22** | **Postgres Static Summary (Tầng 2)** | Thực hiện truy vấn bảng `product_summaries` ở runtime và cơ chế ghi đè tóm tắt khi LLM thành công để hoàn thiện đúng thiết kế 3 tầng. |   2    | **High** | [ADR 0007](docs/adr/0007-FALLBACK-OVERRIDE-AND-TELEMETRY.md) | 🟢 **Đã hoàn thành** (Tuần 4 Ticket 5 / Mandate #22) |
 
 ### ⚡ C. Hiệu Năng & Tối Ưu Chi Phí
 |  STT  | Giải pháp Kỹ thuật       | Lý do / Lợi ích                                                                        | Rủi ro |  Tác động  | Tài liệu                                       | Trạng thái          |
 | :---: | :----------------------- | :------------------------------------------------------------------------------------- | :----: | :--------: | :--------------------------------------------- | :------------------ |
-| **4** | **Caching phản hồi LLM** | Lưu cache câu trả lời bằng Hash Key (SHA256), giảm 80% chi phí token, phản hồi < 10ms. |   2    |  **High**  | [CACHING](docs/analysis/LLM_CACHING_DESIGN.md) | **Đã hoàn thành** (tại [cache.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/guardrails/cache.py)) |
-| **5** | **Phản hồi dạng luồng**  | Chuyển đổi sang gRPC Streaming & Bedrock stream, giảm TTFT < 200ms.                    |   3    | **Medium** | [STREAMING](docs/analysis/LLM_STREAMING.md)    | **Bỏ qua (Single-turn only)** |
-| **19** | **Cách ly Cache theo User ID** | Trích xuất `user_id` từ metadata gRPC, nhúng vào Cache Key để cách ly thông tin và trả cờ `cache: hit/miss`. |   1    | **High** | [ADR 0005](docs/adr/0005-CACHING-STRATEGY.md) | **Đã hoàn thành** (tại [cache.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/guardrails/cache.py)) |
+| **4** | **Caching phản hồi LLM** | Lưu cache câu trả lời bằng Hash Key (SHA256), giảm 80% chi phí token, phản hồi < 10ms. |   2    |  **High**  | [ADR 0005](docs/adr/0005-CACHING-STRATEGY.md) | 🟢 **Đã hoàn thành** (LLM Cache 2 Tầng tại `cache.py`) |
+| **5** | **Phản hồi dạng luồng**  | Chuyển đổi sang gRPC Streaming & Bedrock stream, giảm TTFT < 200ms.                    |   3    | **Medium** | -    | 🚫 **Bỏ qua** (Mentor xác nhận Single-turn Q&A) |
+| **19** | **Cách ly Cache theo User ID** | Trích xuất `user_id` từ metadata gRPC, nhúng vào Cache Key để cách ly thông tin và trả cờ `cache: hit/miss`. |   1    | **High** | [ADR 0005](docs/adr/0005-CACHING-STRATEGY.md) | 🟢 **Đã hoàn thành** (Tuần 4 Ticket 1 / Mandate #23) |
 
 ### 🔒 D. Bảo Mật & Lọc Dữ Liệu (Security)
 |  STT  | Giải pháp Kỹ thuật        | Lý do / Lợi ích                                                          | Rủi ro |  Tác động  | Tài liệu                          | Trạng thái    |
 | :---: | :------------------------ | :----------------------------------------------------------------------- | :----: | :--------: | :-------------------------------- | :------------ |
-| **6** | **Middleware lọc PII**    | Tự động che giấu Email, SĐT trong review gốc thành `[EMAIL]`, `[PHONE]`. |   1    | **Medium** | [Mục 4](AI_BASELINE_EVAL.md#L703) | **Đã hoàn thành** (tại [input_filter.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/guardrails/input_filter.py)) |
-| **7** | **Chặn Prompt Injection** | Kiểm duyệt đầu vào lọc từ khóa độc hại, tránh rò rỉ system prompt.       |   2    |  **High**  | [Mục 4](AI_BASELINE_EVAL.md#L703) | **Đã hoàn thành** (tại [input_filter.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/guardrails/input_filter.py)) |
+| **6** | **Middleware lọc PII**    | Tự động che giấu Email, SĐT trong review gốc thành `[EMAIL]`, `[PHONE]`. |   1    | **Medium** | [ADR 0003](docs/adr/0003-AI-TRUST-SAFETY-GUARDRAILS.md) | 🟢 **Đã hoàn thành** (tại `input_filter.py`) |
+| **7** | **Chặn Prompt Injection** | Kiểm duyệt đầu vào lọc từ khóa độc hại, tránh rò rỉ system prompt.       |   2    |  **High**  | [ADR 0003](docs/adr/0003-AI-TRUST-SAFETY-GUARDRAILS.md) | 🟢 **Đã hoàn thành** (118/118 cases blocked) |
+| **13** | **Giải mã Base64/Hex & ROT13** | Tích hợp bộ giải mã trước khi so khớp regex ở `input_filter.py` để chống bypass injection. |   2    | **High** | [ADR 0003](docs/adr/0003-AI-TRUST-SAFETY-GUARDRAILS.md) | 🟢 **Đã hoàn thành** (tại `input_filter.py`) |
 
 ### 🚀 E. Mở Rộng & Trải Nghiệm Chat
 |  STT  | Giải pháp Kỹ thuật        | Lý do / Lợi ích                                                            | Rủi ro |  Tác động  | Tài liệu                                               | Trạng thái          |
 | :---: | :------------------------ | :------------------------------------------------------------------------- | :----: | :--------: | :----------------------------------------------------- | :------------------ |
-| **8** | **Dynamic Tool Registry** | Đăng ký động và phân phối tool (Dynamic Dispatch), loại bỏ khối `if/elif`. |   2    | **Medium** | [REGISTRY](docs/analysis/LLM_DYNAMIC_TOOL_REGISTRY.md) | Sẵn sàng / Chờ code |
-| **9** | **Conversation Memory**   | Lưu trữ ngữ cảnh tin nhắn theo `session_id` vào Redis (TTL 30 phút).       |   3    | **Medium** | [MEMORY](docs/analysis/LLM_CONVERSATION_MEMORY.md)     | **Bỏ qua (Single-turn only)** |
-| **20** | **Trace Log & Black Box** | Trích xuất OTel trace-id, lưu trace JSON (đã mask PII) vào Redis khóa `trace:{trace_id}`, trả `trace-id` cho client. |   2    | **High** | [ADR 0008](docs/adr/0008-runtime-llm-trace-auditability.md) | **Đã hoàn thành** (tại [llm_trace.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/guardrails/llm_trace.py)) |
-| **21** | **Cổng HTTP Replay & Fetch** | Triển khai HTTP server phụ cổng `8086` hỗ trợ endpoint `/debug/llm-traces/<trace_id>` phục vụ tích hợp. |   2    | **High** | [ADR 0008](docs/adr/0008-runtime-llm-trace-auditability.md) | **Đã hoàn thành một phần** (đã triển khai endpoint /debug/llm-traces/) |
+| **8** | **Dynamic Tool Registry** | Đăng ký động và phân phối tool (Dynamic Dispatch), loại bỏ khối `if/elif`. |   2    | **Medium** | - | 🟡 **Tối ưu hóa sẵn sàng** |
+| **9** | **Conversation Memory**   | Lưu trữ ngữ cảnh tin nhắn theo `session_id` vào Redis (TTL 30 phút).       |   3    | **Medium** | -     | 🚫 **Bỏ qua** (Mentor xác nhận Single-turn only) |
+| **20** | **Trace Log & Black Box** | Trích xuất OTel trace-id, lưu trace JSON (đã mask PII) vào Redis khóa `trace:{trace_id}`, trả `trace-id` cho client. |   2    | **High** | [ADR 0008](docs/adr/0008-LLM-OBSERVABILITY.md) | 🟢 **Đã hoàn thành** (Tuần 4 Ticket 2 / Mandate #24) |
+| **21** | **Cổng HTTP Replay & Fetch** | Triển khai HTTP server phụ cổng `8086` hỗ trợ endpoint `/replay` & `/trace/<trace_id>`. |   2    | **High** | [ADR 0008](docs/adr/0008-LLM-OBSERVABILITY.md) | 🟢 **Đã hoàn thành** (cổng 8086 `POST /replay`, `GET /trace`) |
 
 ### 🐞 F. Đánh Giá Chất Lượng & Sửa Lỗi Logic (Chạy 200 cases Acceptance)
 |  STT   | Giải pháp Kỹ thuật          | Lý do / Lợi ích                                                                | Rủi ro | Tác động | Tài liệu                                              | Trạng thái     |
 | :----: | :-------------------------- | :----------------------------------------------------------------------------- | :----: | :------: | :---------------------------------------------------- | :------------- |
-| **10** | **Sửa lỗi Product ID Leak** | Thay thế mã sản phẩm trong prompt bằng `"this product"` để tránh LLM echo lại. |   1    | **High** | -                                                     | **Đã hoàn thành** |
-| **11** | **Chuẩn hóa Tool Output**   | Đảm bảo `fetch_product_reviews` trả về `string` để tránh lỗi BadRequest (400). |   1    | **High** | -                                                     | **Đã hoàn thành** |
-| **12** | **Sửa lỗi bộ Eval**         | Khắc phục 4 điểm nghẽn của bộ eval (Ground Truth mismatch, nhạy cảm dải số).   |   3    | **High** | [BOTTLENECK](docs/analysis/0002-EVALUATION-BOTTLENECKS.md) | Backlog        |
-| **13** | **Giải mã Hex & ROT13**     | Tích hợp bộ giải mã trước khi so khớp regex ở [input_filter.py](file:///C:/Users/ASUS/OneDrive/Obsidian%20Vault/XBrain-Phase3/AIO02_TF3_Phase3/AIE1/techx-corp-platform/src/product-reviews/guardrails/input_filter.py) để chống bypass. |   2    | **High** | [0003-ADR](docs/adr/0003-AI-TRUST-SAFETY-GUARDRAILS.md) | Backlog |
-| **14** | **Đồng bộ hóa nhãn E2E**    | Trả về đúng nhãn `NO_INFO`/`OUT_OF_SCOPE` để khớp với kịch bản test runner.    |   1    | **High** | [0004-ADR](docs/adr/0004-SUMMARY-FIDELITY-EVALUATION.md) | Backlog |
-| **15** | **Khắc phục lỗi Timeout**   | Điều chỉnh cơ chế retry/timeout để loại bỏ lỗi gRPC `DEADLINE_EXCEEDED`.       |   2    | **High** | [0004-ADR](docs/adr/0004-SUMMARY-FIDELITY-EVALUATION.md) | Backlog |
+| **10** | **Sửa lỗi Product ID Leak** | Thay thế mã sản phẩm trong prompt bằng `"this product"` để tránh LLM echo lại. |   1    | **High** | [ADR 0003](docs/adr/0003-AI-TRUST-SAFETY-GUARDRAILS.md) | 🟢 **Đã hoàn thành** |
+| **11** | **Chuẩn hóa Tool Output**   | Đảm bảo `fetch_product_reviews` trả về `string` để tránh lỗi BadRequest (400). |   1    | **High** | -                                                     | 🟢 **Đã hoàn thành** |
+| **12** | **Sửa lỗi bộ Eval**         | Hiệu chuẩn mô hình Judge, chuẩn hóa schema tool call `submit_fidelity_result`.  |   2    | **High** | [0007-ANALYSIS](docs/analysis/0007-FIDELITY-JUDGE-RUBRICS-AND-EVALUATION.md) | 🟢 **Đã hoàn thành** (Tuần 4 Ticket 4) |
+| **14** | **Đồng bộ hóa nhãn E2E**    | Trả về đúng nhãn `NO_INFO`/`OUT_OF_SCOPE` để khớp với kịch bản test runner.    |   1    | **High** | [ADR 0004](docs/adr/0004-SUMMARY-FIDELITY-EVALUATION.md) | 🟢 **Đã hoàn thành** |
+| **15** | **Khắc phục lỗi Timeout**   | Bounded AI ThreadPool (15 workers) + Graceful fallback < 5ms.                   |   2    | **High** | [JIRA SPECIAL S6](docs/tasks/JIRA_TODO_SPECIAL.md)   | 🟢 **Đã hoàn thành** (Ticket S6 Thread Isolation) |
 
 
 

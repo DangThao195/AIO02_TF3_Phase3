@@ -58,9 +58,9 @@ Xây dựng bộ eval (viết mã nguồn/script tự động hoặc bán tự �
 
 ### Tiêu chí nghiệm thu (Acceptance Criteria)
 * [x] Mã nguồn script/code eval được commit vào thư mục dự án (vd: `repro/` hoặc `scripts/`).
-* [ ] Bộ eval chạy thành công và xuất ra điểm số Fidelity rõ ràng cho từng test case.
-* [ ] Test case mô phỏng lỗi `L9ECAV7KIM` được bộ eval phát hiện chính xác là "Sai lệch dữ liệu".
-* [ ] Đã cập nhật đầy đủ thông tin kịch bản test vào file `AI_BASELINE_EVAL.md`.
+* [x] Bộ eval chạy thành công và xuất ra điểm số Fidelity rõ ràng cho từng test case.
+* [x] Test case mô phỏng lỗi `L9ECAV7KIM` được bộ eval phát hiện chính xác là "Sai lệch dữ liệu".
+* [x] Đã cập nhật đầy đủ thông tin kịch bản test vào file `AI_BASELINE_EVAL.md`.
 
 ---
 
@@ -81,6 +81,6 @@ Nghiên cứu các giải pháp bảo mật cho tầng AI (chống Prompt Inject
 5. **Xây dựng Backlog cải tiến:** Đề xuất ít nhất 3-4 đầu việc cải tiến kỹ thuật cho tầng AI (ví dụ: cài đặt cache giảm 30% chi phí token, middleware chặn PII, timeout/retry logic) kèm điểm rủi ro (Risk Score: 1-5) và tác động business (Business Impact: High/Medium/Low), ghi nhận vào Mục 4 của file `AI_BASELINE_EVAL.md`.
 
 ### Tiêu chí nghiệm thu (Acceptance Criteria)
-* [ ] Danh sách lỗ hổng bảo mật kèm payload mẫu được ghi nhận đầy đủ trong tài liệu eval.
-* [ ] Bản thiết kế kỹ thuật (luồng xử lý/code mẫu) cho cơ chế Fallback và lọc PII được hoàn thành.
-* [ ] Danh sách các công việc cải tiến tầng AI có điểm rủi ro và tác động business được cập nhật đầy đủ vào phần Backlog trong file `AI_BASELINE_EVAL.md`.
+* [x] Danh sách lỗ hổng bảo mật kèm payload mẫu được ghi nhận đầy đủ trong tài liệu eval.
+* [x] Bản thiết kế kỹ thuật (luồng xử lý/code mẫu) cho cơ chế Fallback và lọc PII được hoàn thành.
+* [x] Danh sách các công việc cải tiến tầng AI có điểm rủi ro và tác động business được cập nhật đầy đủ vào phần Backlog trong file `AI_BASELINE_EVAL.md`.

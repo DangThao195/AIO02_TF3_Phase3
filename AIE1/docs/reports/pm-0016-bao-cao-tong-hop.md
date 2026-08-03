@@ -2,8 +2,8 @@
 
 **Ngày:** 28/07/2026 · **Người tổng hợp:** CDO02 (qua Claude Code) · **Đối tượng đọc:** team CDO02 + AIO02
 
-**Tài liệu gốc đầy đủ (kỹ thuật, log/số liệu chi tiết):**
-[`docs/postmortem/0016-product-reviews-deadline-exceeded-under-synthetic-load.md`](postmortem/0016-product-reviews-deadline-exceeded-under-synthetic-load.md)
+**Tài liệu liên quan (kỹ thuật, log/số liệu chi tiết):**
+`docs/tasks/JIRA_TODO_SPECIAL.md` (Mục Special Ticket S6 — PM-0016 Thread Pool Isolation)
 
 ---
 

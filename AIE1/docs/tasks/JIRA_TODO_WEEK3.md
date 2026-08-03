@@ -86,10 +86,10 @@ eval-mandate14:
 - Ghi nhận đường dẫn tệp JSON artifact chứa kết quả đánh giá chi tiết.
 
 ### Tiêu chí nghiệm thu (Acceptance Criteria)
-- [ ] Tập dữ liệu `dataset.jsonl` có đầy đủ ca kiểm thử PII-in-review và multi-turn injection.
-- [ ] Script `eval_support/judge_agreement.py` chạy thành công, xuất ra bảng so sánh và tỷ lệ khớp đạt ≥ 80%.
-- [ ] Target `eval-mandate14` trong Makefile chạy thành công, không gặp lỗi runtime.
-- [ ] Ảnh chụp màn hình và log chạy thật được đính kèm đầy đủ vào Jira ticket.
+- [x] Tập dữ liệu `dataset.jsonl` có đầy đủ ca kiểm thử PII-in-review và multi-turn injection.
+- [x] Script `eval_support/judge_agreement.py` chạy thành công, xuất ra bảng so sánh và tỷ lệ khớp đạt ≥ 80%.
+- [x] Target `eval-mandate14` trong Makefile chạy thành công, không gặp lỗi runtime.
+- [x] Ảnh chụp màn hình và log chạy thật được đính kèm đầy đủ vào Jira ticket.
 
 ---
 
@@ -144,7 +144,7 @@ Triển khai thiết kế bộ nhớ đệm 2 tầng (LLM response cache bằng 
 - [x] Tích hợp Asynchronous Logging ghi audit log xuống RDS chạy nền.
 - [x] File đối chiếu latency/cost after cache được xuất ra.
 - [x] ADR 0006 được phê duyệt và commit.
-- [ ] Jira ticket được tạo đúng format với đầy đủ bằng chứng.
+- [x] Jira ticket được tạo đúng format với đầy đủ bằng chứng.
 
 ---
 
@@ -187,14 +187,14 @@ Không tự xây dựng AIOps Engine (detector độc lập). Nhiệm vụ của
 - Viết logic tự động kết nối lại (auto-reconnection) với các phụ thuộc (PostgreSQL, Redis, Product Catalog) khi khởi động lại dịch vụ để tránh crash pod lúc startup.
 
 ### Tiêu chí nghiệm thu (Acceptance Criteria)
-- [ ] Actuator nhận lệnh từ Redis key hoạt động đúng (key = true -> bypass Bedrock).
-- [ ] Chế độ Failure Injection hoạt động tốt khi bật flag giả lập lỗi.
-- [ ] Custom metrics xuất ra đúng định dạng và thu thập được từ Prometheus.
-- [ ] Cơ chế Graceful Shutdown đóng kết nối êm ái khi nhận tín hiệu tắt; gRPC Health Check báo đúng trạng thái.
-- [ ] Hệ thống tự động kết nối lại cơ sở dữ liệu và Redis khi restart dịch vụ.
-- [ ] Test E2E thành công với đội AIOps, có log rollback hoạt động.
-- [ ] ADR 0007 được commit đúng format và ký tên.
-- [ ] Jira ticket được tạo với đầy đủ bằng chứng chạy thật.
+- [x] Actuator nhận lệnh từ Redis key hoạt động đúng (key = true -> bypass Bedrock).
+- [x] Chế độ Failure Injection hoạt động tốt khi bật flag giả lập lỗi.
+- [x] Custom metrics xuất ra đúng định dạng và thu thập được từ Prometheus.
+- [x] Cơ chế Graceful Shutdown đóng kết nối êm ái khi nhận tín hiệu tắt; gRPC Health Check báo đúng trạng thái.
+- [x] Hệ thống tự động kết nối lại cơ sở dữ liệu và Redis khi restart dịch vụ.
+- [x] Test E2E thành công với đội AIOps, có log rollback hoạt động.
+- [x] ADR 0007 được commit đúng format và ký tên.
+- [x] Jira ticket được tạo với đầy đủ bằng chứng chạy thật.
 
 ---
 

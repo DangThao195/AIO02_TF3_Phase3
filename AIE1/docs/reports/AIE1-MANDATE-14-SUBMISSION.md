@@ -55,7 +55,7 @@ make eval-mandate14
 ---
 
 ## 🎯 5. Bảng So Khớp Độ Khớp Judge ↔ Con Người (Agreement Rate)
-*Kết quả đối chiếu độ chính xác của mô hình LLM Judge tự động (`amazon.nova-micro-v1:0`) so với nhãn dán thủ công của 10 chuyên gia con người (dựa trên tệp bằng chứng [judge_benchmark.jsonl](../../repro/datasets/judge_benchmark.jsonl) & [fidelity_eval_20260727T162702Z.json](../../repro/artifacts/fidelity_eval_20260727T162702Z.json)):*
+*Kết quả đối chiếu độ chính xác của mô hình LLM Judge tự động (`amazon.nova-micro-v1:0`) so với nhãn dán thủ công của 10 chuyên gia con người (dựa trên tệp [judge_human_agreement_bedrock_20260722T143444.json](../../repro/artifacts/judge_human_agreement_bedrock_20260722T143444.json)):*
 
 *   **Tỷ lệ đồng thuận (Agreement Rate):** **`100.0%` (1.0)** - Vượt xa ngưỡng nghiệm thu barem **`≥ 80%`**.
 
@@ -96,7 +96,7 @@ make eval-mandate14
 ---
 
 ## 🎯 6.1. Kết Quả Kiểm Thử Độ Chính Xác RAG & Quality Gate (RAG Accuracy & Quality Gate)
-*Đo lường tự động công khai qua tệp bằng chứng [fidelity_eval_20260727T162702Z.json](../../repro/artifacts/fidelity_eval_20260727T162702Z.json) (59 cases):*
+*Đo lường tự động công khai qua tệp bằng chứng [rag_accuracy_runtime_bedrock_usage_fix2_20260727.json](../../repro/artifacts/rag_accuracy_runtime_bedrock_usage_fix2_20260727.json) (59 cases):*
 
 | Nhóm Ca Kiểm Thử (Category)      | Số Ca (Total) | Đạt (Passed) | Thất Bại (Failed) | Tỷ Lệ Đạt (Pass Rate) | Trạng Thái Quality Gate |
 | :------------------------------- | :-----------: | :----------: | :---------------: | :-------------------: | :---------------------: |
@@ -125,7 +125,7 @@ make eval-mandate14
 
 ## 📁 8. Các Tài Liệu Minh Chứng Đi Kèm (Artifacts)
 *   **Artifact JSON Đánh Giá An Toàn v2 (27/07):** [security_false_block_runtime_bedrock_v2_20260727.json](../../repro/artifacts/security_false_block_runtime_bedrock_v2_20260727.json)
-*   **Artifact JSON Đánh Giá RAG Accuracy / Fidelity (27/07):** [fidelity_eval_20260727T162702Z.json](../../repro/artifacts/fidelity_eval_20260727T162702Z.json)
+*   **Artifact JSON Đánh Giá RAG Accuracy v2 (27/07):** [rag_accuracy_runtime_bedrock_usage_fix2_20260727.json](../../repro/artifacts/rag_accuracy_runtime_bedrock_usage_fix2_20260727.json)
 *   **Artifact JSON Đo Lường Caching (Before vs Hot Cache):** [cost_latency_comparison.json](../../repro/artifacts/cost_latency_comparison.json)
 *   **Báo cáo hiệu năng chi tiết:** [cost_latency_baseline.json](../../repro/artifacts/cost_latency_baseline.json)
 *   **Báo cáo chi tiết Rubrics & Hiệu chỉnh LLM Judge:** [0007-FIDELITY-JUDGE-RUBRICS-AND-EVALUATION.md](../analysis/0007-FIDELITY-JUDGE-RUBRICS-AND-EVALUATION.md)

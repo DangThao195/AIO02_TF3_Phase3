@@ -148,7 +148,7 @@ Phương án B triệt tiêu hoàn toàn tác vụ quét Regex CPU-bound khỏi 
 | [0006-PRODUCT-REVIEW-SERVER-CACHING-DESIGN.md](../analysis/0006-PRODUCT-REVIEW-SERVER-CACHING-DESIGN.md) | Thiết kế kỹ thuật chi tiết: kiến trúc, trade-off analysis, code minh họa, phân tích rủi ro |
 | [LLM_CACHING_DESIGN.md](../analysis/LLM_CACHING_DESIGN.md) | Tài liệu thiết kế LLM Caching ban đầu |
 | [0001-PRODUCT-REVIEWS-BOTTLENECK-ANALYSIS.md](../analysis/0001-PRODUCT-REVIEWS-BOTTLENECK-ANALYSIS.md) | Phân tích điểm nghẽn hiệu năng tổng thể dịch vụ product-reviews |
-| [ADR 0001 — Chọn Bedrock Nova Lite](./0001-CHOOSE-BEDROCK-NOVA-LITE.md) | Quyết định chọn model LLM chính |
+| [ADR 0007 — Fallback & Telemetry](./0007-FALLBACK-OVERRIDE-AND-TELEMETRY.md) | Quyết định cơ chế Fallback 3 Tầng & Telemetry |
 | [ADR 0003 — Guardrails & Eval](./0003-AI-TRUST-SAFETY-GUARDRAILS.md) | Thiết kế hệ thống Guardrails đa tầng |
 | [ADR 0004 — Summary Fidelity Evaluation](./0004-SUMMARY-FIDELITY-EVALUATION.md) | Bộ đánh giá độ trung thực — tích hợp làm Cache Policy gate |
 | [MANDATE-06 — AI Trust & Safety](../../mandates/MANDATE-06-ai-trust-safety.md) | Chỉ thị gốc từ Ban AI & Chất lượng |
